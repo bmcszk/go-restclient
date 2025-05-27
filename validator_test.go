@@ -312,3 +312,132 @@ func TestValidateResponse_BodyNotContains(t *testing.T) {
 // TODO: Add tests for JSONPath once that's part of ExpectedResponse and ValidateResponse
 // func TestValidateResponse_JSONPathChecks(t *testing.T) { ... } // Commented out for now
 // func TestValidateResponse_HeadersContain(t *testing.T) { ... } // Commented out for now
+
+func TestValidateResponse_WithSample1Data(t *testing.T) {
+	// Actual Response based on testdata/http_response_files/sample1.http
+	actualBody := `{
+  "userId": 1,
+  "id": 1,
+  "title": "delectus aut autem",
+  "completed": false
+}`
+	actualHeaders := http.Header{
+		"Date":                             []string{"Tue, 27 May 2025 20:05:38 GMT"},
+		"Content-Type":                     []string{"application/json; charset=utf-8"},
+		"Transfer-Encoding":                []string{"chunked"},
+		"Connection":                       []string{"close"},
+		"Cf-Ray":                           []string{"946820d659550282-WAW"},
+		"Server":                           []string{"cloudflare"},
+		"Content-Encoding":                 []string{"gzip"},
+		"Report-To":                        []string{"{\"group\":\"heroku-nel\",\"max_age\":3600,\"endpoints\":[{\"url\":\"https://nel.heroku.com/reports?ts=1745356143&sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d&s=4cyDq7%2Fvw3Mnr8betT29q8nrRDUr0fEdcJTW8CibGCU%3D\"}]}"},
+		"Reporting-Endpoints":              []string{"heroku-nel=https://nel.heroku.com/reports?ts=1745356143&sid=e11707d5-02a7-43ef-b45e-2cf4d2036f7d&s=4cyDq7%2Fvw3Mnr8betT29q8nrRDUr0fEdcJTW8CibGCU%3D"},
+		"Nel":                              []string{"{\"report_to\":\"heroku-nel\",\"max_age\":3600,\"success_fraction\":0.005,\"failure_fraction\":0.05,\"response_headers\":[\"Via\"]}"},
+		"X-Powered-By":                     []string{"Express"},
+		"X-Ratelimit-Limit":                []string{"1000"},
+		"X-Ratelimit-Remaining":            []string{"999"},
+		"X-Ratelimit-Reset":                []string{"1745356161"},
+		"Vary":                             []string{"Origin, Accept-Encoding"},
+		"Access-Control-Allow-Credentials": []string{"true"},
+		"Cache-Control":                    []string{"max-age=43200"},
+		"Pragma":                           []string{"no-cache"},
+		"Expires":                          []string{"-1"},
+		"X-Content-Type-Options":           []string{"nosniff"},
+		"Etag":                             []string{"W/\"53-hfEnumeNh6YirfjyjaujcOPPT+s\""},
+		"Via":                              []string{"1.1 vegur"},
+		"Age":                              []string{"19759"},
+		"Cf-Cache-Status":                  []string{"HIT"},
+		"Alt-Svc":                          []string{"h3=\":443\"; ma=86400"},
+		"Server-Timing":                    []string{"cfL4;desc=\"?proto=TCP&rtt=17520&min_rtt=17311&rtt_var=6910&sent=3&recv=5&lost=0&retrans=0&sent_bytes=2808&recv_bytes=746&delivery_rate=152541&cwnd=251&unsent_bytes=0&cid=b14c049ec1b01141&ts=40&x=0\""},
+	}
+
+	actualResponse := &Response{
+		Status:     "200 OK",
+		StatusCode: 200,
+		Proto:      "HTTP/1.1",
+		Headers:    actualHeaders,
+		Body:       []byte(actualBody),
+		BodyString: actualBody,
+	}
+
+	t.Run("perfect match", func(t *testing.T) {
+		expectedResponse := &ExpectedResponse{
+			StatusCode: ptr(200),
+			Status:     ptr("200 OK"),
+			Headers: http.Header{
+				"Content-Type": []string{"application/json; charset=utf-8"},
+				"X-Powered-By": []string{"Express"},
+				"Etag":         []string{"W/\"53-hfEnumeNh6YirfjyjaujcOPPT+s\""},
+				// Add a few more representative headers to check for exact match
+			},
+			Body: ptr(actualBody),
+		}
+		errs := ValidateResponse(actualResponse, expectedResponse)
+		assert.Empty(t, errs, "Expected no validation errors for a perfect match")
+	})
+
+	t.Run("status code mismatch", func(t *testing.T) {
+		expectedResponse := &ExpectedResponse{
+			StatusCode: ptr(201), // Mismatch
+			Status:     ptr("200 OK"),
+			Body:       ptr(actualBody),
+		}
+		errs := ValidateResponse(actualResponse, expectedResponse)
+		assert.NotEmpty(t, errs, "Expected validation errors for status code mismatch")
+		assert.Len(t, errs, 1)
+		assert.Contains(t, errs[0].Error(), "status code mismatch: expected 201, got 200")
+	})
+
+	t.Run("status string mismatch", func(t *testing.T) {
+		expectedResponse := &ExpectedResponse{
+			StatusCode: ptr(200),
+			Status:     ptr("200 SomethingElse"), // Mismatch
+			Body:       ptr(actualBody),
+		}
+		errs := ValidateResponse(actualResponse, expectedResponse)
+		assert.NotEmpty(t, errs, "Expected validation errors for status string mismatch")
+		assert.Len(t, errs, 1)
+		assert.Contains(t, errs[0].Error(), "status string mismatch: expected '200 SomethingElse', got '200 OK'")
+	})
+
+	t.Run("body mismatch", func(t *testing.T) {
+		mismatchedBody := `{"key": "some other value"}`
+		expectedResponse := &ExpectedResponse{
+			StatusCode: ptr(200),
+			Status:     ptr("200 OK"),
+			Body:       ptr(mismatchedBody), // Mismatch
+		}
+		errs := ValidateResponse(actualResponse, expectedResponse)
+		assert.NotEmpty(t, errs, "Expected validation errors for body mismatch")
+		assert.Len(t, errs, 1)
+		assert.Contains(t, errs[0].Error(), "body mismatch") // Diff output can be long
+	})
+
+	t.Run("expected header missing from actual", func(t *testing.T) {
+		expectedResponse := &ExpectedResponse{
+			StatusCode: ptr(200),
+			Headers: http.Header{
+				"X-Non-Existent-Header": []string{"value"},
+			},
+		}
+		errs := ValidateResponse(actualResponse, expectedResponse)
+		assert.NotEmpty(t, errs, "Expected validation errors for missing expected header")
+		assert.Len(t, errs, 1)
+		assert.Contains(t, errs[0].Error(), "expected header 'X-Non-Existent-Header' not found in actual response")
+	})
+
+	t.Run("expected header value mismatch", func(t *testing.T) {
+		expectedResponse := &ExpectedResponse{
+			StatusCode: ptr(200),
+			Headers: http.Header{
+				"Content-Type": []string{"application/xml"}, // Mismatch value
+			},
+		}
+		errs := ValidateResponse(actualResponse, expectedResponse)
+		assert.NotEmpty(t, errs, "Expected validation errors for header value mismatch")
+		assert.Len(t, errs, 1)
+		assert.Contains(t, errs[0].Error(), "expected value 'application/xml' for header 'Content-Type' not found in actual values: [application/json; charset=utf-8]")
+	})
+
+	// TODO: Add tests for BodyContains, BodyNotContains based on actualBody
+	// TODO: When JSONPathChecks and HeadersContain are implemented, add tests for those too.
+}
