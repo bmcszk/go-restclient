@@ -17,3 +17,7 @@ Last Updated: 2025-05-27
 | TASK-013 | Create `testdata/http_request_files/post_with_json_body.http`             | Done     | AI       | 2025-06-02 |
 | TASK-014 | Add test case to `http_file_parser_test.go` for `post_with_json_body.http`| Done     | AI       | 2025-06-02 |
 | TASK-015 | Extend parsing logic for POST requests and JSON bodies                      | Done     | AI       | 2025-06-03 |
+| TASK-017 | Make `ExecuteRequest` unexported and update call sites                      | Done        | AI       | 2025-05-28 |
+| TASK-018 | Add `context.Context` parameter to `ExecuteFile` and `executeRequest`       | Done        | AI       | 2025-05-28 |
+| TASK-019 | Refactor `client_test.go` to base all tests on `.http` files via `ExecuteFile`| Done        | AI       | 2025-05-29 |
+| TASK-020 | Remove direct unit tests for (now unexported) `executeRequest`              | Done        | AI       | 2025-05-29 |

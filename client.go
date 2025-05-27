@@ -1,6 +1,7 @@
 package restclient
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -86,7 +87,7 @@ func WithDefaultHeaders(headers http.Header) ClientOption {
 // ExecuteFile parses a request file, executes all requests found, and returns their responses.
 // It returns an error if the file cannot be parsed or no requests are found.
 // Individual request execution errors are stored within each Response object.
-func (c *Client) ExecuteFile(requestFilePath string) ([]*Response, error) {
+func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Response, error) {
 	parsedFile, err := ParseRequestFile(requestFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse request file %s: %w", requestFilePath, err)
@@ -97,18 +98,18 @@ func (c *Client) ExecuteFile(requestFilePath string) ([]*Response, error) {
 
 	responses := make([]*Response, 0, len(parsedFile.Requests))
 	for _, restClientReq := range parsedFile.Requests {
-		// Each ExecuteRequest call will now handle its own errors internally by populating resp.Error
-		resp, _ := c.ExecuteRequest(restClientReq) // Top-level error from ExecuteRequest is mostly for critical failures
+		// Each executeRequest call will now handle its own errors internally by populating resp.Error
+		resp, _ := c.executeRequest(ctx, restClientReq) // Top-level error from executeRequest is mostly for critical failures
 		responses = append(responses, resp)
 	}
 
 	return responses, nil
 }
 
-// ExecuteRequest sends a given Request and returns the Response.
+// executeRequest sends a given Request and returns the Response.
 // Errors during execution (e.g. network, body read) are captured in Response.Error.
 // A non-nil error is returned by this function only for critical pre-execution failures (e.g. nil request, bad BaseURL).
-func (c *Client) ExecuteRequest(rcRequest *Request) (*Response, error) {
+func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Response, error) {
 	if rcRequest == nil {
 		// For a nil request, we can't even populate a Response struct meaningfully.
 		return nil, fmt.Errorf("cannot execute a nil request")
@@ -135,7 +136,7 @@ func (c *Client) ExecuteRequest(rcRequest *Request) (*Response, error) {
 		}
 	}
 
-	httpReq, err := http.NewRequest(rcRequest.Method, urlToUse.String(), rcRequest.Body)
+	httpReq, err := http.NewRequestWithContext(ctx, rcRequest.Method, urlToUse.String(), rcRequest.Body)
 	if err != nil {
 		clientResponse.Error = fmt.Errorf("failed to create http request: %w", err)
 		return clientResponse, nil // Return partially filled response with error
