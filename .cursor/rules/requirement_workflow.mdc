@@ -18,23 +18,24 @@ This document outlines the workflow related to managing requirements and their c
 
 ## Test Coverage for Requirements
 - All functional requirements in `docs/requirements.md` **must** have corresponding test scenarios documented in `docs/test_scenarios.md`.
-- Every test scenario listed in `docs/test_scenarios.md` **must** be covered by an End-to-End (E2E) test.
-- The AI assistant is responsible for verifying this coverage when implementing or modifying E2E tests related to a requirement.
+- Every test scenario listed in `docs/test_scenarios.md` **must** be covered by a unit test.
+- The AI assistant is responsible for verifying this coverage when implementing or modifying unit tests related to a requirement.
 
 ## AI Assistant Responsibilities for Requirements
 - When asked to perform a task, ensure all relevant documentation (`docs/requirements.md`, `docs/test_scenarios.md`, etc.) is considered and updated if necessary. This includes:
     - Defining test scenarios in `docs/test_scenarios.md` for new or modified requirements.
-    - Ensuring E2E test coverage for scenarios in `docs/test_scenarios.md`.
+    - Ensuring unit test coverage for scenarios in `docs/test_scenarios.md`.
 
 ## Git Workflow for Requirements
 
 -   **Branching:**
-    -   On every requirement change (new feature or fix), a new branch **must** be created from `master`.
+    -   On every requirement change (new feature or fix), a new branch **must** be created from `master` (or the main development branch if different).
     -   Branch naming convention: `feature/requirement-name` for new features or `fix/fix-name` for bug fixes. (e.g., `feature/user-authentication`, `fix/login-csrf-vulnerability`).
 -   **Committing and Pushing:**
-    -   Each task related to the requirement should be committed and pushed to this feature/fix branch.
-    -   Follow guidelines in `task_workflow.mdc` for task completion and version control for individual tasks.
+    *   Each task related to the requirement should be committed and pushed to this feature/fix branch, but **only after `make check` passes for the entire project** (as per `task_workflow.mdc`).
+    *   Follow guidelines in `task_workflow.mdc` for task completion and version control for individual tasks.
 -   **Pull Requests:**
-    -   After all tasks for the requirement are **Done** (or **Skipped**), and all associated work is committed and pushed to the feature/fix branch:
-        -   A pull request **must** be created to merge the feature/fix branch into `master`.
-        -   Use the `gh pr create` command. For example: `gh pr create --base master --head feature/your-branch-name --title "Feature: Implement X" --body "Details of the feature and related tasks."`. The title and body should be descriptive.
+    *   After all tasks for the requirement are **Done** (or **Skipped**), all associated work is committed and pushed to the feature/fix branch, and **`make check` passes for the final state of the branch**:
+        *   A Pull Request (PR) **MUST** be created by the AI assistant to merge the feature/fix branch into `master` (or the main development branch).
+        *   The AI assistant **MUST** use the `gh pr create` command. For example: `gh pr create --base master --head feature/your-branch-name --title "Feature: Implement X" --body "Details of the feature and related tasks."`. The title and body should be descriptive.
+        *   The AI assistant should then await the PR's review and merge by the user or an automated process. Do not assume the PR is merged immediately.
