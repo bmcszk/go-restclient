@@ -39,3 +39,4 @@ This document outlines the workflow related to managing requirements and their c
         *   A Pull Request (PR) **MUST** be created by the AI assistant to merge the feature/fix branch into `master` (or the main development branch).
         *   The AI assistant **MUST** use the `gh pr create` command. For example: `gh pr create --base master --head feature/your-branch-name --title "Feature: Implement X" --body "Details of the feature and related tasks."`. The title and body should be descriptive.
         *   The AI assistant should then await the PR's review and merge by the user or an automated process. Do not assume the PR is merged immediately.
+        *   The AI assistant **MUST** remain on the feature/fix branch after pushing and creating the PR, until the PR is merged or closed, or until explicitly instructed to switch branches by the user.
