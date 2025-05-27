@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: all build clean fmt lint test test-unit test-e2e check help
+.PHONY: all build clean fmt lint test test-unit check help
 
 BINARY_NAME=go-restclient-lib-checker # Example, not really a binary for a lib
 
@@ -35,21 +35,16 @@ lint: ## Lint Go source files using golangci-lint
 check: build lint test-unit ## Run all pre-commit checks (build, lint, unit tests)
 	@echo "Checks completed."
 
-test: test-unit test-e2e ## Run all tests
+test: test-unit ## Run all tests
 
 test-unit: ## Run unit tests
 	@echo "Running unit tests..."
 	@go test -tags=unit -cover ./...
 
-test-e2e: ## Run end-to-end tests
-	@echo "Running E2E tests..."
-	@go test -tags=e2e ./e2e/...
-
 # Dependencies
 install-lint: ## Install golangci-lint
 	@echo "Installing golangci-lint..."
-	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-	@mv $(shell go env GOPATH)/bin/golangci-lint $(GOBIN)/
+	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6
 
 # Clean
 clean: ## Clean build artifacts

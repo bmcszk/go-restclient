@@ -62,7 +62,7 @@ func TestExecuteRequest_SimpleGET(t *testing.T) {
 		capturedRequestHost = r.Host // Capture Host header from server side
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, `{"message": "success"}`)
+		_, _ = fmt.Fprintln(w, `{"message": "success"}`)
 	})
 	defer server.Close()
 
@@ -97,7 +97,7 @@ func TestExecuteRequest_POSTWithBody(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, expectedBodyContent, string(bodyBytes))
 		w.WriteHeader(http.StatusCreated)
-		fmt.Fprint(w, "created")
+		_, _ = fmt.Fprint(w, "created")
 	})
 	defer server.Close()
 
@@ -213,7 +213,7 @@ func TestExecuteFile_SingleRequest(t *testing.T) {
 		assert.Equal(t, http.MethodGet, r.Method)
 		assert.Equal(t, "/users", r.URL.Path)
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "user data")
+		_, _ = fmt.Fprint(w, "user data")
 	})
 	defer server.Close()
 
@@ -221,10 +221,10 @@ func TestExecuteFile_SingleRequest(t *testing.T) {
 	content := "GET " + server.URL + "/users"
 	tempFile, err := os.CreateTemp("", "test_single_*.rest")
 	require.NoError(t, err)
-	defer os.Remove(tempFile.Name())
+	defer func() { _ = os.Remove(tempFile.Name()) }()
 	_, err = tempFile.WriteString(content)
 	require.NoError(t, err)
-	tempFile.Close() // Close the file before ParseRequestFile reads it
+	_ = tempFile.Close() // Close the file before ParseRequestFile reads it
 
 	responses, err := client.ExecuteFile(tempFile.Name())
 	require.NoError(t, err)
@@ -240,15 +240,16 @@ func TestExecuteFile_MultipleRequests(t *testing.T) {
 	var requestCounter int
 	server := startMockServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCounter++
-		if r.URL.Path == "/req1" {
+		switch r.URL.Path {
+		case "/req1":
 			assert.Equal(t, http.MethodGet, r.Method)
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, "response1")
-		} else if r.URL.Path == "/req2" {
+			_, _ = fmt.Fprint(w, "response1")
+		case "/req2":
 			assert.Equal(t, http.MethodPost, r.Method)
 			w.WriteHeader(http.StatusCreated)
-			fmt.Fprint(w, "response2")
-		} else {
+			_, _ = fmt.Fprint(w, "response2")
+		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}))
@@ -258,10 +259,10 @@ func TestExecuteFile_MultipleRequests(t *testing.T) {
 	content := fmt.Sprintf("GET %s/req1\n###\nPOST %s/req2", server.URL, server.URL)
 	tempFile, err := os.CreateTemp("", "test_multi_*.rest")
 	require.NoError(t, err)
-	defer os.Remove(tempFile.Name())
+	defer func() { _ = os.Remove(tempFile.Name()) }()
 	_, err = tempFile.WriteString(content)
 	require.NoError(t, err)
-	tempFile.Close()
+	_ = tempFile.Close()
 
 	responses, err := client.ExecuteFile(tempFile.Name())
 	require.NoError(t, err)
@@ -283,7 +284,7 @@ func TestExecuteFile_RequestWithError(t *testing.T) {
 	serverURL := "http://localhost:12346" // Non-existent server for first request
 	server2 := startMockServer(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "good response")
+		_, _ = fmt.Fprint(w, "good response")
 	})
 	defer server2.Close()
 
@@ -291,10 +292,10 @@ func TestExecuteFile_RequestWithError(t *testing.T) {
 	content := fmt.Sprintf("GET %s/bad\n###\nGET %s/good", serverURL, server2.URL)
 	tempFile, err := os.CreateTemp("", "test_err_*.rest")
 	require.NoError(t, err)
-	defer os.Remove(tempFile.Name())
+	defer func() { _ = os.Remove(tempFile.Name()) }()
 	_, err = tempFile.WriteString(content)
 	require.NoError(t, err)
-	tempFile.Close()
+	_ = tempFile.Close()
 
 	responses, err := client.ExecuteFile(tempFile.Name())
 	require.NoError(t, err) // ExecuteFile itself shouldn't error for per-request errors
@@ -315,10 +316,10 @@ func TestExecuteFile_ParseError(t *testing.T) {
 	content := "# just a comment" // This content will cause ParseRequestFile to return an error
 	tempFile, err := os.CreateTemp("", "test_parse_err_*.rest")
 	require.NoError(t, err)
-	defer os.Remove(tempFile.Name())
+	defer func() { _ = os.Remove(tempFile.Name()) }()
 	_, err = tempFile.WriteString(content)
 	require.NoError(t, err)
-	tempFile.Close()
+	_ = tempFile.Close()
 
 	_, err = client.ExecuteFile(tempFile.Name())
 	assert.Error(t, err)
@@ -331,10 +332,10 @@ func TestExecuteFile_NoRequestsInFile(t *testing.T) {
 	content := "# Only comments"
 	tempFile, err := os.CreateTemp("", "test_no_reqs_*.rest")
 	require.NoError(t, err)
-	defer os.Remove(tempFile.Name())
+	defer func() { _ = os.Remove(tempFile.Name()) }()
 	_, err = tempFile.WriteString(content)
 	require.NoError(t, err)
-	tempFile.Close()
+	_ = tempFile.Close()
 
 	_, err = client.ExecuteFile(tempFile.Name())
 	assert.Error(t, err)
