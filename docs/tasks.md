@@ -20,6 +20,6 @@ Last Updated: 2025-05-28
 | TASK-034 | Implement unit tests covering SCENARIO-LIB-012-001 (reject JSON response file). | Skipped     | AI       | 2025-06-06 |
 | TASK-035 | Implement unit tests covering SCENARIO-LIB-012-002 (reject YAML response file). | Skipped     | AI       | 2025-06-06 |
 | TASK-036 | Fix trailing space in `testdata/http_response_files/multiple_responses_gt2_expected.http` (line with `response3`). May require manual edit. | Done        | AI       | 2025-05-29 |
-| TASK-037 | Manually review and fix all test data files in `testdata/http_request_files/` and `testdata/http_response_files/` for whitespace/newline inconsistencies. | ToDo        | User     | 2025-05-29 |
-| TASK-038 | Refactor validator_test.go to remove `writeExpectedResponseFile` and use real .http files from `testdata/http_response_files/`. | Blocked     | AI       | 2025-05-30 |
-| TASK-039 | Manually restore/fix `validator_test.go` due to tool-induced corruption. File may need revert from VCS or careful manual edit to fix duplication/deletion. | ToDo        | User     | 2025-05-28 |
+| TASK-037 | Manually review and fix all test data files in `testdata/http_request_files/` and `testdata/http_response_files/` for whitespace/newline inconsistencies. | Done        | User     | 2025-05-29 |
+| TASK-038 | Refactor validator_test.go to remove `writeExpectedResponseFile` and use real .http files from `testdata/http_response_files/`. | Done        | AI       | 2025-05-30 |
+| TASK-039 | Manually restore/fix `validator_test.go` due to tool-induced corruption. File may need revert from VCS or careful manual edit to fix duplication/deletion. | Done        | User     | 2025-05-28 |
