@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/go-multierror"
 )
 
 // Client is the main struct for interacting with the REST client library.
@@ -96,14 +98,38 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 		return nil, fmt.Errorf("no requests found in file %s", requestFilePath)
 	}
 
-	responses := make([]*Response, 0, len(parsedFile.Requests))
-	for _, restClientReq := range parsedFile.Requests {
-		// Each executeRequest call will now handle its own errors internally by populating resp.Error
-		resp, _ := c.executeRequest(ctx, restClientReq) // Top-level error from executeRequest is mostly for critical failures
-		responses = append(responses, resp)
+	responses := make([]*Response, len(parsedFile.Requests))
+	var multiErr *multierror.Error
+
+	for i, restClientReq := range parsedFile.Requests {
+		resp, execErr := c.executeRequest(ctx, restClientReq)
+		if execErr != nil {
+			// This is a critical error from executeRequest itself (e.g., bad base URL, nil request).
+			// We should capture this error. If resp is nil, create a minimal one.
+			if resp == nil {
+				resp = &Response{Request: restClientReq}
+			}
+			// Ensure the critical error is part of the response error.
+			if resp.Error == nil {
+				resp.Error = execErr
+			} else {
+				// If there was already an error in resp (e.g. from http.Do), wrap execErr too.
+				resp.Error = fmt.Errorf("critical pre-execution error: %w (original error: %s)", execErr, resp.Error)
+			}
+			// Also add this critical error to the multierror result for the whole file execution.
+			wrappedExecErr := fmt.Errorf("request %d (%s %s) failed with critical error: %w", i+1, restClientReq.Method, restClientReq.URL.String(), execErr)
+			multiErr = multierror.Append(multiErr, wrappedExecErr)
+		}
+
+		// Even if execErr was nil, resp.Error might contain an error from within executeRequest (e.g., network error, body read error).
+		if resp != nil && resp.Error != nil {
+			wrappedRespErr := fmt.Errorf("request %d (%s %s) failed: %w", i+1, restClientReq.Method, restClientReq.URL.String(), resp.Error)
+			multiErr = multierror.Append(multiErr, wrappedRespErr)
+		}
+		responses[i] = resp
 	}
 
-	return responses, nil
+	return responses, multiErr.ErrorOrNil()
 }
 
 // executeRequest sends a given Request and returns the Response.

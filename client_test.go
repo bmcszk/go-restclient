@@ -143,7 +143,11 @@ func TestExecuteFile_RequestWithError(t *testing.T) {
 	_ = tempFile.Close()
 
 	responses, err := client.ExecuteFile(context.Background(), tempFile.Name())
-	require.NoError(t, err) // ExecuteFile itself shouldn't error for per-request errors
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "1 error occurred:")
+	assert.Contains(t, err.Error(), "http request failed")
+	assert.Contains(t, err.Error(), "request 1 (GET http://localhost:12346/bad) failed")
+
 	require.Len(t, responses, 2)
 
 	resp1 := responses[0]
@@ -287,7 +291,11 @@ func TestExecuteFile_InvalidMethodInFile(t *testing.T) {
 	// No mock transport needed as the error occurs when the http.Client tries to execute it.
 
 	responses, err := client.ExecuteFile(context.Background(), "testdata/http_request_files/invalid_method.http")
-	require.NoError(t, err) // ExecuteFile itself shouldn't error here
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "1 error occurred:")
+	assert.Contains(t, err.Error(), "unsupported protocol scheme")
+	assert.Contains(t, err.Error(), "request 1 (INVALIDMETHOD /test) failed")
+
 	require.Len(t, responses, 1)
 
 	resp1 := responses[0]

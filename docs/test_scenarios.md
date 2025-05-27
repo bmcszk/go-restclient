@@ -118,3 +118,45 @@ Last Updated: 2025-05-27
 - SCENARIO-LIB-007-001: Use a variable defined in the same file.
 - SCENARIO-LIB-007-002: Use environment variables.
 - SCENARIO-LIB-007-003: Handle undefined variables. 
+
+## REQ-LIB-008: The library should handle errors from `executeRequest` using an `errgroup`.
+
+- SCENARIO-LIB-008-001: Verify that if one request in a multi-request execution (within `ExecuteFile`) fails, `errgroup` correctly captures and returns the error.
+- SCENARIO-LIB-008-002: Verify that if multiple requests fail, `errgroup` captures all errors (or the first one, depending on `errgroup`'s behavior configuration).
+- SCENARIO-LIB-008-003: Verify that successful requests complete even if other requests in the group fail, and their results are available (if applicable).
+
+## REQ-LIB-009: The library must provide a method to validate if the actual HTTP response matches an expected response defined in a file.
+
+- SCENARIO-LIB-009-001: Validate a successful response (status, headers, body) against an expected response file.
+  - Expected: Validation passes.
+- SCENARIO-LIB-009-002: Validate a response where the status code mismatches the expected response file.
+  - Expected: Validation fails with a clear error about status code mismatch.
+- SCENARIO-LIB-009-003: Validate a response where a header mismatches the expected response file.
+  - Expected: Validation fails with a clear error about header mismatch.
+- SCENARIO-LIB-009-004: Validate a response where the body (JSON) mismatches the expected response file.
+  - Expected: Validation fails with a clear error/diff about body mismatch.
+- SCENARIO-LIB-009-005: Validate a response against an expected response file that specifies only a status code.
+  - Expected: Validation passes if status code matches, ignoring headers/body.
+- SCENARIO-LIB-009-006: Validate a response against an expected response file that specifies only certain headers.
+  - Expected: Validation passes if specified headers match, ignoring others and body.
+- SCENARIO-LIB-009-007: Handle a missing expected response file.
+  - Expected: Error reported.
+- SCENARIO-LIB-009-008: Handle an incorrectly formatted expected response file.
+  - Expected: Error reported.
+
+## REQ-LIB-010: The response file format should allow for multiple responses, separated by `###`, similar to request files.
+
+- SCENARIO-LIB-010-001: Parse an expected response file containing multiple response definitions separated by `###`.
+  - Expected: All response definitions are parsed correctly.
+- SCENARIO-LIB-010-002: Match a sequence of actual responses to a sequence of expected responses from a multi-response file.
+- SCENARIO-LIB-010-003: Handle mismatch in the number of actual responses vs. expected responses in a multi-response file.
+
+## REQ-LIB-011: The library must be tested for its capability to handle multiple requests separated by `###` in `.http` files.
+
+- SCENARIO-LIB-011-001: Execute an `.http` file containing two valid GET requests separated by `###`.
+  - Expected: Both requests are sent, and their respective responses are captured.
+- SCENARIO-LIB-011-002: Execute an `.http` file where the first request is valid, and the second is invalid (e.g., bad syntax), separated by `###`.
+  - Expected: The first request is executed; an error is reported for the second. Behavior of `ExecuteFile` (continues or stops) should be defined and tested. (Relates to REQ-LIB-008)
+- SCENARIO-LIB-011-003: Execute an `.http` file with multiple (>2) requests separated by `###`.
+  - Expected: All requests are processed sequentially.
+- SCENARIO-LIB-011-004: (Covered by SCENARIO-LIB-001-010 for parsing aspect) Ensure correct parsing and execution of multiple requests defined in `sample1.http`.

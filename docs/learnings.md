@@ -37,3 +37,10 @@ Last Updated: 2025-05-27
 *   **Mistake:** After being reminded about the Git workflow, attempts to stage and commit files (`git add`, `git commit`) failed with "nothing to commit, working tree clean," despite numerous `edit_file` operations reporting success. This indicates a potential misunderstanding of how `edit_file` interacts with the file system and Git staging, or an issue with the environment/tooling that prevents `git` from seeing the changes.
 *   **Resolution (Pending):** Paused to seek clarification on the actual state of the files in the workspace. If files are modified, the `git add/commit` process needs to be debugged. If files are not modified, the `edit_file` tool's behavior needs to be investigated.
 *   **Learning:** The successful reported execution of a file modification tool does not automatically guarantee that the changes are 1) physically written to disk in a way that `git` can see, or 2) automatically staged. Explicitly verify file changes and Git status when troubleshooting commit issues. Do not assume `edit_file` stages changes. 
+
+## 2025-05-27: Incorrect Error Handling Strategy for `ExecuteFile`
+
+*   **Mistake:** Implemented error handling in `ExecuteFile` using `golang.org/x/sync/errgroup` as per the initial interpretation of the requirement "ExecuteFile has wrong error handling, it should use error group (errgroup) for errors from executeRequest".
+*   **Correction:** The user clarified that the intention was to use `github.com/hashicorp/go-multierror` for collecting multiple errors from the requests executed by `ExecuteFile`.
+*   **Resolution:** The implementation will be refactored to use `go-multierror` instead of `errgroup`.
+*   **Learning:** Clarify ambiguous terms like "error group" if multiple interpretations or common libraries exist. Explicitly confirm the intended library or pattern when a general term is used in requirements.
