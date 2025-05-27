@@ -1,0 +1,3 @@
+GET https://example.com
+Accept: application/json
+Accept: text/xml 

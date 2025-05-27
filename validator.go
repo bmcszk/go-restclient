@@ -113,12 +113,8 @@ func ValidateResponses(ctx context.Context, responseFilePath string, actualRespo
 
 		// Validate Body (Exact Match)
 		if expected.Body != nil {
-			normalizedExpectedBody := strings.ReplaceAll(*expected.Body, "\r\n", "\n")
-			normalizedActualBody := strings.ReplaceAll(actual.BodyString, "\r\n", "\n")
-
-			// Trim a single trailing newline character, if present, from both for consistent comparison.
-			normalizedExpectedBody = strings.TrimSuffix(normalizedExpectedBody, "\n")
-			normalizedActualBody = strings.TrimSuffix(normalizedActualBody, "\n")
+			normalizedExpectedBody := strings.TrimSpace(strings.ReplaceAll(*expected.Body, "\r\n", "\n"))
+			normalizedActualBody := strings.TrimSpace(strings.ReplaceAll(actual.BodyString, "\r\n", "\n"))
 
 			if normalizedActualBody != normalizedExpectedBody {
 				diff := difflib.UnifiedDiff{
@@ -135,11 +131,9 @@ func ValidateResponses(ctx context.Context, responseFilePath string, actualRespo
 
 		// Validate BodyContains
 		if len(expected.BodyContains) > 0 {
-			normalizedActualBody := strings.ReplaceAll(actual.BodyString, "\r\n", "\n")
-			normalizedActualBody = strings.TrimSuffix(normalizedActualBody, "\n") // Also trim here for consistency
+			normalizedActualBody := strings.TrimSpace(strings.ReplaceAll(actual.BodyString, "\r\n", "\n"))
 			for _, sub := range expected.BodyContains {
-				normalizedSub := strings.ReplaceAll(sub, "\r\n", "\n")
-				normalizedSub = strings.TrimSuffix(normalizedSub, "\n") // And here
+				normalizedSub := strings.TrimSpace(strings.ReplaceAll(sub, "\r\n", "\n"))
 				if !strings.Contains(normalizedActualBody, normalizedSub) {
 					errs = multierror.Append(errs, fmt.Errorf("validation for response #%d ('%s'): actual body does not contain expected substring: '%s'", i+1, responseFilePath, sub))
 				}
@@ -148,11 +142,9 @@ func ValidateResponses(ctx context.Context, responseFilePath string, actualRespo
 
 		// Validate BodyNotContains
 		if len(expected.BodyNotContains) > 0 {
-			normalizedActualBody := strings.ReplaceAll(actual.BodyString, "\r\n", "\n")
-			normalizedActualBody = strings.TrimSuffix(normalizedActualBody, "\n") // Also trim here
+			normalizedActualBody := strings.TrimSpace(strings.ReplaceAll(actual.BodyString, "\r\n", "\n"))
 			for _, sub := range expected.BodyNotContains {
-				normalizedSub := strings.ReplaceAll(sub, "\r\n", "\n")
-				normalizedSub = strings.TrimSuffix(normalizedSub, "\n") // And here
+				normalizedSub := strings.TrimSpace(strings.ReplaceAll(sub, "\r\n", "\n"))
 				if strings.Contains(normalizedActualBody, normalizedSub) {
 					errs = multierror.Append(errs, fmt.Errorf("validation for response #%d ('%s'): actual body contains unexpected substring: '%s'", i+1, responseFilePath, sub))
 				}

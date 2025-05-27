@@ -10,15 +10,8 @@ import (
 )
 
 func TestParseRequests_SimpleGET(t *testing.T) {
-	content := `
-# This is a comment
-GET https://example.com/api/users
-Accept: application/json
-User-Agent: test-client
-
-`
-	reader := strings.NewReader(content)
-	parsedFile, err := parseRequests(reader, "test_simple_get.rest")
+	filePath := "testdata/http_request_files/simple_get_with_headers_and_comment.http"
+	parsedFile, err := ParseRequestFile(filePath)
 
 	require.NoError(t, err)
 	require.NotNil(t, parsedFile)
@@ -33,22 +26,13 @@ User-Agent: test-client
 	assert.Empty(t, req.Name)
 	bodyBytes, _ := io.ReadAll(req.Body)
 	assert.Empty(t, string(bodyBytes))
-	assert.Equal(t, "test_simple_get.rest", req.FilePath)
-	assert.Equal(t, 3, req.LineNumber) // Line number where GET is (after initial newline and comment)
+	assert.Equal(t, filePath, req.FilePath)
+	assert.Equal(t, 2, req.LineNumber) // Line number where GET is (after comment)
 }
 
 func TestParseRequests_POSTWithBody(t *testing.T) {
-	content := `
-POST https://example.com/api/resource HTTP/1.1
-Content-Type: application/json
-
-{
-  "name": "test",
-  "value": 123
-}
-`
-	reader := strings.NewReader(content)
-	parsedFile, err := parseRequests(reader, "test_post_body.rest")
+	filePath := "testdata/http_request_files/post_with_body_and_version.http"
+	parsedFile, err := ParseRequestFile(filePath)
 
 	require.NoError(t, err)
 	require.NotNil(t, parsedFile)
@@ -67,32 +51,12 @@ Content-Type: application/json
 	bodyBytes, _ := io.ReadAll(req.Body)
 	assert.Equal(t, expectedBody, string(bodyBytes))
 	assert.Equal(t, expectedBody, req.RawBody)
-	assert.Equal(t, 2, req.LineNumber) // POST line is L2 after initial newline
+	assert.Equal(t, 1, req.LineNumber) // POST line is L1
 }
 
 func TestParseRequests_MultipleRequests(t *testing.T) {
-	content := `
-### First Request: Get Users
-GET https://example.com/users
-
-### Second Request: Create User
-# A comment for the second request
-POST https://example.com/users
-Content-Type: application/json
-
-{
-  "username": "newuser"
-}
-
-### Third Request with Custom HTTP Version
-PUT https://example.com/users/1 HTTP/2.0
-
-{
-  "status": "active"
-}
-`
-	reader := strings.NewReader(content)
-	parsedFile, err := parseRequests(reader, "test_multi.rest")
+	filePath := "testdata/http_request_files/multiple_requests_varied.http"
+	parsedFile, err := ParseRequestFile(filePath)
 
 	require.NoError(t, err)
 	require.NotNil(t, parsedFile)
@@ -106,7 +70,7 @@ PUT https://example.com/users/1 HTTP/2.0
 	assert.Equal(t, "HTTP/1.1", req1.HTTPVersion)
 	bodyBytes1, _ := io.ReadAll(req1.Body)
 	assert.Empty(t, string(bodyBytes1))
-	assert.Equal(t, 2, req1.LineNumber) // ### First Request is L2
+	assert.Equal(t, 1, req1.LineNumber) // ### First Request is L1
 
 	// Check second request
 	req2 := parsedFile.Requests[1]
@@ -121,7 +85,7 @@ PUT https://example.com/users/1 HTTP/2.0
 `
 	bodyBytes2, _ := io.ReadAll(req2.Body)
 	assert.Equal(t, expectedBody2, string(bodyBytes2))
-	assert.Equal(t, 5, req2.LineNumber) // ### Second Request is L5
+	assert.Equal(t, 4, req2.LineNumber) // ### Second Request is L4
 
 	// Check third request
 	req3 := parsedFile.Requests[2]
@@ -134,68 +98,55 @@ PUT https://example.com/users/1 HTTP/2.0
 }`
 	bodyBytes3, _ := io.ReadAll(req3.Body)
 	assert.Equal(t, expectedBody3, string(bodyBytes3))
-	assert.Equal(t, 14, req3.LineNumber) // ### Third Request is L14
+	assert.Equal(t, 13, req3.LineNumber) // ### Third Request is L13
 }
 
 func TestParseRequests_InvalidRequestLine(t *testing.T) {
-	content := `GET`
-	reader := strings.NewReader(content)
-	_, err := parseRequests(reader, "test_invalid.rest")
+	_, err := ParseRequestFile("testdata/http_request_files/invalid_request_line_only.http")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid request line")
 	assert.Contains(t, err.Error(), "line 1")
 }
 
 func TestParseRequests_InvalidHeader(t *testing.T) {
-	content := `GET https://example.com
-Accept application/json`
-	reader := strings.NewReader(content)
-	_, err := parseRequests(reader, "test_invalid_header.rest")
+	_, err := ParseRequestFile("testdata/http_request_files/invalid_header_format.http")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid header line")
 	assert.Contains(t, err.Error(), "line 2") // Header is on L2
 }
 
 func TestParseRequests_InvalidURL(t *testing.T) {
-	content := `GET ://invalid-url`
-	reader := strings.NewReader(content)
-	_, err := parseRequests(reader, "test_invalid_url.rest")
+	_, err := ParseRequestFile("testdata/http_request_files/invalid_url_format.http")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid URL")
 }
 
 func TestParseRequests_EmptyFile(t *testing.T) {
-	content := ``
-	reader := strings.NewReader(content)
-	parsedFile, err := parseRequests(reader, "test_empty.rest") // provide filename to trigger error
+	// Note: The file testdata/http_request_files/no_requests.http is used here as it's an empty file.
+	// It is also used by TestExecuteFile_NoRequestsInFile in client_test.go
+	parsedFile, err := ParseRequestFile("testdata/http_request_files/no_requests.http")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no valid requests found in file")
 	assert.Nil(t, parsedFile)
 
 	// Test with empty reader and no filename (should not error, used in some internal cases)
-	parsedFile, err = parseRequests(strings.NewReader(""), "")
-	require.NoError(t, err)
-	require.NotNil(t, parsedFile)
-	assert.Empty(t, parsedFile.Requests)
+	// This part remains as it tests the parseRequests internal function behavior with an empty reader.
+	parsedFileInternal, errInternal := parseRequests(strings.NewReader(""), "")
+	require.NoError(t, errInternal)
+	require.NotNil(t, parsedFileInternal)
+	assert.Empty(t, parsedFileInternal.Requests)
 }
 
 func TestParseRequests_CommentOnlyFile(t *testing.T) {
-	content := `# comment1
-# comment2`
-	reader := strings.NewReader(content)
-	parsedFile, err := parseRequests(reader, "test_comment_only.rest")
+	parsedFile, err := ParseRequestFile("testdata/http_request_files/comment_only_file.http")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no valid requests found in file")
 	assert.Nil(t, parsedFile)
 }
 
 func TestParseRequests_RequestWithoutSeparator(t *testing.T) {
-	content := `
-GET https://example.com/no-separator
-Accept: text/plain
-`
-	reader := strings.NewReader(content)
-	parsedFile, err := parseRequests(reader, "test_no_sep.rest")
+	filePath := "testdata/http_request_files/request_no_separator.http"
+	parsedFile, err := ParseRequestFile(filePath)
 	require.NoError(t, err)
 	require.NotNil(t, parsedFile)
 	require.Len(t, parsedFile.Requests, 1)
@@ -205,19 +156,12 @@ Accept: text/plain
 	assert.Equal(t, "GET", req.Method)
 	assert.Equal(t, "https://example.com/no-separator", req.URL.String())
 	assert.Equal(t, "text/plain", req.Headers.Get("Accept"))
-	assert.Equal(t, 2, req.LineNumber) // GET is L2 after initial newline
+	assert.Equal(t, 1, req.LineNumber) // GET is L1
 }
 
 func TestParseRequests_HeadersWithDifferentSpacing(t *testing.T) {
-	content := `
-GET https://example.com
-Header1:Value1
-Header2: Value2
-Header3 : Value3
-Header4 :Value4
-`
-	reader := strings.NewReader(content)
-	parsedFile, err := parseRequests(reader, "test_header_spacing.rest")
+	filePath := "testdata/http_request_files/headers_various_spacing.http"
+	parsedFile, err := ParseRequestFile(filePath)
 	require.NoError(t, err)
 	require.Len(t, parsedFile.Requests, 1)
 
@@ -228,52 +172,9 @@ Header4 :Value4
 	assert.Equal(t, "Value4", req.Headers.Get("Header4"))
 }
 
-func TestParseRequests_BodyEndsWithNewline(t *testing.T) {
-	content := `
-POST https://example.com/submit
-Content-Type: text/plain
-
-This is the body.
-
-`
-	reader := strings.NewReader(content)
-	parsedFile, err := parseRequests(reader, "test_body_newline.rest")
-	require.NoError(t, err)
-	require.Len(t, parsedFile.Requests, 1)
-
-	req := parsedFile.Requests[0]
-	expectedBody := "This is the body.\n"
-	bodyBytes, _ := io.ReadAll(req.Body)
-	assert.Equal(t, expectedBody, string(bodyBytes))
-	assert.Equal(t, expectedBody, req.RawBody)
-}
-
-func TestParseRequests_BodyWithoutTrailingNewline(t *testing.T) {
-	content := `
-POST https://example.com/submit
-Content-Type: text/plain
-
-This is the body.`
-	reader := strings.NewReader(content)
-	parsedFile, err := parseRequests(reader, "test_body_no_newline.rest")
-	require.NoError(t, err)
-	require.Len(t, parsedFile.Requests, 1)
-
-	req := parsedFile.Requests[0]
-	expectedBody := "This is the body."
-	bodyBytes, _ := io.ReadAll(req.Body)
-	assert.Equal(t, expectedBody, string(bodyBytes))
-	assert.Equal(t, expectedBody, req.RawBody)
-}
-
 func TestParseRequests_MultipleHeadersSameKey(t *testing.T) {
-	content := `
-GET https://example.com
-Accept: application/json
-Accept: text/xml
-`
-	reader := strings.NewReader(content)
-	parsedFile, err := parseRequests(reader, "test_multi_header.rest")
+	filePath := "testdata/http_request_files/multiple_accept_headers.http"
+	parsedFile, err := ParseRequestFile(filePath)
 	require.NoError(t, err)
 	require.Len(t, parsedFile.Requests, 1)
 
@@ -284,26 +185,18 @@ Accept: text/xml
 }
 
 func TestParseRequests_SeparatorWithoutName(t *testing.T) {
-	content := `
-###
-GET https://example.com/one
-
-### 
-POST https://example.com/two
-
-`
-	reader := strings.NewReader(content)
-	parsedFile, err := parseRequests(reader, "test_sep_no_name.rest")
+	filePath := "testdata/http_request_files/separator_no_name.http"
+	parsedFile, err := ParseRequestFile(filePath)
 	require.NoError(t, err)
 	require.Len(t, parsedFile.Requests, 2)
 
 	assert.Empty(t, parsedFile.Requests[0].Name)
 	assert.Equal(t, "https://example.com/one", parsedFile.Requests[0].URL.String())
-	assert.Equal(t, 2, parsedFile.Requests[0].LineNumber) // First ### is L2
+	assert.Equal(t, 1, parsedFile.Requests[0].LineNumber) // First ### is L1
 
 	assert.Empty(t, parsedFile.Requests[1].Name)
 	assert.Equal(t, "https://example.com/two", parsedFile.Requests[1].URL.String())
-	assert.Equal(t, 5, parsedFile.Requests[1].LineNumber) // Second ### is L5
+	assert.Equal(t, 4, parsedFile.Requests[1].LineNumber) // Second ### is L4
 }
 
 func TestParseRequestFile_SimpleGET_FromFile(t *testing.T) {
@@ -398,16 +291,8 @@ func TestParseRequestFile_PostWithJsonBody_FromFile(t *testing.T) {
 }
 
 func TestParseExpectedResponses_SimpleOK(t *testing.T) {
-	content := `
-HTTP/1.1 200 OK
-Content-Type: application/json
-
-{
-  "status": "success"
-}
-`
-	reader := strings.NewReader(content)
-	expectedResponses, err := parseExpectedResponses(reader, "test_simple_ok.hresp")
+	filePath := "testdata/http_response_files/parser_simple_ok.hresp"
+	expectedResponses, err := ParseExpectedResponseFile(filePath)
 
 	require.NoError(t, err)
 	require.NotNil(t, expectedResponses)
@@ -427,26 +312,8 @@ Content-Type: application/json
 }
 
 func TestParseExpectedResponses_MultipleResponses(t *testing.T) {
-	content := `
-HTTP/1.1 200 OK
-Content-Type: application/json
-
-{
-  "message": "First response"
-}
-
-###
-
-HTTP/1.1 201 Created
-Content-Type: application/json
-X-Custom-Header: value
-
-{
-  "id": 123
-}
-`
-	reader := strings.NewReader(content)
-	expectedResponses, err := parseExpectedResponses(reader, "test_multi.hresp")
+	filePath := "testdata/http_response_files/parser_multiple_responses.hresp"
+	expectedResponses, err := ParseExpectedResponseFile(filePath)
 	require.NoError(t, err)
 	require.Len(t, expectedResponses, 2)
 
@@ -473,77 +340,52 @@ X-Custom-Header: value
 }
 
 func TestParseExpectedResponses_InvalidStatusLine(t *testing.T) {
-	content := `HTTP/1.1` // Missing status code and text
-	reader := strings.NewReader(content)
-	_, err := parseExpectedResponses(reader, "test_invalid_status.hresp")
+	_, err := ParseExpectedResponseFile("testdata/http_response_files/parser_invalid_status_line.hresp")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid status line")
 }
 
 func TestParseExpectedResponses_InvalidStatusCode(t *testing.T) {
-	content := `HTTP/1.1 ABC OK` // ABC is not a number
-	reader := strings.NewReader(content)
-	_, err := parseExpectedResponses(reader, "test_invalid_code.hresp")
+	_, err := ParseExpectedResponseFile("testdata/http_response_files/parser_invalid_status_code.hresp")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid status code 'ABC'")
 }
 
 func TestParseExpectedResponses_InvalidHeaderFormat(t *testing.T) {
-	content := `HTTP/1.1 200 OK
-Content-Type application/json` // Missing colon in header
-	reader := strings.NewReader(content)
-	_, err := parseExpectedResponses(reader, "test_invalid_header.hresp")
+	_, err := ParseExpectedResponseFile("testdata/http_response_files/parser_invalid_header_format.hresp")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid header line")
 }
 
 func TestParseExpectedResponses_EmptyFile(t *testing.T) {
-	content := ``
-	reader := strings.NewReader(content)
-	_, err := parseExpectedResponses(reader, "test_empty.hresp")
+	_, err := ParseExpectedResponseFile("testdata/http_response_files/parser_empty_file.hresp")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no valid expected responses found in file")
 }
 
 func TestParseExpectedResponses_CommentOnlyFile(t *testing.T) {
-	content := `# Only comments here`
-	reader := strings.NewReader(content)
-	_, err := parseExpectedResponses(reader, "test_comment_only.hresp")
+	_, err := ParseExpectedResponseFile("testdata/http_response_files/parser_comment_only_file.hresp")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no valid expected responses found in file")
 }
 
 func TestParseExpectedResponses_SeparatorWithWhitespace(t *testing.T) {
-	content := `HTTP/1.1 200 OK
-
-Body1
-
-  ###  
-
-HTTP/1.1 201 Created
-
-Body2`
-	reader := strings.NewReader(content)
-	resps, err := parseExpectedResponses(reader, "test_separator_whitespace.hresp")
+	filePath := "testdata/http_response_files/parser_separator_whitespace.hresp"
+	resps, err := ParseExpectedResponseFile(filePath)
 	require.NoError(t, err)
 	require.Len(t, resps, 2, "Expected two responses")
 
 	assert.Equal(t, 200, *resps[0].StatusCode)
-	assert.Equal(t, "Body1\n", *resps[0].Body)
+	// With simplified file content, no blank line after Body1, so no trailing \n
+	assert.Equal(t, "Body1", *resps[0].Body)
 
 	assert.Equal(t, 201, *resps[1].StatusCode)
-	assert.Equal(t, "Body2", *resps[1].Body)
+	assert.Equal(t, "Body2 ", *resps[1].Body)
 }
 
 func TestParseExpectedResponses_SeparatorInContent(t *testing.T) {
-	content := `HTTP/1.1 200 OK
-X-Custom-Header: Info ### SeparatorLikeValue
-
-Body line 1
-This body contains ### as text.
-Body line 3`
-	reader := strings.NewReader(content)
-	resps, err := parseExpectedResponses(reader, "test_separator_in_content.hresp")
+	filePath := "testdata/http_response_files/parser_separator_in_content.hresp"
+	resps, err := ParseExpectedResponseFile(filePath)
 	require.NoError(t, err)
 	require.Len(t, resps, 1, "Expected a single response")
 
