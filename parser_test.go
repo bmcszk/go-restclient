@@ -512,3 +512,47 @@ func TestParseExpectedResponses_CommentOnlyFile(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no valid expected responses found in file")
 }
+
+func TestParseExpectedResponses_SeparatorWithWhitespace(t *testing.T) {
+	content := `HTTP/1.1 200 OK
+
+Body1
+
+  ###  
+
+HTTP/1.1 201 Created
+
+Body2`
+	reader := strings.NewReader(content)
+	resps, err := parseExpectedResponses(reader, "test_separator_whitespace.hresp")
+	require.NoError(t, err)
+	require.Len(t, resps, 2, "Expected two responses")
+
+	assert.Equal(t, 200, *resps[0].StatusCode)
+	assert.Equal(t, "Body1\n", *resps[0].Body)
+
+	assert.Equal(t, 201, *resps[1].StatusCode)
+	assert.Equal(t, "Body2", *resps[1].Body)
+}
+
+func TestParseExpectedResponses_SeparatorInContent(t *testing.T) {
+	content := `HTTP/1.1 200 OK
+X-Custom-Header: Info ### SeparatorLikeValue
+
+Body line 1
+This body contains ### as text.
+Body line 3`
+	reader := strings.NewReader(content)
+	resps, err := parseExpectedResponses(reader, "test_separator_in_content.hresp")
+	require.NoError(t, err)
+	require.Len(t, resps, 1, "Expected a single response")
+
+	resp1 := resps[0]
+	assert.Equal(t, 200, *resp1.StatusCode)
+	assert.Equal(t, "Info ### SeparatorLikeValue", resp1.Headers.Get("X-Custom-Header"))
+	expectedBody := "Body line 1\nThis body contains ### as text.\nBody line 3"
+	assert.Equal(t, expectedBody, *resp1.Body)
+}
+
+// TestParseExpectedResponses_SingleResponseNoSeparator tests parsing a single expected response
+// ... existing code ...

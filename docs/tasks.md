@@ -11,7 +11,7 @@ Last Updated: 2025-05-28
 | TASK-025 | Add unit tests for `Client.ExecuteFile` to verify handling of multiple requests from a single `.http` request file and validating each response. | Done        | AI       | 2025-05-30 |
 | TASK-026 | Implement unit tests covering SCENARIO-LIB-008-001, SCENARIO-LIB-008-002, SCENARIO-LIB-008-003. | Done        | AI       | 2025-05-31 |
 | TASK-027 | Implement unit tests covering SCENARIO-LIB-009-001 to SCENARIO-LIB-009-008.          | Done        | AI       | 2025-06-01 |
-| TASK-028 | Implement unit tests covering SCENARIO-LIB-010-001 to SCENARIO-LIB-010-003.          | Blocked     | AI       | 2025-06-02 |
+| TASK-028 | Implement unit tests covering SCENARIO-LIB-010-001 to SCENARIO-LIB-010-003.          | Done        | AI       | 2025-06-02 |
 | TASK-029 | Implement unit tests covering SCENARIO-LIB-011-001 to SCENARIO-LIB-011-004.          | Done        | AI       | 2025-06-03 |
 | TASK-030 | Implement `JSONPathChecks` validation in `ValidateResponse` and `ExpectedResponse`. | Skipped     | AI       | 2025-06-04 |
 | TASK-031 | Add unit tests for `JSONPathChecks` in `validator_test.go`.                 | Skipped     | AI       | 2025-06-04 |
