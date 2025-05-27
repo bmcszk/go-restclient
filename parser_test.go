@@ -305,3 +305,94 @@ POST https://example.com/two
 	assert.Equal(t, "https://example.com/two", parsedFile.Requests[1].URL.String())
 	assert.Equal(t, 5, parsedFile.Requests[1].LineNumber) // Second ### is L5
 }
+
+func TestParseRequestFile_SimpleGET_FromFile(t *testing.T) {
+	filePath := "testdata/http_request_files/simple_get.http"
+	parsedFile, err := ParseRequestFile(filePath)
+
+	require.NoError(t, err)
+	require.NotNil(t, parsedFile)
+	assert.Equal(t, filePath, parsedFile.FilePath)
+	require.Len(t, parsedFile.Requests, 1)
+
+	req := parsedFile.Requests[0]
+	assert.Equal(t, "GET", req.Method)
+	assert.Equal(t, "https://jsonplaceholder.typicode.com/todos/1", req.URL.String())
+	assert.Empty(t, req.Headers)
+	assert.Equal(t, "HTTP/1.1", req.HTTPVersion) // Assuming default or parser sets it
+	assert.Empty(t, req.Name)
+	bodyBytes, err := io.ReadAll(req.Body)
+	require.NoError(t, err)
+	assert.Empty(t, string(bodyBytes))
+	assert.Equal(t, filePath, req.FilePath)
+	assert.True(t, req.LineNumber > 0) // Line number should be set
+}
+
+func TestParseRequestFile_GetWithHeaders_FromFile(t *testing.T) {
+	filePath := "testdata/http_request_files/get_with_headers.http"
+	parsedFile, err := ParseRequestFile(filePath)
+
+	require.NoError(t, err)
+	require.NotNil(t, parsedFile)
+	assert.Equal(t, filePath, parsedFile.FilePath)
+	require.Len(t, parsedFile.Requests, 1)
+
+	req := parsedFile.Requests[0]
+	assert.Equal(t, "GET", req.Method)
+	assert.Equal(t, "https://jsonplaceholder.typicode.com/todos/1", req.URL.String())
+	assert.Equal(t, "HTTP/1.1", req.HTTPVersion)
+	assert.Empty(t, req.Name)
+
+	require.NotNil(t, req.Headers)
+	assert.Equal(t, "application/json", req.Headers.Get("Accept"))
+	assert.Equal(t, "go-restclient-test", req.Headers.Get("User-Agent"))
+
+	bodyBytes, err := io.ReadAll(req.Body)
+	require.NoError(t, err)
+	assert.Empty(t, string(bodyBytes))
+	assert.Equal(t, filePath, req.FilePath)
+	assert.True(t, req.LineNumber > 0, "Line number should be set and greater than 0")
+}
+
+func TestParseRequestFile_PostWithJsonBody_FromFile(t *testing.T) {
+	filePath := "testdata/http_request_files/post_with_json_body.http"
+	parsedFile, err := ParseRequestFile(filePath)
+
+	require.NoError(t, err)
+	require.NotNil(t, parsedFile)
+	assert.Equal(t, filePath, parsedFile.FilePath)
+	require.Len(t, parsedFile.Requests, 1)
+
+	req := parsedFile.Requests[0]
+	assert.Equal(t, "POST", req.Method)
+	assert.Equal(t, "https://jsonplaceholder.typicode.com/posts", req.URL.String())
+	assert.Equal(t, "HTTP/1.1", req.HTTPVersion) // Assuming default
+	assert.Empty(t, req.Name)
+
+	require.NotNil(t, req.Headers)
+	assert.Equal(t, "application/json", req.Headers.Get("Content-Type"))
+
+	expectedBody := `{
+  "title": "foo",
+  "body": "bar",
+  "userId": 1
+}`
+	bodyBytes, err := io.ReadAll(req.Body)
+	require.NoError(t, err)
+	assert.JSONEq(t, expectedBody, string(bodyBytes), "Parsed body does not match expected JSON")
+	assert.Equal(t, filePath, req.FilePath)
+	assert.True(t, req.LineNumber > 0, "Line number should be set and greater than 0")
+
+	// Also check RawBody if it's populated and matches (stripping potential trailing newline from file)
+	// The parser might or might not include the final newline of the file in RawBody.
+	// For this test, we are primarily concerned with the io.Reader Body's content.
+	// However, if RawBody is a feature, it's good to be aware.
+	// For now, let's ensure it's not empty if a body was provided.
+	if len(strings.TrimSpace(expectedBody)) > 0 {
+		assert.NotEmpty(t, req.RawBody, "RawBody should not be empty when a body is provided")
+		// A more specific assertion for RawBody might be needed if its exact content
+		// (including trailing newlines) is strictly defined by the parser.
+		// For instance, if the parser is expected to store exactly what's in the file:
+		assert.JSONEq(t, expectedBody, strings.TrimSuffix(req.RawBody, "\n"), "RawBody does not match expected JSON (ignoring potential trailing newline)")
+	}
+}

@@ -342,4 +342,54 @@ func TestExecuteFile_NoRequestsInFile(t *testing.T) {
 	assert.Contains(t, err.Error(), "no valid requests found in file")
 }
 
+func TestExecuteFile_SimpleGetHTTP(t *testing.T) {
+	// The purpose of THIS test is to ensure ExecuteFile
+	// correctly parses the file and attempts to make a request.
+	// We use a custom http.Client with a Transport that intercepts the request
+	// to verify the outgoing http.Request object.
+
+	var interceptedReq *http.Request
+	mockTransport := &mockRoundTripper{
+		RoundTripFunc: func(req *http.Request) (*http.Response, error) {
+			interceptedReq = req.Clone(req.Context()) // Clone to inspect safely
+
+			// Return a dummy response
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader("mocked response")),
+				Header:     make(http.Header),
+			}, nil
+		},
+	}
+
+	clientWithMockTransport, err := NewClient(WithHTTPClient(&http.Client{Transport: mockTransport}))
+	require.NoError(t, err)
+
+	responses, err := clientWithMockTransport.ExecuteFile("testdata/http_request_files/simple_get.http")
+	require.NoError(t, err, "ExecuteFile should not fail")
+	require.Len(t, responses, 1, "Expected one response")
+	resp := responses[0]
+	require.NotNil(t, resp, "Response should not be nil")
+	assert.NoError(t, resp.Error, "Response error should be nil")
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "Expected status OK from mock")
+
+	// Now assert the details of the *intercepted* request
+	require.NotNil(t, interceptedReq, "Request should have been intercepted")
+	assert.Equal(t, http.MethodGet, interceptedReq.Method, "Expected GET method")
+	assert.Equal(t, "https://jsonplaceholder.typicode.com/todos/1", interceptedReq.URL.String(), "Expected full URL from file")
+	assert.Empty(t, interceptedReq.Header, "Expected no headers from simple_get.http")
+}
+
+// mockRoundTripper is a helper for mocking http.RoundTripper
+type mockRoundTripper struct {
+	RoundTripFunc func(req *http.Request) (*http.Response, error)
+}
+
+func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	if m.RoundTripFunc != nil {
+		return m.RoundTripFunc(req)
+	}
+	return nil, fmt.Errorf("RoundTripFunc not set")
+}
+
 // TODO: Test TLS details in Response struct (requires HTTPS server and more setup)

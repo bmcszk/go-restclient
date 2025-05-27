@@ -12,4 +12,22 @@ Last Updated: 2025-05-27
 
 *   **Decision:** Shifted from placing library Go source files under `pkg/restclient/` to placing them directly in the project root.
 *   **Rationale:** For a relatively small library with a public interface, a flatter structure can be simpler and more direct. The `pkg/` convention is often more beneficial for larger projects or when internal packages are numerous.
-*   **Impact:** `docs/project_structure.md` and `docs/tasks.md` updated. `pkg/restclient` directory removed. 
+*   **Impact:** `docs/project_structure.md` and `docs/tasks.md` updated. `pkg/restclient` directory removed.
+
+## 2025-05-27: Parser Implementation Oversight
+
+*   **Mistake:** Planned to create a new `http_file_parser.go` and associated tests from scratch (TASK-003, TASK-004 initial versions) without first thoroughly verifying if the existing `parser.go` and `parser_test.go` already covered the necessary functionality for `.http` files.
+*   **Correction:** Upon inspection, it was found that `parser.go` was already capable of handling `.http` file syntax (as it's similar to `.rest`). Tasks were revised to add specific test cases for `.http` files to the existing test suite, which then passed, confirming its suitability.
+*   **Learning:** Before creating new components, always perform a thorough check of existing codebase elements to see if they can be leveraged or extended. This prevents redundant work and keeps the codebase leaner.
+
+## 2025-05-27: Premature File Creation Planning
+
+*   **Mistake:** When initially planning for E2E tests (before they were descoped), I listed the creation of the specific test file `e2e/scenario_lib_001_001_test.go` before ensuring its parent directory `e2e/` would be created.
+*   **Correction:** I identified the missing step and added the directory creation task first. This particular sequence became moot when E2E tests were removed from scope, but the procedural learning is valid.
+*   **Learning:** Always ensure directory structures are planned for creation before the files within them, especially when automating file/directory operations.
+
+## 2025-05-27: Missed Git Workflow Steps
+
+*   **Mistake:** Completed several development tasks (TASK-001 through TASK-015) and marked them as 'Done' in `docs/tasks.md` without following the prescribed Git workflow of proposing a `git commit` and `git push` after each task (or a logical group of tasks that pass `make check`).
+*   **Correction:** Acknowledged the oversight. Will proceed to commit the accumulated changes for the completed tasks and will adhere to the commit/push workflow for all subsequent tasks.
+*   **Learning:** Adhere strictly to all documented workflow steps, including version control procedures, as they are crucial for maintaining a clean and traceable project history. Regularly re-check guidelines if unsure. 
