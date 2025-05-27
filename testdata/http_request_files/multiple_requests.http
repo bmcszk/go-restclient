@@ -1,0 +1,3 @@
+GET {{.ServerURL}}/req1
+###
+POST {{.ServerURL}}/req2 

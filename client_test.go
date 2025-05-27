@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"text/template"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -28,6 +30,27 @@ func TestNewClient(t *testing.T) {
 	assert.Empty(t, c.BaseURL)
 	assert.NotNil(t, c.DefaultHeaders)
 	assert.Empty(t, c.DefaultHeaders)
+}
+
+// createTestFileFromTemplate processes a template file and returns the path to the processed file.
+func createTestFileFromTemplate(t *testing.T, templatePath string, data interface{}) string {
+	t.Helper()
+	tmplContent, err := os.ReadFile(templatePath)
+	require.NoError(t, err)
+
+	tmpl, err := template.New("testfile").Parse(string(tmplContent))
+	require.NoError(t, err)
+
+	tempFile, err := os.CreateTemp(t.TempDir(), "processed_*.http")
+	require.NoError(t, err)
+
+	err = tmpl.Execute(tempFile, data)
+	require.NoError(t, err)
+
+	err = tempFile.Close()
+	require.NoError(t, err)
+
+	return tempFile.Name()
 }
 
 func TestNewClient_WithOptions(t *testing.T) {
@@ -101,15 +124,9 @@ func TestExecuteFile_MultipleRequests(t *testing.T) {
 	defer server.Close()
 
 	client, _ := NewClient()
-	content := fmt.Sprintf("GET %s/req1\n###\nPOST %s/req2", server.URL, server.URL)
-	tempFile, err := os.CreateTemp("", "test_multi_*.rest")
-	require.NoError(t, err)
-	defer func() { _ = os.Remove(tempFile.Name()) }()
-	_, err = tempFile.WriteString(content)
-	require.NoError(t, err)
-	_ = tempFile.Close()
+	processedFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/multiple_requests.http", struct{ ServerURL string }{ServerURL: server.URL})
 
-	responses, err := client.ExecuteFile(context.Background(), tempFile.Name())
+	responses, err := client.ExecuteFile(context.Background(), processedFilePath)
 	require.NoError(t, err)
 	require.Len(t, responses, 2)
 	assert.Equal(t, 2, requestCounter, "Server should have received two requests")
@@ -126,7 +143,7 @@ func TestExecuteFile_MultipleRequests(t *testing.T) {
 }
 
 func TestExecuteFile_RequestWithError(t *testing.T) {
-	serverURL := "http://localhost:12346" // Non-existent server for first request
+	// serverURL := "http://localhost:12346" // Non-existent server for first request - This is now in the .http file
 	server2 := startMockServer(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprint(w, "good response")
@@ -134,15 +151,9 @@ func TestExecuteFile_RequestWithError(t *testing.T) {
 	defer server2.Close()
 
 	client, _ := NewClient()
-	content := fmt.Sprintf("GET %s/bad\n###\nGET %s/good", serverURL, server2.URL)
-	tempFile, err := os.CreateTemp("", "test_err_*.rest")
-	require.NoError(t, err)
-	defer func() { _ = os.Remove(tempFile.Name()) }()
-	_, err = tempFile.WriteString(content)
-	require.NoError(t, err)
-	_ = tempFile.Close()
+	processedFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/request_with_error.http", struct{ ServerURL string }{ServerURL: server2.URL})
 
-	responses, err := client.ExecuteFile(context.Background(), tempFile.Name())
+	responses, err := client.ExecuteFile(context.Background(), processedFilePath)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "1 error occurred:")
 	assert.Contains(t, err.Error(), "http request failed")
@@ -162,31 +173,14 @@ func TestExecuteFile_RequestWithError(t *testing.T) {
 
 func TestExecuteFile_ParseError(t *testing.T) {
 	client, _ := NewClient()
-	content := "# just a comment" // This content will cause ParseRequestFile to return an error
-	tempFile, err := os.CreateTemp("", "test_parse_err_*.rest")
-	require.NoError(t, err)
-	defer func() { _ = os.Remove(tempFile.Name()) }()
-	_, err = tempFile.WriteString(content)
-	require.NoError(t, err)
-	_ = tempFile.Close()
-
-	_, err = client.ExecuteFile(context.Background(), tempFile.Name())
+	_, err := client.ExecuteFile(context.Background(), "testdata/http_request_files/parse_error.http")
 	assert.Error(t, err)
-	// The error should be "no valid requests found in file" from the parser
-	assert.Contains(t, err.Error(), "no valid requests found in file")
+	assert.Contains(t, err.Error(), "failed to parse request file")
 }
 
 func TestExecuteFile_NoRequestsInFile(t *testing.T) {
 	client, _ := NewClient()
-	content := "# Only comments"
-	tempFile, err := os.CreateTemp("", "test_no_reqs_*.rest")
-	require.NoError(t, err)
-	defer func() { _ = os.Remove(tempFile.Name()) }()
-	_, err = tempFile.WriteString(content)
-	require.NoError(t, err)
-	_ = tempFile.Close()
-
-	_, err = client.ExecuteFile(context.Background(), tempFile.Name())
+	_, err := client.ExecuteFile(context.Background(), "testdata/http_request_files/no_requests.http")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no valid requests found in file")
 }

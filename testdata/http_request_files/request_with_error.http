@@ -1,0 +1,3 @@
+GET http://localhost:12346/bad
+###
+GET {{.ServerURL}}/good 

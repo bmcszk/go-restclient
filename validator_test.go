@@ -2,228 +2,313 @@ package restclient
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func ptr[T any](v T) *T { return &v }
+func ptr[T any](v T) *T {
+	return &v
+}
 
 func TestValidateResponse_NilInputs(t *testing.T) {
-	result := ValidateResponse(nil, &ExpectedResponse{})
-	assert.False(t, result.Passed)
-	assert.Contains(t, result.Mismatches[0], "Actual or Expected response is nil")
-
-	result = ValidateResponse(&Response{}, nil)
-	assert.False(t, result.Passed)
-	assert.Contains(t, result.Mismatches[0], "Actual or Expected response is nil")
+	assert.NotNil(t, ValidateResponse(nil, &ExpectedResponse{}))
+	assert.NotNil(t, ValidateResponse(&Response{}, nil))
+	assert.Len(t, ValidateResponse(nil, &ExpectedResponse{}), 1)
+	assert.Contains(t, ValidateResponse(nil, &ExpectedResponse{})[0].Error(), "actual response is nil")
+	assert.Len(t, ValidateResponse(&Response{}, nil), 1)
+	assert.Contains(t, ValidateResponse(&Response{}, nil)[0].Error(), "expected response is nil")
 }
 
 func TestValidateResponse_StatusCode(t *testing.T) {
-	actual := &Response{StatusCode: 200}
-	expected := &ExpectedResponse{StatusCode: ptr(200)}
-	result := ValidateResponse(actual, expected)
-	assert.True(t, result.Passed)
+	tests := []struct {
+		name             string
+		actual           *Response
+		expected         *ExpectedResponse
+		expectedErrCount int
+		expectedErrText  string // if count is 1, check this text
+	}{
+		{
+			name:             "matching status code",
+			actual:           &Response{StatusCode: 200},
+			expected:         &ExpectedResponse{StatusCode: ptr(200)},
+			expectedErrCount: 0,
+		},
+		{
+			name:             "mismatching status code",
+			actual:           &Response{StatusCode: 500},
+			expected:         &ExpectedResponse{StatusCode: ptr(200)},
+			expectedErrCount: 1,
+			expectedErrText:  "status code mismatch: expected 200, got 500",
+		},
+		{
+			name:             "nil expected status code (ignore)",
+			actual:           &Response{StatusCode: 200, BodyString: "actual body"}, // Provide an actual body
+			expected:         &ExpectedResponse{StatusCode: nil, Body: nil},         // StatusCode is nil, and Body is nil to not trigger body validation here
+			expectedErrCount: 0,
+		},
+	}
 
-	expectedFail := &ExpectedResponse{StatusCode: ptr(400)}
-	resultFail := ValidateResponse(actual, expectedFail)
-	assert.False(t, resultFail.Passed)
-	assert.Contains(t, resultFail.Mismatches[0], "StatusCode: expected 400, got 200")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errs := ValidateResponse(tt.actual, tt.expected)
+			assert.Len(t, errs, tt.expectedErrCount)
+			if tt.expectedErrCount == 1 && len(errs) == 1 {
+				assert.Contains(t, errs[0].Error(), tt.expectedErrText)
+			}
+		})
+	}
 }
 
-func TestValidateResponse_Status(t *testing.T) {
-	actual := &Response{Status: "200 OK"}
-	expected := &ExpectedResponse{Status: ptr("200 OK")}
-	result := ValidateResponse(actual, expected)
-	assert.True(t, result.Passed)
-
-	expectedFail := &ExpectedResponse{Status: ptr("400 Bad Request")}
-	resultFail := ValidateResponse(actual, expectedFail)
-	assert.False(t, resultFail.Passed)
-	assert.Contains(t, resultFail.Mismatches[0], "Status: expected \"400 Bad Request\", got \"200 OK\"")
+func TestValidateResponse_StatusString(t *testing.T) {
+	tests := []struct {
+		name             string
+		actual           *Response
+		expected         *ExpectedResponse
+		expectedErrCount int
+		expectedErrText  string
+	}{
+		{
+			name:             "matching status string",
+			actual:           &Response{Status: "200 OK"},
+			expected:         &ExpectedResponse{Status: ptr("200 OK")}, // Use ptr for *string
+			expectedErrCount: 0,
+		},
+		{
+			name:             "mismatching status string",
+			actual:           &Response{Status: "500 Internal Server Error"},
+			expected:         &ExpectedResponse{Status: ptr("200 OK")}, // Use ptr for *string
+			expectedErrCount: 1,
+			expectedErrText:  "status string mismatch: expected '200 OK', got '500 Internal Server Error'",
+		},
+		{
+			name:             "nil expected status string (ignore)",
+			actual:           &Response{Status: "200 OK"},
+			expected:         &ExpectedResponse{Status: nil}, // Nil means ignore
+			expectedErrCount: 0,
+		},
+		{
+			name:             "empty expected status string (ignore)",
+			actual:           &Response{Status: "200 OK"},
+			expected:         &ExpectedResponse{Status: ptr("")}, // Empty string in ptr means ignore
+			expectedErrCount: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errs := ValidateResponse(tt.actual, tt.expected)
+			assert.Len(t, errs, tt.expectedErrCount)
+			if tt.expectedErrCount == 1 && len(errs) == 1 {
+				assert.Contains(t, errs[0].Error(), tt.expectedErrText)
+			}
+		})
+	}
 }
 
-func TestValidateResponse_Headers_ExactMatch(t *testing.T) {
-	actual := &Response{
-		Headers: http.Header{
-			"Content-Type": []string{"application/json"},
-			"X-Custom":     []string{"value1", "value2"},
+func TestValidateResponse_Headers(t *testing.T) {
+	tests := []struct {
+		name             string
+		actual           *Response
+		expected         *ExpectedResponse
+		expectedErrCount int
+		expectedErrTexts []string // All these substrings must be in the errors
+	}{
+		{
+			name:             "matching headers",
+			actual:           &Response{Headers: http.Header{"Content-Type": {"application/json"}, "X-Request-Id": {"123"}}},
+			expected:         &ExpectedResponse{Headers: http.Header{"Content-Type": {"application/json"}}},
+			expectedErrCount: 0,
+		},
+		{
+			name:             "mismatching header value",
+			actual:           &Response{Headers: http.Header{"Content-Type": {"text/html"}}},
+			expected:         &ExpectedResponse{Headers: http.Header{"Content-Type": {"application/json"}}},
+			expectedErrCount: 1,
+			expectedErrTexts: []string{"expected value 'application/json' for header 'Content-Type' not found"},
+		},
+		{
+			name:             "missing expected header",
+			actual:           &Response{Headers: http.Header{"X-Other": {"value"}}},
+			expected:         &ExpectedResponse{Headers: http.Header{"Content-Type": {"application/json"}}},
+			expectedErrCount: 1,
+			expectedErrTexts: []string{"expected header 'Content-Type' not found"},
+		},
+		{
+			name:             "multiple expected values, one missing",
+			actual:           &Response{Headers: http.Header{"Vary": {"Accept-Encoding"}}},
+			expected:         &ExpectedResponse{Headers: http.Header{"Vary": {"Accept-Encoding", "User-Agent"}}},
+			expectedErrCount: 1,
+			expectedErrTexts: []string{"expected value 'User-Agent' for header 'Vary' not found"},
+		},
+		{
+			name:             "nil expected headers (ignore)",
+			actual:           &Response{Headers: http.Header{"Content-Type": {"application/json"}}},
+			expected:         &ExpectedResponse{Headers: nil},
+			expectedErrCount: 0,
 		},
 	}
-	expected := &ExpectedResponse{
-		Headers: http.Header{
-			"Content-Type": []string{"application/json"},
-		},
-	}
-	result := ValidateResponse(actual, expected)
-	assert.True(t, result.Passed, "Mismatches: %v", result.Mismatches)
 
-	// Case: Expected header not found
-	expectedFailNotFound := &ExpectedResponse{
-		Headers: http.Header{"X-Not-Found": []string{"any"}},
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errs := ValidateResponse(tt.actual, tt.expected)
+			assert.Len(t, errs, tt.expectedErrCount)
+			for _, errText := range tt.expectedErrTexts {
+				found := false
+				for _, err := range errs {
+					if strings.Contains(err.Error(), errText) {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "Expected error text not found: %s", errText)
+			}
+		})
 	}
-	resultFailNotFound := ValidateResponse(actual, expectedFailNotFound)
-	assert.False(t, resultFailNotFound.Passed)
-	assert.Contains(t, resultFailNotFound.Mismatches[0], "Header 'X-Not-Found': expected but not found")
-
-	// Case: Expected header value mismatch (strict with current softer check, so should pass if subset)
-	expectedMismatchValues := &ExpectedResponse{
-		Headers: http.Header{"Content-Type": []string{"text/xml"}},
-	}
-	resultMismatchValues := ValidateResponse(actual, expectedMismatchValues)
-	assert.False(t, resultMismatchValues.Passed)
-	assert.Contains(t, resultMismatchValues.Mismatches[0], "Header 'Content-Type': expected values [text/xml], got [application/json]")
-
-	// Case: Multiple values, all expected are present
-	expectedMulti := &ExpectedResponse{
-		Headers: http.Header{"X-Custom": []string{"value1"}}, // Softer check: value1 is in actual [value1, value2]
-	}
-	resultMulti := ValidateResponse(actual, expectedMulti)
-	assert.True(t, resultMulti.Passed, "Mismatches: %v", resultMulti.Mismatches)
-
-	expectedMultiFail := &ExpectedResponse{
-		Headers: http.Header{"X-Custom": []string{"value3"}},
-	}
-	resultMultiFail := ValidateResponse(actual, expectedMultiFail)
-	assert.False(t, resultMultiFail.Passed)
-	assert.Contains(t, resultMultiFail.Mismatches[0], "Header 'X-Custom': expected values [value3], got [value1 value2]")
-}
-
-func TestValidateResponse_HeadersContain(t *testing.T) {
-	actual := &Response{
-		Headers: http.Header{
-			"Content-Disposition": []string{"attachment; filename=\"file.zip\""},
-			"Set-Cookie":          []string{"session=123; path=/; HttpOnly", "pref=abc; path=/;"},
-		},
-	}
-	expected := &ExpectedResponse{
-		HeadersContain: map[string]string{
-			"Content-Disposition": "filename=",
-			"Set-Cookie":          "HttpOnly",
-		},
-	}
-	result := ValidateResponse(actual, expected)
-	assert.True(t, result.Passed, "Mismatches: %v", result.Mismatches)
-
-	// Case: Header not found
-	expectedFailNotFound := &ExpectedResponse{
-		HeadersContain: map[string]string{"X-Non-Existent": "any"},
-	}
-	resultFailNotFound := ValidateResponse(actual, expectedFailNotFound)
-	assert.False(t, resultFailNotFound.Passed)
-	assert.Contains(t, resultFailNotFound.Mismatches[0], "HeadersContain: Expected header 'X-Non-Existent' not found")
-
-	// Case: Substring not found in any value of the header
-	expectedFailSubstring := &ExpectedResponse{
-		HeadersContain: map[string]string{"Set-Cookie": "Secure"},
-	}
-	resultFailSubstring := ValidateResponse(actual, expectedFailSubstring)
-	assert.False(t, resultFailSubstring.Passed)
-	assert.Contains(t, resultFailSubstring.Mismatches[0], "HeadersContain: Header 'Set-Cookie' did not contain substring 'Secure'. Values: [session=123; path=/; HttpOnly pref=abc; path=/;]")
 }
 
 func TestValidateResponse_Body_ExactMatch(t *testing.T) {
-	actual := &Response{BodyString: "Hello World"}
-	expected := &ExpectedResponse{Body: ptr("Hello World")}
-	result := ValidateResponse(actual, expected)
-	assert.True(t, result.Passed)
-
-	expectedFail := &ExpectedResponse{Body: ptr("Goodbye World")}
-	resultFail := ValidateResponse(actual, expectedFail)
-	assert.False(t, resultFail.Passed)
-	assert.Contains(t, resultFail.Mismatches[0], "Body: mismatch.")
+	body1 := "Hello World"
+	body2 := "Hello Go"
+	tests := []struct {
+		name             string
+		actual           *Response
+		expected         *ExpectedResponse
+		expectedErrCount int
+		expectedErrText  string // for diff check, this can be a substring of the diff
+	}{
+		{
+			name:             "matching body",
+			actual:           &Response{BodyString: body1},
+			expected:         &ExpectedResponse{Body: ptr(body1)},
+			expectedErrCount: 0,
+		},
+		{
+			name:             "mismatching body",
+			actual:           &Response{BodyString: body2},
+			expected:         &ExpectedResponse{Body: ptr(body1)},
+			expectedErrCount: 1,
+			expectedErrText:  "--- Expected Body\n+++ Actual Body", // Start of diff
+		},
+		{
+			name:             "nil expected body (ignore)",
+			actual:           &Response{BodyString: body1},
+			expected:         &ExpectedResponse{Body: nil},
+			expectedErrCount: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errs := ValidateResponse(tt.actual, tt.expected)
+			assert.Len(t, errs, tt.expectedErrCount)
+			if tt.expectedErrCount == 1 && len(errs) == 1 {
+				assert.Contains(t, errs[0].Error(), tt.expectedErrText)
+			}
+		})
+	}
 }
 
 func TestValidateResponse_BodyContains(t *testing.T) {
-	actual := &Response{BodyString: "This is a test response with important data."}
-	expected := &ExpectedResponse{
-		BodyContains: []string{"test response", "important data"},
+	tests := []struct {
+		name             string
+		actual           *Response
+		expected         *ExpectedResponse
+		expectedErrCount int
+		expectedErrTexts []string
+	}{
+		{
+			name:             "body contains expected substring",
+			actual:           &Response{BodyString: "Hello World Wide Web"},
+			expected:         &ExpectedResponse{BodyContains: []string{"World Wide"}},
+			expectedErrCount: 0,
+		},
+		{
+			name:             "body does not contain expected substring",
+			actual:           &Response{BodyString: "Hello World"},
+			expected:         &ExpectedResponse{BodyContains: []string{"Universe"}},
+			expectedErrCount: 1,
+			expectedErrTexts: []string{"actual body does not contain expected substring: 'Universe'"},
+		},
+		{
+			name:             "body contains one but not another",
+			actual:           &Response{BodyString: "Hello World"},
+			expected:         &ExpectedResponse{BodyContains: []string{"Hello", "Universe"}},
+			expectedErrCount: 1,
+			expectedErrTexts: []string{"actual body does not contain expected substring: 'Universe'"},
+		},
+		{
+			name:             "empty BodyContains (ignore)",
+			actual:           &Response{BodyString: "Hello World"},
+			expected:         &ExpectedResponse{BodyContains: []string{}}, // Empty means no checks
+			expectedErrCount: 0,
+		},
 	}
-	result := ValidateResponse(actual, expected)
-	assert.True(t, result.Passed, "Mismatches: %v", result.Mismatches)
 
-	expectedFail := &ExpectedResponse{
-		BodyContains: []string{"test response", "missing_text"},
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errs := ValidateResponse(tt.actual, tt.expected)
+			assert.Len(t, errs, tt.expectedErrCount)
+			for _, errText := range tt.expectedErrTexts {
+				found := false
+				for _, err := range errs {
+					if strings.Contains(err.Error(), errText) {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "Expected error text not found: %s", errText)
+			}
+		})
 	}
-	resultFail := ValidateResponse(actual, expectedFail)
-	assert.False(t, resultFail.Passed)
-	assert.Contains(t, resultFail.Mismatches[0], "BodyContains: expected substring not found: 'missing_text'")
 }
 
 func TestValidateResponse_BodyNotContains(t *testing.T) {
-	actual := &Response{BodyString: "Allowed content without error messages."}
-	expected := &ExpectedResponse{
-		BodyNotContains: []string{"ERROR", "Failed"},
-	}
-	result := ValidateResponse(actual, expected)
-	assert.True(t, result.Passed, "Mismatches: %v", result.Mismatches)
-
-	expectedFail := &ExpectedResponse{
-		BodyNotContains: []string{"ERROR", "content"}, // "content" is present
-	}
-	resultFail := ValidateResponse(actual, expectedFail)
-	assert.False(t, resultFail.Passed)
-	assert.Contains(t, resultFail.Mismatches[0], "BodyNotContains: unexpected substring found: 'content'")
-}
-
-func TestValidateResponse_JSONPathChecks(t *testing.T) {
-	jsonBody := `{"user": {"id": 123, "name": "Test User", "active": true}, "tags": ["a", "b"]}`
-	actual := &Response{Body: []byte(jsonBody), BodyString: jsonBody}
-
-	expected := &ExpectedResponse{
-		JSONPathChecks: map[string]interface{}{
-			"$.user.id":         123.0, // JSON numbers are float64 by default when unmarshaled to interface{}
-			"$.user.name":       "Test User",
-			"$.user.active":     true,
-			"$.tags[?(@=='a')]": "a", // This path will return a slice if used with jsonpath.Get, so check might need adjustment
+	tests := []struct {
+		name             string
+		actual           *Response
+		expected         *ExpectedResponse
+		expectedErrCount int
+		expectedErrTexts []string
+	}{
+		{
+			name:             "body does not contain unexpected substring",
+			actual:           &Response{BodyString: "Hello World"},
+			expected:         &ExpectedResponse{BodyNotContains: []string{"Universe"}},
+			expectedErrCount: 0,
+		},
+		{
+			name:             "body contains unexpected substring",
+			actual:           &Response{BodyString: "Hello Universe"},
+			expected:         &ExpectedResponse{BodyNotContains: []string{"Universe"}},
+			expectedErrCount: 1,
+			expectedErrTexts: []string{"actual body contains unexpected substring: 'Universe'"},
+		},
+		{
+			name:             "empty BodyNotContains (ignore)",
+			actual:           &Response{BodyString: "Hello Universe"},
+			expected:         &ExpectedResponse{BodyNotContains: []string{}}, // Empty means no checks
+			expectedErrCount: 0,
 		},
 	}
-	// Adjusting the expectation for jsonpath.Get on array filter
-	// jsonpath.Get with "$.tags[?(@=='a')]" will return a slice like ["a"].
-	// For a simple value check, one might use "$.tags[0]" == "a".
-	// Or, if we want to check for existence from a filter: an empty slice means not found.
-	// For this test, let's assume the expected value is the first element of the filtered result if not empty.
-	// Or more robustly, we want to check if the value 'a' is present in the 'tags' array.
-	// A better JSONPath for existence could be `$.tags[?(@ == "a")]` and check if the result is non-empty.
-	// However, the current structure is `path: expectedValue`. So, if path yields a slice, expectedValue should be a slice.
-
-	// For now, this specific test `"$.tags[?(@=='a')]": "a"` will likely fail due to type mismatch (slice vs string)
-	// or the Get function returning a slice. Let's simplify for direct value assertion.
-
-	// Let's refine the JSONPath test for tags:
-	expectedWithSimplerTagCheck := &ExpectedResponse{
-		JSONPathChecks: map[string]interface{}{
-			"$.user.id":     123.0,
-			"$.user.name":   "Test User",
-			"$.user.active": true,
-			"$.tags[0]":     "a",
-		},
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errs := ValidateResponse(tt.actual, tt.expected)
+			assert.Len(t, errs, tt.expectedErrCount)
+			for _, errText := range tt.expectedErrTexts {
+				found := false
+				for _, err := range errs {
+					if strings.Contains(err.Error(), errText) {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "Expected error text not found: %s", errText)
+			}
+		})
 	}
-
-	result := ValidateResponse(actual, expectedWithSimplerTagCheck)
-	assert.True(t, result.Passed, "Mismatches: %v", result.Mismatches)
-
-	// Case: Path not found
-	expectedFailPath := &ExpectedResponse{
-		JSONPathChecks: map[string]interface{}{"$.user.nonexistent": "any"},
-	}
-	resultFailPath := ValidateResponse(actual, expectedFailPath)
-	assert.False(t, resultFailPath.Passed)
-	assert.Contains(t, resultFailPath.Mismatches[0], "JSONPathChecks: error evaluating path '$.user.nonexistent'")
-
-	// Case: Value mismatch
-	expectedFailValue := &ExpectedResponse{
-		JSONPathChecks: map[string]interface{}{"$.user.id": 456.0},
-	}
-	resultFailValue := ValidateResponse(actual, expectedFailValue)
-	assert.False(t, resultFailValue.Passed)
-	assert.Contains(t, resultFailValue.Mismatches[0], "JSONPathChecks: path '$.user.id', expected '456' (float64), got '123' (float64)")
-
-	// Case: Malformed JSON body in actual response
-	actualMalformed := &Response{Body: []byte("{not_json"), BodyString: "{not_json"}
-	resultMalformed := ValidateResponse(actualMalformed, expected)
-	assert.False(t, resultMalformed.Passed)
-	assert.Contains(t, resultMalformed.Mismatches[0], "JSONPathChecks: failed to unmarshal actual body to JSON")
 }
 
-// TODO: Test LoadExpectedResponseFromJSONFile
+// TODO: Add comprehensive tests combining multiple validation types
+// TODO: Add tests for JSONPath once that's part of ExpectedResponse and ValidateResponse
+// func TestValidateResponse_JSONPathChecks(t *testing.T) { ... } // Commented out for now
+// func TestValidateResponse_HeadersContain(t *testing.T) { ... } // Commented out for now

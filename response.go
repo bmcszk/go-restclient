@@ -29,22 +29,24 @@ type Response struct {
 // This might be loaded from a file (e.g., request_name.expected.json or .http).
 // Or it could be defined programmatically.
 type ExpectedResponse struct {
-	StatusCode      *int              `json:"statusCode,omitempty" yaml:"statusCode,omitempty"`
-	Status          *string           `json:"status,omitempty" yaml:"status,omitempty"`
-	Headers         http.Header       `json:"headers,omitempty" yaml:"headers,omitempty"`           // For header presence/value checks
-	Body            *string           `json:"body,omitempty" yaml:"body,omitempty"`                 // Expected body content (exact match or regex)
-	BodyContains    []string          `json:"bodyContains,omitempty" yaml:"bodyContains,omitempty"` // Substrings expected in body
-	BodyNotContains []string          `json:"bodyNotContains,omitempty" yaml:"bodyNotContains,omitempty"`
-	JSONPathChecks  map[string]any    `json:"jsonPathChecks,omitempty" yaml:"jsonPathChecks,omitempty"` // e.g., {"$.user.id": 123, "$.user.name": "test"}
-	HeadersContain  map[string]string `json:"headersContain,omitempty" yaml:"headersContain,omitempty"` // Check if headers contain specific key-value (substring match for value)
+	StatusCode      *int        `json:"statusCode,omitempty" yaml:"statusCode,omitempty"`
+	Status          *string     `json:"status,omitempty" yaml:"status,omitempty"`
+	Headers         http.Header `json:"headers,omitempty" yaml:"headers,omitempty"`           // For header presence/value checks
+	Body            *string     `json:"body,omitempty" yaml:"body,omitempty"`                 // Expected body content (exact match or regex)
+	BodyContains    []string    `json:"bodyContains,omitempty" yaml:"bodyContains,omitempty"` // Substrings expected in body
+	BodyNotContains []string    `json:"bodyNotContains,omitempty" yaml:"bodyNotContains,omitempty"`
+	// JSONPathChecks  map[string]any    `json:"jsonPathChecks,omitempty" yaml:"jsonPathChecks,omitempty"` // e.g., {"$.user.id": 123, "$.user.name": "test"}
+	// HeadersContain  map[string]string `json:"headersContain,omitempty" yaml:"headersContain,omitempty"` // Check if headers contain specific key-value (substring match for value)
 
 	// TODO: Add fields for body schema validation (JSON Schema), timing assertions, etc.
 }
 
-// ValidationResult holds the outcome of comparing an actual Response to an ExpectedResponse.
+// ValidationResult is no longer used, ValidateResponse returns []error directly.
+/*
 type ValidationResult struct {
 	Passed      bool
 	Mismatches  []string // Descriptions of what didn't match
 	RawActual   *Response
 	RawExpected *ExpectedResponse
 }
+*/

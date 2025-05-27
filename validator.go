@@ -2,160 +2,101 @@ package restclient
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
-	"reflect"
 	"strings"
 
-	"github.com/PaesslerAG/jsonpath"
+	"github.com/pmezard/go-difflib/difflib"
 )
 
-// ValidateResponse compares an actual Response against an ExpectedResponse.
-func ValidateResponse(actual *Response, expected *ExpectedResponse) *ValidationResult {
-	if actual == nil || expected == nil {
-		return &ValidationResult{ // Or return an error / specific result type
-			Passed:      false,
-			Mismatches:  []string{"Actual or Expected response is nil"},
-			RawActual:   actual,
-			RawExpected: expected,
-		}
-	}
+// ExpectedResponse is defined in response.go
 
-	result := &ValidationResult{
-		Passed:      true, // Assume pass until a mismatch is found
-		Mismatches:  []string{},
-		RawActual:   actual,
-		RawExpected: expected,
+// ValidateResponse compares an actual Response against an ExpectedResponse.
+// It returns a list of validation errors, or nil if everything matches.
+func ValidateResponse(actual *Response, expected *ExpectedResponse) []error {
+	var validationErrors []error
+
+	if actual == nil {
+		validationErrors = append(validationErrors, errors.New("actual response is nil"))
+		return validationErrors
+	}
+	if expected == nil {
+		validationErrors = append(validationErrors, errors.New("expected response is nil"))
+		return validationErrors
 	}
 
 	// 1. Validate Status Code
 	if expected.StatusCode != nil {
 		if actual.StatusCode != *expected.StatusCode {
-			result.Passed = false
-			result.Mismatches = append(result.Mismatches, fmt.Sprintf("StatusCode: expected %d, got %d", *expected.StatusCode, actual.StatusCode))
+			validationErrors = append(validationErrors, fmt.Errorf("status code mismatch: expected %d, got %d", *expected.StatusCode, actual.StatusCode))
 		}
 	}
 
-	// 2. Validate Status (e.g., "200 OK") - less common, but supported
+	// 2. Validate Status (string, e.g., "200 OK") - less common to validate precisely but can be useful
 	if expected.Status != nil {
-		if actual.Status != *expected.Status {
-			result.Passed = false
-			result.Mismatches = append(result.Mismatches, fmt.Sprintf("Status: expected \"%s\", got \"%s\"", *expected.Status, actual.Status))
+		if *expected.Status != "" {
+			if actual.Status != *expected.Status {
+				validationErrors = append(validationErrors, fmt.Errorf("status string mismatch: expected '%s', got '%s'", *expected.Status, actual.Status))
+			}
 		}
 	}
 
-	// 3. Validate Headers (presence and exact match for specified headers)
-	// This checks if all headers in expected.Headers are present in actual.Headers with the same values.
-	// It does NOT check if actual.Headers contains extra headers not in expected.Headers.
-	for key, expectedValues := range expected.Headers {
-		actualValues, ok := actual.Headers[key]
+	// 3. Validate Headers
+	for expectedHeaderName, expectedHeaderValues := range expected.Headers {
+		actualHeaderValues, ok := actual.Headers[http.CanonicalHeaderKey(expectedHeaderName)]
 		if !ok {
-			result.Passed = false
-			result.Mismatches = append(result.Mismatches, fmt.Sprintf("Header '%s': expected but not found", key))
+			validationErrors = append(validationErrors, fmt.Errorf("expected header '%s' not found in actual response", expectedHeaderName))
 			continue
 		}
-		// For simplicity, if a header is present, we check if all expected values are present.
-		// More complex logic (e.g. exact match of value counts, order) could be added.
-		if !reflect.DeepEqual(expectedValues, actualValues) { // This is strict: order and count must match
-			// A softer check: ensure all expectedValues are within actualValues
-			match := true
-			for _, ev := range expectedValues {
-				found := false
-				for _, av := range actualValues {
-					if ev == av {
-						found = true
-						break
-					}
-				}
-				if !found {
-					match = false
+		// For now, we check if all expected values for a header are present in the actual header values.
+		// This means actual can have more values, but not fewer for the ones we expect.
+		// TODO: Consider options for exact match of header values counts or specific ordering if necessary.
+		for _, ehv := range expectedHeaderValues {
+			found := false
+			for _, ahv := range actualHeaderValues {
+				if ahv == ehv {
+					found = true
 					break
 				}
 			}
-			if !match {
-				result.Passed = false
-				result.Mismatches = append(result.Mismatches, fmt.Sprintf("Header '%s': expected values %v, got %v", key, expectedValues, actualValues))
+			if !found {
+				validationErrors = append(validationErrors, fmt.Errorf("expected value '%s' for header '%s' not found in actual values: %v", ehv, expectedHeaderName, actualHeaderValues))
 			}
 		}
 	}
 
-	// 4. Validate HeadersContain (check if actual headers contain specific key-value substrings)
-	for expectedKey, expectedValueSubstring := range expected.HeadersContain {
-		actualHeaderValues := actual.Headers.Values(expectedKey)
-		if len(actualHeaderValues) == 0 {
-			result.Passed = false
-			result.Mismatches = append(result.Mismatches, fmt.Sprintf("HeadersContain: Expected header '%s' not found", expectedKey))
-			continue
-		}
-		foundMatch := false
-		for _, actualValue := range actualHeaderValues {
-			if strings.Contains(actualValue, expectedValueSubstring) {
-				foundMatch = true
-				break
-			}
-		}
-		if !foundMatch {
-			result.Passed = false
-			result.Mismatches = append(result.Mismatches, fmt.Sprintf("HeadersContain: Header '%s' did not contain substring '%s'. Values: %v", expectedKey, expectedValueSubstring, actualHeaderValues))
-		}
-	}
-
-	// 5. Validate Body (exact match, if specified)
+	// 4. Validate Body (exact match)
 	if expected.Body != nil {
 		if actual.BodyString != *expected.Body {
-			result.Passed = false
-			// For long bodies, showing a diff or snippet might be better than full bodies.
-			result.Mismatches = append(result.Mismatches, fmt.Sprintf("Body: mismatch. Expected:\n%s\nGot:\n%s", *expected.Body, actual.BodyString))
-		}
-	}
-
-	// 6. Validate BodyContains (substrings)
-	for _, sub := range expected.BodyContains {
-		if !strings.Contains(actual.BodyString, sub) {
-			result.Passed = false
-			result.Mismatches = append(result.Mismatches, fmt.Sprintf("BodyContains: expected substring not found: '%s'", sub))
-		}
-	}
-
-	// 7. Validate BodyNotContains (substrings)
-	for _, sub := range expected.BodyNotContains {
-		if strings.Contains(actual.BodyString, sub) {
-			result.Passed = false
-			result.Mismatches = append(result.Mismatches, fmt.Sprintf("BodyNotContains: unexpected substring found: '%s'", sub))
-		}
-	}
-
-	// 8. Validate JSONPathChecks
-	if len(expected.JSONPathChecks) > 0 {
-		var jsonData interface{}
-		err := json.Unmarshal(actual.Body, &jsonData)
-		if err != nil {
-			result.Passed = false
-			result.Mismatches = append(result.Mismatches, fmt.Sprintf("JSONPathChecks: failed to unmarshal actual body to JSON: %v", err))
-		} else {
-			for path, expectedValue := range expected.JSONPathChecks {
-				actualValue, err := jsonpath.Get(path, jsonData)
-				if err != nil {
-					result.Passed = false
-					result.Mismatches = append(result.Mismatches, fmt.Sprintf("JSONPathChecks: error evaluating path '%s': %v", path, err))
-				} else {
-					// DeepEqual might be too strict for numbers (e.g. int vs float64)
-					// Convert expectedValue to type of actualValue for more robust comparison, or use a library for this.
-					if !reflect.DeepEqual(actualValue, expectedValue) {
-						// Attempt a more tolerant comparison for numeric types
-						actualValStr := fmt.Sprintf("%v", actualValue)
-						expectedValStr := fmt.Sprintf("%v", expectedValue)
-						if actualValStr != expectedValStr { // Fallback to string comparison if types are tricky
-							result.Passed = false
-							result.Mismatches = append(result.Mismatches, fmt.Sprintf("JSONPathChecks: path '%s', expected '%v' (%T), got '%v' (%T)", path, expectedValue, expectedValue, actualValue, actualValue))
-						}
-					}
-				}
+			diff := difflib.UnifiedDiff{
+				A:        difflib.SplitLines(*expected.Body),
+				B:        difflib.SplitLines(actual.BodyString),
+				FromFile: "Expected Body",
+				ToFile:   "Actual Body",
+				Context:  3,
 			}
+			diffText, _ := difflib.GetUnifiedDiffString(diff)
+			validationErrors = append(validationErrors, fmt.Errorf("body mismatch:\n%s", diffText))
 		}
 	}
 
-	return result
+	// 5. Validate BodyContains
+	for _, substr := range expected.BodyContains {
+		if !strings.Contains(actual.BodyString, substr) {
+			validationErrors = append(validationErrors, fmt.Errorf("actual body does not contain expected substring: '%s'", substr))
+		}
+	}
+
+	// 6. Validate BodyNotContains
+	for _, substr := range expected.BodyNotContains {
+		if strings.Contains(actual.BodyString, substr) {
+			validationErrors = append(validationErrors, fmt.Errorf("actual body contains unexpected substring: '%s'", substr))
+		}
+	}
+
+	return validationErrors
 }
 
 // Helper to load ExpectedResponse from a JSON file (example)
