@@ -35,6 +35,8 @@ This document outlines the workflow related to managing requirements and their c
     -   Each task related to the requirement should be committed and pushed to this feature/fix branch.
     -   Follow guidelines in `task_workflow.mdc` for task completion and version control for individual tasks.
 -   **Pull Requests:**
-    -   After all tasks for the requirement are **Done** (or **Skipped**), and all associated work is committed and pushed to the feature/fix branch:
-        -   A pull request **must** be created to merge the feature/fix branch into `master`.
-        -   Use the `gh pr create` command. For example: `gh pr create --base master --head feature/your-branch-name --title "Feature: Implement X" --body "Details of the feature and related tasks."`. The title and body should be descriptive.
+    *   After all tasks for the requirement are **Done** (or **Skipped**), all associated work is committed and pushed to the feature/fix branch, and **`make check` passes for the final state of the branch**:
+        *   A Pull Request (PR) **MUST** be created by the AI assistant to merge the feature/fix branch into `master` (or the main development branch).
+        *   The AI assistant **MUST** use the `gh pr create` command. For example: `gh pr create --base master --head feature/your-branch-name --title "Feature: Implement X" --body "Details of the feature and related tasks."`. The title and body should be descriptive.
+        *   The AI assistant should then await the PR's review and merge by the user or an automated process. Do not assume the PR is merged immediately.
+        *   The AI assistant **MUST** remain on the feature/fix branch after pushing and creating the PR, until the PR is merged or closed, or until explicitly instructed to switch branches by the user.
