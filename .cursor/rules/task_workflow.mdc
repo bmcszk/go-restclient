@@ -10,7 +10,7 @@ This document outlines the workflow for creating, managing, and completing tasks
 ## Task Creation & Management (from `docs/tasks.md`)
 
 1.  When requirements change (i.e., `docs/requirements.md` is updated), create a set of tasks in **ToDo** state. These new tasks **must** be appended to the end of the `docs/tasks.md` file.
-    *   When a requirement is a functional requirement, test scenarios should be added to `docs/test_scenarios.md` and a task should be created to implement E2E tests for every scenario.
+    *   When a requirement is a functional requirement, test scenarios should be added to `docs/test_scenarios.md` and a task should be created to implement unit tests for every scenario.
 2.  After new tasks are created, remove all tasks with **Done** status from `docs/tasks.md`.
 3.  Tasks should be always created and managed by the AI agent, including assigning IDs and tracking status in `docs/tasks.md`.
 
@@ -25,21 +25,22 @@ This document outlines the workflow for creating, managing, and completing tasks
     *   Perform the task changes using TDD (if possible).
     *   Ensure all relevant documentation (`docs/requirements.md`, `docs/test_scenarios.md`, `docs/tasks.md`, `docs/decisions.md`, `README.md`, `docs/project_structure.md`, `docs/learnings.md`) is considered and updated if necessary.
     *   Proactively suggest or perform checks (compile, lint, test) as part of the development process for the current task.
-4.  **Task Completion:** A task is completed when:
-    *   Code changes are done.
-    *   Functional requirements are met.
-    *   Relevant test scenarios from `docs/test_scenarios.md` are covered by E2E tests (if applicable).
-    *   `make check` is passing for the task's changes.
-    *   `make test-e2e` is passing for the task's changes.
-    *   Mark the task as **Done** in `docs/tasks.md`.
+4.  **Task Completion & Status Management:** 
+    *   A task is considered **Completed** when:
+        *   Code changes are done.
+        *   Functional requirements are met.
+        *   Relevant test scenarios from `docs/test_scenarios.md` are covered by unit tests (if applicable).
+        *   The `make check` command (verifying the entire project: build, lint, all unit tests) **MUST** be passing. A task cannot be considered done if `make check` fails for any reason.
+    *   If a task is marked as **Done**, its status in `docs/tasks.md` is updated accordingly.
+    *   If work on a task is stopped before completion, or if previously "Done" work is reverted (e.g., due to failed checks or changing requirements), its status in `docs/tasks.md` **MUST** be updated to **ToDo** (if it can be picked up later) or **Blocked** (if dependencies prevent further work).
 5.  **Post-Completion:**
-    *   After successfully committing and pushing changes for a completed task, immediately start processing the next task in **ToDo** status from `docs/tasks.md` (if any), following the same workflow.
+    *   After successfully committing and pushing changes for a completed task (which implies `make check` passed), immediately start processing the next task in **ToDo** status from `docs/tasks.md` (if any), following the same workflow.
     *   Whenever the AI knows what to do next (including starting a new task), it should proceed without asking for confirmation.
 
 ## Task Completion & Version Control
 
-1.  When a task from `docs/tasks.md` is marked as **Done** (i.e., functional requirements met, relevant test scenarios from `docs/test_scenarios.md` covered by E2E tests, and all pre-commit checks like `make check` and `make test-e2e` have passed for the task's changes):
+1.  When a task from `docs/tasks.md` is marked as **Done** (i.e., functional requirements met, relevant test scenarios from `docs/test_scenarios.md` covered by unit tests, and, most importantly, `make check` for the entire project passes):
     *   The AI assistant **must** ensure all changed and new files related to the task are staged for commit (e.g., by using appropriate tool calls to accept/stage all proposed and applied changes).
-    *   The AI assistant **must** then propose a Git commit. The commit message **must** follow the convention: `[TASK-ID] Short descriptive title for the task` (e.g., `[TASK-109] Add unit tests for StockPriceWorker`).
-    *   After the commit is successfully made (simulated or confirmed by the user), the AI assistant **must** propose a Git push to the current branch.
-2.  Push other working changes (even if a task is not fully **Done**) to the remote repository frequently, after ensuring they pass pre-commit checks and are committed. This applies especially to the AI assistant's work on a feature/fix branch as per `requirement_workflow.mdc`.
+    *   The AI assistant **must** then propose a Git commit. The commit message **must** follow the convention: `[TASK-ID] Short descriptive title for the task` (e.g., `[TASK-109] Add unit tests for StockPriceWorker`). **Committing is ONLY allowed if `make check` passes.**
+    *   After the commit is successfully made, the AI assistant **must** propose a Git push to the current branch.
+2.  Push other working changes (even if a task is not fully **Done**) to the remote repository frequently, but **only after ensuring they pass `make check` and are committed.** This applies especially to the AI assistant's work on a feature/fix branch as per `requirement_workflow.mdc`.
