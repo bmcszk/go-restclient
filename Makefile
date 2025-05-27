@@ -35,7 +35,7 @@ lint: ## Lint Go source files using golangci-lint
 check: build lint test-unit ## Run all pre-commit checks (build, lint, unit tests)
 	@echo "Checks completed."
 
-test: test-unit ## Run all tests (now only unit tests)
+test: test-unit ## Run all tests
 
 test-unit: ## Run unit tests
 	@echo "Running unit tests..."

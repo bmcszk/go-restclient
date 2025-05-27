@@ -28,6 +28,7 @@ Refer to `.cursor/rules/task_workflow.mdc` for guidelines on task creation and m
         *   Compiling the project (e.g., `go build ./...`)
         *   Running linters (e.g., `golangci-lint run` or other configured linters)
         *   Running all **unit tests** (e.g., `make test-unit` or `go test -tags=unit ./...`)
+    *   Running all **End-to-End (E2E) tests** (e.g., `make test-e2e`).
 2.  **Makefile Targets for Tools:** All essential development tools used in the project (e.g., `sqlc`, `migrate`, linters) should have corresponding targets in the main `Makefile` for easy and consistent execution.
 3.  **Test Coverage:**
     *   Refer to `.cursor/rules/requirement_workflow.mdc` for test coverage guidelines related to requirements and scenarios.
@@ -47,6 +48,6 @@ Refer to `.cursor/rules/task_workflow.mdc` for guidelines on task creation and m
     3.  Once the mistake is corrected, update the entry in `docs/learnings.md` with the resolution or what was learned.
 
 ## Testing Guidelines
-
-+ Unit tests are the primary method for verifying functionality. They MUST strive to cover all functional requirements outlined in `docs/requirements.md` and all scenarios listed in `docs/test_scenarios.md`.
-+ Unit tests MUST be runnable via a dedicated Makefile target (e.g., `make test-unit`).
+- **End-to-End (E2E) / Integration Tests:** These tests verify the behavior of the system as a whole or integrated parts. They should be written in a Behavior-Driven Development (BDD) style using tools like Godog. These tests typically require a running instance of the application and its dependencies (like databases) managed via Docker Compose. Use Go build tags (e.g., `//go:build e2e`) to identify them.
+- **E2E tests MUST strive to cover all functional requirements outlined in `docs/requirements.md` and all scenarios listed in `docs/test_scenarios.md`, ensuring key user flows and API interactions are validated against a realistic (Dockerized) environment.**
+- Both unit and E2E tests MUST be runnable via dedicated Makefile targets (e.g., `make test-unit`, `make test-e2e`).

@@ -18,13 +18,13 @@ This document outlines the workflow related to managing requirements and their c
 
 ## Test Coverage for Requirements
 - All functional requirements in `docs/requirements.md` **must** have corresponding test scenarios documented in `docs/test_scenarios.md`.
-- Every test scenario listed in `docs/test_scenarios.md` **must** be covered by a unit test.
-- The AI assistant is responsible for verifying this coverage when implementing or modifying unit tests related to a requirement.
+- Every test scenario listed in `docs/test_scenarios.md` **must** be covered by an End-to-End (E2E) test.
+- The AI assistant is responsible for verifying this coverage when implementing or modifying E2E tests related to a requirement.
 
 ## AI Assistant Responsibilities for Requirements
 - When asked to perform a task, ensure all relevant documentation (`docs/requirements.md`, `docs/test_scenarios.md`, etc.) is considered and updated if necessary. This includes:
     - Defining test scenarios in `docs/test_scenarios.md` for new or modified requirements.
-    - Ensuring unit test coverage for scenarios in `docs/test_scenarios.md`.
+    - Ensuring E2E test coverage for scenarios in `docs/test_scenarios.md`.
 
 ## Git Workflow for Requirements
 
