@@ -1,0 +1,95 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Go Project Setup Guide
+
+**Objective:** Standardize setup for new Go services/microservices.
+
+## 1. Directory Structure (Root Level)
+-   `services/<service_name>/`: Main application and its internal logic.
+    -   `main.go` or `cmd/main.go`: Application entry point.
+    -   `internal/`: Core service logic.
+        -   `handler/`: HTTP request handlers (e.g., Chi).
+        -   `service/`: Business logic.
+        -   `storage/`: Data persistence (DB interactions).
+        -   `model/`: Core data structures (if not co-located/generated).
+        -   `worker/`: Background/periodic task processors.
+        -   `config/`: Configuration management.
+    -   `db/`: Database assets.
+        -   `migration/`: SQL migrations (`golang-migrate`).
+        -   `query/`: SQL files for `sqlc`.
+        -   `sqlc_generated/`: `sqlc` output.
+    -   `api/`: API specifications (e.g., OpenAPI).
+-   `pkg/`: Shared libraries/utilities (if any, across services).
+-   `docs/`: Project documentation (`requirements.md`, `tasks.md`, `decisions.md`, `project_structure.md`).
+-   `.cursor/rules/`: AI assistant guidelines (MDC files).
+-   `e2e/`: End-to-End tests.
+-   `Makefile`: Common dev tasks.
+-   `Dockerfile`: Containerization config.
+-   `docker-compose.yml`: Local dev & E2E test environment.
+-   `go.mod`, `go.sum`: Go module files.
+
+## 2. Core Tooling & Libraries
+-   **HTTP Routing:** `github.com/go-chi/chi`
+-   **Configuration:** `github.com/caarlos0/env/v6`
+-   **DB Migrations (`golang-migrate`):** `github.com/golang-migrate/migrate`
+    -   Location: `services/<service_name>/db/migration/`.
+    -   Naming: Lexicographical (e.g., `001_initial_schema.up.sql`).
+    -   Execution: Consider auto-run on app startup (in `main.go` or `entrypoint.sh`).
+-   **DB Interaction (`sqlc`):** `github.com/sqlc-dev/sqlc`
+    -   Config: `sqlc.yaml` in `services/<service_name>/`.
+    -   Queries: `services/<service_name>/db/query/`.
+    -   Generated Code: `services/<service_name>/db/sqlc_generated/`.
+-   **Logging:** Standard `log/slog`.
+-   **Error Handling:** Wrap errors: `fmt.Errorf("context: %w", err)`.
+-   **Concurrency:** `golang.org/x/sync/errgroup`.
+-   **Messaging (Optional):** `github.com/ThreeDotsLabs/watermill` (for event-driven needs).
+
+## 3. Standard Makefile Targets
+-   `build`: Compile.
+-   `run`: Run locally.
+-   `lint`: `golangci-lint run`.
+-   `test-unit`: Run unit tests.
+-   `test-e2e`: Run E2E tests (often uses Docker Compose).
+-   `check`: Pre-commit (build, lint, unit tests).
+-   `sqlc`: Generate SQLC code.
+-   `migrate-up`/`migrate-down`: Manual DB migration control.
+-   `docker-build`: Build Docker image.
+-   `docker-run`: Run via Docker.
+
+## 4. Testing Strategy
+-   **Unit Tests:**
+    -   In-package (`_test.go` files), tag `//go:build unit`.
+    -   Mock all external dependencies (DB, APIs).
+    -   Fast, no Docker/external services needed.
+-   **E2E / Integration Tests:**
+    -   Verify system/integrated parts, tag `//go:build e2e`.
+    -   Requires running app & dependencies (Docker Compose).
+    -   Location: Root `e2e/` directory.
+    -   Style: BDD (e.g., Godog).
+    -   **Isolated Config:** Use `docker-compose.e2e.yml` (includes main `docker-compose.yml`, overrides for E2E specifics like ports, test env vars, test data volumes). See Docker docs on [multiple Compose files](https://docs.docker.com/compose/how-tos/multiple-compose-files/include).
+-   **Makefile Integration:**
+    -   `make test-unit`: Runs only unit tests.
+    -   `make test-e2e`: Runs only E2E tests.
+    -   `make check`: Includes `make test-unit`.
+
+## 5. Documentation Practice
+-   Primary docs in `docs/` (see section 1).
+-   `README.md`: Current setup/usage instructions.
+
+## 6. AI Assistant Guidelines
+-   Store in `.cursor/rules/` (MDC files).
+-   Follow TDD (tests before code).
+-   Manage tasks via `docs/tasks.md`.
+
+## 7. Service Health Checks (Mandatory)
+-   Implement liveness (`/healthz/live`) and readiness (`/healthz/ready`) probes.
+    -   **Liveness:** Is app running? (Simple, no external dependencies). Failure -> Restart container.
+    -   **Readiness:** Ready for traffic? (Can check DB, etc.). Failure -> No traffic sent.
+
+## 8. Dependency Management
+-   **Versioning:** Check for latest stable versions (Go, Docker images, Go libs) before adding/updating. Prefer stable releases for prod.
+
+**Note:** Adapt this guide as needed for your project.

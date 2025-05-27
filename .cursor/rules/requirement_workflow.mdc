@@ -1,0 +1,40 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Requirement Workflow
+
+This document outlines the workflow related to managing requirements and their corresponding test scenarios.
+
+## Documentation of Requirements & Test Scenarios
+1.  **Requirements File (`docs/requirements.md`):**
+    *   All functional and non-functional requirements **must** be documented in `docs/requirements.md`.
+    *   Before starting work on a new feature or change, consult and update this file.
+
+2.  **Test Scenarios File (`docs/test_scenarios.md`):**
+    *   For every requirement defined in `docs/requirements.md`, corresponding test scenarios (covering common cases and edge cases) **must** be documented in `docs/test_scenarios.md`.
+    *   This file serves as a checklist for test coverage.
+
+## Test Coverage for Requirements
+- All functional requirements in `docs/requirements.md` **must** have corresponding test scenarios documented in `docs/test_scenarios.md`.
+- Every test scenario listed in `docs/test_scenarios.md` **must** be covered by an End-to-End (E2E) test.
+- The AI assistant is responsible for verifying this coverage when implementing or modifying E2E tests related to a requirement.
+
+## AI Assistant Responsibilities for Requirements
+- When asked to perform a task, ensure all relevant documentation (`docs/requirements.md`, `docs/test_scenarios.md`, etc.) is considered and updated if necessary. This includes:
+    - Defining test scenarios in `docs/test_scenarios.md` for new or modified requirements.
+    - Ensuring E2E test coverage for scenarios in `docs/test_scenarios.md`.
+
+## Git Workflow for Requirements
+
+-   **Branching:**
+    -   On every requirement change (new feature or fix), a new branch **must** be created from `master`.
+    -   Branch naming convention: `feature/requirement-name` for new features or `fix/fix-name` for bug fixes. (e.g., `feature/user-authentication`, `fix/login-csrf-vulnerability`).
+-   **Committing and Pushing:**
+    -   Each task related to the requirement should be committed and pushed to this feature/fix branch.
+    -   Follow guidelines in `task_workflow.mdc` for task completion and version control for individual tasks.
+-   **Pull Requests:**
+    -   After all tasks for the requirement are **Done** (or **Skipped**), and all associated work is committed and pushed to the feature/fix branch:
+        -   A pull request **must** be created to merge the feature/fix branch into `master`.
+        -   Use the `gh pr create` command. For example: `gh pr create --base master --head feature/your-branch-name --title "Feature: Implement X" --body "Details of the feature and related tasks."`. The title and body should be descriptive.
