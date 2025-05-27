@@ -145,42 +145,57 @@ func parseExpectedResponses(reader io.Reader, filePath string) ([]*ExpectedRespo
 	scanner := bufio.NewScanner(reader)
 	var expectedResponses []*ExpectedResponse
 
-	var currentExpectedResponse *ExpectedResponse
+	currentExpectedResponse := &ExpectedResponse{Headers: make(http.Header)}
 	var bodyLines []string
 	parsingBody := false
 	lineNumber := 0
+	processedAnyLine := false
 
 	for scanner.Scan() {
 		lineNumber++
 		originalLine := scanner.Text()
 		processedLine := strings.TrimSpace(originalLine)
 
-		if strings.HasPrefix(processedLine, commentPrefix) {
-			continue // Skip comment lines
-		}
-
-		if strings.HasPrefix(processedLine, requestSeparator) { // Using same separator for now
-			if currentExpectedResponse != nil && ((currentExpectedResponse.Status != nil && *currentExpectedResponse.Status != "") || currentExpectedResponse.StatusCode != nil || len(bodyLines) > 0) {
+		if processedLine == requestSeparator { // Exact match for "###"
+			processedAnyLine = true // Mark that we processed the separator itself
+			// Current response (before separator) is complete. Add it if it has content.
+			if (currentExpectedResponse.Status != nil && *currentExpectedResponse.Status != "") ||
+				currentExpectedResponse.StatusCode != nil ||
+				len(currentExpectedResponse.Headers) > 0 || // Also check headers for empty responses
+				len(bodyLines) > 0 {
 				bodyStr := strings.Join(bodyLines, "\n")
 				currentExpectedResponse.Body = &bodyStr
 				expectedResponses = append(expectedResponses, currentExpectedResponse)
 			}
+			// Reset for the new response that starts *after* this separator.
+			currentExpectedResponse = &ExpectedResponse{Headers: make(http.Header)}
 			bodyLines = []string{}
 			parsingBody = false
-			currentExpectedResponse = &ExpectedResponse{Headers: make(http.Header)}
+			continue
+		}
+
+		processedAnyLine = true // Mark that we are processing content (if not separator)
+
+		if strings.HasPrefix(processedLine, commentPrefix) {
+			// If it's just a comment line like "#" with nothing else, or only whitespace after #,
+			// and we're in parsingBody mode, it should be part of the body.
+			if parsingBody && strings.TrimSpace(strings.TrimPrefix(processedLine, commentPrefix)) == "" {
+				bodyLines = append(bodyLines, originalLine) // Add original line if it's a body comment
+			}
+			// Otherwise, always skip normal comment lines from direct parsing as response parts
 			continue
 		}
 
 		if processedLine == "" && !parsingBody {
-			if currentExpectedResponse != nil && ((currentExpectedResponse.Status != nil && *currentExpectedResponse.Status != "") || currentExpectedResponse.StatusCode != nil) && !parsingBody {
+			// This condition signifies the start of the body or an ignored blank line between responses
+			if (currentExpectedResponse.Status != nil && *currentExpectedResponse.Status != "") || currentExpectedResponse.StatusCode != nil {
 				parsingBody = true
 			}
 			continue
 		}
 
-		if currentExpectedResponse == nil {
-			currentExpectedResponse = &ExpectedResponse{Headers: make(http.Header)}
-		}
+		// No need for: if currentExpectedResponse == nil { currentExpectedResponse = &ExpectedResponse{Headers: make(http.Header)} }
+		// because it's initialized before the loop and reset after each separator.
 
 		if parsingBody {
 			bodyLines = append(bodyLines, originalLine)
@@ -191,6 +206,7 @@ func parseExpectedResponses(reader io.Reader, filePath string) ([]*ExpectedRespo
 				if len(parts) < 2 { // Must have at least HTTP_VERSION STATUS_CODE [STATUS_TEXT]
 					return nil, fmt.Errorf("line %d: invalid status line: '%s'. Expected HTTP_VERSION STATUS_CODE [STATUS_TEXT]", lineNumber, processedLine)
 				}
+				// parts[0] is HTTP Version, parts[1] is StatusCode, rest is StatusText
 				statusCodeInt, err := parseInt(parts[1])
 				if err != nil {
 					return nil, fmt.Errorf("line %d: invalid status code '%s': %w", lineNumber, parts[1], err)
@@ -198,18 +214,12 @@ func parseExpectedResponses(reader io.Reader, filePath string) ([]*ExpectedRespo
 				currentExpectedResponse.StatusCode = &statusCodeInt
 
 				var finalStatusString string
-				if len(parts) > 2 { // e.g. HTTP/1.1 200 OK
-					statusText := strings.Join(parts[2:], " ")      // "OK"
-					finalStatusString = parts[1] + " " + statusText // "200 OK"
-				} else { // e.g. HTTP/1.1 200
-					statusText := http.StatusText(statusCodeInt)
-					if statusText == "" {
-						statusText = "Unknown Status"
-					}
-					finalStatusString = fmt.Sprintf("%d %s", statusCodeInt, statusText) // "200 OK"
+				if len(parts) > 2 {
+					finalStatusString = strings.Join(parts[1:], " ") // e.g. "200 OK"
+				} else {
+					finalStatusString = parts[1] // Just code, e.g. "200"
 				}
-				currentExpectedResponse.Status = &finalStatusString
-
+				currentExpectedResponse.Status = &finalStatusString // Store the combined status code and text or just code
 			} else { // Parsing headers
 				parts := strings.SplitN(processedLine, ":", 2)
 				if len(parts) != 2 {
@@ -222,23 +232,35 @@ func parseExpectedResponses(reader io.Reader, filePath string) ([]*ExpectedRespo
 		}
 	}
 
-	if currentExpectedResponse != nil && ((currentExpectedResponse.Status != nil && *currentExpectedResponse.Status != "") || currentExpectedResponse.StatusCode != nil || len(bodyLines) > 0) {
+	// Add the last expected response pending in currentExpectedResponse, if it has content
+	if processedAnyLine && ((currentExpectedResponse.Status != nil && *currentExpectedResponse.Status != "") ||
+		currentExpectedResponse.StatusCode != nil ||
+		len(currentExpectedResponse.Headers) > 0 || // Also check headers for empty responses
+		len(bodyLines) > 0) {
 		bodyStr := strings.Join(bodyLines, "\n")
 		currentExpectedResponse.Body = &bodyStr
 		expectedResponses = append(expectedResponses, currentExpectedResponse)
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading expected response file %s: %w", filePath, err)
+		return nil, fmt.Errorf("error reading expected response file %s (last processed line %d): %w", filePath, lineNumber, err)
 	}
 
-	if len(expectedResponses) == 0 && filePath != "" { // filePath check for tests
-		return nil, fmt.Errorf("no valid expected responses found in file %s", filePath)
+	// If no responses were parsed and it's a file (not an empty test reader)
+	if len(expectedResponses) == 0 && filePath != "" {
+		// If we didn't even process any non-comment lines, it's a specific kind of "not found"
+		if !processedAnyLine {
+			// TestParseExpectedResponses_EmptyFile expects this specific wording
+			return nil, fmt.Errorf("no valid expected responses found in file %s", filePath)
+		}
+		// Otherwise, content was there but nothing valid was parsed from it
+		return nil, fmt.Errorf("no valid expected responses found in file %s despite processing content", filePath)
 	}
+
 	return expectedResponses, nil
 }
 
-// parseInt is a helper, like strconv.Atoi but for this limited context.
+// parseInt is a helper function to convert string to int.
 func parseInt(s string) (int, error) {
 	var n int
 	_, err := fmt.Sscan(s, &n)

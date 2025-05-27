@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -136,6 +137,26 @@ func TestExecuteFile_MultipleRequests(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp1.StatusCode)
 	assert.Equal(t, "response1", resp1.BodyString)
 
+	// Define expected response for request 1 & 2 in a single file
+	expectedFileContent := fmt.Sprintf(`HTTP/1.1 %d %s
+
+%s
+
+###
+
+HTTP/1.1 %d %s
+
+%s`,
+		http.StatusOK, http.StatusText(http.StatusOK),
+		"response1",
+		http.StatusCreated, http.StatusText(http.StatusCreated),
+		"response2",
+	)
+	expectedFilePath := writeExpectedResponseFile(t, expectedFileContent)
+
+	validationErr := ValidateResponses(context.Background(), expectedFilePath, resp1, responses[1])
+	assert.NoError(t, validationErr, "Validation errors for responses should be nil")
+
 	resp2 := responses[1]
 	assert.NoError(t, resp2.Error)
 	assert.Equal(t, http.StatusCreated, resp2.StatusCode)
@@ -183,6 +204,84 @@ func TestExecuteFile_NoRequestsInFile(t *testing.T) {
 	_, err := client.ExecuteFile(context.Background(), "testdata/http_request_files/no_requests.http")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no valid requests found in file")
+}
+
+func TestExecuteFile_ValidThenInvalidSyntax(t *testing.T) {
+	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/first" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, "response from /first")
+		} else if r.Method == "INVALID_METHOD" && r.URL.Path == "/second" {
+			// The Go http server by default will respond with 501 Not Implemented
+			// if it receives a method it doesn't understand, or 405 if the handler is more specific.
+			// httptest.Server uses DefaultServeMux which would result in 404 if no path matches,
+			// but if a path *could* match but method doesn't, it's 405.
+			// Let's assume the default http server behavior for an unknown method is 501.
+			w.WriteHeader(http.StatusNotImplemented)
+			fmt.Fprint(w, "method not implemented")
+		} else {
+			t.Logf("Mock server received UNEXPECTED request: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusTeapot)
+		}
+	})
+	defer server.Close()
+
+	client, _ := NewClient()
+	tempFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/valid_then_invalid_syntax.http", struct{ ServerURL string }{ServerURL: server.URL})
+
+	responses, err := client.ExecuteFile(context.Background(), tempFilePath)
+
+	// ExecuteFile itself should not return an error, as parsing succeeds and requests are attempted.
+	// Errors from server (like 501) are captured in the Response object, not as a Go error from ExecuteFile directly unless it's a client-side execution failure (e.g. network unreachable)
+	require.NoError(t, err, "ExecuteFile should not return an error if requests are merely rejected by server")
+
+	require.Len(t, responses, 2, "Should have two response objects")
+
+	// First response should be successful
+	resp1 := responses[0]
+	require.NotNil(t, resp1, "First response object should not be nil")
+	assert.NoError(t, resp1.Error, "Error in first response object should be nil")
+	assert.Equal(t, http.StatusOK, resp1.StatusCode, "Status code for first response should be OK")
+	assert.Equal(t, "response from /first", resp1.BodyString)
+
+	// Second response should indicate server error (e.g., 501 Not Implemented)
+	resp2 := responses[1]
+	require.NotNil(t, resp2, "Second response object should not be nil")
+	assert.NoError(t, resp2.Error, "Error in second object should be nil as it's a server response, not client-side exec error")
+	assert.Equal(t, http.StatusNotImplemented, resp2.StatusCode, "Status code for second response should be Not Implemented")
+	assert.Contains(t, resp2.BodyString, "method not implemented", "Body for second response should indicate method error")
+}
+
+func TestExecuteFile_MultipleErrors(t *testing.T) {
+	client, _ := NewClient()
+	filePath := "testdata/http_request_files/multiple_errors.http"
+
+	responses, err := client.ExecuteFile(context.Background(), filePath)
+
+	// Check the combined error from ExecuteFile
+	require.Error(t, err, "Expected an error from ExecuteFile when multiple requests fail")
+	// Using multierror, the message often starts with "X errors occurred:"
+	// We are checking for the presence of specific error messages for each request.
+	// The exact count "2 errors occurred" might be brittle if multierror changes formatting slightly,
+	// so we check for the presence of individual failure messages.
+	assert.Contains(t, err.Error(), "request 1 (GET http://localhost:12347/badreq1) failed", "Error message should contain info about first failed request")
+	// Check for port and connection refused, being flexible about IPv4/IPv6 loopback
+	assert.Contains(t, err.Error(), ":12347: connect: connection refused", "Error message should contain specific connection error for first request")
+	assert.Contains(t, err.Error(), "request 2 (POST http://localhost:12348/badreq2) failed", "Error message should contain info about second failed request")
+	assert.Contains(t, err.Error(), ":12348: connect: connection refused", "Error message should contain specific connection error for second request")
+
+	// Check individual response objects
+	require.Len(t, responses, 2, "Should receive two response objects, even if they contain errors")
+
+	resp1 := responses[0]
+	require.NotNil(t, resp1, "First response object should not be nil")
+	assert.Error(t, resp1.Error, "Error in first response object should be set")
+	assert.Contains(t, resp1.Error.Error(), ":12347: connect: connection refused")
+
+	resp2 := responses[1]
+	require.NotNil(t, resp2, "Second response object should not be nil")
+	assert.Error(t, resp2.Error, "Error in second response object should be set")
+	assert.Contains(t, resp2.Error.Error(), ":12348: connect: connection refused")
 }
 
 func TestExecuteFile_SimpleGetHTTP(t *testing.T) {
@@ -298,6 +397,68 @@ func TestExecuteFile_InvalidMethodInFile(t *testing.T) {
 	assert.Contains(t, resp1.Error.Error(), "unsupported protocol scheme", "Error message should indicate unsupported protocol scheme")
 	// Check for the method string as it appears in the error message
 	assert.Contains(t, resp1.Error.Error(), "Invalidmethod", "Error message should contain the problematic method string as used")
+}
+
+func TestExecuteFile_MultipleRequests_GreaterThanTwo(t *testing.T) {
+	var requestCounter int32 // Use int32 for atomic operations
+	server := startMockServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		currentCount := atomic.AddInt32(&requestCounter, 1)
+		switch r.URL.Path {
+		case "/req1":
+			assert.Equal(t, http.MethodGet, r.Method)
+			assert.Equal(t, "Request1", r.Header.Get("X-Test-Header"))
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "response1")
+		case "/req2":
+			assert.Equal(t, http.MethodPost, r.Method)
+			assert.Equal(t, "Request2", r.Header.Get("X-Test-Header"))
+			body, _ := io.ReadAll(r.Body)
+			assert.JSONEq(t, `{"name": "Request Two"}`, string(body))
+			w.WriteHeader(http.StatusCreated)
+			_, _ = fmt.Fprint(w, "response2")
+		case "/req3":
+			assert.Equal(t, http.MethodGet, r.Method)
+			assert.Equal(t, "Request3", r.Header.Get("X-Test-Header"))
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = fmt.Fprint(w, "response3")
+		default:
+			t.Errorf("Unexpected request to %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+		t.Logf("Server handled request %d: %s %s", currentCount, r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	client, err := NewClient()
+	require.NoError(t, err)
+
+	processedFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/multiple_requests_gt2.http", struct{ ServerURL string }{ServerURL: server.URL})
+
+	responses, err := client.ExecuteFile(context.Background(), processedFilePath)
+	require.NoError(t, err)
+	require.Len(t, responses, 3, "Expected three responses")
+	assert.EqualValues(t, 3, atomic.LoadInt32(&requestCounter), "Server should have received three requests")
+
+	// Validate all responses against the expected file
+	expectedResponseFilePath := "testdata/http_response_files/multiple_responses_gt2_expected.http"
+	validationErr := ValidateResponses(context.Background(), expectedResponseFilePath, responses...)
+	assert.NoError(t, validationErr, "Validation errors for all responses should be nil")
+
+	// Individual response checks (optional, as ValidateResponses covers them, but good for sanity)
+	resp1 := responses[0]
+	assert.NoError(t, resp1.Error)
+	assert.Equal(t, http.StatusOK, resp1.StatusCode)
+	assert.Equal(t, "response1", resp1.BodyString)
+
+	resp2 := responses[1]
+	assert.NoError(t, resp2.Error)
+	assert.Equal(t, http.StatusCreated, resp2.StatusCode)
+	assert.Equal(t, "response2", resp2.BodyString)
+
+	resp3 := responses[2]
+	assert.NoError(t, resp3.Error)
+	assert.Equal(t, http.StatusAccepted, resp3.StatusCode)
+	assert.Equal(t, "response3", resp3.BodyString)
 }
 
 // mockRoundTripper is a helper for mocking http.RoundTripper

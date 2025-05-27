@@ -35,9 +35,7 @@ type ExpectedResponse struct {
 	Body            *string     `json:"body,omitempty" yaml:"body,omitempty"`                 // Expected body content (exact match or regex)
 	BodyContains    []string    `json:"bodyContains,omitempty" yaml:"bodyContains,omitempty"` // Substrings expected in body
 	BodyNotContains []string    `json:"bodyNotContains,omitempty" yaml:"bodyNotContains,omitempty"`
-	// JSONPathChecks  map[string]any    `json:"jsonPathChecks,omitempty" yaml:"jsonPathChecks,omitempty"` // e.g., {"$.user.id": 123, "$.user.name": "test"}
-	// HeadersContain  map[string]string `json:"headersContain,omitempty" yaml:"headersContain,omitempty"` // Check if headers contain specific key-value (substring match for value)
-
+	HeadersContain  http.Header `json:"headersContain,omitempty"` // New field
 	// TODO: Add fields for body schema validation (JSON Schema), timing assertions, etc.
 }
 

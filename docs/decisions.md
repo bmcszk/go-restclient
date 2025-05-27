@@ -23,3 +23,14 @@ Last Updated: 2025-05-27
 - **Decision 3 (Testing Strategy)**: All unit tests for the `Client`'s execution logic (`client_test.go`) must be based on executing `.http` files via `ExecuteFile`. Direct testing of `executeRequest` (now unexported) is removed.
 - **Rationale 3**: To ensure client tests accurately reflect the primary use case of the library and to test the full flow from file parsing to request execution. This aligns with the guideline that scenarios in `docs/test_scenarios.md` should be covered by unit tests using real `.http` files.
 - **Impact**: `client.go` modified. `client_test.go` significantly refactored: old `TestExecuteRequest_*` tests removed, existing `TestExecuteFile_*` tests updated, and new `TestExecuteFile_*` tests added to cover scenarios previously tested via direct `ExecuteRequest` calls (e.g., `BaseURL` and `DefaultHeaders` functionality).
+
+## 2025-05-27: Expected Response File Format and Parsing
+
+- **Decision**: Expected responses will be defined in files using the same `.http`-like format as request files. This includes:
+    - A status line (e.g., `HTTP/1.1 200 OK`).
+    - Header key-value pairs.
+    - An optional body, separated from headers by a blank line.
+    - Multiple expected response definitions can be included in a single file, separated by `###`.
+- **Rationale**: To maintain consistency with the request file format, making it easier for users to create and manage expected response definitions. This approach is also more flexible than a simple JSON or YAML structure for defining HTTP responses.
+- **Implementation**: The `parser.go` file contains `ParseExpectedResponseFile` and `parseExpectedResponses` functions to handle this format.
+- **Exclusion**: Support for defining expected responses in other formats (e.g., dedicated JSON or YAML files) is explicitly excluded to simplify the library and maintain a consistent user experience.

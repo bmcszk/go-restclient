@@ -1,0 +1,18 @@
+HTTP/1.1 200 OK
+Content-Type: text/plain; charset=utf-8
+
+response1
+
+###
+
+HTTP/1.1 201 Created
+Content-Type: text/plain; charset=utf-8
+
+response2
+
+###
+
+HTTP/1.1 202 Accepted
+Content-Type: text/plain; charset=utf-8
+
+response3
