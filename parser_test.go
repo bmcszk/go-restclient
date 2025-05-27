@@ -396,3 +396,119 @@ func TestParseRequestFile_PostWithJsonBody_FromFile(t *testing.T) {
 		assert.JSONEq(t, expectedBody, strings.TrimSuffix(req.RawBody, "\n"), "RawBody does not match expected JSON (ignoring potential trailing newline)")
 	}
 }
+
+func TestParseExpectedResponses_SimpleOK(t *testing.T) {
+	content := `
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "status": "success"
+}
+`
+	reader := strings.NewReader(content)
+	expectedResponses, err := parseExpectedResponses(reader, "test_simple_ok.hresp")
+
+	require.NoError(t, err)
+	require.NotNil(t, expectedResponses)
+	require.Len(t, expectedResponses, 1)
+
+	expResp := expectedResponses[0]
+	require.NotNil(t, expResp.StatusCode)
+	assert.Equal(t, 200, *expResp.StatusCode)
+	require.NotNil(t, expResp.Status)
+	assert.Equal(t, "200 OK", *expResp.Status)
+	assert.Equal(t, "application/json", expResp.Headers.Get("Content-Type"))
+	require.NotNil(t, expResp.Body)
+	expectedBody := `{
+  "status": "success"
+}`
+	assert.Equal(t, expectedBody, *expResp.Body)
+}
+
+func TestParseExpectedResponses_MultipleResponses(t *testing.T) {
+	content := `
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "message": "First response"
+}
+
+###
+
+HTTP/1.1 201 Created
+Content-Type: application/json
+X-Custom-Header: value
+
+{
+  "id": 123
+}
+`
+	reader := strings.NewReader(content)
+	expectedResponses, err := parseExpectedResponses(reader, "test_multi.hresp")
+	require.NoError(t, err)
+	require.Len(t, expectedResponses, 2)
+
+	// Check first expected response
+	exp1 := expectedResponses[0]
+	require.NotNil(t, exp1.StatusCode)
+	assert.Equal(t, 200, *exp1.StatusCode)
+	require.NotNil(t, exp1.Status)
+	assert.Equal(t, "200 OK", *exp1.Status)
+	assert.Equal(t, "application/json", exp1.Headers.Get("Content-Type"))
+	require.NotNil(t, exp1.Body)
+	assert.JSONEq(t, `{"message": "First response"}`, *exp1.Body)
+
+	// Check second expected response
+	exp2 := expectedResponses[1]
+	require.NotNil(t, exp2.StatusCode)
+	assert.Equal(t, 201, *exp2.StatusCode)
+	require.NotNil(t, exp2.Status)
+	assert.Equal(t, "201 Created", *exp2.Status)
+	assert.Equal(t, "application/json", exp2.Headers.Get("Content-Type"))
+	assert.Equal(t, "value", exp2.Headers.Get("X-Custom-Header"))
+	require.NotNil(t, exp2.Body)
+	assert.JSONEq(t, `{"id": 123}`, *exp2.Body)
+}
+
+func TestParseExpectedResponses_InvalidStatusLine(t *testing.T) {
+	content := `HTTP/1.1` // Missing status code and text
+	reader := strings.NewReader(content)
+	_, err := parseExpectedResponses(reader, "test_invalid_status.hresp")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid status line")
+}
+
+func TestParseExpectedResponses_InvalidStatusCode(t *testing.T) {
+	content := `HTTP/1.1 ABC OK` // ABC is not a number
+	reader := strings.NewReader(content)
+	_, err := parseExpectedResponses(reader, "test_invalid_code.hresp")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid status code 'ABC'")
+}
+
+func TestParseExpectedResponses_InvalidHeaderFormat(t *testing.T) {
+	content := `HTTP/1.1 200 OK
+Content-Type application/json` // Missing colon in header
+	reader := strings.NewReader(content)
+	_, err := parseExpectedResponses(reader, "test_invalid_header.hresp")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid header line")
+}
+
+func TestParseExpectedResponses_EmptyFile(t *testing.T) {
+	content := ``
+	reader := strings.NewReader(content)
+	_, err := parseExpectedResponses(reader, "test_empty.hresp")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no valid expected responses found in file")
+}
+
+func TestParseExpectedResponses_CommentOnlyFile(t *testing.T) {
+	content := `# Only comments here`
+	reader := strings.NewReader(content)
+	_, err := parseExpectedResponses(reader, "test_comment_only.hresp")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no valid expected responses found in file")
+}

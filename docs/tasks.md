@@ -6,7 +6,7 @@ Last Updated: 2025-05-27
 | :------- | :-------------------------------------------------------------------------- | :------- | :------- | :--------- |
 | TASK-021 | Refactor `ExecuteFile` to use `errgroup` for handling errors from `executeRequest`. | Done     | AI       | 2025-05-28 |
 | TASK-022 | Implement `ValidateResponse` method in `Client` or a new validator component. | Done     | AI       | 2025-05-29 |
-| TASK-023 | Define response file format allowing `###` separator and update parser.     | ToDo     | AI       | 2025-05-29 |
+| TASK-023 | Define response file format allowing `###` separator and update parser.     | Done | AI       | 2025-05-29 |
 | TASK-024 | Create E2E tests for `ValidateResponse` using `sample1.http` and its expected response. | ToDo     | AI       | 2025-05-30 |
 | TASK-025 | Add/verify E2E test for multiple requests in one `.http` file (e.g. `sample1.http`). | ToDo     | AI       | 2025-05-30 |
 | TASK-026 | Implement E2E tests for SCENARIO-LIB-008-001, SCENARIO-LIB-008-002, SCENARIO-LIB-008-003 | ToDo     | AI       | 2025-05-31 |
