@@ -30,4 +30,10 @@ Last Updated: 2025-05-27
 
 *   **Mistake:** Completed several development tasks (TASK-001 through TASK-015) and marked them as 'Done' in `docs/tasks.md` without following the prescribed Git workflow of proposing a `git commit` and `git push` after each task (or a logical group of tasks that pass `make check`).
 *   **Correction:** Acknowledged the oversight. Will proceed to commit the accumulated changes for the completed tasks and will adhere to the commit/push workflow for all subsequent tasks.
-*   **Learning:** Adhere strictly to all documented workflow steps, including version control procedures, as they are crucial for maintaining a clean and traceable project history. Regularly re-check guidelines if unsure. 
+*   **Learning:** Adhere strictly to all documented workflow steps, including version control procedures, as they are crucial for maintaining a clean and traceable project history. Regularly re-check guidelines if unsure.
+
+## 2025-05-27: Git Staging/Committing Issues & File System State Uncertainty
+
+*   **Mistake:** After being reminded about the Git workflow, attempts to stage and commit files (`git add`, `git commit`) failed with "nothing to commit, working tree clean," despite numerous `edit_file` operations reporting success. This indicates a potential misunderstanding of how `edit_file` interacts with the file system and Git staging, or an issue with the environment/tooling that prevents `git` from seeing the changes.
+*   **Resolution (Pending):** Paused to seek clarification on the actual state of the files in the workspace. If files are modified, the `git add/commit` process needs to be debugged. If files are not modified, the `edit_file` tool's behavior needs to be investigated.
+*   **Learning:** The successful reported execution of a file modification tool does not automatically guarantee that the changes are 1) physically written to disk in a way that `git` can see, or 2) automatically staged. Explicitly verify file changes and Git status when troubleshooting commit issues. Do not assume `edit_file` stages changes. 

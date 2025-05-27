@@ -4,9 +4,9 @@ Last Updated: 2025-05-27
 
 ## Overview
 
-`go-restclient` is a Go library designed to simplify HTTP request execution and validation, primarily for testing purposes. It allows developers to define HTTP requests in simple text files (`.rest` or `.http` format, similar to RFC 2616 and popular REST client tools), send these requests, and validate the responses against expected outcomes.
+`go-restclient` is a Go library designed to simplify HTTP request execution and validation. It allows developers to define HTTP requests in simple text files (`.rest` or `.http` format, similar to RFC 2616 and popular REST client tools), send these requests, and validate the responses against expected outcomes.
 
-This library is suitable for programmatic use within Go applications, especially for crafting End-to-End (E2E) and integration tests.
+This library is suitable for programmatic use within Go applications.
 
 ## Features
 
@@ -16,8 +16,7 @@ This library is suitable for programmatic use within Go applications, especially
     - Supports comments (`#`) and named requests (e.g., `### My Request Name`).
 - **HTTP Request Execution:**
     - Create a `Client` with options (custom `http.Client`, `BaseURL`, default headers).
-    - Execute all requests from a `.rest` file (`ExecuteFile`).
-    - Execute a single programmatically defined `Request` struct (`ExecuteRequest`).
+    - Execute all requests from a `.rest` or `.http` file using `ExecuteFile(ctx context.Context, requestFilePath string)`.
     - Captures detailed response information: status, headers, body, duration, TLS details.
     - Handles errors during request execution and stores them within the `Response` object.
 - **Response Validation:**
@@ -69,6 +68,7 @@ Content-Type: application/json
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 
@@ -84,7 +84,8 @@ func main() {
 		log.Fatalf("Failed to create client: %v", err)
 	}
 
-	responses, err := client.ExecuteFile("requests.rest")
+	// Pass a context, e.g., context.Background() or context.TODO()
+	responses, err := client.ExecuteFile(context.Background(), "requests.rest")
 	if err != nil {
 		// This error is for file-level issues (e.g., file not found, parse error for whole file)
 		log.Fatalf("Failed to execute request file: %v", err)
@@ -142,8 +143,6 @@ if !validationResult.Passed {
 ### Running Tests
 
 - **Unit Tests:** `make test-unit` (or `go test -cover ./...`)
-- **End-to-End Tests:** `make test-e2e` (or `go test -tags=e2e ./e2e/...`)
-- **All Tests:** `make test`
 
 ### Linting and Checks
 
