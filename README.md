@@ -4,79 +4,158 @@ Last Updated: 2025-05-27
 
 ## Overview
 
-`go-restclient` is a Go library designed to simplify HTTP request testing in End-to-End (E2E) test suites. It allows developers to define HTTP requests in simple text files (`.rest` or `.http` format) and validate responses against expected outcomes also defined in files.
+`go-restclient` is a Go library designed to simplify HTTP request execution and validation, primarily for testing purposes. It allows developers to define HTTP requests in simple text files (`.rest` or `.http` format, similar to RFC 2616 and popular REST client tools), send these requests, and validate the responses against expected outcomes.
 
-This library is inspired by tools like the VSCode REST Client extension but is intended for programmatic use within Go applications, particularly for testing.
+This library is suitable for programmatic use within Go applications, especially for crafting End-to-End (E2E) and integration tests.
 
-## Features (Planned)
+## Features
 
-- Parse `.rest`/`.http` files for request details (method, URL, headers, body).
-- Send HTTP requests.
-- Capture HTTP responses.
-- Compare actual responses against expected responses (status code, headers, body).
-- Support for variables in request files.
+- **Parse `.rest`/`.http` files:** 
+    - Supports multiple requests per file, separated by `###`.
+    - Handles request method, URL, HTTP version, headers, and body.
+    - Supports comments (`#`) and named requests (e.g., `### My Request Name`).
+- **HTTP Request Execution:**
+    - Create a `Client` with options (custom `http.Client`, `BaseURL`, default headers).
+    - Execute all requests from a `.rest` file (`ExecuteFile`).
+    - Execute a single programmatically defined `Request` struct (`ExecuteRequest`).
+    - Captures detailed response information: status, headers, body, duration, TLS details.
+    - Handles errors during request execution and stores them within the `Response` object.
+- **Response Validation:**
+    - Compare actual `Response` against an `ExpectedResponse` struct.
+    - Validate status code and status string.
+    - Validate headers: exact match for specified keys, or check if actual headers contain specified key-substring pairs.
+    - Validate body: exact match, contains substrings, not-contains substrings.
+    - Validate JSON body content using JSONPath expressions.
+- **Extensible:** Designed with clear structs and functions for further extension.
 
 ## Getting Started
 
-_(Instructions to be added once the library is more mature)_.
-
 ### Prerequisites
 
-- Go (version X.Y.Z or higher - to be specified)
+- Go 1.21 or higher (developed with Go 1.24.3).
 
 ### Installation
 
+To use `go-restclient` in your Go project:
+
 ```bash
-# To be determined (e.g., go get github.com/bmcszk/go-restclient)
+go get github.com/bmcszk/go-restclient
 ```
 
 ## Usage
 
-_(Code examples and usage instructions to be added)_.
+### 1. Create a `.rest` file
 
-### Request File Format
-
-The request files (`.rest` or `.http`) should follow a simple format:
-
+**Example: `requests.rest`**
 ```http
-### Example Request
-# Comment: This is a GET request to a test API
-GET https://httpbin.org/get
+### Get User
+GET https://api.example.com/users/123
 Accept: application/json
+X-API-Key: your-api-key
+
+### Create Product
+POST https://api.example.com/products
+Content-Type: application/json
+
+{
+  "name": "Awesome Gadget",
+  "price": 99.99
+}
+```
+
+### 2. Execute requests using the client
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+
+	"github.com/bmcszk/go-restclient"
+)
+
+func main() {
+	client, err := restclient.NewClient(
+		// Example: Set a default header for all requests
+		// restclient.WithDefaultHeader("User-Agent", "MyTestApp/1.0"),
+	)
+	if err != nil {
+		log.Fatalf("Failed to create client: %v", err)
+	}
+
+	responses, err := client.ExecuteFile("requests.rest")
+	if err != nil {
+		// This error is for file-level issues (e.g., file not found, parse error for whole file)
+		log.Fatalf("Failed to execute request file: %v", err)
+	}
+
+	for _, resp := range responses {
+		if resp.Error != nil {
+			fmt.Printf("Request to %s failed: %v\n", resp.Request.URL, resp.Error)
+			continue
+		}
+
+		fmt.Printf("Response for %s %s:\n", resp.Request.Method, resp.Request.URL)
+		fmt.Printf("Status: %s\n", resp.Status)
+		fmt.Printf("Body:\n%s\n", resp.BodyString)
+		fmt.Println("----------")
+
+		// Example Validation (if you have an ExpectedResponse)
+		// expected := &restclient.ExpectedResponse{ ... }
+		// validationResult := restclient.ValidateResponse(resp, expected)
+		// if !validationResult.Passed {
+		// 	 fmt.Printf("Validation Failed: %v\n", validationResult.Mismatches)
+		// }
+	}
+}
 
 ```
 
-Multiple requests can be separated by `###`.
+### 3. Defining Expected Responses and Validating
 
-### Expected Response Format
+(Details on loading `ExpectedResponse` from files and full validation flow to be expanded based on chosen file format for expected responses e.g. JSON, YAML, or a simplified `.httpresponse` format)
 
-_(Details on how expected responses will be defined to be added)_.
+Currently, `ExpectedResponse` can be defined programmatically or loaded from a JSON file using `LoadExpectedResponseFromJSONFile`.
+
+```go
+// Programmatic example
+expected := &restclient.ExpectedResponse{
+    StatusCode: restclient.IntPtr(200),
+    BodyContains: []string{"success"},
+    HeadersContain: map[string]string{"Content-Type": "application/json"},
+    JSONPathChecks: map[string]interface{}{"$.data.id": 100},
+}
+
+// Assuming 'resp' is the *restclient.Response from ExecuteFile/ExecuteRequest
+validationResult := restclient.ValidateResponse(resp, expected)
+if !validationResult.Passed {
+    fmt.Printf("Validation failed for %s:\n", resp.Request.Name)
+    for _, mismatch := range validationResult.Mismatches {
+        fmt.Printf(" - %s\n", mismatch)
+    }
+}
+```
 
 ## Development
 
 ### Running Tests
 
-```bash
-make test-unit
-make test-e2e
-```
+- **Unit Tests:** `make test-unit` (or `go test -cover ./...`)
+- **End-to-End Tests:** `make test-e2e` (or `go test -tags=e2e ./e2e/...`)
+- **All Tests:** `make test`
 
-### Linting
+### Linting and Checks
 
-```bash
-make lint
-```
-
-### Building
-
-```bash
-make build
-```
+- **Lint:** `make lint`
+- **All pre-commit checks (lint, build, unit tests):** `make check`
 
 ## Contributing
 
-_(Contribution guidelines to be added)_.
+Contributions are welcome! Please follow standard Go best practices and ensure `make check` passes before submitting pull requests.
+
+(Further contribution guidelines to be added if the project grows).
 
 ## License
 
-_(License information to be added - likely MIT)_. 
+MIT License (To be formally added - assuming MIT for now). 
