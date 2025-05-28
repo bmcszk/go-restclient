@@ -1,7 +1,6 @@
 package restclient
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -43,26 +42,25 @@ func assertMultierrorContains(t *testing.T, err error, expectedErrCount int, exp
 }
 
 func TestValidateResponses_NilAndEmptyActuals(t *testing.T) {
-	ctx := context.Background()
 	testFilePath := "testdata/http_response_files/validator_nil_empty_actuals_expected.hresp"
 
 	t.Run("nil actual response slice", func(t *testing.T) {
 		var nilActuals []*Response // nil slice
-		err := ValidateResponses(ctx, testFilePath, nilActuals...)
+		err := ValidateResponses(testFilePath, nilActuals...)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "mismatch in number of responses: got 0 actual, but expected 1")
 	})
 
 	t.Run("empty actual response slice", func(t *testing.T) {
 		emptyActuals := []*Response{} // empty slice
-		err := ValidateResponses(ctx, testFilePath, emptyActuals...)
+		err := ValidateResponses(testFilePath, emptyActuals...)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "mismatch in number of responses: got 0 actual, but expected 1")
 	})
 
 	t.Run("slice with one nil actual response", func(t *testing.T) {
 		oneNilActual := []*Response{nil}
-		err := ValidateResponses(ctx, testFilePath, oneNilActual...)
+		err := ValidateResponses(testFilePath, oneNilActual...)
 		require.Error(t, err)
 		merr, ok := err.(*multierror.Error)
 		require.True(t, ok, "Expected a multierror.Error")
@@ -72,11 +70,10 @@ func TestValidateResponses_NilAndEmptyActuals(t *testing.T) {
 }
 
 func TestValidateResponses_FileErrors(t *testing.T) {
-	ctx := context.Background()
 	actualResp := &Response{StatusCode: 200}
 
 	t.Run("missing expected response file", func(t *testing.T) {
-		err := ValidateResponses(ctx, "nonexistent.hresp", actualResp)
+		err := ValidateResponses("nonexistent.hresp", actualResp)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to parse expected response file")
 		assert.Contains(t, err.Error(), "nonexistent.hresp")
@@ -84,7 +81,7 @@ func TestValidateResponses_FileErrors(t *testing.T) {
 
 	t.Run("empty expected response file", func(t *testing.T) {
 		emptyFilePath := "testdata/http_response_files/validator_empty_expected.hresp"
-		err := ValidateResponses(ctx, emptyFilePath, actualResp)
+		err := ValidateResponses(emptyFilePath, actualResp)
 		assertMultierrorContains(t, err, 2, []string{
 			"failed to parse expected response file",
 			"no valid expected responses found in file",
@@ -94,7 +91,7 @@ func TestValidateResponses_FileErrors(t *testing.T) {
 
 	t.Run("malformed expected response file", func(t *testing.T) {
 		malformedFilePath := "testdata/http_response_files/validator_malformed_status.hresp"
-		err := ValidateResponses(ctx, malformedFilePath, actualResp)
+		err := ValidateResponses(malformedFilePath, actualResp)
 		assertMultierrorContains(t, err, 2, []string{
 			"failed to parse expected response file",
 			"invalid status code",
@@ -104,7 +101,6 @@ func TestValidateResponses_FileErrors(t *testing.T) {
 }
 
 func TestValidateResponses_StatusString(t *testing.T) {
-	ctx := context.Background()
 	tests := []struct {
 		name             string
 		actualResponse   *Response
@@ -149,7 +145,7 @@ func TestValidateResponses_StatusString(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateResponses(ctx, tt.expectedFilePath, tt.actualResponse)
+			err := ValidateResponses(tt.expectedFilePath, tt.actualResponse)
 
 			if tt.expectedErrCount == 0 {
 				assert.NoError(t, err)
@@ -171,7 +167,6 @@ func TestValidateResponses_StatusString(t *testing.T) {
 }
 
 func TestValidateResponses_Headers(t *testing.T) {
-	ctx := context.Background()
 	tests := []struct {
 		name             string
 		actualResponse   *Response
@@ -242,7 +237,7 @@ func TestValidateResponses_Headers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateResponses(ctx, tt.expectedFilePath, tt.actualResponse)
+			err := ValidateResponses(tt.expectedFilePath, tt.actualResponse)
 
 			if tt.expectedErrCount == 0 {
 				assert.NoError(t, err)
@@ -254,7 +249,6 @@ func TestValidateResponses_Headers(t *testing.T) {
 }
 
 func TestValidateResponses_Body_ExactMatch(t *testing.T) {
-	ctx := context.Background()
 	body1 := "Hello World"
 	body2 := "Hello Go"
 	tests := []struct {
@@ -305,23 +299,10 @@ func TestValidateResponses_Body_ExactMatch(t *testing.T) {
 		// 	expectedErrCount:    1,
 		// 	expectedErrTexts:    []string{"body mismatch"},
 		// },
-		// {
-		// 	name:                "body normalization - trailing newlines in actual",
-		// 	actualResponse:      &Response{StatusCode: 200, Status: "200 OK", BodyString: "Line1\nLine2\n\n"},
-		// 	expectedFilePath:    "testdata/http_response_files/validator_body_normalize_newlines.hresp", // File has Line1\nLine2
-		// 	expectedErrCount:    0, // Validator should trim one trailing newline for comparison
-		// },
-		// {
-		// 	name:                "body normalization - trailing newlines in expected file (less common)",
-		// 	actualResponse:      &Response{StatusCode: 200, Status: "200 OK", BodyString: "Line1\nLine2"},
-		// 	// Assuming validator_body_normalize_newlines_extra_in_file.hresp would be: HTTP/1.1 200 OK\n\nLine1\nLine2\n\n
-		// 	expectedFilePath:    "testdata/http_response_files/validator_body_normalize_newlines_extra_in_file.hresp",
-		// 	expectedErrCount:    0,
-		// },
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateResponses(ctx, tt.expectedFilePath, tt.actualResponse)
+			err := ValidateResponses(tt.expectedFilePath, tt.actualResponse)
 
 			if tt.expectedErrCount == 0 {
 				assert.NoError(t, err)
@@ -337,7 +318,6 @@ func TestValidateResponses_Body_ExactMatch(t *testing.T) {
 // this test verifies that the BodyContains logic in ValidateResponses is benign
 // (doesn't cause errors) when the expected response comes from a file.
 func TestValidateResponses_BodyContains(t *testing.T) {
-	ctx := context.Background()
 	tests := []struct {
 		name           string
 		actualResponse *Response
@@ -366,7 +346,7 @@ func TestValidateResponses_BodyContains(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateResponses(ctx, tt.expectedFilePath, tt.actualResponse)
+			err := ValidateResponses(tt.expectedFilePath, tt.actualResponse)
 
 			if tt.expectedErrCount == 0 {
 				assert.NoError(t, err)
@@ -381,7 +361,6 @@ func TestValidateResponses_BodyContains(t *testing.T) {
 // It verifies that BodyNotContains logic in ValidateResponses is benign
 // when the expected response comes from a file, as the file cannot specify BodyNotContains.
 func TestValidateResponses_BodyNotContains(t *testing.T) {
-	ctx := context.Background()
 	tests := []struct {
 		name             string
 		actualResponse   *Response
@@ -405,7 +384,7 @@ func TestValidateResponses_BodyNotContains(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateResponses(ctx, tt.expectedFilePath, tt.actualResponse)
+			err := ValidateResponses(tt.expectedFilePath, tt.actualResponse)
 
 			if tt.expectedErrCount == 0 {
 				assert.NoError(t, err)
@@ -417,7 +396,6 @@ func TestValidateResponses_BodyNotContains(t *testing.T) {
 }
 
 func TestValidateResponses_WithSampleFile(t *testing.T) {
-	ctx := context.Background()
 	sampleFilePath := "testdata/http_response_files/sample1.http" // Use the actual file
 
 	parsedSampleExpected, err := parseExpectedResponseFile(sampleFilePath)
@@ -537,7 +515,7 @@ func TestValidateResponses_WithSampleFile(t *testing.T) {
 
 			currentExpectedFilePath := tt.expectedFileSource
 
-			err := ValidateResponses(ctx, currentExpectedFilePath, actualTest)
+			err := ValidateResponses(currentExpectedFilePath, actualTest)
 
 			if tt.expectedErrCount == 0 {
 				assert.NoError(t, err)
@@ -556,7 +534,6 @@ func TestValidateResponses_WithSampleFile(t *testing.T) {
 // TestValidateResponses_HeadersContain verifies that HeadersContain logic in ValidateResponses
 // is benign when the expected response comes from a file, as the file cannot specify HeadersContain.
 func TestValidateResponses_HeadersContain(t *testing.T) {
-	ctx := context.Background()
 	tests := []struct {
 		name             string
 		actualResponse   *Response
@@ -588,7 +565,7 @@ func TestValidateResponses_HeadersContain(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateResponses(ctx, tt.expectedFilePath, tt.actualResponse)
+			err := ValidateResponses(tt.expectedFilePath, tt.actualResponse)
 
 			if tt.expectedErrCount == 0 {
 				assert.NoError(t, err)
@@ -600,7 +577,6 @@ func TestValidateResponses_HeadersContain(t *testing.T) {
 }
 
 func TestValidateResponses_PartialExpected(t *testing.T) {
-	ctx := context.Background()
 	tests := []struct {
 		name             string
 		actualResponse   *Response
@@ -683,7 +659,7 @@ func TestValidateResponses_PartialExpected(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateResponses(ctx, tt.expectedFilePath, tt.actualResponse)
+			err := ValidateResponses(tt.expectedFilePath, tt.actualResponse)
 
 			if tt.expectedErrCount == 0 {
 				assert.NoError(t, err)
@@ -695,7 +671,6 @@ func TestValidateResponses_PartialExpected(t *testing.T) {
 }
 
 func TestValidateResponses_StatusCode(t *testing.T) {
-	ctx := context.Background()
 	tests := []struct {
 		name                string
 		actualResponse      *Response
@@ -763,7 +738,7 @@ func TestValidateResponses_StatusCode(t *testing.T) {
 				currentExpectedErrTexts = []string{tt.expectedErrText}
 			}
 
-			err := ValidateResponses(ctx, tt.expectedFilePath, actual)
+			err := ValidateResponses(tt.expectedFilePath, actual)
 
 			if currentExpectedErrCount == 0 {
 				assert.NoError(t, err)

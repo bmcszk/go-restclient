@@ -144,7 +144,7 @@ func TestExecuteFile_MultipleRequests(t *testing.T) {
 	// Define expected response for request 1 & 2 in a single file
 	expectedFilePath := "testdata/http_response_files/client_multiple_requests_expected.hresp"
 
-	validationErr := ValidateResponses(context.Background(), expectedFilePath, resp1, responses[1])
+	validationErr := ValidateResponses(expectedFilePath, resp1, responses[1])
 	assert.NoError(t, validationErr, "Validation errors for responses should be nil")
 
 	resp2 := responses[1]
@@ -437,7 +437,7 @@ func TestExecuteFile_MultipleRequests_GreaterThanTwo(t *testing.T) {
 	// Validate using the existing expected response file
 	expectedResponseFilePath := "testdata/http_response_files/multiple_responses_gt2_expected.http"
 
-	validationErr := ValidateResponses(context.Background(), expectedResponseFilePath, actualResponses...)
+	validationErr := ValidateResponses(expectedResponseFilePath, actualResponses...)
 	assert.NoError(t, validationErr, "Validation against multiple_responses_gt2_expected.http failed")
 }
 

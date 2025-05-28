@@ -1,7 +1,6 @@
 package restclient
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -14,7 +13,7 @@ import (
 // ValidateResponses compares a slice of actual HTTP responses against a set of expected responses
 // parsed from the specified file. It returns a consolidated error (multierror) if any
 // discrepancies are found, or nil if all validations pass.
-func ValidateResponses(ctx context.Context, responseFilePath string, actualResponses ...*Response) error {
+func ValidateResponses(responseFilePath string, actualResponses ...*Response) error {
 	var errs *multierror.Error
 
 	// Attempt to parse the expected responses from the file.
@@ -88,29 +87,6 @@ func ValidateResponses(ctx context.Context, responseFilePath string, actualRespo
 			}
 		}
 
-		// Validate HeadersContain
-		if expected.HeadersContain != nil {
-			for key, expectedValues := range expected.HeadersContain {
-				actualValues, ok := actual.Headers[key]
-				if !ok {
-					errs = multierror.Append(errs, fmt.Errorf("validation for response #%d ('%s'): expected header '%s' (for HeadersContain) not found", i+1, responseFilePath, key))
-					continue
-				}
-				for _, ev := range expectedValues {
-					found := false
-					for _, av := range actualValues {
-						if av == ev {
-							found = true
-							break
-						}
-					}
-					if !found {
-						errs = multierror.Append(errs, fmt.Errorf("validation for response #%d ('%s'): expected value '%s' for header '%s' (for HeadersContain) not found in actual values %v", i+1, responseFilePath, ev, key, actualValues))
-					}
-				}
-			}
-		}
-
 		// Validate Body (Exact Match)
 		if expected.Body != nil {
 			normalizedExpectedBody := strings.TrimSpace(strings.ReplaceAll(*expected.Body, "\r\n", "\n"))
@@ -126,28 +102,6 @@ func ValidateResponses(ctx context.Context, responseFilePath string, actualRespo
 				}
 				diffText, _ := difflib.GetUnifiedDiffString(diff)
 				errs = multierror.Append(errs, fmt.Errorf("validation for response #%d ('%s'): body mismatch:\n%s", i+1, responseFilePath, diffText))
-			}
-		}
-
-		// Validate BodyContains
-		if len(expected.BodyContains) > 0 {
-			normalizedActualBody := strings.TrimSpace(strings.ReplaceAll(actual.BodyString, "\r\n", "\n"))
-			for _, sub := range expected.BodyContains {
-				normalizedSub := strings.TrimSpace(strings.ReplaceAll(sub, "\r\n", "\n"))
-				if !strings.Contains(normalizedActualBody, normalizedSub) {
-					errs = multierror.Append(errs, fmt.Errorf("validation for response #%d ('%s'): actual body does not contain expected substring: '%s'", i+1, responseFilePath, sub))
-				}
-			}
-		}
-
-		// Validate BodyNotContains
-		if len(expected.BodyNotContains) > 0 {
-			normalizedActualBody := strings.TrimSpace(strings.ReplaceAll(actual.BodyString, "\r\n", "\n"))
-			for _, sub := range expected.BodyNotContains {
-				normalizedSub := strings.TrimSpace(strings.ReplaceAll(sub, "\r\n", "\n"))
-				if strings.Contains(normalizedActualBody, normalizedSub) {
-					errs = multierror.Append(errs, fmt.Errorf("validation for response #%d ('%s'): actual body contains unexpected substring: '%s'", i+1, responseFilePath, sub))
-				}
 			}
 		}
 	}

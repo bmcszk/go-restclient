@@ -21,8 +21,6 @@ type Request struct {
 	FilePath string
 	// LineNumber is the starting line number of this request in the file.
 	LineNumber int
-
-	// TODO: Add fields for variables, pre-request scripts/commands if supported later.
 }
 
 // ParsedFile represents all requests parsed from a single .rest file.
@@ -30,5 +28,4 @@ type Request struct {
 type ParsedFile struct {
 	FilePath string
 	Requests []*Request
-	// TODO: Add global variables or settings defined at the file level if supported.
 }

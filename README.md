@@ -189,7 +189,7 @@ func main() {
 	fmt.Printf("Executed %d requests from %s\n", len(responses), requestFilePath)
 
 	// Validate all responses against the expected responses file
-	validationErr := restclient.ValidateResponses(context.Background(), expectedResponseFilePath, responses...)
+	validationErr := restclient.ValidateResponses(expectedResponseFilePath, responses...)
 	if validationErr != nil {
 		log.Fatalf("Validation failed: %v", validationErr)
 	}

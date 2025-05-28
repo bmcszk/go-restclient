@@ -20,31 +20,14 @@ type Response struct {
 	TLSVersion     string        // e.g., "TLS 1.3" (if IsTLS is true)
 	TLSCipherSuite string        // e.g., "TLS_AES_128_GCM_SHA256" (if IsTLS is true)
 	Error          error         // Error encountered during request execution or response processing
-
-	// TODO: Add fields for cookies, redirect history if needed.
-	// TODO: Add fields for validation results if comparison is done here.
 }
 
 // ExpectedResponse defines what an actual response should be compared against.
 // This might be loaded from a file (e.g., request_name.expected.json or .http).
 // Or it could be defined programmatically.
 type ExpectedResponse struct {
-	StatusCode      *int        `json:"statusCode,omitempty" yaml:"statusCode,omitempty"`
-	Status          *string     `json:"status,omitempty" yaml:"status,omitempty"`
-	Headers         http.Header `json:"headers,omitempty" yaml:"headers,omitempty"`           // For header presence/value checks
-	Body            *string     `json:"body,omitempty" yaml:"body,omitempty"`                 // Expected body content (exact match or regex)
-	BodyContains    []string    `json:"bodyContains,omitempty" yaml:"bodyContains,omitempty"` // Substrings expected in body
-	BodyNotContains []string    `json:"bodyNotContains,omitempty" yaml:"bodyNotContains,omitempty"`
-	HeadersContain  http.Header `json:"headersContain,omitempty"` // New field
-	// TODO: Add fields for body schema validation (JSON Schema), timing assertions, etc.
+	StatusCode *int        `json:"statusCode,omitempty" yaml:"statusCode,omitempty"`
+	Status     *string     `json:"status,omitempty" yaml:"status,omitempty"`
+	Headers    http.Header `json:"headers,omitempty" yaml:"headers,omitempty"` // For header presence/value checks
+	Body       *string     `json:"body,omitempty" yaml:"body,omitempty"`       // Expected body content (exact match or regex)
 }
-
-// ValidationResult is no longer used, ValidateResponse returns []error directly.
-/*
-type ValidationResult struct {
-	Passed      bool
-	Mismatches  []string // Descriptions of what didn't match
-	RawActual   *Response
-	RawExpected *ExpectedResponse
-}
-*/
