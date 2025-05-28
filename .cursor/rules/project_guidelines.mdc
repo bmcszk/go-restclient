@@ -3,52 +3,88 @@ description:
 globs: 
 alwaysApply: true
 ---
-# Project Overview & Workflow
+# Project Overview & Workflow (AI-Readable)
 
-This is a Go project (`github.com/bmcszk/go-restclient`).
+Project: Go library `github.com/bmcszk/go-restclient`.
 
-## Development Methodology: Test-Driven Development (TDD)
-- Always write tests *before* writing implementation code.
-- Ensure tests cover requirements adequately.
-- For every task (as defined in `docs/tasks.md`), proceed with TDD principles.
+## 1. Development Methodology: TDD
+    - ALWAYS write tests BEFORE implementation.
+    - Ensure tests cover requirements adequately.
+    - APPLY TDD for all tasks in `docs/tasks.md`.
 
-## Documentation
-Refer to `.cursor/rules/requirement_workflow.mdc` for guidelines on managing requirements and test scenarios.
-Refer to `.cursor/rules/task_workflow.mdc` for guidelines on task creation and management.
+## 2. Documentation Rules
+    - Requirement/Scenario Guidelines: See `.cursor/rules/requirement_workflow.mdc`.
+    - Task Guidelines: See `.cursor/rules/task_workflow.mdc`.
+    - **Decisions (`docs/decisions.md`):** Incrementally document ALL significant architectural/design decisions with rationale.
+    - **README (`README.md`):** Keep up-to-date with essential project info (setup, build, usage). Update as project evolves.
+    - **Date/Time in Docs:** For current date/time, USE shell command (e.g., `date +%Y-%m-%d`).
+    - **Project Structure (`docs/project_structure.md`):** This outlines project structure for AI understanding.
+    - **Learnings (`docs/learnings.md`):** Record AI mistakes and their resolutions here for continuous improvement.
+    - **Project Scope Confirmation**: BEFORE detailed setup, CONFIRM high-level project goal & type (e.g., service vs. library). Clarify if general guidelines apply fully or need adaptation.
 
-1.  **Decisions:** All significant architectural or design decisions must be documented incrementally in `docs/decisions.md`. Include the rationale behind each decision.
-2.  **README:** The `README.md` file must be kept up-to-date with the most essential project information, including setup, build, and usage instructions. Update it as the project evolves.
-3.  **Date/Time in Documentation:** When the current date or time is needed in any documentation, it must be obtained by running an appropriate command line instruction (e.g., `date +%Y-%m-%d` for date).
-4.  **Project Structure Document:** A document outlining the project structure, key components, and their interactions, specifically for the AI assistant\'s understanding and context. This is located at `docs/project_structure.md`.
-5.  **Learnings Document:** A document (`docs/learnings.md`) where the AI assistant (you) records any mistakes made during development, along with their resolutions once fixed. This serves as a continuous improvement log.
+## 3. Quality Assurance & Workflow
+    - **Pre-commit Checks (MANDATORY):** BEFORE committing, VERIFY ALL changes by:
+        1. Running `make check` (includes compile, lint, all unit tests).
+        2. Running all E2E tests (e.g., `make test-e2e`).
+    - **Makefile Targets for Tools:** ENSURE all essential dev tools (sqlc, migrate, linters) have Makefile targets.
+    - **Test Coverage:** See `.cursor/rules/requirement_workflow.mdc`.
+    - **Task Completion & VC:** See `.cursor/rules/task_workflow.mdc`.
+    - **Procedural Integrity**: ENSURE directory structures are planned/created BEFORE files within them (esp. for automation).
+    - **Trust `make check`**: TREAT `make check` results as definitive. If tests fail, code is faulty. DO NOT mark tasks Done if tests fail.
 
-## Quality Assurance & Workflow
-1.  **Pre-commit Checks:** Before committing any code, every change *must* be verified by:
-    *   Running the consolidated Makefile target (`make check`). This target will typically include:
-        *   Compiling the project (e.g., `go build ./...`)
-        *   Running linters (e.g., `golangci-lint run` or other configured linters)
-        *   Running all **unit tests** (e.g., `make test-unit` or `go test -tags=unit ./...`)
-    *   Running all **End-to-End (E2E) tests** (e.g., `make test-e2e`).
-2.  **Makefile Targets for Tools:** All essential development tools used in the project (e.g., `sqlc`, `migrate`, linters) should have corresponding targets in the main `Makefile` for easy and consistent execution.
-3.  **Test Coverage:**
-    *   Refer to `.cursor/rules/requirement_workflow.mdc` for test coverage guidelines related to requirements and scenarios.
-4.  **Task Completion & Version Control:**
-    *   Refer to `.cursor/rules/task_workflow.mdc` for guidelines on task completion and version control.
+## 4. AI Assistant (You) Responsibilities
+    - ADHERE to ALL guidelines herein without explicit reminder.
+    - **Initial Context:** At request start, CONFIRM project root (main `Makefile` dir) & current date (`date +%Y-%m-%d`).
+    - **Documentation Awareness:** When performing tasks, CONSIDER and UPDATE ALL relevant docs (requirements, scenarios, tasks, decisions, README, project_structure, learnings, workflow files).
+    - **Post-Test File Change:** After ANY change to test files (add, refactor, modify), YOU MUST run `make check`. PROCEED only if all tests pass & quality standards met.
+    - **Task Processing:** See `.cursor/rules/task_workflow.mdc`.
+    - **Requirements/Scenarios:** See `.cursor/rules/requirement_workflow.mdc`.
+    - **File Not Found Error:** If path error, 1) `pwd`, 2) consult `docs/project_structure.md`, 3) retry or report.
+    - **Clarify Ambiguity**: If requirements/terms are ambiguous (multiple interpretations, libraries, patterns), explicitly CONFIRM intended approach.
+    - **Mistake Logging (`docs/learnings.md`):**
+        1. Acknowledge mistake.
+        2. Document mistake in `docs/learnings.md` (what went wrong).
+        3. After correction, UPDATE `docs/learnings.md` with resolution/lesson.
 
-## AI Assistant (You)
-- You are expected to adhere to all the above guidelines in every interaction and code modification without being explicitly reminded.
-- At the start of processing any request, ensure you are aware of the project\'s root directory (the directory containing the main `Makefile`, usually the workspace root) and the current date (obtain using `date +%Y-%m-%d`).
-- When asked to perform a task, ensure all relevant documentation (including the new workflow files) is considered and updated if necessary.
-- After making any changes to test files (e.g., refactoring, adding new tests, or modifying existing ones), you **must** run `make check` to ensure all tests pass and the code adheres to quality standards before proceeding with further changes or concluding the task.
-- Refer to `.cursor/rules/task_workflow.mdc` for detailed AI assistant responsibilities regarding task processing.
-- Refer to `.cursor/rules/requirement_workflow.mdc` for detailed AI assistant responsibilities regarding requirements and test scenarios.
-- If you encounter a "file or directory not found" error when attempting to access a path, first check your current working directory using `pwd`, then consult `docs/project_structure.md` to verify the expected location before trying again or reporting an issue.
-- **Mistake Logging**: If you make a mistake (e.g., an incorrect code change, a misunderstanding of requirements, a deviation from guidelines), you must:
-    1.  Acknowledge the mistake.
-    2.  Document the mistake in `docs/learnings.md`, including a brief description of what went wrong.
-    3.  Once the mistake is corrected, update the entry in `docs/learnings.md` with the resolution or what was learned.
+## 5. File Editing & Patch Management (AI Agent)
+    - **A. Direct File Modification (`edit_file` tool):**
+        - USE `edit_file` for direct changes.
+        - `code_edit`: New/modified lines. Unchanged code: `// ... existing code ...` (adapt comment style to language).
+        - PROVIDE sufficient context (unchanged lines around edit) to avoid ambiguity.
+        - New files: `code_edit` contains entire file content.
+    - **B. Verification & Retries:**
+        - AFTER `edit_file` success, USE `read_file` to confirm exact application.
+        - CAUTION: `edit_file` success report DOES NOT guarantee disk write visible to `git` or auto-staging. ALWAYS verify file changes & Git status.
+        - If `edit_file` diff incorrect OR `read_file` shows discrepancies, USE `reapply` (same file).
+        - If `reapply` fails OR for complex/widespread changes: Break into SMALLER, targeted `edit_file` calls. VERIFY each.
+    - **C. `edit_file` Tool - CRITICAL CAUTIONS & LIMITATIONS:**
+        - **Risk of Corruption (HIGH):** `edit_file` can be DANGEROUS with inconsistent file states or large/complex diffs. May misinterpret context, causing SEVERE file corruption. SAFER: Manual intervention or VCS restore. USE EXTREME CAUTION beyond simple, localized changes, especially if prior edits unreliable.
+        - **Subtlety Issues:** May struggle with subtle changes (e.g., single trailing space removal, precise whitespace/newline in test data). May not register/apply correctly.
+        - **Markdown/Tables:** Unreliable for complex Markdown updates (esp. tables).
+        - **Patch Generation:** May have issues generating patch diffs correctly.
+        - **Verification is KEY:** ALWAYS verify `edit_file` results (`read_file`), esp. for critical files or subtle changes. If tool repeatedly problematic, seek alternatives/manual help.
+        - **Accidental Deletions:** Tool can misapply diffs, causing accidental content deletion. Review diff & `read_file` output carefully.
+    - **D. Generating Git Patches (ONLY When Explicitly Required):**
+        - General Rule: DO NOT use `edit_file` to create patch files.
+        - If Git-formatted patch NEEDED (manual review, sharing, specific Git workflows):
+            1. ENSURE target file(s) correctly modified via `edit_file`/`reapply`/`read_file` workflow.
+            2. Stage file(s): `git add <file_path>`.
+            3. Generate patch (Git commands):
+                - Staged vs. HEAD: `git diff --cached > my_changes.patch`
+                - From commits (mailbox): `git format-patch <commit-range/branch> --stdout > series.patch` OR `git format-patch -1 <sha> -o patches/`
+    - **E. Applying External Git Patches:**
+        1. Inspect patch: `cat patch_file.patch` (if possible).
+        2. Check applicability: `git apply --check my_patch.patch`.
+        3. Plain diff (`git diff`): `git apply my_patch.patch` (changes unstaged).
+        4. Mailbox format (`git format-patch`): `git am < my_patch.patch` (creates commits). Use `git am --abort` on issues.
+        5. ALWAYS verify changes & run `make check` post-application.
+    - **F. `edit_file` for Patch CONTENT: AVOID.** `edit_file` modifies source files, not for writing patch content.
 
-## Testing Guidelines
-- **End-to-End (E2E) / Integration Tests:** These tests verify the behavior of the system as a whole or integrated parts. They should be written in a Behavior-Driven Development (BDD) style using tools like Godog. These tests typically require a running instance of the application and its dependencies (like databases) managed via Docker Compose. Use Go build tags (e.g., `//go:build e2e`) to identify them.
-- **E2E tests MUST strive to cover all functional requirements outlined in `docs/requirements.md` and all scenarios listed in `docs/test_scenarios.md`, ensuring key user flows and API interactions are validated against a realistic (Dockerized) environment.**
-- Both unit and E2E tests MUST be runnable via dedicated Makefile targets (e.g., `make test-unit`, `make test-e2e`).
+## 6. Testing Guidelines (Project Specific)
+    - **E2E / Integration Tests (`//go:build e2e`):
+        - Verify system behavior (whole/integrated parts).
+        - Style: BDD (Godog or similar patterns, see `go_guideline.mdc` for non-Godog example).
+        - Requires running app & dependencies (Docker Compose).
+        - Build Tag: `//go:build e2e`.
+    - **E2E Test Coverage:** MUST cover all functional requirements (`docs/requirements.md`) and scenarios (`docs/test_scenarios.md`). Validate key user flows & API interactions in realistic (Dockerized) environment.
+    - **Makefile Targets:** Both Unit & E2E tests MUST be runnable via `make test-unit` and `make test-e2e`.

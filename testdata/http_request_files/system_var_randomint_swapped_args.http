@@ -1,0 +1,5 @@
+GET [[.ServerURL]]/item/{{$randomInt 30 25}}/swapped
+
+{
+  "value": {{$randomInt 90 80}}
+} 

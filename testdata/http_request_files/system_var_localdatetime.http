@@ -1,0 +1,10 @@
+GET [[.ServerURL]]/localdatetime/{{$localDatetime rfc1123}}
+Content-Type: application/json
+X-LocalDatetime-RFC1123: {{$localDatetime rfc1123}}
+X-LocalDatetime-ISO8601: {{$localDatetime iso8601}}
+X-LocalDatetime-Custom: {{$localDatetime "2006-01-02"}}
+
+{
+  "localdatetime_custom_body": "{{$localDatetime "Jan_2_2006"}}",
+  "localdatetime_iso_body": "{{$localDatetime iso8601}}"
+} 

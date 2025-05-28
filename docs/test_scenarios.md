@@ -1,6 +1,6 @@
 # Test Scenarios
 
-Last Updated: 2025-05-27
+Last Updated: 2025-05-28
 
 ## REQ-LIB-001: Parse request definitions from `.rest` or `.http` files
 
@@ -173,3 +173,139 @@ Last Updated: 2025-05-27
   - Expected: The library either errors out or fails to parse the file, as only `.http` format is supported for expected responses.
 - SCENARIO-LIB-012-002: Attempt to load an expected response defined in a YAML file.
   - Expected: The library either errors out or fails to parse the file, as only `.http` format is supported for expected responses.
+
+## REQ-LIB-013: Support for user-defined custom variables
+
+- SCENARIO-LIB-013-001: Define and use a simple custom variable in the request URL.
+  - File content:
+    ```http
+    @host = https://example.com
+    GET {{host}}/users
+    ```
+  - Expected: Request sent to `https://example.com/users`.
+- SCENARIO-LIB-013-002: Define and use a custom variable in a request header.
+  - File content:
+    ```http
+    @token = mysecrettoken
+    GET https://api.example.com/data
+    Authorization: Bearer {{token}}
+    ```
+  - Expected: `Authorization` header sent as `Bearer mysecrettoken`.
+- SCENARIO-LIB-013-003: Define and use a custom variable in the request body.
+  - File content:
+    ```http
+    @username = testuser
+    POST https://api.example.com/login
+    Content-Type: application/json
+
+    {
+      "user": "{{username}}"
+    }
+    ```
+  - Expected: JSON body sent with `user` field as `testuser`.
+- SCENARIO-LIB-013-004: Override a custom variable defined earlier in the file.
+  - File content:
+    ```http
+    @baseUrl = https://api.sandbox.com
+    GET {{baseUrl}}/status
+
+    ###
+
+    @baseUrl = https://api.production.com
+    GET {{baseUrl}}/status
+    ```
+  - Expected: First request to `https://api.sandbox.com/status`, second to `https://api.production.com/status`.
+- SCENARIO-LIB-013-005: Use an undefined custom variable.
+  - Expected: Error reported, or variable is substituted as an empty string (behavior should be defined).
+
+## REQ-LIB-014: Support for {{$guid}} system variable
+
+- SCENARIO-LIB-014-001: Use `{{$guid}}` in request URL.
+  - Expected: A valid GUID is generated and inserted into the URL.
+- SCENARIO-LIB-014-002: Use `{{$guid}}` in request header.
+  - Expected: A valid GUID is generated and inserted into the header value.
+- SCENARIO-LIB-014-003: Use `{{$guid}}` in request body.
+  - Expected: A valid GUID is generated and inserted into the body.
+- SCENARIO-LIB-014-004: Multiple `{{$guid}}` instances in one request generate different GUIDs.
+  - File content:
+    ```http
+    GET https://example.com/{{$guid}}/{{$guid}}
+    ```
+  - Expected: The two GUIDs in the URL are different.
+
+## REQ-LIB-015: Support for {{$randomInt min max}} system variable
+
+- SCENARIO-LIB-015-001: Use `{{$randomInt 1 10}}` in request URL.
+  - Expected: A random integer between 1 and 10 (inclusive) is generated and inserted.
+- SCENARIO-LIB-015-002: Use `{{$randomInt 100 105}}` in request body.
+  - Expected: A random integer between 100 and 105 (inclusive) is generated and inserted.
+- SCENARIO-LIB-015-003: Use `{{$randomInt}}` (missing arguments).
+  - Expected: Error or default behavior (e.g., 0-100, to be defined).
+- SCENARIO-LIB-015-004: Use `{{$randomInt max min}}` (min > max).
+  - Expected: Error or specific behavior (e.g., swap, to be defined).
+
+## REQ-LIB-016: Support for {{$timestamp}} system variable
+
+- SCENARIO-LIB-016-001: Use `{{$timestamp}}` in request header.
+  - Expected: Current UTC timestamp (Unix epoch seconds) is inserted.
+
+## REQ-LIB-017: Support for {{$datetime format}} system variable
+
+- SCENARIO-LIB-017-001: Use `{{$datetime 'YYYY-MM-DD'}}`.
+  - Expected: Current UTC date formatted as `YYYY-MM-DD`.
+- SCENARIO-LIB-017-002: Use `{{$datetime 'HH:mm:ss'}}`.
+  - Expected: Current UTC time formatted as `HH:mm:ss`.
+- SCENARIO-LIB-017-003: Use `{{$datetime 'rfc1123'}}` (or similar common format name).
+  - Expected: Current UTC datetime in RFC1123 format.
+- SCENARIO-LIB-017-004: Use `{{$datetime}}` (missing format).
+  - Expected: Error or default format (e.g., ISO8601, to be defined).
+
+## REQ-LIB-018: Support for {{$localDatetime format}} system variable
+
+- SCENARIO-LIB-018-001: Use `{{$localDatetime 'YYYY-MM-DD HH:mm'}}`.
+  - Expected: Current local date and time formatted as `YYYY-MM-DD HH:mm`.
+- SCENARIO-LIB-018-002: Use `{{$localDatetime}}` (missing format).
+  - Expected: Error or default format (e.g., ISO8601 local, to be defined).
+
+## REQ-LIB-019: Support for {{$processEnv variableName}} system variable
+
+- SCENARIO-LIB-019-001: Use `{{$processEnv HOME}}` (assuming HOME is set).
+  - Expected: Value of `HOME` environment variable is substituted.
+- SCENARIO-LIB-019-002: Use `{{$processEnv NON_EXISTENT_VAR}}`.
+  - Expected: Error or empty string substitution (behavior to be defined).
+
+## REQ-LIB-020: Support for {{$dotenv variableName}} system variable
+
+- SCENARIO-LIB-020-001: Use `{{$dotenv DOTENV_VAR}}` where `DOTENV_VAR` exists in a `.env` file in the request file's directory.
+  - Expected: The value of `DOTENV_VAR` from the `.env` file is substituted.
+- SCENARIO-LIB-020-002: Use `{{$dotenv UNDEFINED_DOTENV_VAR}}` where `UNDEFINED_DOTENV_VAR` does not exist in the `.env` file.
+  - Expected: Error or empty string substitution (behavior to be defined).
+- SCENARIO-LIB-020-003: Use `{{$dotenv SOME_VAR}}` with no `.env` file present in the request file's directory.
+  - Expected: Error or empty string substitution (behavior to be defined).
+
+## REQ-LIB-021: Programmatic custom variables for ExecuteFile
+
+- SCENARIO-LIB-021-001: Pass a map of custom variables to `ExecuteFile` and verify they are substituted in the URL.
+  - Example: `vars := map[string]string{"userId": "prog_user_123"}`
+  - File content: `GET https://api.example.com/users/{{userId}}`
+  - Expected: Request sent to `https://api.example.com/users/prog_user_123`.
+- SCENARIO-LIB-021-002: Pass a map of custom variables to `ExecuteFile` and verify they are substituted in headers.
+  - Example: `vars := map[string]string{"authToken": "prog_token_abc"}`
+  - File content: `GET /data\nAuthorization: Bearer {{authToken}}`
+  - Expected: `Authorization` header is `Bearer prog_token_abc`.
+- SCENARIO-LIB-021-003: Pass a map of custom variables to `ExecuteFile` and verify they are substituted in the body.
+  - Example: `vars := map[string]string{"orderId": "prog_order_456"}`
+  - File content: `POST /orders\nContent-Type: application/json\n\n{"id": "{{orderId}}"}`
+  - Expected: JSON body sent with `id` field as `prog_order_456`.
+- SCENARIO-LIB-021-004: Programmatic variables override variables defined in the request file.
+  - Example: `vars := map[string]string{"baseUrl": "https://prog.example.com"}`
+  - File content: `@baseUrl = https://file.example.com\nGET {{baseUrl}}/path`
+  - Expected: Request sent to `https://prog.example.com/path`.
+- SCENARIO-LIB-021-005: Variables defined in the file are still used if not overridden programmatically.
+  - Example: `vars := map[string]string{"otherVar": "prog_value"}`
+  - File content: `@fileVar = file_value\nGET /path?p1={{fileVar}}&p2={{otherVar}}`
+  - Expected: Request sent to `/path?p1=file_value&p2=prog_value`.
+- SCENARIO-LIB-021-006: Pass an empty map of variables to `ExecuteFile`.
+  - Expected: No error, and only file-defined variables (if any) are used.
+- SCENARIO-LIB-021-007: Pass `nil` as the variables map to `ExecuteFile`.
+  - Expected: No error, and only file-defined variables (if any) are used.

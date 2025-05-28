@@ -1,0 +1,1 @@
+GET {{.ServerURL}}/date/__DATETIME_YYYY-MM-DD__

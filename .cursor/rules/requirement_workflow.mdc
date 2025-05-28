@@ -3,40 +3,40 @@ description:
 globs: 
 alwaysApply: true
 ---
-# Requirement Workflow
+# Requirement Workflow (AI-Readable)
 
-This document outlines the workflow related to managing requirements and their corresponding test scenarios.
+Handles management of requirements and their test scenarios.
 
-## Documentation of Requirements & Test Scenarios
-1.  **Requirements File (`docs/requirements.md`):**
-    *   All functional and non-functional requirements **must** be documented in `docs/requirements.md`.
-    *   Before starting work on a new feature or change, consult and update this file.
+## 1. Documentation: Requirements & Test Scenarios
+    - **A. Requirements File (`docs/requirements.md`):**
+        - ALL functional/non-functional requirements MUST be documented in `docs/requirements.md`.
+        - BEFORE starting work on new feature/change, CONSULT and UPDATE `docs/requirements.md`.
+    - **B. Test Scenarios File (`docs/test_scenarios.md`):**
+        - For EVERY requirement in `docs/requirements.md`, corresponding test scenarios (common/edge cases) MUST be documented in `docs/test_scenarios.md`.
+        - `docs/test_scenarios.md` serves as a test coverage checklist.
 
-2.  **Test Scenarios File (`docs/test_scenarios.md`):**
-    *   For every requirement defined in `docs/requirements.md`, corresponding test scenarios (covering common cases and edge cases) **must** be documented in `docs/test_scenarios.md`.
-    *   This file serves as a checklist for test coverage.
+## 2. Test Coverage for Requirements
+    - ALL functional requirements in `docs/requirements.md` MUST have corresponding test scenarios in `docs/test_scenarios.md`.
+    - EVERY test scenario in `docs/test_scenarios.md` MUST be covered by a unit test.
+    - AI Assistant: VERIFY this coverage when implementing/modifying unit tests for a requirement.
 
-## Test Coverage for Requirements
-- All functional requirements in `docs/requirements.md` **must** have corresponding test scenarios documented in `docs/test_scenarios.md`.
-- Every test scenario listed in `docs/test_scenarios.md` **must** be covered by a unit test.
-- The AI assistant is responsible for verifying this coverage when implementing or modifying unit tests related to a requirement.
+## 3. AI Assistant Responsibilities (Requirements)
+    - When tasked, ENSURE relevant docs (`docs/requirements.md`, `docs/test_scenarios.md`, etc.) are considered and UPDATED if needed. This includes:
+        - Defining test scenarios in `docs/test_scenarios.md` for new/modified requirements.
+        - Ensuring unit test coverage for scenarios in `docs/test_scenarios.md`.
 
-## AI Assistant Responsibilities for Requirements
-- When asked to perform a task, ensure all relevant documentation (`docs/requirements.md`, `docs/test_scenarios.md`, etc.) is considered and updated if necessary. This includes:
-    - Defining test scenarios in `docs/test_scenarios.md` for new or modified requirements.
-    - Ensuring unit test coverage for scenarios in `docs/test_scenarios.md`.
-
-## Git Workflow for Requirements
-
--   **Branching:**
-    -   On every requirement change (new feature or fix), a new branch **must** be created from `master` (or the main development branch if different).
-    -   Branch naming convention: `feature/requirement-name` for new features or `fix/fix-name` for bug fixes. (e.g., `feature/user-authentication`, `fix/login-csrf-vulnerability`).
--   **Committing and Pushing:**
-    *   Each task related to the requirement should be committed and pushed to this feature/fix branch, but **only after `make check` passes for the entire project** (as per `task_workflow.mdc`).
-    *   Follow guidelines in `task_workflow.mdc` for task completion and version control for individual tasks.
--   **Pull Requests:**
-    *   After all tasks for the requirement are **Done** (or **Skipped**), all associated work is committed and pushed to the feature/fix branch, and **`make check` passes for the final state of the branch**:
-        *   A Pull Request (PR) **MUST** be created by the AI assistant to merge the feature/fix branch into `master` (or the main development branch).
-        *   The AI assistant **MUST** use the `gh pr create` command. For example: `gh pr create --base master --head feature/your-branch-name --title "Feature: Implement X" --body "Details of the feature and related tasks."`. The title and body should be descriptive.
-        *   The AI assistant should then await the PR's review and merge by the user or an automated process. Do not assume the PR is merged immediately.
-        *   The AI assistant **MUST** remain on the feature/fix branch after pushing and creating the PR, until the PR is merged or closed, or until explicitly instructed to switch branches by the user.
+## 4. Git Workflow for Requirements
+    - **A. Branching:**
+        - On EVERY requirement change (new feature/fix), a NEW branch MUST be created from `master` (or main dev branch).
+        - Branch Naming: `feature/requirement-name` (new features) or `fix/fix-name` (bug fixes).
+          (e.g., `feature/user-authentication`, `fix/login-csrf-vulnerability`).
+    - **B. Committing and Pushing (Feature/Fix Branch):**
+        - Commit & push each task for the requirement to its feature/fix branch.
+        - CONDITION: ONLY AFTER `make check` PASSES for the ENTIRE project (see `task_workflow.mdc`).
+        - Follow `task_workflow.mdc` for individual task completion & VC.
+    - **C. Pull Requests (PRs):**
+        - TRIGGER: All tasks for requirement are Done/Skipped, all work committed/pushed to feature/fix branch, AND `make check` PASSES for the final branch state.
+        - ACTION: AI assistant MUST create a PR to merge feature/fix branch into `master` (or main dev branch).
+        - COMMAND: USE `gh pr create`. Example: `gh pr create --base master --head feature/your-branch-name --title "Feature: Implement X" --body "Details..."` (Title/body MUST be descriptive).
+        - POST-PR: AWAIT PR review/merge by user/automation. DO NOT assume immediate merge.
+        - BRANCH STATE: AI MUST remain on feature/fix branch after push & PR creation, until PR merged/closed, OR explicitly told to switch by user.

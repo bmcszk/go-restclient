@@ -6,36 +6,43 @@ Last Updated: 2025-05-28
 
 `go-restclient` is a Go library designed to simplify HTTP request execution and validation. It allows developers to define HTTP requests in simple text files (`.rest` or `.http` format, similar to RFC 2616 and popular REST client tools), send these requests, and validate the responses against expected outcomes.
 
-This library is suitable for programmatic use within Go applications.
+This library is suitable for programmatic use within Go applications, particularly for integration and end-to-end testing.
 
 ## Features
 
-- **Parse `.rest`/`.http` files:** 
+- **Parse `.rest`/`.http` files:**
     - Supports multiple requests per file, separated by `###`.
     - Handles request method, URL, HTTP version, headers, and body.
     - Supports comments (`#`) and named requests (e.g., `### My Request Name`).
+- **Dynamic Variable Substitution:**
+    - **Custom Variables (File-defined):** Define and use variables within request files (e.g., `@baseUrl = https://api.example.com`, `{{baseUrl}}`).
+    - **System Variables:**
+        - `{{$guid}}`: Generates a new UUID.
+        - `{{$randomInt [min max]}}`: Generates a random integer. Optional `min` `max` (e.g., `{{$randomInt 1 10}}`). Defaults to 0-100.
+        - `{{$timestamp}}`: Current UTC Unix timestamp (seconds).
+        - `{{$datetime format}}`: Current UTC datetime. `format` can be `rfc1123`, `iso8601`, or a Go layout string (e.g., `"2006-01-02"`).
+        - `{{$localDatetime format}}`: Current local datetime, same `format` options as `$datetime`.
+        - `{{$processEnv VAR_NAME}}`: Value of environment variable `VAR_NAME`.
+        - `{{$dotenv VAR_NAME}}`: Value of `VAR_NAME` from a `.env` file in the request file's directory.
+    - **Programmatic Variables:** Pass a `map[string]string` of variables directly to `ExecuteFile`. These override file-defined and environment variables of the same name.
 - **HTTP Request Execution:**
     - Create a `Client` with options (custom `http.Client`, `BaseURL`, default headers).
-    - Execute all requests from a `.rest` or `.http` file using `ExecuteFile(ctx context.Context, requestFilePath string)`.
-    - Captures detailed response information: status, headers, body, duration, TLS details.
+    - Execute requests from a `.http` file using `ExecuteFile(ctx, filePath, [programmaticVars])`.
+    - Captures detailed response information: status, headers, body, duration.
     - Handles errors during request execution and stores them within the `Response` object.
 - **Response Validation:**
-    - Compare actual `Response` against an `ExpectedResponse` struct.
+    - Compare actual `Response` objects against an expected response file (`.hresp`).
     - Validate status code and status string.
     - Validate headers: exact match for specified keys, or check if actual headers contain specified key-substring pairs.
-    - Validate body: exact match, contains substrings, not-contains substrings.
-    - Validate JSON body content using JSONPath expressions.
-- **Extensible:** Designed with clear structs and functions for further extension.
+    - Validate body: exact match or contains substrings.
 
 ## Getting Started
 
 ### Prerequisites
 
-- Go 1.21 or higher (developed with Go 1.24.3).
+- Go 1.21 or higher.
 
 ### Installation
-
-To use `go-restclient` in your Go project:
 
 ```bash
 go get github.com/bmcszk/go-restclient
@@ -43,111 +50,54 @@ go get github.com/bmcszk/go-restclient
 
 ## Usage
 
-### 1. Create a `.rest` file
+### 1. Define HTTP Requests
 
-**Example: `requests.rest`**
+Create a `.http` (or `.rest`) file with your requests.
+
+**Example: `api_requests.http`**
 ```http
-### Get User
-GET https://api.example.com/users/123
-Accept: application/json
-X-API-Key: your-api-key
+@baseUrl = https://api.example.com
+@defaultUser = file_user_id
 
-### Create Product
-POST https://api.example.com/products
+### Get a specific user, potentially overridden by programmatic var
+GET {{baseUrl}}/users/{{userId}}
+X-Request-ID: {{$guid}}
+Authorization: Bearer {{authToken}}
+
+### Create a new product
+POST {{baseUrl}}/products
 Content-Type: application/json
 
 {
-  "name": "Awesome Gadget",
-  "price": 99.99
+  "productId": "{{$randomInt 1000 9999}}",
+  "name": "Super Widget {{productSuffix}}" 
 }
 ```
 
-### 2. Execute requests using the client
+### 2. Define Expected Responses (Optional)
 
-```go
-package main
+Create an `.hresp` file to specify expected responses for validation. Each response corresponds to a request in your `.http` file, in the same order, separated by `###`.
 
-import (
-	"context"
-	"fmt"
-	"log"
-
-	"github.com/bmcszk/go-restclient"
-)
-
-func main() {
-	client, err := restclient.NewClient(
-		// Example: Set a default header for all requests
-		// restclient.WithDefaultHeader("User-Agent", "MyTestApp/1.0"),
-	)
-	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
-	}
-
-	// Pass a context, e.g., context.Background() or context.TODO()
-	responses, err := client.ExecuteFile(context.Background(), "requests.rest")
-	if err != nil {
-		// This error is for file-level issues (e.g., file not found, parse error for whole file)
-		log.Fatalf("Failed to execute request file: %v", err)
-	}
-
-	for _, resp := range responses {
-		if resp.Error != nil {
-			fmt.Printf("Request to %s failed: %v\n", resp.Request.URL, resp.Error)
-			continue
-		}
-
-		fmt.Printf("Response for %s %s:\n", resp.Request.Method, resp.Request.URL)
-		fmt.Printf("Status: %s\n", resp.Status)
-		fmt.Printf("Body:\n%s\n", resp.BodyString)
-		fmt.Println("----------")
-
-		// Example Validation (if you have an ExpectedResponse)
-		// expected := &restclient.ExpectedResponse{ ... }
-		// validationResult := restclient.ValidateResponse(resp, expected)
-		// if !validationResult.Passed {
-		// 	 fmt.Printf("Validation Failed: %v\n", validationResult.Mismatches)
-		// }
-	}
-}
-
-```
-
-### 3. Validating with Request and Response Files
-
-A common use case is to define your HTTP requests in one file and their corresponding expected responses in another. `go-restclient` supports this workflow using `.http` (or `.rest`) files for requests and `.hresp` files for expected responses.
-
-**Example: `my_requests.http`**
-
-This file defines the actual HTTP requests to be sent. Variables like `{{.ServerURL}}` can be used if you process the file through a template engine before parsing, or you can use absolute URLs directly.
-
-```http
-GET {{.ServerURL}}/req1
-
-###
-POST {{.ServerURL}}/req2
-Content-Type: application/json
-
-{"key": "value"}
-```
-
-**Example: `my_expected_responses.hresp`**
-
-This file defines the expected outcomes for the requests in `my_requests.http`, in the same order. Each expected response is separated by `###`.
-
+**Example: `api_expected.hresp`** (for the first two requests in `api_requests.http`)
 ```http
 HTTP/1.1 200 OK
+Content-Type: application/json
 
-response1
+{
+  "message": "User details retrieved"
+}
 
 ###
 
 HTTP/1.1 201 Created
+Content-Type: application/json
 
-response2
+{
+  "message": "Product created successfully"
+}
 ```
 
-**Go Code Example:**
+### 3. Execute and Validate in Go
 
 ```go
 package main
@@ -160,76 +110,47 @@ import (
 	"github.com/bmcszk/go-restclient"
 )
 
-// Assume startMockServer() sets up a test server and returns its URL.
-// In a real scenario, ServerURL might come from config or be hardcoded if static.
-var mockServerURL string 
-
 func main() {
-	// For this example, let's assume my_requests.http needs a ServerURL.
-	// In a real test, you might dynamically create this file content.
-	// For simplicity, we'll assume my_requests.http directly contains usable URLs
-	// or you pre-process it. For this example, let's use placeholder paths.
-	
-	// Effective request file path (can be the direct path if no templating is needed)
-	requestFilePath := "my_requests.http" // Or path to your pre-processed file
-	expectedResponseFilePath := "my_expected_responses.hresp"
-
 	client, err := restclient.NewClient()
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
 	}
 
-	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+	programmaticAPIVars := map[string]string{
+		"userId":        "prog_user_override_123",
+		"authToken":     "prog_auth_token_xyz",
+		"productSuffix": "Deluxe",
+	}
+
+	requestFilePath := "api_requests.http"       // Your .http file
+	expectedResponseFilePath := "api_expected.hresp" // Your .hresp file for validation
+
+	responses, err := client.ExecuteFile(context.Background(), requestFilePath, programmaticAPIVars)
 	if err != nil {
-		// This error is for file-level issues (e.g., file not found, parse error for whole file)
-		// or if any request within the file critically fails during execution setup.
 		log.Fatalf("Failed to execute request file: %v", err)
 	}
 
-	fmt.Printf("Executed %d requests from %s\n", len(responses), requestFilePath)
+	fmt.Printf("Executed %d requests from %s.\n", len(responses), requestFilePath)
 
-	// Validate all responses against the expected responses file
+	// Primary validation method: using an expected response file.
 	validationErr := restclient.ValidateResponses(expectedResponseFilePath, responses...)
 	if validationErr != nil {
-		log.Fatalf("Validation failed: %v", validationErr)
+		// This error could be due to file not found, parsing issues, or actual validation failures.
+		log.Fatalf("Validation against '%s' failed: %v", expectedResponseFilePath, validationErr)
 	}
+	fmt.Printf("All responses validated successfully against %s!\n", expectedResponseFilePath)
 
-	fmt.Println("All requests executed and validated successfully!")
-
-	// Individual response details are still available in the 'responses' slice
+	// Optional: Iterate through responses for manual checks or logging.
+	fmt.Println("\nIndividual response details (optional logging):")
 	for i, resp := range responses {
-		if resp.Error != nil { // This error is for individual request execution issues (e.g. network error)
-			fmt.Printf("Request #%d to %s failed during execution: %v\n", i+1, resp.Request.URL, resp.Error)
+		if resp.Error != nil {
+			fmt.Printf("Request #%d (%s %s) had an execution error: %v\n",
+				i+1, resp.Request.Method, resp.Request.RawURLString, resp.Error)
 			continue
 		}
-		fmt.Printf("Details for Request #%d (%s %s): Status %s\n", i+1, resp.Request.Method, resp.Request.URL, resp.Status)
+		fmt.Printf("Request #%d (%s %s): Status %s\n  Body: %s\n",
+			i+1, resp.Request.Method, resp.Request.URL, resp.Status, resp.BodyString)
 	}
-}
-
-```
-
-### 4. Advanced: Programmatic Validation and JSONPath
-
-(Details on loading `ExpectedResponse` from files and full validation flow to be expanded based on chosen file format for expected responses e.g. JSON, YAML, or a simplified `.httpresponse` format)
-
-Currently, `ExpectedResponse` can be defined programmatically or loaded from a JSON file using `LoadExpectedResponseFromJSONFile`.
-
-```go
-// Programmatic example
-expected := &restclient.ExpectedResponse{
-    StatusCode: restclient.IntPtr(200),
-    BodyContains: []string{"success"},
-    HeadersContain: map[string]string{"Content-Type": "application/json"},
-    JSONPathChecks: map[string]interface{}{"$.data.id": 100},
-}
-
-// Assuming 'resp' is the *restclient.Response from ExecuteFile/ExecuteRequest
-validationResult := restclient.ValidateResponse(resp, expected)
-if !validationResult.Passed {
-    fmt.Printf("Validation failed for %s:\n", resp.Request.Name)
-    for _, mismatch := range validationResult.Mismatches {
-        fmt.Printf(" - %s\n", mismatch)
-    }
 }
 ```
 
@@ -237,18 +158,15 @@ if !validationResult.Passed {
 
 ### Running Tests
 
-- **Unit Tests:** `make test-unit` (or `go test -cover ./...`)
+- **Unit Tests:** `make test-unit` (or `go test -tags=unit ./...`)
 
 ### Linting and Checks
 
-- **Lint:** `make lint`
 - **All pre-commit checks (lint, build, unit tests):** `make check`
 
 ## Contributing
 
 Contributions are welcome! Please follow standard Go best practices and ensure `make check` passes before submitting pull requests.
-
-(Further contribution guidelines to be added if the project grows).
 
 ## License
 
