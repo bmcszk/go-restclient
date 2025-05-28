@@ -15,18 +15,19 @@ This library is suitable for programmatic use within Go applications, particular
     - Handles request method, URL, HTTP version, headers, and body.
     - Supports comments (`#`) and named requests (e.g., `### My Request Name`).
 - **Dynamic Variable Substitution:**
-    - **Custom Variables:** Define and use variables within request files (e.g., `@baseUrl = https://api.example.com`).
+    - **Custom Variables (File-defined):** Define and use variables within request files (e.g., `@baseUrl = https://api.example.com`, `{{baseUrl}}`).
     - **System Variables:**
         - `{{$guid}}`: Generates a new UUID.
-        - `{{$randomInt min max}}`: Generates a random integer within the range [min, max] (inclusive). If no arguments, defaults to [0, 100].
+        - `{{$randomInt [min max]}}`: Generates a random integer. Optional `min` `max` (e.g., `{{$randomInt 1 10}}`). Defaults to 0-100.
         - `{{$timestamp}}`: Current UTC Unix timestamp (seconds).
-        - `{{$datetime format}}`: Current UTC datetime formatted according to `format` (e.g., `rfc1123`, `iso8601`, or a custom Go layout string like `"2006-01-02T15:04:05Z07:00"`).
-        - `{{$localDatetime format}}`: Current local datetime formatted similarly to `$datetime`.
-        - `{{$processEnv variableName}}`: Substitutes with the value of the environment variable `variableName`.
-        - `{{$dotenv variableName}}`: Substitutes with the value of `variableName` from a `.env` file in the same directory as the request file.
+        - `{{$datetime format}}`: Current UTC datetime. `format` can be `rfc1123`, `iso8601`, or a Go layout string (e.g., `"2006-01-02"`).
+        - `{{$localDatetime format}}`: Current local datetime, same `format` options as `$datetime`.
+        - `{{$processEnv VAR_NAME}}`: Value of environment variable `VAR_NAME`.
+        - `{{$dotenv VAR_NAME}}`: Value of `VAR_NAME` from a `.env` file in the request file's directory.
+    - **Programmatic Variables:** Pass a `map[string]string` of variables directly to `ExecuteFile`. These override file-defined and environment variables of the same name.
 - **HTTP Request Execution:**
     - Create a `Client` with options (custom `http.Client`, `BaseURL`, default headers).
-    - Execute all requests from a `.rest` or `.http` file using `ExecuteFile(ctx context.Context, requestFilePath string)`.
+    - Execute requests from a `.http` file using `ExecuteFile(ctx, filePath, [programmaticVars])`.
     - Captures detailed response information: status, headers, body, duration.
     - Handles errors during request execution and stores them within the `Response` object.
 - **Response Validation:**
@@ -56,32 +57,21 @@ Create a `.http` (or `.rest`) file with your requests.
 **Example: `api_requests.http`**
 ```http
 @baseUrl = https://api.example.com
-@authToken = your-secret-token
+@defaultUser = file_user_id
 
-### Get a specific user
-GET {{baseUrl}}/users/{{$guid}}
+### Get a specific user, potentially overridden by programmatic var
+GET {{baseUrl}}/users/{{userId}}
 X-Request-ID: {{$guid}}
 Authorization: Bearer {{authToken}}
-Accept: application/json
 
 ### Create a new product
-# Example using a system variable in the body
 POST {{baseUrl}}/products
 Content-Type: application/json
-X-Correlation-ID: {{$guid}}
 
 {
   "productId": "{{$randomInt 1000 9999}}",
-  "name": "Super Widget",
-  "timestamp": "{{$timestamp}}"
+  "name": "Super Widget {{productSuffix}}" 
 }
-
-### Get orders using an environment variable for the filter
-GET {{baseUrl}}/orders?status={{$processEnv ORDER_STATUS_FILTER}}
-
-### Load user from .env file
-# Assuming .env file in the same directory has: USER_ID_FROM_ENV=user_from_dotenv_123
-GET {{baseUrl}}/users/{{$dotenv USER_ID_FROM_ENV}}
 ```
 
 ### 2. Define Expected Responses (Optional)
@@ -122,11 +112,11 @@ import (
 )
 
 func main() {
-	// Example: Set an environment variable for $processEnv
-	os.Setenv("ORDER_STATUS_FILTER", "pending")
-	// Example: Create a .env file for $dotenv
-	_ = os.WriteFile(".env", []byte("USER_ID_FROM_ENV=user_from_dotenv_abc"), 0644)
-	defer os.Remove(".env")
+	// Example: Set an environment variable for $processEnv (if used in file)
+	// os.Setenv("ORDER_STATUS_FILTER", "pending")
+	// Example: Create a .env file for $dotenv (if used in file)
+	// _ = os.WriteFile(".env", []byte("USER_ID_FROM_ENV=user_from_dotenv_abc"), 0644)
+	// defer os.Remove(".env")
 
 
 	client, err := restclient.NewClient()
@@ -134,8 +124,18 @@ func main() {
 		log.Fatalf("Failed to create client: %v", err)
 	}
 
+	// Programmatic variables to pass to ExecuteFile
+	// These will override any 'userId' or 'authToken' defined in the .http file or environment.
+	programmaticAPI<y_bin_473> := map[string]string{
+		"userId":        "prog_user_override_123",
+		"authToken":     "prog_auth_token_xyz",
+		"productSuffix": "Deluxe", // This var might only be used programmatically
+	}
+
 	requestFilePath := "api_requests.http" // Your .http file
-	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Pass programmatic vars as the optional third argument
+	responses, err := client.ExecuteFile(context.Background(), requestFilePath, programmaticAPI<y_bin_473>)
 	if err != nil {
 		// This error covers file-level issues or critical request setup failures.
 		log.Fatalf("Failed to execute request file: %v", err)
@@ -150,20 +150,22 @@ func main() {
 				i+1, resp.Request.Method, resp.Request.RawURLString, resp.Error)
 			continue
 		}
-		fmt.Printf("Request #%d (%s %s): Status %s, Body: %s\n",
+		// Note: resp.Request.URL will show the URL *after* all substitutions
+		fmt.Printf("Request #%d (%s %s): Status %s\n  Body: %s\n",
 			i+1, resp.Request.Method, resp.Request.URL, resp.Status, resp.BodyString)
 	}
 
 	// Optional: Validate against an expected response file
-	expectedResponseFilePath := "api_expected.hresp"
-	if _, err := os.Stat(expectedResponseFilePath); err == nil {
+	// ... (validation logic remains the same) ...
+	expectedResponseFilePath := "api_expected.hresp" // Assuming this file exists and matches executed requests
+	if _, statErr := os.Stat(expectedResponseFilePath); statErr == nil {
 		validationErr := restclient.ValidateResponses(expectedResponseFilePath, responses...)
 		if validationErr != nil {
 			log.Fatalf("Validation failed: %v", validationErr)
 		}
 		fmt.Println("All responses validated successfully against " + expectedResponseFilePath + "!")
 	} else {
-		fmt.Println("Expected response file not found, skipping validation.")
+		fmt.Println("Expected response file not found or error stating: " + statErr.Error() + ", skipping validation.")
 	}
 }
 ```
