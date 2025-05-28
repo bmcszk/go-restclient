@@ -39,6 +39,7 @@ Refer to `.cursor/rules/task_workflow.mdc` for guidelines on task creation and m
 - You are expected to adhere to all the above guidelines in every interaction and code modification without being explicitly reminded.
 - At the start of processing any request, ensure you are aware of the project\'s root directory (the directory containing the main `Makefile`, usually the workspace root) and the current date (obtain using `date +%Y-%m-%d`).
 - When asked to perform a task, ensure all relevant documentation (including the new workflow files) is considered and updated if necessary.
+- After making any changes to test files (e.g., refactoring, adding new tests, or modifying existing ones), you **must** run `make check` to ensure all tests pass and the code adheres to quality standards before proceeding with further changes or concluding the task.
 - Refer to `.cursor/rules/task_workflow.mdc` for detailed AI assistant responsibilities regarding task processing.
 - Refer to `.cursor/rules/requirement_workflow.mdc` for detailed AI assistant responsibilities regarding requirements and test scenarios.
 - If you encounter a "file or directory not found" error when attempting to access a path, first check your current working directory using `pwd`, then consult `docs/project_structure.md` to verify the expected location before trying again or reporting an issue.

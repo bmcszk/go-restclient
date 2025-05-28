@@ -1,6 +1,6 @@
 # Go REST Client Library (`go-restclient`)
 
-Last Updated: 2025-05-27
+Last Updated: 2025-05-28
 
 ## Overview
 
@@ -113,7 +113,102 @@ func main() {
 
 ```
 
-### 3. Defining Expected Responses and Validating
+### 3. Validating with Request and Response Files
+
+A common use case is to define your HTTP requests in one file and their corresponding expected responses in another. `go-restclient` supports this workflow using `.http` (or `.rest`) files for requests and `.hresp` files for expected responses.
+
+**Example: `my_requests.http`**
+
+This file defines the actual HTTP requests to be sent. Variables like `{{.ServerURL}}` can be used if you process the file through a template engine before parsing, or you can use absolute URLs directly.
+
+```http
+GET {{.ServerURL}}/req1
+
+###
+POST {{.ServerURL}}/req2
+Content-Type: application/json
+
+{"key": "value"}
+```
+
+**Example: `my_expected_responses.hresp`**
+
+This file defines the expected outcomes for the requests in `my_requests.http`, in the same order. Each expected response is separated by `###`.
+
+```http
+HTTP/1.1 200 OK
+
+response1
+
+###
+
+HTTP/1.1 201 Created
+
+response2
+```
+
+**Go Code Example:**
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+
+	"github.com/bmcszk/go-restclient"
+)
+
+// Assume startMockServer() sets up a test server and returns its URL.
+// In a real scenario, ServerURL might come from config or be hardcoded if static.
+var mockServerURL string 
+
+func main() {
+	// For this example, let's assume my_requests.http needs a ServerURL.
+	// In a real test, you might dynamically create this file content.
+	// For simplicity, we'll assume my_requests.http directly contains usable URLs
+	// or you pre-process it. For this example, let's use placeholder paths.
+	
+	// Effective request file path (can be the direct path if no templating is needed)
+	requestFilePath := "my_requests.http" // Or path to your pre-processed file
+	expectedResponseFilePath := "my_expected_responses.hresp"
+
+	client, err := restclient.NewClient()
+	if err != nil {
+		log.Fatalf("Failed to create client: %v", err)
+	}
+
+	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+	if err != nil {
+		// This error is for file-level issues (e.g., file not found, parse error for whole file)
+		// or if any request within the file critically fails during execution setup.
+		log.Fatalf("Failed to execute request file: %v", err)
+	}
+
+	fmt.Printf("Executed %d requests from %s\n", len(responses), requestFilePath)
+
+	// Validate all responses against the expected responses file
+	validationErr := restclient.ValidateResponses(expectedResponseFilePath, responses...)
+	if validationErr != nil {
+		log.Fatalf("Validation failed: %v", validationErr)
+	}
+
+	fmt.Println("All requests executed and validated successfully!")
+
+	// Individual response details are still available in the 'responses' slice
+	for i, resp := range responses {
+		if resp.Error != nil { // This error is for individual request execution issues (e.g. network error)
+			fmt.Printf("Request #%d to %s failed during execution: %v\n", i+1, resp.Request.URL, resp.Error)
+			continue
+		}
+		fmt.Printf("Details for Request #%d (%s %s): Status %s\n", i+1, resp.Request.Method, resp.Request.URL, resp.Status)
+	}
+}
+
+```
+
+### 4. Advanced: Programmatic Validation and JSONPath
 
 (Details on loading `ExpectedResponse` from files and full validation flow to be expanded based on chosen file format for expected responses e.g. JSON, YAML, or a simplified `.httpresponse` format)
 

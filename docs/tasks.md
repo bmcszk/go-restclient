@@ -1,19 +1,25 @@
 # Tasks
 
-Last Updated: 2025-05-27
+Last Updated: 2025-05-28
 
-| ID       | Description                                                                 | Status   | Assignee | Due Date   |
-| :------- | :-------------------------------------------------------------------------- | :------- | :------- | :--------- |
-| TASK-021 | Refactor `ExecuteFile` to use `errgroup` for handling errors from `executeRequest`. | Done     | AI       | 2025-05-28 |
-| TASK-022 | Implement `ValidateResponse` method in `Client` or a new validator component. | Done     | AI       | 2025-05-29 |
-| TASK-023 | Define response file format allowing `###` separator and update parser.     | Done | AI       | 2025-05-29 |
-| TASK-024 | Create E2E tests for `ValidateResponse` using `sample1.http` and its expected response. | ToDo     | AI       | 2025-05-30 |
-| TASK-025 | Add/verify E2E test for multiple requests in one `.http` file (e.g. `sample1.http`). | ToDo     | AI       | 2025-05-30 |
-| TASK-026 | Implement E2E tests for SCENARIO-LIB-008-001, SCENARIO-LIB-008-002, SCENARIO-LIB-008-003 | ToDo     | AI       | 2025-05-31 |
-| TASK-027 | Implement E2E tests for SCENARIO-LIB-009-001 to SCENARIO-LIB-009-008          | ToDo     | AI       | 2025-06-01 |
-| TASK-028 | Implement E2E tests for SCENARIO-LIB-010-001 to SCENARIO-LIB-010-003          | ToDo     | AI       | 2025-06-02 |
-| TASK-029 | Implement E2E tests for SCENARIO-LIB-011-001 to SCENARIO-LIB-011-004          | ToDo     | AI       | 2025-06-03 |
-| TASK-030 | Implement `JSONPathChecks` validation in `ValidateResponse` and `ExpectedResponse`. | ToDo     | AI       | 2025-06-04 |
-| TASK-031 | Add unit tests for `JSONPathChecks` in `validator_test.go`.                 | ToDo     | AI       | 2025-06-04 |
-| TASK-032 | Implement `HeadersContain` validation in `ValidateResponse` and `ExpectedResponse`. | ToDo     | AI       | 2025-06-05 |
-| TASK-033 | Add unit tests for `HeadersContain` in `validator_test.go`.               | ToDo     | AI       | 2025-06-05 |
+| ID       | Description                                                                 | Status      | Assignee | Due Date   |
+| :------- | :-------------------------------------------------------------------------- | :---------- | :------- | :--------- |
+| TASK-021 | Refactor `ExecuteFile` to use `errgroup` for handling errors from `executeRequest`. | Done        | AI       | 2025-05-28 |
+| TASK-022 | Implement `ValidateResponses` method to compare actual responses against an expected response file (supports multiple via `###`). | Done        | AI       | 2025-05-29 |
+| TASK-023 | Define response file format allowing `###` separator and update parser.     | Done        | AI       | 2025-05-29 |
+| TASK-024 | Add comprehensive unit tests for `ValidateResponse` using `sample1.http` as a basis for test data, covering various scenarios. | Done        | AI       | 2025-05-30 |
+| TASK-025 | Add unit tests for `Client.ExecuteFile` to verify handling of multiple requests from a single `.http` request file and validating each response. | Done        | AI       | 2025-05-30 |
+| TASK-026 | Implement unit tests covering SCENARIO-LIB-008-001, SCENARIO-LIB-008-002, SCENARIO-LIB-008-003. | Done        | AI       | 2025-05-31 |
+| TASK-027 | Implement unit tests covering SCENARIO-LIB-009-001 to SCENARIO-LIB-009-008.          | Done        | AI       | 2025-06-01 |
+| TASK-028 | Implement unit tests covering SCENARIO-LIB-010-001 to SCENARIO-LIB-010-003.          | Done        | AI       | 2025-06-02 |
+| TASK-029 | Implement unit tests covering SCENARIO-LIB-011-001 to SCENARIO-LIB-011-004.          | Done        | AI       | 2025-06-03 |
+| TASK-030 | Implement `JSONPathChecks` validation in `ValidateResponse` and `ExpectedResponse`. | Skipped     | AI       | 2025-06-04 |
+| TASK-031 | Add unit tests for `JSONPathChecks` in `validator_test.go`.                 | Skipped     | AI       | 2025-06-04 |
+| TASK-032 | Implement `HeadersContain` validation in `ValidateResponse` and `ExpectedResponse`. | Done        | AI       | 2025-06-05 |
+| TASK-033 | Add unit tests for `HeadersContain` in `validator_test.go`.               | Done        | AI       | 2025-06-05 |
+| TASK-034 | Implement unit tests covering SCENARIO-LIB-012-001 (reject JSON response file). | Skipped     | AI       | 2025-06-06 |
+| TASK-035 | Implement unit tests covering SCENARIO-LIB-012-002 (reject YAML response file). | Skipped     | AI       | 2025-06-06 |
+| TASK-036 | Fix trailing space in `testdata/http_response_files/multiple_responses_gt2_expected.http` (line with `response3`). May require manual edit. | Done        | AI       | 2025-05-29 |
+| TASK-037 | Manually review and fix all test data files in `testdata/http_request_files/` and `testdata/http_response_files/` for whitespace/newline inconsistencies. | Done        | User     | 2025-05-29 |
+| TASK-038 | Refactor validator_test.go to remove `writeExpectedResponseFile` and use real .http files from `testdata/http_response_files/`. | Done        | AI       | 2025-05-30 |
+| TASK-039 | Manually restore/fix `validator_test.go` due to tool-induced corruption. File may need revert from VCS or careful manual edit to fix duplication/deletion. | Done        | User     | 2025-05-28 |

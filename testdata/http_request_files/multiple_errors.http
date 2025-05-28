@@ -1,0 +1,10 @@
+GET http://localhost:12347/badreq1
+
+###
+
+POST http://localhost:12348/badreq2
+Content-Type: application/json
+
+{
+  "error": true
+} 

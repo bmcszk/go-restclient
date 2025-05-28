@@ -125,24 +125,30 @@ Last Updated: 2025-05-27
 - SCENARIO-LIB-008-002: Verify that if multiple requests fail, `errgroup` captures all errors (or the first one, depending on `errgroup`'s behavior configuration).
 - SCENARIO-LIB-008-003: Verify that successful requests complete even if other requests in the group fail, and their results are available (if applicable).
 
-## REQ-LIB-009: The library must provide a method to validate if the actual HTTP response matches an expected response defined in a file.
+## REQ-LIB-009: The library must provide a method (`ValidateResponses`) to validate one or more actual HTTP responses against a corresponding set of expected responses defined in a single `.http` file (using `###` as a separator for multiple expected responses).
 
-- SCENARIO-LIB-009-001: Validate a successful response (status, headers, body) against an expected response file.
-  - Expected: Validation passes.
-- SCENARIO-LIB-009-002: Validate a response where the status code mismatches the expected response file.
-  - Expected: Validation fails with a clear error about status code mismatch.
-- SCENARIO-LIB-009-003: Validate a response where a header mismatches the expected response file.
-  - Expected: Validation fails with a clear error about header mismatch.
-- SCENARIO-LIB-009-004: Validate a response where the body (JSON) mismatches the expected response file.
-  - Expected: Validation fails with a clear error/diff about body mismatch.
-- SCENARIO-LIB-009-005: Validate a response against an expected response file that specifies only a status code.
-  - Expected: Validation passes if status code matches, ignoring headers/body.
-- SCENARIO-LIB-009-006: Validate a response against an expected response file that specifies only certain headers.
-  - Expected: Validation passes if specified headers match, ignoring others and body.
-- SCENARIO-LIB-009-007: Handle a missing expected response file.
-  - Expected: Error reported.
-- SCENARIO-LIB-009-008: Handle an incorrectly formatted expected response file.
-  - Expected: Error reported.
+- SCENARIO-LIB-009-001: Validate a single successful actual response (status, headers, body) against an expected response file containing one definition.
+  - Expected: Validation passes (no error returned from `ValidateResponses`).
+- SCENARIO-LIB-009-002: Validate a single actual response where the status code mismatches the definition in an expected response file.
+  - Expected: `ValidateResponses` returns an error detailing the status code mismatch.
+- SCENARIO-LIB-009-003: Validate a single actual response where a header mismatches the definition in an expected response file.
+  - Expected: `ValidateResponses` returns an error detailing the header mismatch.
+- SCENARIO-LIB-009-004: Validate a single actual response where the body (JSON) mismatches the definition in an expected response file.
+  - Expected: `ValidateResponses` returns an error detailing the body mismatch (e.g., a diff).
+- SCENARIO-LIB-009-005: Validate a single actual response against an expected response file that specifies only a status code.
+  - Expected: Validation passes if status code matches; headers/body in actual response are ignored for this check if not specified in expected.
+- SCENARIO-LIB-009-006: Validate a single actual response against an expected response file that specifies only certain headers.
+  - Expected: Validation passes if specified headers match; status/body/other headers are ignored if not specified.
+- SCENARIO-LIB-009-007: Call `ValidateResponses` with a path to a missing expected response file.
+  - Expected: `ValidateResponses` returns an error indicating the file could not be parsed/found.
+- SCENARIO-LIB-009-008: Call `ValidateResponses` with a path to an incorrectly formatted expected response file.
+  - Expected: `ValidateResponses` returns an error indicating the file parsing failed.
+- SCENARIO-LIB-009-009: Validate multiple actual responses against an expected response file containing multiple definitions (separated by `###`).
+  - Expected: Validation passes for all corresponding pairs.
+- SCENARIO-LIB-009-010: Validate multiple actual responses where one response mismatches its corresponding definition in a multi-response expected file.
+  - Expected: `ValidateResponses` returns a multierror containing the specific mismatch.
+- SCENARIO-LIB-009-011: Call `ValidateResponses` with a different number of actual responses than expected responses defined in the file.
+  - Expected: `ValidateResponses` returns an error indicating the count mismatch.
 
 ## REQ-LIB-010: The response file format should allow for multiple responses, separated by `###`, similar to request files.
 
@@ -160,3 +166,10 @@ Last Updated: 2025-05-27
 - SCENARIO-LIB-011-003: Execute an `.http` file with multiple (>2) requests separated by `###`.
   - Expected: All requests are processed sequentially.
 - SCENARIO-LIB-011-004: (Covered by SCENARIO-LIB-001-010 for parsing aspect) Ensure correct parsing and execution of multiple requests defined in `sample1.http`.
+
+## REQ-LIB-012: Exclusive use of .http format for expected responses
+
+- SCENARIO-LIB-012-001: Attempt to load an expected response defined in a JSON file.
+  - Expected: The library either errors out or fails to parse the file, as only `.http` format is supported for expected responses.
+- SCENARIO-LIB-012-002: Attempt to load an expected response defined in a YAML file.
+  - Expected: The library either errors out or fails to parse the file, as only `.http` format is supported for expected responses.

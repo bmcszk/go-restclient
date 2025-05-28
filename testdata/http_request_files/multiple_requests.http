@@ -1,3 +1,6 @@
 GET {{.ServerURL}}/req1
 ###
-POST {{.ServerURL}}/req2 
+POST {{.ServerURL}}/req2
+Content-Type: application/json
+
+{"key": "value"} 

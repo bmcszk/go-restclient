@@ -1,116 +1,123 @@
 package restclient
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
-	"net/http"
-	"os"
 	"strings"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/pmezard/go-difflib/difflib"
 )
 
 // ExpectedResponse is defined in response.go
 
-// ValidateResponse compares an actual Response against an ExpectedResponse.
-// It returns a list of validation errors, or nil if everything matches.
-func ValidateResponse(actual *Response, expected *ExpectedResponse) []error {
-	var validationErrors []error
+// ValidateResponses compares a slice of actual HTTP responses against a set of expected responses
+// parsed from the specified file. It returns a consolidated error (multierror) if any
+// discrepancies are found, or nil if all validations pass.
+func ValidateResponses(responseFilePath string, actualResponses ...*Response) error {
+	var errs *multierror.Error
 
-	if actual == nil {
-		validationErrors = append(validationErrors, errors.New("actual response is nil"))
-		return validationErrors
-	}
-	if expected == nil {
-		validationErrors = append(validationErrors, errors.New("expected response is nil"))
-		return validationErrors
+	// Attempt to parse the expected responses from the file.
+	expectedResponses, parseErr := parseExpectedResponseFile(responseFilePath)
+	if parseErr != nil {
+		errs = multierror.Append(errs, fmt.Errorf("failed to parse expected response file '%s': %w", responseFilePath, parseErr))
 	}
 
-	// 1. Validate Status Code
-	if expected.StatusCode != nil {
-		if actual.StatusCode != *expected.StatusCode {
-			validationErrors = append(validationErrors, fmt.Errorf("status code mismatch: expected %d, got %d", *expected.StatusCode, actual.StatusCode))
-		}
+	// Determine effective counts for actual and expected responses.
+	effectiveNumActual := countNonNilActuals(actualResponses)
+	effectiveNumExpected := 0
+	if expectedResponses != nil {
+		effectiveNumExpected = len(expectedResponses)
 	}
 
-	// 2. Validate Status (string, e.g., "200 OK") - less common to validate precisely but can be useful
-	if expected.Status != nil {
-		if *expected.Status != "" {
-			if actual.Status != *expected.Status {
-				validationErrors = append(validationErrors, fmt.Errorf("status string mismatch: expected '%s', got '%s'", *expected.Status, actual.Status))
-			}
-		}
+	// Check for count mismatch.
+	if effectiveNumActual != effectiveNumExpected {
+		errs = multierror.Append(errs, fmt.Errorf("mismatch in number of responses: got %d actual, but expected %d from file '%s'", effectiveNumActual, effectiveNumExpected, responseFilePath))
 	}
 
-	// 3. Validate Headers
-	for expectedHeaderName, expectedHeaderValues := range expected.Headers {
-		actualHeaderValues, ok := actual.Headers[http.CanonicalHeaderKey(expectedHeaderName)]
-		if !ok {
-			validationErrors = append(validationErrors, fmt.Errorf("expected header '%s' not found in actual response", expectedHeaderName))
+	// If parsing failed, we cannot proceed with per-response validation. Return collected errors so far.
+	if parseErr != nil {
+		return errs.ErrorOrNil()
+	}
+
+	// If there was no parse error, but counts mismatched, return the count mismatch error.
+	if effectiveNumActual != effectiveNumExpected { // This implies parseErr was nil to reach here
+		return errs.ErrorOrNil()
+	}
+
+	// If we reach here, parsing succeeded and counts match. Proceed to validate pairs.
+	for i := 0; i < effectiveNumActual; i++ {
+		actual := actualResponses[i]
+		expected := expectedResponses[i]
+
+		if actual == nil {
+			errs = multierror.Append(errs, fmt.Errorf("validation for response #%d ('%s'): actual response is nil", i+1, responseFilePath))
 			continue
 		}
-		// For now, we check if all expected values for a header are present in the actual header values.
-		// This means actual can have more values, but not fewer for the ones we expect.
-		// TODO: Consider options for exact match of header values counts or specific ordering if necessary.
-		for _, ehv := range expectedHeaderValues {
-			found := false
-			for _, ahv := range actualHeaderValues {
-				if ahv == ehv {
-					found = true
-					break
+
+		// Validate Status Code
+		if expected.StatusCode != nil && (actual.StatusCode != *expected.StatusCode) {
+			errs = multierror.Append(errs, fmt.Errorf("validation for response #%d ('%s'): status code mismatch: expected %d, got %d", i+1, responseFilePath, *expected.StatusCode, actual.StatusCode))
+		}
+
+		// Validate Status String
+		if expected.Status != nil && *expected.Status != "" && (actual.Status != *expected.Status) {
+			errs = multierror.Append(errs, fmt.Errorf("validation for response #%d ('%s'): status string mismatch: expected '%s', got '%s'", i+1, responseFilePath, *expected.Status, actual.Status))
+		}
+
+		// Validate Headers (Exact Match for specified keys)
+		if expected.Headers != nil {
+			for key, expectedValues := range expected.Headers {
+				actualValues, ok := actual.Headers[key]
+				if !ok {
+					errs = multierror.Append(errs, fmt.Errorf("validation for response #%d ('%s'): expected header '%s' not found", i+1, responseFilePath, key))
+					continue
+				}
+				for _, ev := range expectedValues {
+					found := false
+					for _, av := range actualValues {
+						if av == ev {
+							found = true
+							break
+						}
+					}
+					if !found {
+						errs = multierror.Append(errs, fmt.Errorf("validation for response #%d ('%s'): expected value '%s' for header '%s' not found in actual values %v", i+1, responseFilePath, ev, key, actualValues))
+					}
 				}
 			}
-			if !found {
-				validationErrors = append(validationErrors, fmt.Errorf("expected value '%s' for header '%s' not found in actual values: %v", ehv, expectedHeaderName, actualHeaderValues))
+		}
+
+		// Validate Body (Exact Match)
+		if expected.Body != nil {
+			normalizedExpectedBody := strings.TrimSpace(strings.ReplaceAll(*expected.Body, "\r\n", "\n"))
+			normalizedActualBody := strings.TrimSpace(strings.ReplaceAll(actual.BodyString, "\r\n", "\n"))
+
+			if normalizedActualBody != normalizedExpectedBody {
+				diff := difflib.UnifiedDiff{
+					A:        difflib.SplitLines(normalizedExpectedBody),
+					B:        difflib.SplitLines(normalizedActualBody),
+					FromFile: "Expected Body",
+					ToFile:   "Actual Body",
+					Context:  3,
+				}
+				diffText, _ := difflib.GetUnifiedDiffString(diff)
+				errs = multierror.Append(errs, fmt.Errorf("validation for response #%d ('%s'): body mismatch:\n%s", i+1, responseFilePath, diffText))
 			}
 		}
 	}
 
-	// 4. Validate Body (exact match)
-	if expected.Body != nil {
-		if actual.BodyString != *expected.Body {
-			diff := difflib.UnifiedDiff{
-				A:        difflib.SplitLines(*expected.Body),
-				B:        difflib.SplitLines(actual.BodyString),
-				FromFile: "Expected Body",
-				ToFile:   "Actual Body",
-				Context:  3,
-			}
-			diffText, _ := difflib.GetUnifiedDiffString(diff)
-			validationErrors = append(validationErrors, fmt.Errorf("body mismatch:\n%s", diffText))
-		}
-	}
-
-	// 5. Validate BodyContains
-	for _, substr := range expected.BodyContains {
-		if !strings.Contains(actual.BodyString, substr) {
-			validationErrors = append(validationErrors, fmt.Errorf("actual body does not contain expected substring: '%s'", substr))
-		}
-	}
-
-	// 6. Validate BodyNotContains
-	for _, substr := range expected.BodyNotContains {
-		if strings.Contains(actual.BodyString, substr) {
-			validationErrors = append(validationErrors, fmt.Errorf("actual body contains unexpected substring: '%s'", substr))
-		}
-	}
-
-	return validationErrors
+	return errs.ErrorOrNil()
 }
 
-// Helper to load ExpectedResponse from a JSON file (example)
-func LoadExpectedResponseFromJSONFile(filePath string) (*ExpectedResponse, error) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read expected response file %s: %w", filePath, err)
+// Helper function to count non-nil actual responses
+func countNonNilActuals(responses []*Response) int {
+	count := 0
+	for _, r := range responses {
+		if r != nil {
+			count++
+		}
 	}
-	exp := &ExpectedResponse{}
-	if err := json.Unmarshal(data, exp); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal expected response file %s: %w", filePath, err)
-	}
-	return exp, nil
+	return count
 }
 
-// TODO: Add LoadExpectedResponseFromYAMLFile
 // TODO: Add LoadExpectedResponseFromHTTPFile (parsing a simplified .http format for expected responses)
