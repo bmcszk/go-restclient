@@ -1,0 +1,10 @@
+GET [[.ServerURL]]/datetime/{{$datetime rfc1123}}
+Content-Type: application/json
+X-Datetime-RFC1123: {{$datetime rfc1123}}
+X-Datetime-ISO8601: {{$datetime iso8601}}
+X-Datetime-Custom: {{$datetime "2006-01-02T15:04:05Z07:00"}}
+
+{
+  "datetime_custom_body": "{{$datetime "Jan_2_2006_15:04:05"}}",
+  "datetime_iso_body": "{{$datetime iso8601}}"
+} 

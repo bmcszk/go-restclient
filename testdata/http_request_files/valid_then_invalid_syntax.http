@@ -1,5 +1,5 @@
-GET {{.ServerURL}}/first
+GET [[.ServerURL]]/first
 
 ###
 
-INVALID_METHOD {{.ServerURL}}/second 
+INVALID_METHOD [[.ServerURL]]/second 

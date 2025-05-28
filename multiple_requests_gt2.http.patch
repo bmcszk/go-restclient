@@ -1,0 +1,24 @@
+--- a/testdata/http_request_files/multiple_requests_gt2.http
++++ b/testdata/http_request_files/multiple_requests_gt2.http
+@@ -1,17 +1,17 @@
+-GET {{.ServerURL}}/req1
++GET [[.ServerURL]]/req1
+ X-Test-Header: Request1
+ 
+ ###
+ 
+-POST {{.ServerURL}}/req2
++POST [[.ServerURL]]/req2
+ Content-Type: application/json
+ X-Test-Header: Request2
+ 
+ {
+-    "name": "Request Two"
++    "name": "request2"
+ }
+ 
+ ###
+ 
+-GET {{.ServerURL}}/req3
++GET [[.ServerURL]]/req3
+ X-Test-Header: Request3 

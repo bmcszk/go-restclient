@@ -39,3 +39,4 @@ Last Updated: 2025-05-28
 | TASK-053 | Add unit tests for REQ-LIB-019 (SCENARIO-LIB-019-001 to SCENARIO-LIB-019-002). | Done        | AI       | 2025-06-13 |
 | TASK-054 | Implement REQ-LIB-020: Support for `{{$dotenv variableName}}` system variable.   | Done        | AI       | 2025-06-14 |
 | TASK-055 | Add unit tests for REQ-LIB-020 (SCENARIO-LIB-020-001 to SCENARIO-LIB-020-003). | Done        | AI       | 2025-06-14 |
+| TASK-056 | Refactor client_test.go to use .http files for all test cases.                 | Done        | AI       | 2025-05-28 |

@@ -1,0 +1,10 @@
+GET [[.ServerURL]]/path-{{$processEnv [[.TestEnvVarName]]}}/data
+Content-Type: application/json
+Cache-Control: {{$processEnv UNDEFINED_CACHE_VAR_SHOULD_BE_EMPTY}}
+User-Agent: test-client
+X-Env-Value: {{$processEnv [[.TestEnvVarName]]}}
+
+{
+  "env_payload": "{{$processEnv [[.TestEnvVarName]]}}",
+  "undefined_payload": "{{$processEnv [[.UndefinedEnvVarName]]}}"
+} 

@@ -1,0 +1,6 @@
+GET [[.ServerURL]]/item/{{$randomInt 10 20}}/details
+X-Random-ID: {{$randomInt 1 5}}
+
+{
+  "value": {{$randomInt 100 105}}
+} 
