@@ -1,0 +1,1 @@
+GET {{.ServerURL}}/item/{{$randomInt 1 10}} 

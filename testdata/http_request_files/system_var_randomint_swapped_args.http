@@ -1,0 +1,3 @@
+POST {{.ServerURL}}/order
+
+{"priority": {{$randomInt 5 1}}} 

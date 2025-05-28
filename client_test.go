@@ -625,3 +625,135 @@ X-Request-ID: {{$guid}}
 	assert.NotEqual(t, guidFromHeader, guidFromBody2, "GUID from header and body2 should be different")
 	assert.NotEqual(t, guidFromBody1, guidFromBody2, "GUIDs from body (transactionId and correlationId) should be different")
 }
+
+//func TestExecuteFile_WithRandomIntSystemVariable(t *testing.T) {
+//	tests := []struct {
+//		name             string
+//		requestFile      string
+//		mockResponseCode int
+//		mockResponseBody string
+//		validationFunc   func(t *testing.T, results []*Response, err error)
+//	}{
+//		{
+//			name:        "SCENARIO-LIB-015-001: {{$randomInt min max}} in URL",
+//			requestFile: "testdata/http_request_files/system_var_randomint_url.http",
+//			validationFunc: func(t *testing.T, results []*Response, err error) {
+//				require.NoError(t, err)
+//				require.Len(t, results, 1)
+//				resp := results[0]
+//				require.NotNil(t, resp)
+//				pathParts := strings.Split(resp.Request.URL.Path, "/")
+//				require.GreaterOrEqual(t, len(pathParts), 3)
+//				randomNumStr := pathParts[2]
+//				randomNum, convErr := strconv.Atoi(randomNumStr)
+//				require.NoError(t, convErr, "Failed to convert random number from URL path to int")
+//				assert.True(t, randomNum >= 10 && randomNum <= 20, "Expected random number in URL to be between 10 and 20, got %d", randomNum)
+//			},
+//		},
+//		{
+//			name:        "SCENARIO-LIB-015-002: {{$randomInt min max}} in request body",
+//			requestFile: "testdata/http_request_files/system_var_randomint_body.http",
+//			validationFunc: func(t *testing.T, results []*Response, err error) {
+//				require.NoError(t, err)
+//				require.Len(t, results, 1)
+//				resp := results[0]
+//				require.NotNil(t, resp)
+//				var bodyMap map[string]interface{}
+//				require.NoError(t, json.Unmarshal(resp.Request.Body, &bodyMap))
+//				randomNumFloat, ok := bodyMap["randomNumber"].(float64)
+//				require.True(t, ok, "randomNumber not found in request body or not a number")
+//				randomNum := int(randomNumFloat)
+//				assert.True(t, randomNum >= 1 && randomNum <= 5, "Expected random number in body to be between 1 and 5, got %d", randomNum)
+//			},
+//		},
+//		{
+//			name:        "SCENARIO-LIB-015-003: {{$randomInt}} (no args) in URL",
+//			requestFile: "testdata/http_request_files/system_var_randomint_no_args.http",
+//			validationFunc: func(t *testing.T, results []*Response, err error) {
+//				require.NoError(t, err)
+//				require.Len(t, results, 1)
+//				resp := results[0]
+//				require.NotNil(t, resp)
+//				pathParts := strings.Split(resp.Request.URL.Path, "/")
+//				require.GreaterOrEqual(t, len(pathParts), 3)
+//				randomNumStr := pathParts[2]
+//				randomNum, convErr := strconv.Atoi(randomNumStr)
+//				require.NoError(t, convErr)
+//				assert.True(t, randomNum >= 0 && randomNum <= 100, "Expected random number (no args) to be between 0 and 100, got %d", randomNum)
+//			},
+//		},
+//		{
+//			name:        "SCENARIO-LIB-015-004: {{$randomInt max min}} (swapped args) in URL",
+//			requestFile: "testdata/http_request_files/system_var_randomint_swapped_args.http",
+//			validationFunc: func(t *testing.T, results []*Response, err error) {
+//				require.NoError(t, err)
+//				require.Len(t, results, 1)
+//				resp := results[0]
+//				require.NotNil(t, resp)
+//				pathParts := strings.Split(resp.Request.URL.Path, "/")
+//				require.GreaterOrEqual(t, len(pathParts), 3)
+//				randomNumStr := pathParts[2]
+//				randomNum, convErr := strconv.Atoi(randomNumStr)
+//				require.NoError(t, convErr)
+//				assert.True(t, randomNum >= 30 && randomNum <= 40, "Expected random number (swapped args) to be between 30 and 40, got %d", randomNum)
+//			},
+//		},
+//		{
+//			name:        "SCENARIO-LIB-015-005: {{$randomInt min max}} negative numbers in URL",
+//			requestFile: "testdata/http_request_files/system_var_randomint_url_negative.http",
+//			validationFunc: func(t *testing.T, results []*Response, err error) {
+//				require.NoError(t, err)
+//				require.Len(t, results, 1)
+//				resp := results[0]
+//				require.NotNil(t, resp)
+//				pathParts := strings.Split(resp.Request.URL.Path, "/")
+//				require.GreaterOrEqual(t, len(pathParts), 3)
+//				randomNumStr := pathParts[2]
+//				randomNum, convErr := strconv.Atoi(randomNumStr)
+//				require.NoError(t, convErr)
+//				assert.True(t, randomNum >= -20 && randomNum <= -10, "Expected random number in URL to be between -20 and -10, got %d", randomNum)
+//			},
+//		},
+//		{
+//			name:        "SCENARIO-LIB-015-006: {{$randomInt malformed}} in URL (should leave as is)",
+//			requestFile: "testdata/http_request_files/system_var_randomint_malformed_args.http",
+//			validationFunc: func(t *testing.T, results []*Response, err error) {
+//				require.NoError(t, err)
+//				require.Len(t, results, 1)
+//				resp := results[0]
+//				require.NotNil(t, resp)
+//				assert.Equal(t, "/test/{{$randomInt malformed}}/data", resp.Request.URL.Path)
+//			},
+//		},
+//	}
+//
+//	for _, tc := range tests {
+//		t.Run(tc.name, func(t *testing.T) {
+//			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+//				bodyBytes, _ := io.ReadAll(r.Body)
+//				r.Body.Close()
+//				r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes)) // Restore body for logging/assertion
+//
+//				c.logger.Debug("Mock server received request",
+//					"method", r.Method,
+//					"url", r.URL.String(),
+//					"headers", r.Header,
+//					"body", string(bodyBytes),
+//				)
+//				w.WriteHeader(tc.mockResponseCode)
+//				if tc.mockResponseBody != "" {
+//					_, _ = w.Write([]byte(tc.mockResponseBody))
+//				}
+//			}))
+//			defer server.Close()
+//
+//			// Create a temporary file with the request content
+//			tempFile, err := createTestFileFromTemplate(tc.requestFile, map[string]string{"mock_server_url": server.URL})
+//			require.NoError(t, err)
+//			defer os.Remove(tempFile.Name())
+//
+//			results, err := c.ExecuteFile(context.Background(), tempFile.Name())
+//			tc.validationFunc(t, results, err)
+//		})
+//	}
+//}

@@ -1,0 +1,1 @@
+GET {{.ServerURL}}/product/{{$randomInt 1 notanumber}} 

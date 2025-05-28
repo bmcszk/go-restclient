@@ -1,0 +1,3 @@
+POST {{.ServerURL}}/data
+
+{"value": {{$randomInt 100 105}}} 

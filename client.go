@@ -5,12 +5,9 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"regexp"
-
-	// "regexp" // Unused
 	"strconv"
 	"strings"
 	"time"
@@ -232,38 +229,31 @@ func (c *Client) substituteSystemVariables(text string) string {
 		text = strings.Replace(text, "{{$guid}}", uuid.NewString(), 1)
 	}
 
-	// Handle {{$randomInt min max}}
-	reRandomIntWithArgs := regexp.MustCompile(`{{\$randomInt\s+(-?\d+)\s+(-?\d+)}}`)
-	text = reRandomIntWithArgs.ReplaceAllStringFunc(text, func(match string) string {
-		parts := reRandomIntWithArgs.FindStringSubmatch(match)
-		if len(parts) == 3 {
-			min, errMin := strconv.Atoi(parts[1])
-			max, errMax := strconv.Atoi(parts[2])
-			if errMin == nil && errMax == nil {
-				if min > max {
-					min, max = max, min // Swap if min > max
-				}
-				// rand.Intn(n) returns a random number in [0, n). So for [min, max] inclusive:
-				// rand.Intn(max - min + 1) + min
-				// Seed for each call for now for simplicity in a library context, not ideal for performance.
-				// A shared, seeded rand.Rand source would be better in a long-running app.
-				r := rand.New(rand.NewSource(time.Now().UnixNano()))
-				return strconv.Itoa(r.Intn(max-min+1) + min)
+	// Handle {{$datetime "format"}}
+	// Regex to find {{$datetime "capture_this_format_string"}}
+	reDateTime := regexp.MustCompile(`\{\{\$datetime\s+"([^"}]+)"\}\}`)
+	text = reDateTime.ReplaceAllStringFunc(text, func(match string) string {
+		parts := reDateTime.FindStringSubmatch(match)
+		if len(parts) == 2 {
+			formatString := parts[1]
+			now := time.Now().UTC()
+			switch formatString {
+			case "RFC3339":
+				return now.Format(time.RFC3339)
+			case "RFC3339Nano":
+				return now.Format(time.RFC3339Nano)
+			case "epoch", "unix":
+				return strconv.FormatInt(now.Unix(), 10)
+			default:
+				// Use the provided format string directly
+				// Potentially add more named formats or validation later
+				return now.Format(formatString)
 			}
 		}
-		return match // Return original match if parsing fails
+		return match // Return original match if parsing fails or no match
 	})
 
-	// Handle {{$randomInt}} (no arguments, default 0-100)
-	reRandomIntNoArgs := regexp.MustCompile(`{{\$randomInt}}`)
-	text = reRandomIntNoArgs.ReplaceAllStringFunc(text, func(match string) string {
-		// Default range [0, 100]
-		min, max := 0, 100
-		r := rand.New(rand.NewSource(time.Now().UnixNano()))
-		return strconv.Itoa(r.Intn(max-min+1) + min)
-	})
-
-	// TODO: Add other system variables here like {{$timestamp}}, etc.
+	// TODO: Add other system variables here like {{$timestamp}}, {{$randomInt}}, etc.
 
 	return text
 }
