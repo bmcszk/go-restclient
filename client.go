@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 
 	// "regexp" // Unused
@@ -17,14 +18,16 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-multierror"
+	"github.com/joho/godotenv"
 )
 
 // Client is the main struct for interacting with the REST client library.
 // It will hold configuration and methods to execute requests.
 type Client struct {
-	httpClient     *http.Client
-	BaseURL        string
-	DefaultHeaders http.Header
+	httpClient        *http.Client
+	BaseURL           string
+	DefaultHeaders    http.Header
+	currentDotEnvVars map[string]string
 }
 
 // NewClient creates a new instance of the REST client.
@@ -99,6 +102,22 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 	}
 	if len(parsedFile.Requests) == 0 {
 		return nil, fmt.Errorf("no requests found in file %s", requestFilePath)
+	}
+
+	// Load .env file from the same directory as the request file
+	c.currentDotEnvVars = make(map[string]string)
+	envFilePath := filepath.Join(filepath.Dir(requestFilePath), ".env")
+	if _, err := os.Stat(envFilePath); err == nil {
+		loadedVars, loadErr := godotenv.Read(envFilePath)
+		if loadErr != nil {
+			// Log or return an error? For now, let's treat a load error as non-fatal,
+			// meaning $dotenv vars will just be empty if the file is malformed.
+			// Or, we could append to multiErr.
+			// For now, just print a warning perhaps, or let it be silent.
+			// Let's be silent for now, consistent with undefined vars being empty.
+		} else {
+			c.currentDotEnvVars = loadedVars
+		}
 	}
 
 	responses := make([]*Response, len(parsedFile.Requests))
@@ -227,7 +246,6 @@ func (c *Client) applyVariables(req *Request, vars map[string]string) {
 
 // substituteSystemVariables replaces system variable placeholders in a string.
 func (c *Client) substituteSystemVariables(text string) string {
-
 	// Handle {{$guid}}
 	for strings.Contains(text, "{{$guid}}") {
 		text = strings.Replace(text, "{{$guid}}", uuid.NewString(), 1)
@@ -244,6 +262,20 @@ func (c *Client) substituteSystemVariables(text string) string {
 			return os.Getenv(envVarName) // Returns empty string if not found, which is desired behavior
 		}
 		return match // Should not happen if regex matches, but as a fallback
+	})
+
+	// Handle {{$dotenv variableName}}
+	reDotEnv := regexp.MustCompile(`\{\{\$dotenv\s+([a-zA-Z_][a-zA-Z0-9_]*)\}\}`)
+	text = reDotEnv.ReplaceAllStringFunc(text, func(match string) string {
+		parts := reDotEnv.FindStringSubmatch(match)
+		if len(parts) == 2 {
+			varName := parts[1]
+			if val, ok := c.currentDotEnvVars[varName]; ok {
+				return val
+			}
+			return "" // Variable not found in .env, return empty string
+		}
+		return match // Should not happen
 	})
 
 	// TODO: Add other system variables here like {{$datetime}}, {{$timestamp}}, {{$randomInt}}, etc. when they are unblocked.

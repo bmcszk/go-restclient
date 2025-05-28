@@ -37,5 +37,5 @@ Last Updated: 2025-05-28
 | TASK-051 | Add unit tests for REQ-LIB-018 (SCENARIO-LIB-018-001 to SCENARIO-LIB-018-002). | Blocked     | AI       | 2025-06-12 |
 | TASK-052 | Implement REQ-LIB-019: Support for `{{$processEnv variableName}}` system variable. | Done        | AI       | 2025-06-13 |
 | TASK-053 | Add unit tests for REQ-LIB-019 (SCENARIO-LIB-019-001 to SCENARIO-LIB-019-002). | Done        | AI       | 2025-06-13 |
-| TASK-054 | Implement REQ-LIB-020: Support for `{{$dotenv variableName}}` system variable.   | ToDo        | AI       | 2025-06-14 |
-| TASK-055 | Add unit tests for REQ-LIB-020 (SCENARIO-LIB-020-001 to SCENARIO-LIB-020-003). | ToDo        | AI       | 2025-06-14 |
+| TASK-054 | Implement REQ-LIB-020: Support for `{{$dotenv variableName}}` system variable.   | Done        | AI       | 2025-06-14 |
+| TASK-055 | Add unit tests for REQ-LIB-020 (SCENARIO-LIB-020-001 to SCENARIO-LIB-020-003). | Done        | AI       | 2025-06-14 |
