@@ -97,7 +97,8 @@ func WithDefaultHeaders(headers http.Header) ClientOption {
 // ExecuteFile parses a request file, executes all requests found, and returns their responses.
 // It returns an error if the file cannot be parsed or no requests are found.
 // Individual request execution errors are stored within each Response object.
-func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Response, error) {
+// programmaticVars, if provided, will override any variables defined in the request file.
+func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string, programmaticVars ...map[string]string) ([]*Response, error) {
 	parsedFile, err := parseRequestFile(requestFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse request file %s: %w", requestFilePath, err)
@@ -126,9 +127,24 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 	var multiErr *multierror.Error
 
 	for i, restClientReq := range parsedFile.Requests {
+		// Create a new map for merged variables to avoid modifying the original parsed request's ActiveVariables directly yet.
+		mergedVariables := make(map[string]string)
+		// Copy file-defined variables first
+		for k, v := range restClientReq.ActiveVariables {
+			mergedVariables[k] = v
+		}
+		// Then, override with programmatic variables if provided
+		if len(programmaticVars) > 0 && programmaticVars[0] != nil {
+			for k, v := range programmaticVars[0] {
+				mergedVariables[k] = v
+			}
+		}
+		// Update the request's ActiveVariables with the merged map for subsequent use
+		restClientReq.ActiveVariables = mergedVariables
+
 		// Substitute custom variables in RawURLString
 		substitutedRawURL := restClientReq.RawURLString
-		for k, v := range restClientReq.ActiveVariables {
+		for k, v := range restClientReq.ActiveVariables { // Use the now merged ActiveVariables
 			placeholder := "{{" + k + "}}"
 			substitutedRawURL = strings.ReplaceAll(substitutedRawURL, placeholder, v)
 		}
