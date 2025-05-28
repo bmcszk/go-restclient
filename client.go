@@ -5,11 +5,13 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 
 	// "regexp" // Unused
 
@@ -246,6 +248,29 @@ func (c *Client) applyVariables(req *Request, vars map[string]string) {
 
 // substituteSystemVariables replaces system variable placeholders in a string.
 func (c *Client) substituteSystemVariables(text string) string {
+	// Handle {{$randomInt min max}} - MUST be before {{$randomInt}} (no-args)
+	reRandomIntWithArgs := regexp.MustCompile(`\{\{\$randomInt\s+(-?\d+)\s+(-?\d+)\}\}`)
+	text = reRandomIntWithArgs.ReplaceAllStringFunc(text, func(match string) string {
+		parts := reRandomIntWithArgs.FindStringSubmatch(match)
+		if len(parts) == 3 { // parts[0] is full match, parts[1] is min, parts[2] is max
+			min, errMin := strconv.Atoi(parts[1])
+			max, errMax := strconv.Atoi(parts[2])
+			if errMin == nil && errMax == nil {
+				if min > max { // Swap if min > max
+					min, max = max, min
+				}
+				return strconv.Itoa(rand.Intn(max-min+1) + min)
+			}
+		}
+		return match // Malformed or error, leave as is
+	})
+
+	// Handle {{$randomInt}} (no arguments, defaults to 0-100)
+	reRandomIntNoArgs := regexp.MustCompile(`\{\{\$randomInt\}\}`)
+	text = reRandomIntNoArgs.ReplaceAllStringFunc(text, func(match string) string {
+		return strconv.Itoa(rand.Intn(101)) // 0-100 inclusive
+	})
+
 	// Handle {{$guid}}
 	for strings.Contains(text, "{{$guid}}") {
 		text = strings.Replace(text, "{{$guid}}", uuid.NewString(), 1)

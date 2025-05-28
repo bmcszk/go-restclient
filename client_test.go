@@ -930,3 +930,173 @@ User-Agent: test-client
 	assert.Equal(t, timestampFromHeader, timestampFromBody1, "Timestamp in Header and Body (event_time) should be the same")
 	assert.Equal(t, timestampFromBody1, timestampFromBody2, "Timestamp in Body (event_time and processed_at) should be the same")
 }
+
+func TestExecuteFile_WithRandomIntSystemVariable(t *testing.T) {
+	var interceptedRequest struct {
+		URL    string
+		Header string
+		Body   string
+	}
+
+	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+		interceptedRequest.URL = r.URL.String()
+		bodyBytes, _ := io.ReadAll(r.Body)
+		interceptedRequest.Body = string(bodyBytes)
+		interceptedRequest.Header = r.Header.Get("X-Random-ID")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, "ok")
+	})
+	defer server.Close()
+
+	client, _ := NewClient()
+
+	// Test cases
+	tests := []struct {
+		name               string
+		httpFileContent    string
+		validate           func(t *testing.T, url, header, body string)
+		expectErrorInExec  bool
+		expectErrorInParse bool // For malformed variable syntax causing URL parse issues
+	}{ // SCENARIO-LIB-015-001: With valid min max args
+		{
+			name: "valid min max args",
+			httpFileContent: fmt.Sprintf(`
+GET %s/item/{{$randomInt 10 20}}/details
+X-Random-ID: {{$randomInt 1 5}}
+
+{
+  "value": {{$randomInt 100 105}}
+}
+`, server.URL),
+			validate: func(t *testing.T, url, header, body string) {
+				urlParts := strings.Split(url, "/")
+				valURL, err := strconv.Atoi(urlParts[len(urlParts)-2])
+				require.NoError(t, err, "Random int from URL should be valid int")
+				assert.True(t, valURL >= 10 && valURL <= 20, "URL random int %d out of range [10,20]", valURL)
+
+				valHeader, err := strconv.Atoi(header)
+				require.NoError(t, err, "Random int from Header should be valid int")
+				assert.True(t, valHeader >= 1 && valHeader <= 5, "Header random int %d out of range [1,5]", valHeader)
+
+				var bodyJSON map[string]int
+				err = json.Unmarshal([]byte(body), &bodyJSON)
+				require.NoError(t, err, "Failed to unmarshal body")
+				assert.True(t, bodyJSON["value"] >= 100 && bodyJSON["value"] <= 105, "Body random int %d out of range [100,105]", bodyJSON["value"])
+			},
+		},
+		// SCENARIO-LIB-015-002: No args (default 0-100)
+		{
+			name: "no args",
+			httpFileContent: fmt.Sprintf(`
+GET %s/item/{{$randomInt}}/default
+X-Random-ID: {{$randomInt}}
+
+{
+  "value": {{$randomInt}}
+}
+`, server.URL),
+			validate: func(t *testing.T, url, header, body string) {
+				urlParts := strings.Split(url, "/")
+				valURL, err := strconv.Atoi(urlParts[len(urlParts)-2])
+				require.NoError(t, err, "Random int from URL (no args) should be valid int")
+				assert.True(t, valURL >= 0 && valURL <= 100, "URL random int (no args) %d out of range [0,100]", valURL)
+
+				valHeader, err := strconv.Atoi(header)
+				require.NoError(t, err, "Random int from Header (no args) should be valid int")
+				assert.True(t, valHeader >= 0 && valHeader <= 100, "Header random int (no args) %d out of range [0,100]", valHeader)
+
+				var bodyJSON map[string]int
+				err = json.Unmarshal([]byte(body), &bodyJSON)
+				require.NoError(t, err, "Failed to unmarshal body (no args)")
+				assert.True(t, bodyJSON["value"] >= 0 && bodyJSON["value"] <= 100, "Body random int (no args) %d out of range [0,100]", bodyJSON["value"])
+			},
+		},
+		// SCENARIO-LIB-015-003: Swapped min max args
+		{
+			name: "swapped min max args",
+			httpFileContent: fmt.Sprintf(`
+GET %s/item/{{$randomInt 30 25}}/swapped
+
+{
+  "value": {{$randomInt 90 80}}
+}
+`, server.URL),
+			validate: func(t *testing.T, url, header, body string) {
+				urlParts := strings.Split(url, "/")
+				valURL, err := strconv.Atoi(urlParts[len(urlParts)-2])
+				require.NoError(t, err, "Random int from URL (swapped) should be valid int")
+				assert.True(t, valURL >= 25 && valURL <= 30, "URL random int (swapped) %d out of range [25,30]", valURL)
+
+				var bodyJSON map[string]int
+				err = json.Unmarshal([]byte(body), &bodyJSON)
+				require.NoError(t, err, "Failed to unmarshal body (swapped)")
+				assert.True(t, bodyJSON["value"] >= 80 && bodyJSON["value"] <= 90, "Body random int (swapped) %d out of range [80,90]", bodyJSON["value"])
+			},
+		},
+		// SCENARIO-LIB-015-004: Malformed args (non-integer)
+		{
+			name: "malformed args",
+			httpFileContent: fmt.Sprintf(`
+GET %s/item/{{$randomInt abc def}}/malformed
+X-Random-ID: {{$randomInt 1 xyz}}
+
+{
+  "value": "{{$randomInt foo bar}}"
+}
+`, server.URL),
+			validate: func(t *testing.T, urlStr, header, body string) {
+				// Placeholder: {{$randomInt abc def}}
+				// Expected URL encoding: %7B%7B$randomInt%20abc%20def%7D%7D
+				expectedEncodedPlaceholder := "%7B%7B$randomInt%20abc%20def%7D%7D"
+				assert.Contains(t, urlStr, expectedEncodedPlaceholder, "URL should contain URL-encoded malformed $randomInt")
+				assert.Equal(t, "{{$randomInt 1 xyz}}", header, "Header should retain malformed $randomInt")
+				var bodyJSON map[string]string // Expecting string due to non-substitution
+				err := json.Unmarshal([]byte(body), &bodyJSON)
+				require.NoError(t, err, "Failed to unmarshal body (malformed)")
+				assert.Equal(t, "{{$randomInt foo bar}}", bodyJSON["value"], "Body should retain malformed $randomInt")
+			},
+			expectErrorInParse: false, // Changed: url.Parse might not fail on this. The literal string is sent.
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tempFile, err := os.CreateTemp(t.TempDir(), "test_randomint_*.http")
+			require.NoError(t, err)
+			defer func() { _ = os.Remove(tempFile.Name()) }()
+			_, err = tempFile.WriteString(tc.httpFileContent)
+			require.NoError(t, err)
+			_ = tempFile.Close()
+
+			responses, err := client.ExecuteFile(context.Background(), tempFile.Name())
+
+			if tc.expectErrorInExec {
+				require.Error(t, err, "Expected error during ExecuteFile")
+				return
+			}
+			// Some malformed variables might not cause ExecuteFile to error directly,
+			// but might cause the individual request.URL to fail parsing later.
+			// If tc.expectErrorInParse is true, we check resp.Error
+			if !tc.expectErrorInParse {
+				require.NoError(t, err, "ExecuteFile returned an unexpected error: %v", err)
+			}
+
+			require.Len(t, responses, 1, "Expected 1 response")
+			resp := responses[0]
+
+			if tc.expectErrorInParse {
+				require.Error(t, resp.Error, "Expected error in response due to parsing/substitution issue")
+				assert.Contains(t, resp.Error.Error(), "failed to parse URL after variable substitution")
+			} else {
+				assert.NoError(t, resp.Error, "Response error should be nil for case: %s", tc.name)
+			}
+
+			// If we expected a parse error for the request, validation of substituted values might not be meaningful
+			// or possible if the request didn't even reach the server.
+			if resp.Error == nil { // Only validate if the request was successful or server responded.
+				assert.Equal(t, http.StatusOK, resp.StatusCode)
+				tc.validate(t, interceptedRequest.URL, interceptedRequest.Header, interceptedRequest.Body)
+			}
+		})
+	}
+}
