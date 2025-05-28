@@ -347,7 +347,38 @@ func (c *Client) substituteSystemVariables(text string) string {
 		return match // Regex didn't match as expected
 	})
 
-	// TODO: Add other system variables here like {{$localDatetime}}, etc. when they are unblocked.
+	// Handle {{$localDatetime formatStringOrKeyword}}
+	// Supports rfc1123, iso8601, or a "double-quoted" custom Go format string.
+	reLocalDatetime := regexp.MustCompile(`\{\{\$localDatetime\s+(rfc1123|iso8601|"[^"]+")\}\}`)
+	text = reLocalDatetime.ReplaceAllStringFunc(text, func(match string) string {
+		parts := reLocalDatetime.FindStringSubmatch(match)
+		if len(parts) == 2 { // parts[0] is full match, parts[1] is formatArg
+			formatArg := parts[1]
+			now := time.Now().Local() // Changed to Local()
+			var formatString string
+
+			switch formatArg {
+			case "rfc1123":
+				formatString = time.RFC1123
+			case "iso8601":
+				formatString = time.RFC3339 // Go's equivalent for ISO8601
+			default:
+				// Must be a double-quoted custom format
+				if strings.HasPrefix(formatArg, "\"") && strings.HasSuffix(formatArg, "\"") {
+					customFormat, err := strconv.Unquote(formatArg)
+					if err == nil {
+						formatString = customFormat
+					} else {
+						return match // Error unquoting, leave placeholder
+					}
+				} else {
+					return match // Not a known keyword or valid double-quoted string
+				}
+			}
+			return now.Format(formatString)
+		}
+		return match // Regex didn't match as expected
+	})
 
 	return text
 }

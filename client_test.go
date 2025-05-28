@@ -1239,3 +1239,136 @@ X-Request-DT: %s
 		})
 	}
 }
+
+func TestExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
+	var interceptedRequest struct {
+		URL    string
+		Header string
+		Body   string
+	}
+
+	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+		interceptedRequest.URL = r.URL.String()
+		bodyBytes, _ := io.ReadAll(r.Body)
+		interceptedRequest.Body = string(bodyBytes)
+		interceptedRequest.Header = r.Header.Get("X-Request-LDT")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, "ok")
+	})
+	defer server.Close()
+
+	client, _ := NewClient()
+
+	// Custom format for Go: YYYY-MM-DD HH:mm:ssZ07:00 -> 2006-01-02 15:04:05Z07:00
+	customGoFormatWithZone := "2006-01-02 15:04:05Z07:00"
+
+	tests := []struct {
+		name                string
+		httpVar             string
+		expectedFormat      string
+		expectAsPlaceholder bool
+	}{
+		{
+			name:           "local rfc1123",
+			httpVar:        "rfc1123",
+			expectedFormat: time.RFC1123,
+		},
+		{
+			name:           "local iso8601",
+			httpVar:        "iso8601",
+			expectedFormat: time.RFC3339, // RFC3339 handles timezones
+		},
+		{
+			name:           "local custom format double quotes with zone",
+			httpVar:        fmt.Sprintf("\"%s\"", customGoFormatWithZone),
+			expectedFormat: customGoFormatWithZone,
+		},
+		{
+			name:                "local unknown keyword",
+			httpVar:             "badlocalkeyword",
+			expectAsPlaceholder: true,
+		},
+		{
+			name:                "local malformed custom format (unclosed quote)",
+			httpVar:             "\"2006-01-02 15:04:05Z07:00", // Unclosed quote
+			expectAsPlaceholder: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fullHttpVar := fmt.Sprintf("{{$localDatetime %s}}", tc.httpVar)
+
+			requestFileContent := fmt.Sprintf(`
+GET %s/local-events/%s
+Content-Type: application/json
+X-Request-LDT: %s
+
+{
+  "event_ldt": "%s"
+}
+`, server.URL, fullHttpVar, fullHttpVar, fullHttpVar)
+
+			tempFile, err := os.CreateTemp(t.TempDir(), "test_localdatetime_*.http")
+			require.NoError(t, err)
+			_, err = tempFile.WriteString(requestFileContent)
+			require.NoError(t, err)
+			_ = tempFile.Close()
+
+			beforeRequest := time.Now().Local() // Use Local for comparison base
+			responses, err := client.ExecuteFile(context.Background(), tempFile.Name())
+			afterRequest := time.Now().Local() // Use Local for comparison base
+
+			require.NoError(t, err, "ExecuteFile should not error for localdatetime processing")
+			require.Len(t, responses, 1)
+			resp := responses[0]
+			require.NoError(t, resp.Error)
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+			valuesToTest := map[string]string{
+				"URL":    strings.TrimPrefix(interceptedRequest.URL, "/local-events/"),
+				"Header": interceptedRequest.Header,
+			}
+
+			if tc.name == "local malformed custom format (unclosed quote)" {
+				valuesToTest["BodyRaw"] = interceptedRequest.Body
+			} else {
+				var bodyJSON map[string]string
+				err = json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON)
+				require.NoError(t, err, "Failed to unmarshal body for localdatetime test: %s. Body: %s", tc.name, interceptedRequest.Body)
+				valuesToTest["BodyJSON"] = bodyJSON["event_ldt"]
+			}
+
+			for K, V := range valuesToTest {
+				t.Logf("Test: %s, Key: %s, Value: %s, Expected Placeholder: %t, Expected Format: %s", tc.name, K, V, tc.expectAsPlaceholder, tc.expectedFormat)
+				actualValueToTest := V
+				if K == "URL" {
+					decodedVal, decodeErr := url.PathUnescape(V)
+					if decodeErr == nil {
+						actualValueToTest = decodedVal
+					}
+				}
+
+				if tc.expectAsPlaceholder {
+					if K == "BodyRaw" {
+						expectedBodyContent := fmt.Sprintf(`{
+  "event_ldt": "%s"
+}`, fullHttpVar)
+						assert.Equal(t, expectedBodyContent, actualValueToTest, "BodyRaw should contain the placeholder (local)")
+					} else {
+						assert.Equal(t, fullHttpVar, actualValueToTest, "%s value should be the placeholder (local) %s", K, fullHttpVar)
+					}
+				} else {
+					parsedTime, parseErr := time.Parse(tc.expectedFormat, actualValueToTest)
+					assert.NoError(t, parseErr, "%s value '%s' (original '%s') should be parsable with format '%s' (local)", K, actualValueToTest, V, tc.expectedFormat)
+					if parseErr == nil {
+						// Check if the parsed time is within a reasonable window of the request execution (local time)
+						assert.WithinDuration(t, beforeRequest, parsedTime, 2*time.Second, "%s time should be close to request time (local, before)", K)
+						assert.WithinDuration(t, parsedTime, afterRequest.Add(1*time.Second), 2*time.Second, "%s time should be close to request time (local, after)", K)
+					}
+				}
+			}
+			_ = os.Remove(tempFile.Name())
+		})
+	}
+}
