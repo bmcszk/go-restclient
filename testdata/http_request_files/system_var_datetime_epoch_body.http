@@ -1,0 +1,6 @@
+POST {{.ServerURL}}/event
+Content-Type: application/json
+
+{
+  "eventTime": "__DATETIME_EPOCH__"
+} 

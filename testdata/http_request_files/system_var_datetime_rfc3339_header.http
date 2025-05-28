@@ -1,0 +1,2 @@
+GET {{.ServerURL}}/time
+X-Timestamp: __DATETIME_RFC3339__ 
