@@ -281,14 +281,14 @@ func TestParseRequestFile_PostWithTrailingWhitespaceBody_FromFile(t *testing.T) 
 
 	req := parsedFile.Requests[0]
 	headers := http.Header{"Content-Type": []string{"text/plain"}}
-	// Assuming the parser will trim trailing whitespace from each line of the body,
-	// and that a line containing only spaces is treated like a blank line (contributing to a newline in the body).
-	expectedBody := "Line 1 with trailing spaces\n" +
-		"Line 2 with trailing tab\n" +
-		"Line 3 with mixed\n" +
+	// Trailing whitespace on individual lines is preserved.
+	// Trailing whitespace (spaces, tabs, newlines) from the *entire body* is trimmed.
+	expectedBody := "Line 1 with trailing spaces   \n" +
+		"Line 2 with trailing tab\t\n" +
+		"Line 3 with mixed \t \n" +
 		"Line 4 is clean.\n" +
-		"\n" + // From the line that originally contained only spaces
-		"Line 6 after a blank line, with spaces"
+		"  \n" + // This line with only spaces is preserved, followed by its newline.
+		"Line 6 after a blank line, with spaces" // Trailing spaces from this last line are trimmed by strings.TrimRight(..., " \t\n")
 
 	assertRequestDetails(t, req, "POST", "https://example.com/submit", "HTTP/1.1", "", headers, expectedBody, filePath, req.LineNumber)
 	assert.True(t, req.LineNumber > 0, "Line number should be set and greater than 0")

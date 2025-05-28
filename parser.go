@@ -49,6 +49,7 @@ func parseRequests(reader io.Reader, filePath string) (*ParsedFile, error) {
 			if strings.HasPrefix(processedLine, requestSeparator) {
 				if currentRequest != nil && (currentRequest.Method != "" || len(bodyLines) > 0) {
 					currentRequest.RawBody = strings.Join(bodyLines, "\n")
+					currentRequest.RawBody = strings.TrimRight(currentRequest.RawBody, " \t\n")
 					currentRequest.Body = strings.NewReader(currentRequest.RawBody)
 					parsedFile.Requests = append(parsedFile.Requests, currentRequest)
 				}
@@ -81,8 +82,7 @@ func parseRequests(reader io.Reader, filePath string) (*ParsedFile, error) {
 		}
 
 		if parsingBody {
-			trimmedLine := strings.TrimRight(originalLine, " \t")
-			bodyLines = append(bodyLines, trimmedLine)
+			bodyLines = append(bodyLines, originalLine) // Use original line for body
 		} else {
 			// Parsing request line or headers
 			if currentRequest.Method == "" { // First non-comment, non-empty line is the request line
@@ -115,7 +115,8 @@ func parseRequests(reader io.Reader, filePath string) (*ParsedFile, error) {
 
 	// Add the last request if any
 	if currentRequest != nil && (currentRequest.Method != "" || len(bodyLines) > 0) {
-		currentRequest.RawBody = strings.Join(bodyLines, "\n")
+		rawJoinedBody := strings.Join(bodyLines, "\n")
+		currentRequest.RawBody = strings.TrimRight(rawJoinedBody, " \t\n")
 		currentRequest.Body = strings.NewReader(currentRequest.RawBody)
 		parsedFile.Requests = append(parsedFile.Requests, currentRequest)
 	}
