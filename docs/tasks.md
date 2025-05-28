@@ -25,7 +25,7 @@ Last Updated: 2025-05-28
 | TASK-039 | Manually restore/fix `validator_test.go` due to tool-induced corruption. File may need revert from VCS or careful manual edit to fix duplication/deletion. | Done        | User     | 2025-05-28 |
 | TASK-040 | Implement REQ-LIB-013: Support for user-defined custom variables.             | Done        | AI       | 2025-06-07 |
 | TASK-041 | Add unit tests for REQ-LIB-013 (SCENARIO-LIB-013-001 to SCENARIO-LIB-013-005). | Done        | AI       | 2025-06-07 |
-| TASK-042 | Implement REQ-LIB-014: Support for `{{$guid}}` system variable.                | ToDo        | AI       | 2025-06-08 |
+| TASK-042 | Implement REQ-LIB-014: Support for `{{$guid}}` system variable.                | Done        | AI       | 2025-06-08 |
 | TASK-043 | Add unit tests for REQ-LIB-014 (SCENARIO-LIB-014-001 to SCENARIO-LIB-014-004). | ToDo        | AI       | 2025-06-08 |
 | TASK-044 | Implement REQ-LIB-015: Support for `{{$randomInt min max}}` system variable.   | ToDo        | AI       | 2025-06-09 |
 | TASK-045 | Add unit tests for REQ-LIB-015 (SCENARIO-LIB-015-001 to SCENARIO-LIB-015-004). | ToDo        | AI       | 2025-06-09 |

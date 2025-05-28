@@ -7,9 +7,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+
+	// "regexp" // Unused
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hashicorp/go-multierror"
 )
 
@@ -99,12 +102,16 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 	var multiErr *multierror.Error
 
 	for i, restClientReq := range parsedFile.Requests {
-		// Substitute variables in RawURLString and parse it
+		// Substitute custom variables in RawURLString
 		substitutedRawURL := restClientReq.RawURLString
 		for k, v := range restClientReq.ActiveVariables {
 			placeholder := "{{" + k + "}}"
 			substitutedRawURL = strings.ReplaceAll(substitutedRawURL, placeholder, v)
 		}
+
+		// Substitute system variables in RawURLString
+		substitutedRawURL = c.substituteSystemVariables(substitutedRawURL)
+
 		finalParsedURL, parseErr := url.Parse(substitutedRawURL)
 		if parseErr != nil {
 			// If URL parsing fails after substitution, this is a critical error for this request
@@ -150,38 +157,82 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 	return responses, multiErr.ErrorOrNil()
 }
 
-// applyVariables substitutes placeholders in the request's Headers, and Body.
+// applyVariables substitutes custom placeholders in the request's Headers, and Body.
+// It then substitutes system variables.
 func (c *Client) applyVariables(req *Request, vars map[string]string) {
-	if req == nil || len(vars) == 0 {
+	if req == nil {
 		return
 	}
 
-	// Substitute in Headers
+	// Substitute custom variables in Headers
+	if len(vars) > 0 {
+		for headerKey, headerValues := range req.Headers {
+			newValues := make([]string, len(headerValues))
+			for i, val := range headerValues {
+				tempVal := val
+				for key, value := range vars {
+					placeholder := "{{" + key + "}}"
+					tempVal = strings.ReplaceAll(tempVal, placeholder, value)
+				}
+				newValues[i] = tempVal
+			}
+			req.Headers[headerKey] = newValues
+		}
+	}
+
+	// Substitute system variables in Headers
 	for headerKey, headerValues := range req.Headers {
 		newValues := make([]string, len(headerValues))
 		for i, val := range headerValues {
-			for key, value := range vars {
-				placeholder := "{{" + key + "}}"
-				val = strings.ReplaceAll(val, placeholder, value)
-			}
-			newValues[i] = val
+			newValues[i] = c.substituteSystemVariables(val)
 		}
 		req.Headers[headerKey] = newValues
 	}
 
 	// Substitute in RawBody
 	if req.RawBody != "" {
-		newBody := req.RawBody
-		for key, value := range vars {
-			placeholder := "{{" + key + "}}"
-			newBody = strings.ReplaceAll(newBody, placeholder, value)
+		bodyChanged := false
+		currentBody := req.RawBody
+
+		// Substitute custom variables
+		if len(vars) > 0 {
+			tempCustomSubstBody := currentBody
+			for key, value := range vars {
+				placeholder := "{{" + key + "}}"
+				tempCustomSubstBody = strings.ReplaceAll(tempCustomSubstBody, placeholder, value)
+			}
+			if tempCustomSubstBody != currentBody {
+				currentBody = tempCustomSubstBody
+				bodyChanged = true
+			}
 		}
-		if newBody != req.RawBody {
-			req.RawBody = newBody
+
+		// Substitute system variables
+		tempSystemSubstBody := c.substituteSystemVariables(currentBody)
+		if tempSystemSubstBody != currentBody {
+			currentBody = tempSystemSubstBody
+			bodyChanged = true
+		}
+
+		if bodyChanged {
+			req.RawBody = currentBody
 			// Important: Update the Body io.Reader as well
 			req.Body = strings.NewReader(req.RawBody)
 		}
 	}
+}
+
+// substituteSystemVariables replaces system variable placeholders in a string.
+func (c *Client) substituteSystemVariables(text string) string {
+	// Handle {{$guid}}
+	// Loop to ensure multiple {{$guid}} are replaced with different GUIDs
+	for strings.Contains(text, "{{$guid}}") {
+		text = strings.Replace(text, "{{$guid}}", uuid.NewString(), 1)
+	}
+
+	// TODO: Add other system variables here like {{$timestamp}}, {{$randomInt}}, etc.
+
+	return text
 }
 
 // executeRequest sends a given Request and returns the Response.
