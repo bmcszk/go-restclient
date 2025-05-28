@@ -81,7 +81,8 @@ func parseRequests(reader io.Reader, filePath string) (*ParsedFile, error) {
 		}
 
 		if parsingBody {
-			bodyLines = append(bodyLines, originalLine) // Use original line for body
+			trimmedLine := strings.TrimRight(originalLine, " \t")
+			bodyLines = append(bodyLines, trimmedLine)
 		} else {
 			// Parsing request line or headers
 			if currentRequest.Method == "" { // First non-comment, non-empty line is the request line

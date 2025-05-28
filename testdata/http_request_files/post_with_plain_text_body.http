@@ -1,0 +1,5 @@
+POST https://example.com/submit
+Content-Type: text/plain
+
+This is a plain text body.
+It has multiple lines.

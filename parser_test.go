@@ -248,8 +248,52 @@ func TestParseRequestFile_PostWithJsonBody_FromFile(t *testing.T) {
 	if len(strings.TrimSpace(expectedBody)) > 0 {
 		assert.NotEmpty(t, req.RawBody, "RawBody should not be empty when a body is provided")
 		// This JSONEq might be redundant if the above one passes, but it specifically checks after trimming newline.
-		assert.JSONEq(t, expectedBody, strings.TrimSuffix(req.RawBody, "\n"), "RawBody does not match expected JSON (ignoring potential trailing newline)")
+		assert.JSONEq(t, strings.TrimSpace(expectedBody), strings.TrimSpace(req.RawBody))
 	}
+}
+
+func TestParseRequestFile_PostWithPlainTextBody_FromFile(t *testing.T) {
+	filePath := "testdata/http_request_files/post_with_plain_text_body.http"
+	parsedFile, err := ParseRequestFile(filePath)
+
+	require.NoError(t, err)
+	require.NotNil(t, parsedFile)
+	assert.Equal(t, filePath, parsedFile.FilePath)
+	require.Len(t, parsedFile.Requests, 1)
+
+	req := parsedFile.Requests[0]
+	headers := http.Header{"Content-Type": []string{"text/plain"}}
+	expectedBody := "This is a plain text body.\nIt has multiple lines." // No final newline, assuming parser trims it if it's from a trailing blank line.
+
+	assertRequestDetails(t, req, "POST", "https://example.com/submit", "HTTP/1.1", "", headers, expectedBody, filePath, req.LineNumber)
+	assert.True(t, req.LineNumber > 0, "Line number should be set and greater than 0")
+	assert.Equal(t, expectedBody, req.RawBody, "RawBody does not match expected plain text")
+}
+
+func TestParseRequestFile_PostWithTrailingWhitespaceBody_FromFile(t *testing.T) {
+	filePath := "testdata/http_request_files/post_with_trailing_whitespace_body.http"
+	parsedFile, err := ParseRequestFile(filePath)
+
+	require.NoError(t, err)
+	require.NotNil(t, parsedFile)
+	assert.Equal(t, filePath, parsedFile.FilePath)
+	require.Len(t, parsedFile.Requests, 1)
+
+	req := parsedFile.Requests[0]
+	headers := http.Header{"Content-Type": []string{"text/plain"}}
+	// Assuming the parser will trim trailing whitespace from each line of the body,
+	// and that a line containing only spaces is treated like a blank line (contributing to a newline in the body).
+	expectedBody := "Line 1 with trailing spaces\n" +
+		"Line 2 with trailing tab\n" +
+		"Line 3 with mixed\n" +
+		"Line 4 is clean.\n" +
+		"\n" + // From the line that originally contained only spaces
+		"Line 6 after a blank line, with spaces"
+
+	assertRequestDetails(t, req, "POST", "https://example.com/submit", "HTTP/1.1", "", headers, expectedBody, filePath, req.LineNumber)
+	assert.True(t, req.LineNumber > 0, "Line number should be set and greater than 0")
+	// Also assert RawBody directly, as assertRequestDetails uses the Body reader which might behave differently after one read.
+	assert.Equal(t, expectedBody, req.RawBody, "RawBody does not match expected trimmed plain text")
 }
 
 func assertExpectedResponseDetails(t *testing.T, resp *ExpectedResponse, statusCode int, status string, headers http.Header, body string) {

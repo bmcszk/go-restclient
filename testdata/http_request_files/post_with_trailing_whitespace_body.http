@@ -1,0 +1,9 @@
+POST https://example.com/submit
+Content-Type: text/plain
+
+Line 1 with trailing spaces   
+Line 2 with trailing tab	
+Line 3 with mixed 	 
+Line 4 is clean.
+  
+Line 6 after a blank line, with spaces   

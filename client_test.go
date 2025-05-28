@@ -116,6 +116,10 @@ func TestExecuteFile_MultipleRequests(t *testing.T) {
 			_, _ = fmt.Fprint(w, "response1")
 		case "/req2":
 			assert.Equal(t, http.MethodPost, r.Method)
+			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+			bodyBytes, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			assert.JSONEq(t, `{"key": "value"}`, string(bodyBytes))
 			w.WriteHeader(http.StatusCreated)
 			_, _ = fmt.Fprint(w, "response2")
 		default:
@@ -268,6 +272,39 @@ func TestExecuteFile_MultipleErrors(t *testing.T) {
 	require.NotNil(t, resp2, "Second response object should not be nil")
 	assert.Error(t, resp2.Error, "Error in second response object should be set")
 	assert.Contains(t, resp2.Error.Error(), ":12348: connect: connection refused")
+}
+
+func TestExecuteFile_CapturesResponseHeaders(t *testing.T) {
+	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		w.Header().Add("X-Custom-Header", "value1")
+		w.Header().Add("X-Custom-Header", "value2")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, "{\"data\": \"headers test\"}")
+	})
+	defer server.Close()
+
+	client, _ := NewClient()
+	content := "GET " + server.URL + "/testheaders"
+	tempFile, err := os.CreateTemp("", "test_headers_*.rest")
+	require.NoError(t, err)
+	defer func() { _ = os.Remove(tempFile.Name()) }()
+	_, err = tempFile.WriteString(content)
+	require.NoError(t, err)
+	_ = tempFile.Close()
+
+	responses, err := client.ExecuteFile(context.Background(), tempFile.Name())
+	require.NoError(t, err)
+	require.Len(t, responses, 1)
+
+	resp := responses[0]
+	require.NotNil(t, resp)
+	assert.NoError(t, resp.Error)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	assert.Equal(t, "application/vnd.api+json", resp.Headers.Get("Content-Type"))
+	assert.Equal(t, []string{"value1", "value2"}, resp.Headers["X-Custom-Header"]) // Check multi-value header
+	assert.Empty(t, resp.Headers.Get("Non-Existent-Header"))
 }
 
 func TestExecuteFile_SimpleGetHTTP(t *testing.T) {
