@@ -658,7 +658,6 @@ func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
 	// A header with an empty value after substitution might be sent as "HeaderName: " or omitted.
 	// net/http server behavior: if a header `Key: ` is sent, `r.Header.Get("Key")` returns `""`.
 	// Let's assume the .http file explicitly defines Cache-Control, it should be present, even if value is empty after substitution.
-
 }
 
 func TestExecuteFile_WithDotEnvSystemVariable(t *testing.T) {
@@ -984,6 +983,235 @@ func TestExecuteFile_WithRandomIntSystemVariable(t *testing.T) {
 }
 
 func TestExecuteFile_WithDatetimeSystemVariable(t *testing.T) {
+	var interceptedRequest struct {
+		URL    string
+		Header string
+		Body   string
+	}
+
+	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+		interceptedRequest.URL = r.URL.String()
+		bodyBytes, _ := io.ReadAll(r.Body)
+		interceptedRequest.Body = string(bodyBytes)
+		interceptedRequest.Header = r.Header.Get("X-Request-Time")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, "ok")
+	})
+	defer server.Close()
+
+	client, _ := NewClient()
+
+	// Capture current time to compare against, allowing for slight delay
+	beforeTime := time.Now().UTC().Unix()
+
+	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_timestamp.http", struct{ ServerURL string }{ServerURL: server.URL})
+
+	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+	require.NoError(t, err, "ExecuteFile should not return an error for $timestamp processing")
+	require.Len(t, responses, 1, "Expected 1 response")
+
+	resp := responses[0]
+	assert.NoError(t, resp.Error)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	afterTime := time.Now().UTC().Unix()
+
+	// SCENARIO-LIB-016-001: {{$timestamp}} in URL, header, body
+	// Check URL
+	urlParts := strings.Split(interceptedRequest.URL, "/")
+	require.True(t, len(urlParts) >= 2, "URL path should have at least two parts")
+	timestampFromURLStr := urlParts[len(urlParts)-1]
+	timestampFromURL, parseErrURL := strconv.ParseInt(timestampFromURLStr, 10, 64)
+	assert.NoError(t, parseErrURL, "Timestamp from URL should be a valid integer")
+	assert.GreaterOrEqual(t, timestampFromURL, beforeTime, "Timestamp from URL should be >= time before request")
+	assert.LessOrEqual(t, timestampFromURL, afterTime, "Timestamp from URL should be <= time after request")
+
+	// Check Header
+	timestampFromHeader, parseErrHeader := strconv.ParseInt(interceptedRequest.Header, 10, 64)
+	assert.NoError(t, parseErrHeader, "Timestamp from Header should be a valid integer")
+	assert.GreaterOrEqual(t, timestampFromHeader, beforeTime, "Timestamp from Header should be >= time before request")
+	assert.LessOrEqual(t, timestampFromHeader, afterTime, "Timestamp from Header should be <= time after request")
+
+	// Check Body
+	var bodyJSON map[string]string
+	err = json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON)
+	require.NoError(t, err, "Failed to unmarshal request body JSON")
+
+	timestampFromBody1Str, ok1 := bodyJSON["event_time"]
+	require.True(t, ok1, "event_time not found in body")
+	timestampFromBody1, parseErrBody1 := strconv.ParseInt(timestampFromBody1Str, 10, 64)
+	assert.NoError(t, parseErrBody1, "Timestamp from body (event_time) should be valid int")
+	assert.GreaterOrEqual(t, timestampFromBody1, beforeTime)
+	assert.LessOrEqual(t, timestampFromBody1, afterTime)
+
+	timestampFromBody2Str, ok2 := bodyJSON["processed_at"]
+	require.True(t, ok2, "processed_at not found in body")
+	timestampFromBody2, parseErrBody2 := strconv.ParseInt(timestampFromBody2Str, 10, 64)
+	assert.NoError(t, parseErrBody2, "Timestamp from body (processed_at) should be valid int")
+	assert.GreaterOrEqual(t, timestampFromBody2, beforeTime)
+	assert.LessOrEqual(t, timestampFromBody2, afterTime)
+
+	// SCENARIO-LIB-016-002: Multiple {{$timestamp}} instances yield the same value for that pass
+	assert.Equal(t, timestampFromURL, timestampFromHeader, "Timestamp in URL and Header should be the same for one request pass")
+	assert.Equal(t, timestampFromHeader, timestampFromBody1, "Timestamp in Header and Body (event_time) should be the same")
+	assert.Equal(t, timestampFromBody1, timestampFromBody2, "Timestamp in Body (event_time and processed_at) should be the same")
+}
+
+func TestExecuteFile_WithProgrammaticVariables(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		defer r.Body.Close()
+		// Echo back the request details
+		w.Header().Set("X-Echo-Method", r.Method)
+		for k, v := range r.Header {
+			w.Header().Set("X-Echo-Header-"+k, strings.Join(v, ","))
+		}
+		w.Header().Set("X-Echo-Path", r.URL.Path)
+		w.Header().Set("X-Echo-Query", r.URL.RawQuery)
+		w.WriteHeader(http.StatusOK)
+		w.Write(bodyBytes) // Echo body
+	}))
+	defer server.Close()
+
+	tests := []struct {
+		name                 string
+		httpFileContent      string
+		programmaticVars     map[string]string
+		expectedPathContains string // For URL checks
+		expectedHeaderKey    string // For header checks
+		expectedHeaderValue  string // For header checks
+		expectedBodyContains string // For body checks
+		expectError          bool
+	}{
+		{
+			name: "SCENARIO-LIB-021-001 Programmatic var in URL",
+			httpFileContent: `
+GET [[.ServerURL]]/users/{{userId}}
+`,
+			programmaticVars:     map[string]string{"userId": "prog_user_123"},
+			expectedPathContains: "/users/prog_user_123",
+		},
+		{
+			name: "SCENARIO-LIB-021-002 Programmatic var in Header",
+			httpFileContent: `
+GET [[.ServerURL]]/data
+X-Auth-Token: {{authToken}}
+`,
+			programmaticVars:    map[string]string{"authToken": "prog_token_abc"},
+			expectedHeaderKey:   "X-Echo-Header-X-Auth-Token",
+			expectedHeaderValue: "prog_token_abc",
+		},
+		{
+			name: "SCENARIO-LIB-021-003 Programmatic var in Body",
+			httpFileContent: `
+POST [[.ServerURL]]/items
+Content-Type: application/json
+
+{
+	"itemId": "{{itemId}}"
+}
+`,
+			programmaticVars:     map[string]string{"itemId": "prog_item_789"},
+			expectedBodyContains: `{"itemId":"prog_item_789"}`,
+		},
+		{
+			name: "SCENARIO-LIB-021-004 Programmatic var overrides file var",
+			httpFileContent: `
+@host = file_host.com
+GET [[.ServerURL]]/{{host}}/path 
+`, // Request goes to mock server, host var is part of path
+			programmaticVars:     map[string]string{"host": "prog_host.com"},
+			expectedPathContains: "/prog_host.com/path", // Check echoed path
+			// expectError: false, // No longer expect DNS error
+		},
+		{
+			name: "SCENARIO-LIB-021-005 Mixed programmatic and file vars",
+			httpFileContent: `
+@fileVar = file_val
+GET [[.ServerURL]]/info?q1={{fileVar}}&q2={{progVar}}
+`,
+			programmaticVars:     map[string]string{"progVar": "prog_val"},
+			expectedPathContains: "/info?q1=file_val&q2=prog_val",
+		},
+		{
+			name: "SCENARIO-LIB-021-006 Empty programmatic vars map",
+			httpFileContent: `
+@fileVar = from_file
+GET [[.ServerURL]]/path?v={{fileVar}}
+`,
+			programmaticVars:     map[string]string{},
+			expectedPathContains: "/path?v=from_file",
+		},
+		{
+			name: "SCENARIO-LIB-021-007 Nil programmatic vars map",
+			httpFileContent: `
+@fileVar = from_file_too
+GET [[.ServerURL]]/another?v={{fileVar}}
+`,
+			programmaticVars:     nil,
+			expectedPathContains: "/another?v=from_file_too",
+		},
+	}
+
+	client, err := NewClient()
+	require.NoError(t, err)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a temporary file to hold the httpFileContent as a template
+			tempTemplateFile, err := os.CreateTemp(t.TempDir(), "test_template_*.http")
+			require.NoError(t, err)
+			_, err = tempTemplateFile.WriteString(tt.httpFileContent)
+			require.NoError(t, err)
+			err = tempTemplateFile.Close()
+			require.NoError(t, err)
+
+			// server.URL should be passed as part of a struct that the template expects.
+			processedFilePath := createTestFileFromTemplate(t, tempTemplateFile.Name(), struct{ ServerURL string }{ServerURL: server.URL})
+
+			var responses []*Response
+			var execErr error
+			if tt.programmaticVars == nil && tt.name == "SCENARIO-LIB-021-007 Nil programmatic vars map" {
+				// Call ExecuteFile without the third argument for nil case
+				responses, execErr = client.ExecuteFile(context.Background(), processedFilePath)
+			} else {
+				responses, execErr = client.ExecuteFile(context.Background(), processedFilePath, tt.programmaticVars)
+			}
+
+			if tt.expectError {
+				require.Error(t, execErr)
+				return
+			}
+			require.NoError(t, execErr)
+			require.Len(t, responses, 1)
+			resp := responses[0]
+			require.NoError(t, resp.Error)
+			require.Equal(t, http.StatusOK, resp.StatusCode)
+
+			if tt.expectedPathContains != "" {
+				// For URL/Path checks, the echoed path + query is a good target
+				echoedPath := resp.Headers.Get("X-Echo-Path")
+				echoedQuery := resp.Headers.Get("X-Echo-Query")
+				fullEchoedPath := echoedPath
+				if echoedQuery != "" {
+					fullEchoedPath += "?" + echoedQuery
+				}
+				assert.Contains(t, fullEchoedPath, tt.expectedPathContains, "Echoed path+query mismatch")
+			}
+
+			if tt.expectedHeaderKey != "" {
+				assert.Equal(t, tt.expectedHeaderValue, resp.Headers.Get(tt.expectedHeaderKey), "Echoed header mismatch")
+			}
+
+			if tt.expectedBodyContains != "" {
+				// Use JSONEq for comparing JSON bodies, as it handles formatting differences.
+				assert.JSONEq(t, tt.expectedBodyContains, string(resp.Body), "Response body mismatch")
+			}
+		})
+	}
+}
+
+func TestExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
 	var interceptedRequest struct {
 		URL    string
 		Header string
