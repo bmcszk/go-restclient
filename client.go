@@ -99,6 +99,9 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 	var multiErr *multierror.Error
 
 	for i, restClientReq := range parsedFile.Requests {
+		// Apply variables before executing the request
+		c.applyVariables(restClientReq, parsedFile.Variables)
+
 		resp, execErr := c.executeRequest(ctx, restClientReq)
 		if execErr != nil {
 			if resp == nil {
@@ -121,6 +124,55 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 	}
 
 	return responses, multiErr.ErrorOrNil()
+}
+
+// applyVariables substitutes placeholders in the request's URL, Headers, and Body.
+func (c *Client) applyVariables(req *Request, vars map[string]string) {
+	if req == nil || len(vars) == 0 {
+		return
+	}
+
+	// Substitute in URL
+	if req.URL != nil {
+		rawURL := req.URL.String()
+		for key, value := range vars {
+			placeholder := "{{" + key + "}}"
+			rawURL = strings.ReplaceAll(rawURL, placeholder, value)
+		}
+		// Re-parse the URL after substitution
+		parsedURL, err := url.Parse(rawURL)
+		if err == nil { // If parsing fails, keep the original URL
+			req.URL = parsedURL
+		}
+		// TODO: Log error if URL parsing fails after substitution?
+	}
+
+	// Substitute in Headers
+	for headerKey, headerValues := range req.Headers {
+		newValues := make([]string, len(headerValues))
+		for i, val := range headerValues {
+			for key, value := range vars {
+				placeholder := "{{" + key + "}}"
+				val = strings.ReplaceAll(val, placeholder, value)
+			}
+			newValues[i] = val
+		}
+		req.Headers[headerKey] = newValues
+	}
+
+	// Substitute in RawBody
+	if req.RawBody != "" {
+		newBody := req.RawBody
+		for key, value := range vars {
+			placeholder := "{{" + key + "}}"
+			newBody = strings.ReplaceAll(newBody, placeholder, value)
+		}
+		if newBody != req.RawBody {
+			req.RawBody = newBody
+			// Important: Update the Body io.Reader as well
+			req.Body = strings.NewReader(req.RawBody)
+		}
+	}
 }
 
 // executeRequest sends a given Request and returns the Response.

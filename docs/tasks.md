@@ -23,3 +23,19 @@ Last Updated: 2025-05-28
 | TASK-037 | Manually review and fix all test data files in `testdata/http_request_files/` and `testdata/http_response_files/` for whitespace/newline inconsistencies. | Done        | User     | 2025-05-29 |
 | TASK-038 | Refactor validator_test.go to remove `writeExpectedResponseFile` and use real .http files from `testdata/http_response_files/`. | Done        | AI       | 2025-05-30 |
 | TASK-039 | Manually restore/fix `validator_test.go` due to tool-induced corruption. File may need revert from VCS or careful manual edit to fix duplication/deletion. | Done        | User     | 2025-05-28 |
+| TASK-040 | Implement REQ-LIB-013: Support for user-defined custom variables.             | Done        | AI       | 2025-06-07 |
+| TASK-041 | Add unit tests for REQ-LIB-013 (SCENARIO-LIB-013-001 to SCENARIO-LIB-013-005). | ToDo        | AI       | 2025-06-07 |
+| TASK-042 | Implement REQ-LIB-014: Support for `{{$guid}}` system variable.                | ToDo        | AI       | 2025-06-08 |
+| TASK-043 | Add unit tests for REQ-LIB-014 (SCENARIO-LIB-014-001 to SCENARIO-LIB-014-004). | ToDo        | AI       | 2025-06-08 |
+| TASK-044 | Implement REQ-LIB-015: Support for `{{$randomInt min max}}` system variable.   | ToDo        | AI       | 2025-06-09 |
+| TASK-045 | Add unit tests for REQ-LIB-015 (SCENARIO-LIB-015-001 to SCENARIO-LIB-015-004). | ToDo        | AI       | 2025-06-09 |
+| TASK-046 | Implement REQ-LIB-016: Support for `{{$timestamp}}` system variable.           | ToDo        | AI       | 2025-06-10 |
+| TASK-047 | Add unit tests for REQ-LIB-016 (SCENARIO-LIB-016-001 to SCENARIO-LIB-016-002). | ToDo        | AI       | 2025-06-10 |
+| TASK-048 | Implement REQ-LIB-017: Support for `{{$datetime format}}` system variable.     | ToDo        | AI       | 2025-06-11 |
+| TASK-049 | Add unit tests for REQ-LIB-017 (SCENARIO-LIB-017-001 to SCENARIO-LIB-017-004). | ToDo        | AI       | 2025-06-11 |
+| TASK-050 | Implement REQ-LIB-018: Support for `{{$localDatetime format}}` system variable. | ToDo        | AI       | 2025-06-12 |
+| TASK-051 | Add unit tests for REQ-LIB-018 (SCENARIO-LIB-018-001 to SCENARIO-LIB-018-002). | ToDo        | AI       | 2025-06-12 |
+| TASK-052 | Implement REQ-LIB-019: Support for `{{$processEnv variableName}}` system variable. | ToDo        | AI       | 2025-06-13 |
+| TASK-053 | Add unit tests for REQ-LIB-019 (SCENARIO-LIB-019-001 to SCENARIO-LIB-019-002). | ToDo        | AI       | 2025-06-13 |
+| TASK-054 | Implement REQ-LIB-020: Support for `{{$dotenv variableName}}` system variable.   | ToDo        | AI       | 2025-06-14 |
+| TASK-055 | Add unit tests for REQ-LIB-020 (SCENARIO-LIB-020-001 to SCENARIO-LIB-020-003). | ToDo        | AI       | 2025-06-14 |

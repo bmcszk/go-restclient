@@ -30,8 +30,9 @@ func parseRequestFile(filePath string) (*ParsedFile, error) {
 func parseRequests(reader io.Reader, filePath string) (*ParsedFile, error) {
 	scanner := bufio.NewScanner(reader)
 	parsedFile := &ParsedFile{
-		FilePath: filePath,
-		Requests: []*Request{},
+		FilePath:  filePath,
+		Requests:  []*Request{},
+		Variables: make(map[string]string),
 	}
 
 	var currentRequest *Request
@@ -43,6 +44,19 @@ func parseRequests(reader io.Reader, filePath string) (*ParsedFile, error) {
 		lineNumber++
 		originalLine := scanner.Text() // Keep original line for body
 		processedLine := strings.TrimSpace(originalLine)
+
+		// Handle variable definitions like @name = value
+		if strings.HasPrefix(processedLine, "@") {
+			parts := strings.SplitN(processedLine[1:], "=", 2)
+			if len(parts) == 2 {
+				varName := strings.TrimSpace(parts[0])
+				varValue := strings.TrimSpace(parts[1])
+				if varName != "" {
+					parsedFile.Variables[varName] = varValue
+				}
+			}
+			continue // Variable definition line, skip further processing for this line
+		}
 
 		if strings.HasPrefix(processedLine, commentPrefix) {
 			// Handle special comments like request name, e.g., "### My Request Name"

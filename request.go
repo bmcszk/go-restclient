@@ -26,6 +26,7 @@ type Request struct {
 // ParsedFile represents all requests parsed from a single .rest file.
 // This might be useful if a single file can contain multiple request blocks.
 type ParsedFile struct {
-	FilePath string
-	Requests []*Request
+	FilePath  string
+	Requests  []*Request
+	Variables map[string]string // Stores custom variables defined in the file
 }
