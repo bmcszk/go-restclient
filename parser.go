@@ -17,7 +17,7 @@ const (
 
 // ParseRequestFile reads a .rest or .http file and parses it into a ParsedFile struct
 // containing one or more Request definitions.
-func ParseRequestFile(filePath string) (*ParsedFile, error) {
+func parseRequestFile(filePath string) (*ParsedFile, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open request file %s: %w", filePath, err)
@@ -78,7 +78,6 @@ func parseRequests(reader io.Reader, filePath string) (*ParsedFile, error) {
 			// Decide on strictness: error out, or try to find the first valid request start.
 			// For now, let's assume files are well-formed or the first non-comment line is the method line.
 			currentRequest = &Request{Headers: make(http.Header), FilePath: filePath, LineNumber: lineNumber}
-			// No separator found yet, so no name.
 		}
 
 		if parsingBody {
@@ -133,7 +132,7 @@ func parseRequests(reader io.Reader, filePath string) (*ParsedFile, error) {
 }
 
 // ParseExpectedResponseFile reads a file and parses it into a slice of ExpectedResponse definitions.
-func ParseExpectedResponseFile(filePath string) ([]*ExpectedResponse, error) {
+func parseExpectedResponseFile(filePath string) ([]*ExpectedResponse, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open expected response file %s: %w", filePath, err)
@@ -158,8 +157,8 @@ func parseExpectedResponses(reader io.Reader, filePath string) ([]*ExpectedRespo
 		originalLine := scanner.Text()
 		processedLine := strings.TrimSpace(originalLine)
 
-		if processedLine == requestSeparator { // Exact match for "###"
-			processedAnyLine = true // Mark that we processed the separator itself
+		if processedLine == requestSeparator {
+			processedAnyLine = true
 			// Current response (before separator) is complete. Add it if it has content.
 			if (currentExpectedResponse.Status != nil && *currentExpectedResponse.Status != "") ||
 				currentExpectedResponse.StatusCode != nil ||
@@ -176,7 +175,7 @@ func parseExpectedResponses(reader io.Reader, filePath string) ([]*ExpectedRespo
 			continue
 		}
 
-		processedAnyLine = true // Mark that we are processing content (if not separator)
+		processedAnyLine = true
 
 		if strings.HasPrefix(processedLine, commentPrefix) {
 			// If it's just a comment line like "#" with nothing else, or only whitespace after #,
@@ -195,9 +194,6 @@ func parseExpectedResponses(reader io.Reader, filePath string) ([]*ExpectedRespo
 			}
 			continue
 		}
-
-		// No need for: if currentExpectedResponse == nil { currentExpectedResponse = &ExpectedResponse{Headers: make(http.Header)} }
-		// because it's initialized before the loop and reset after each separator.
 
 		if parsingBody {
 			bodyLines = append(bodyLines, originalLine)

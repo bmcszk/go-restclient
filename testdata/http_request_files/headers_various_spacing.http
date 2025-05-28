@@ -1,5 +1,0 @@
-GET https://example.com
-Header1:Value1
-Header2: Value2
-Header3 : Value3
-Header4 :Value4 

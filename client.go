@@ -16,11 +16,8 @@ import (
 // Client is the main struct for interacting with the REST client library.
 // It will hold configuration and methods to execute requests.
 type Client struct {
-	// httpClient is the underlying HTTP client used to make requests.
-	httpClient *http.Client
-	// BaseURL can be used to set a common base URL for all requests.
-	BaseURL string
-	// DefaultHeaders can be used to set headers that apply to all requests.
+	httpClient     *http.Client
+	BaseURL        string
 	DefaultHeaders http.Header
 }
 
@@ -49,7 +46,7 @@ type ClientOption func(*Client) error
 func WithHTTPClient(hc *http.Client) ClientOption {
 	return func(c *Client) error {
 		if hc == nil {
-			// Or return an error, TBD
+			// Default to a new client if nil is provided
 			c.httpClient = &http.Client{}
 		} else {
 			c.httpClient = hc
@@ -90,7 +87,7 @@ func WithDefaultHeaders(headers http.Header) ClientOption {
 // It returns an error if the file cannot be parsed or no requests are found.
 // Individual request execution errors are stored within each Response object.
 func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Response, error) {
-	parsedFile, err := ParseRequestFile(requestFilePath)
+	parsedFile, err := parseRequestFile(requestFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse request file %s: %w", requestFilePath, err)
 	}
@@ -104,24 +101,18 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 	for i, restClientReq := range parsedFile.Requests {
 		resp, execErr := c.executeRequest(ctx, restClientReq)
 		if execErr != nil {
-			// This is a critical error from executeRequest itself (e.g., bad base URL, nil request).
-			// We should capture this error. If resp is nil, create a minimal one.
 			if resp == nil {
 				resp = &Response{Request: restClientReq}
 			}
-			// Ensure the critical error is part of the response error.
 			if resp.Error == nil {
 				resp.Error = execErr
 			} else {
-				// If there was already an error in resp (e.g. from http.Do), wrap execErr too.
 				resp.Error = fmt.Errorf("critical pre-execution error: %w (original error: %s)", execErr, resp.Error)
 			}
-			// Also add this critical error to the multierror result for the whole file execution.
 			wrappedExecErr := fmt.Errorf("request %d (%s %s) failed with critical error: %w", i+1, restClientReq.Method, restClientReq.URL.String(), execErr)
 			multiErr = multierror.Append(multiErr, wrappedExecErr)
 		}
 
-		// Even if execErr was nil, resp.Error might contain an error from within executeRequest (e.g., network error, body read error).
 		if resp != nil && resp.Error != nil {
 			wrappedRespErr := fmt.Errorf("request %d (%s %s) failed: %w", i+1, restClientReq.Method, restClientReq.URL.String(), resp.Error)
 			multiErr = multierror.Append(multiErr, wrappedRespErr)
@@ -146,12 +137,10 @@ func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Respo
 		Request: rcRequest, // Link the request early
 	}
 
-	// 1. Construct http.Request from restclient.Request
 	urlToUse := rcRequest.URL
 	if !urlToUse.IsAbs() && c.BaseURL != "" {
 		base, err := url.Parse(c.BaseURL)
 		if err != nil {
-			// This is a client configuration error, critical.
 			return nil, fmt.Errorf("invalid BaseURL %s: %w", c.BaseURL, err)
 		}
 		if rcRequest.URL.Scheme == "" && rcRequest.URL.Host == "" {
@@ -165,10 +154,9 @@ func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Respo
 	httpReq, err := http.NewRequestWithContext(ctx, rcRequest.Method, urlToUse.String(), rcRequest.Body)
 	if err != nil {
 		clientResponse.Error = fmt.Errorf("failed to create http request: %w", err)
-		return clientResponse, nil // Return partially filled response with error
+		return clientResponse, nil
 	}
 
-	// 2. Apply DefaultHeaders and then request-specific headers
 	for key, values := range c.DefaultHeaders {
 		for _, value := range values {
 			httpReq.Header.Add(key, value)
@@ -184,7 +172,6 @@ func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Respo
 		httpReq.Host = httpReq.URL.Host
 	}
 
-	// 3. Execute request using c.httpClient
 	startTime := time.Now()
 	httpResp, err := c.httpClient.Do(httpReq)
 	duration := time.Since(startTime)

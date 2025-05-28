@@ -1,4 +1,0 @@
-# This is a comment
-GET https://example.com/api/users
-Accept: application/json
-User-Agent: test-client 

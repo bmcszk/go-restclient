@@ -1,3 +1,0 @@
-GET https://jsonplaceholder.typicode.com/todos/1
-Accept: application/json
-User-Agent: go-restclient-test 

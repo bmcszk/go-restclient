@@ -18,7 +18,7 @@ func ValidateResponses(ctx context.Context, responseFilePath string, actualRespo
 	var errs *multierror.Error
 
 	// Attempt to parse the expected responses from the file.
-	expectedResponses, parseErr := ParseExpectedResponseFile(responseFilePath)
+	expectedResponses, parseErr := parseExpectedResponseFile(responseFilePath)
 	if parseErr != nil {
 		errs = multierror.Append(errs, fmt.Errorf("failed to parse expected response file '%s': %w", responseFilePath, parseErr))
 	}

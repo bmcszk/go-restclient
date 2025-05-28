@@ -77,11 +77,9 @@ func TestValidateResponses_FileErrors(t *testing.T) {
 
 	t.Run("missing expected response file", func(t *testing.T) {
 		err := ValidateResponses(ctx, "nonexistent.hresp", actualResp)
-		// For single, non-multierror errors, direct assertion is fine.
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to parse expected response file")
 		assert.Contains(t, err.Error(), "nonexistent.hresp")
-		// Note: os.IsNotExist might be useful for more specific check if not wrapped too much
 	})
 
 	t.Run("empty expected response file", func(t *testing.T) {
@@ -422,7 +420,7 @@ func TestValidateResponses_WithSampleFile(t *testing.T) {
 	ctx := context.Background()
 	sampleFilePath := "testdata/http_response_files/sample1.http" // Use the actual file
 
-	parsedSampleExpected, err := ParseExpectedResponseFile(sampleFilePath)
+	parsedSampleExpected, err := parseExpectedResponseFile(sampleFilePath)
 	require.NoError(t, err)
 	require.Len(t, parsedSampleExpected, 1)
 	sampleExpectedStruct := parsedSampleExpected[0]

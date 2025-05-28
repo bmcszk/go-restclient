@@ -248,19 +248,12 @@ func TestExecuteFile_MultipleErrors(t *testing.T) {
 
 	responses, err := client.ExecuteFile(context.Background(), filePath)
 
-	// Check the combined error from ExecuteFile
 	require.Error(t, err, "Expected an error from ExecuteFile when multiple requests fail")
-	// Using multierror, the message often starts with "X errors occurred:"
-	// We are checking for the presence of specific error messages for each request.
-	// The exact count "2 errors occurred" might be brittle if multierror changes formatting slightly,
-	// so we check for the presence of individual failure messages.
 	assert.Contains(t, err.Error(), "request 1 (GET http://localhost:12347/badreq1) failed", "Error message should contain info about first failed request")
-	// Check for port and connection refused, being flexible about IPv4/IPv6 loopback
 	assert.Contains(t, err.Error(), ":12347: connect: connection refused", "Error message should contain specific connection error for first request")
 	assert.Contains(t, err.Error(), "request 2 (POST http://localhost:12348/badreq2) failed", "Error message should contain info about second failed request")
 	assert.Contains(t, err.Error(), ":12348: connect: connection refused", "Error message should contain specific connection error for second request")
 
-	// Check individual response objects
 	require.Len(t, responses, 2, "Should receive two response objects, even if they contain errors")
 
 	resp1 := responses[0]
@@ -308,11 +301,6 @@ func TestExecuteFile_CapturesResponseHeaders(t *testing.T) {
 }
 
 func TestExecuteFile_SimpleGetHTTP(t *testing.T) {
-	// The purpose of THIS test is to ensure ExecuteFile
-	// correctly parses the file and attempts to make a request.
-	// We use a custom http.Client with a Transport that intercepts the request
-	// to verify the outgoing http.Request object.
-
 	var interceptedReq *http.Request
 	mockTransport := &mockRoundTripper{
 		RoundTripFunc: func(req *http.Request) (*http.Response, error) {
@@ -338,7 +326,6 @@ func TestExecuteFile_SimpleGetHTTP(t *testing.T) {
 	assert.NoError(t, resp.Error, "Response error should be nil")
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "Expected status OK from mock")
 
-	// Now assert the details of the *intercepted* request
 	require.NotNil(t, interceptedReq, "Request should have been intercepted")
 	assert.Equal(t, http.MethodGet, interceptedReq.Method, "Expected GET method")
 	assert.Equal(t, "https://jsonplaceholder.typicode.com/todos/1", interceptedReq.URL.String(), "Expected full URL from file")
@@ -367,9 +354,6 @@ func TestExecuteFile_WithBaseURL(t *testing.T) {
 	assert.NoError(t, responses[0].Error)
 
 	require.NotNil(t, interceptedReq)
-	// BaseURL is mockServerURL + "/api" = "http://localhost:12345/api"
-	// Request URL is "/todos/1"
-	// Expected resolved URL is "http://localhost:12345/api/todos/1"
 	assert.Equal(t, mockServerURL, interceptedReq.URL.Scheme+"://"+interceptedReq.URL.Host)
 	assert.Equal(t, "/api/todos/1", interceptedReq.URL.Path)
 }
@@ -404,7 +388,6 @@ func TestExecuteFile_WithDefaultHeaders(t *testing.T) {
 
 func TestExecuteFile_InvalidMethodInFile(t *testing.T) {
 	client, _ := NewClient()
-	// No mock transport needed as the error occurs when the http.Client tries to execute it.
 
 	responses, err := client.ExecuteFile(context.Background(), "testdata/http_request_files/invalid_method.http")
 	require.Error(t, err)
@@ -416,14 +399,11 @@ func TestExecuteFile_InvalidMethodInFile(t *testing.T) {
 
 	resp1 := responses[0]
 	assert.Error(t, resp1.Error, "Expected an error for invalid method/scheme")
-	// The error comes from httpClient.Do() due to the malformed request (non-standard method with path-only URL)
 	assert.Contains(t, resp1.Error.Error(), "unsupported protocol scheme", "Error message should indicate unsupported protocol scheme")
-	// Check for the method string as it appears in the error message
 	assert.Contains(t, resp1.Error.Error(), "Invalidmethod", "Error message should contain the problematic method string as used")
 }
 
 func TestExecuteFile_MultipleRequests_GreaterThanTwo(t *testing.T) {
-	// Test setup similar to TestExecuteFile_MultipleRequests but with 3+ requests
 	var requestCount int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cIdx := atomic.AddInt32(&requestCount, 1)
@@ -456,9 +436,6 @@ func TestExecuteFile_MultipleRequests_GreaterThanTwo(t *testing.T) {
 
 	// Validate using the existing expected response file
 	expectedResponseFilePath := "testdata/http_response_files/multiple_responses_gt2_expected.http"
-	// previousExpectedContent, err := os.ReadFile(expectedResponseFilePath) // Removed
-	// require.NoError(t, err) // Removed
-	// tempExpectedFile := writeExpectedResponseFile(t, string(previousExpectedContent)) // Removed
 
 	validationErr := ValidateResponses(context.Background(), expectedResponseFilePath, actualResponses...)
 	assert.NoError(t, validationErr, "Validation against multiple_responses_gt2_expected.http failed")

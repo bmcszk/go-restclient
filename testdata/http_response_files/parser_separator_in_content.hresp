@@ -1,6 +1,0 @@
-HTTP/1.1 200 OK
-X-Custom-Header: Info ### SeparatorLikeValue
-
-Body line 1
-This body contains ### as text.
-Body line 3
