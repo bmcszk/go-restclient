@@ -126,7 +126,7 @@ func main() {
 
 	// Programmatic variables to pass to ExecuteFile
 	// These will override any 'userId' or 'authToken' defined in the .http file or environment.
-	programmaticAPI<y_bin_473> := map[string]string{
+	programmaticAPIVars := map[string]string{
 		"userId":        "prog_user_override_123",
 		"authToken":     "prog_auth_token_xyz",
 		"productSuffix": "Deluxe", // This var might only be used programmatically
@@ -135,7 +135,7 @@ func main() {
 	requestFilePath := "api_requests.http" // Your .http file
 
 	// Pass programmatic vars as the optional third argument
-	responses, err := client.ExecuteFile(context.Background(), requestFilePath, programmaticAPI<y_bin_473>)
+	responses, err := client.ExecuteFile(context.Background(), requestFilePath, programmaticAPIVars)
 	if err != nil {
 		// This error covers file-level issues or critical request setup failures.
 		log.Fatalf("Failed to execute request file: %v", err)
