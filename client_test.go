@@ -625,3 +625,102 @@ X-Request-ID: {{$guid}}
 	assert.NotEqual(t, guidFromHeader, guidFromBody2, "GUID from header and body2 should be different")
 	assert.NotEqual(t, guidFromBody1, guidFromBody2, "GUIDs from body (transactionId and correlationId) should be different")
 }
+
+func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
+	// Set up environment variables for the test
+	const testEnvVarName = "GO_RESTCLIENT_TEST_VAR"
+	const testEnvVarValue = "test_env_value_123"
+	const undefinedEnvVarName = "GO_RESTCLIENT_UNDEFINED_VAR"
+
+	err := os.Setenv(testEnvVarName, testEnvVarValue)
+	require.NoError(t, err, "Failed to set environment variable for test")
+	defer func() { _ = os.Unsetenv(testEnvVarName) }() // Clean up
+
+	// Ensure the undefined variable is indeed not set
+	_ = os.Unsetenv(undefinedEnvVarName)
+
+	var interceptedRequest struct {
+		URL    string
+		Header string
+		Body   string
+	}
+
+	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+		interceptedRequest.URL = r.URL.String()
+		bodyBytes, _ := io.ReadAll(r.Body)
+		interceptedRequest.Body = string(bodyBytes)
+		interceptedRequest.Header = r.Header.Get("X-Env-Value")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, "ok")
+	})
+	defer server.Close()
+
+	client, _ := NewClient()
+
+	requestFileContent := fmt.Sprintf(`
+GET %s/path-{{$processEnv %s}}/data
+Content-Type: application/json
+Cache-Control: {{$processEnv UNDEFINED_CACHE_VAR_SHOULD_BE_EMPTY}}
+User-Agent: test-client
+X-Env-Value: {{$processEnv %s}}
+
+{
+  "env_payload": "{{$processEnv %s}}",
+  "undefined_payload": "{{$processEnv %s}}"
+}
+`, server.URL, testEnvVarName, testEnvVarName, testEnvVarName, undefinedEnvVarName)
+
+	tempFile, err := os.CreateTemp(t.TempDir(), "test_process_env_*.http")
+	require.NoError(t, err)
+	defer func() { _ = os.Remove(tempFile.Name()) }()
+	_, err = tempFile.WriteString(requestFileContent)
+	require.NoError(t, err)
+	_ = tempFile.Close()
+
+	responses, err := client.ExecuteFile(context.Background(), tempFile.Name())
+	require.NoError(t, err, "ExecuteFile should not return an error for $processEnv processing")
+	require.Len(t, responses, 1, "Expected 1 response")
+
+	resp := responses[0]
+	assert.NoError(t, resp.Error)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// SCENARIO-LIB-019-001: Correctly substitutes an existing environment variable
+	// Check URL
+	expectedURL := fmt.Sprintf("/path-%s/data", testEnvVarValue)
+	assert.Equal(t, expectedURL, interceptedRequest.URL, "URL should contain substituted env variable")
+
+	// Check Header
+	assert.Equal(t, testEnvVarValue, interceptedRequest.Header, "X-Env-Value header should contain substituted env variable")
+
+	// Check Body
+	var bodyJSON map[string]string
+	err = json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON)
+	require.NoError(t, err, "Failed to unmarshal request body JSON")
+
+	envPayload, ok := bodyJSON["env_payload"]
+	require.True(t, ok, "env_payload not found in body")
+	assert.Equal(t, testEnvVarValue, envPayload, "Body env_payload should contain substituted env variable")
+
+	// SCENARIO-LIB-019-002: Substitutes with an empty string if the environment variable is not defined
+	// Check undefined in URL (implicitly via full URL check) - the original path segment was `data`
+	// Check Header for undefined variable
+	// The Cache-Control header in the .http file was Cache-Control: {{$processEnv UNDEFINED_CACHE_VAR_SHOULD_BE_EMPTY}}
+	// The actual header sent to the mock server, after substitution, should be 'Cache-Control: '. The value part is empty.
+	// However, how Go's http.Request.Header handles this needs care. If the value is empty, it might omit the header or format it as 'Key:'.
+	// Let's check the Request object *before* it's sent, specifically the restClientReq.Headers
+	// This test is better performed by checking the effective header on the server side if possible, or by inspecting the RawRequest string.
+	// For now, let's check the 'undefined_payload' in the body.
+
+	undefinedPayload, ok := bodyJSON["undefined_payload"]
+	require.True(t, ok, "undefined_payload not found in body")
+	assert.Empty(t, undefinedPayload, "Body undefined_payload should be empty for an undefined env variable")
+
+	// Also explicitly check the Cache-Control header as received by the mock server
+	// A header with an empty value after substitution might be sent as "HeaderName: " or omitted.
+	// net/http server behavior: if a header `Key: ` is sent, `r.Header.Get("Key")` returns `""`.
+	// Let's assume the .http file explicitly defines Cache-Control, it should be present, even if value is empty after substitution.
+	actualCacheControl := resp.Request.Headers.Get("Cache-Control")
+	assert.Equal(t, "", actualCacheControl, "Cache-Control header value after undefined variable substitution should be empty")
+
+}

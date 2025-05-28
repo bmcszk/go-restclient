@@ -5,13 +5,13 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 
 	// "regexp" // Unused
-	"strconv"
+
 	"strings"
 	"time"
 
@@ -227,43 +227,26 @@ func (c *Client) applyVariables(req *Request, vars map[string]string) {
 
 // substituteSystemVariables replaces system variable placeholders in a string.
 func (c *Client) substituteSystemVariables(text string) string {
+
 	// Handle {{$guid}}
 	for strings.Contains(text, "{{$guid}}") {
 		text = strings.Replace(text, "{{$guid}}", uuid.NewString(), 1)
 	}
 
-	// Handle {{$randomInt min max}}
-	reRandomIntWithArgs := regexp.MustCompile(`{{\$randomInt\s+(-?\d+)\s+(-?\d+)}}`)
-	text = reRandomIntWithArgs.ReplaceAllStringFunc(text, func(match string) string {
-		parts := reRandomIntWithArgs.FindStringSubmatch(match)
-		if len(parts) == 3 {
-			min, errMin := strconv.Atoi(parts[1])
-			max, errMax := strconv.Atoi(parts[2])
-			if errMin == nil && errMax == nil {
-				if min > max {
-					min, max = max, min // Swap if min > max
-				}
-				// rand.Intn(n) returns a random number in [0, n). So for [min, max] inclusive:
-				// rand.Intn(max - min + 1) + min
-				// Seed for each call for now for simplicity in a library context, not ideal for performance.
-				// A shared, seeded rand.Rand source would be better in a long-running app.
-				r := rand.New(rand.NewSource(time.Now().UnixNano()))
-				return strconv.Itoa(r.Intn(max-min+1) + min)
-			}
+	// Handle {{$processEnv variableName}}
+	// Regex to find {{$processEnv ENV_VAR_NAME}}
+	// The variable name must start with a letter or underscore, followed by letters, numbers, or underscores.
+	reProcessEnv := regexp.MustCompile(`{{\$processEnv\s+([a-zA-Z_][a-zA-Z0-9_]*)\}\}`)
+	text = reProcessEnv.ReplaceAllStringFunc(text, func(match string) string {
+		parts := reProcessEnv.FindStringSubmatch(match)
+		if len(parts) == 2 { // parts[0] is full match, parts[1] is envVarName
+			envVarName := parts[1]
+			return os.Getenv(envVarName) // Returns empty string if not found, which is desired behavior
 		}
-		return match // Return original match if parsing fails
+		return match // Should not happen if regex matches, but as a fallback
 	})
 
-	// Handle {{$randomInt}} (no arguments, default 0-100)
-	reRandomIntNoArgs := regexp.MustCompile(`{{\$randomInt}}`)
-	text = reRandomIntNoArgs.ReplaceAllStringFunc(text, func(match string) string {
-		// Default range [0, 100]
-		min, max := 0, 100
-		r := rand.New(rand.NewSource(time.Now().UnixNano()))
-		return strconv.Itoa(r.Intn(max-min+1) + min)
-	})
-
-	// TODO: Add other system variables here like {{$timestamp}}, etc.
+	// TODO: Add other system variables here like {{$datetime}}, {{$timestamp}}, {{$randomInt}}, etc. when they are unblocked.
 
 	return text
 }

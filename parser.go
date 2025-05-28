@@ -104,21 +104,39 @@ func parseRequests(reader io.Reader, filePath string) (*ParsedFile, error) {
 		} else {
 			// Parsing request line or headers
 			if currentRequest.Method == "" { // First non-comment, non-empty line is the request line
-				parts := strings.Fields(processedLine)
-				if len(parts) < 2 { // Must have at least METHOD URL
-					return nil, fmt.Errorf("line %d: invalid request line: %s. Expected METHOD URL [HTTP_VERSION]", lineNumber, processedLine)
-				}
-				currentRequest.Method = strings.ToUpper(parts[0])
-				currentRequest.RawURLString = parts[1] // Store raw URL string
-				// Attempt an initial parse. If it contains unresolved variables, this might result
-				// in a partially valid URL or a URL with an error, which is fine for now.
-				// The final parse will happen after variable substitution in the client.
-				parsedURL, _ := url.Parse(parts[1]) // Best effort, ignore error here
-				currentRequest.URL = parsedURL
-				if len(parts) > 2 {
-					currentRequest.HTTPVersion = parts[2]
-				} else {
-					currentRequest.HTTPVersion = "HTTP/1.1" // Default
+				// Attempt to parse as a request line (METHOD URL [HTTP_VERSION])
+				// Correctly parse the request line: first word is method, the rest is URL + version
+				parts := strings.SplitN(processedLine, " ", 2) // Split into method and the rest
+				if len(parts) == 2 {
+					method := strings.ToUpper(strings.TrimSpace(parts[0]))
+					urlAndVersionStr := strings.TrimSpace(parts[1])
+
+					var urlStr string
+					var httpVersion string
+
+					// Check if the last part of urlAndVersionStr is an HTTP version
+					lastSpaceIdx := strings.LastIndex(urlAndVersionStr, " ")
+					if lastSpaceIdx != -1 {
+						potentialVersion := strings.TrimSpace(urlAndVersionStr[lastSpaceIdx+1:])
+						if strings.HasPrefix(strings.ToUpper(potentialVersion), "HTTP/") {
+							httpVersion = potentialVersion
+							urlStr = strings.TrimSpace(urlAndVersionStr[:lastSpaceIdx])
+						} else {
+							// No HTTP version found at the end after a space
+							urlStr = urlAndVersionStr
+						}
+					} else {
+						// No spaces in urlAndVersionStr, so the whole thing is the URL
+						urlStr = urlAndVersionStr
+					}
+
+					currentRequest.Method = method
+					currentRequest.RawURLString = urlStr // Store the raw URL string before any parsing
+					currentRequest.HTTPVersion = httpVersion
+
+					// Best-effort initial parse. This URL might contain variables.
+					parsedURL, _ := url.Parse(urlStr) // Best effort, ignore error here
+					currentRequest.URL = parsedURL
 				}
 			} else { // Parsing headers
 				parts := strings.SplitN(processedLine, ":", 2)
