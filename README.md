@@ -106,7 +106,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 
 	"github.com/bmcszk/go-restclient"
 )
@@ -134,15 +133,12 @@ func main() {
 	fmt.Printf("Executed %d requests from %s.\n", len(responses), requestFilePath)
 
 	// Primary validation method: using an expected response file.
-	if _, statErr := os.Stat(expectedResponseFilePath); statErr == nil {
-		validationErr := restclient.ValidateResponses(expectedResponseFilePath, responses...)
-		if validationErr != nil {
-			log.Fatalf("Validation against '%s' failed: %v", expectedResponseFilePath, validationErr)
-		}
-		fmt.Printf("All responses validated successfully against %s!\n", expectedResponseFilePath)
-	} else {
-		fmt.Printf("Expected response file '%s' not found, skipping validation. Error: %v\n", expectedResponseFilePath, statErr)
+	validationErr := restclient.ValidateResponses(expectedResponseFilePath, responses...)
+	if validationErr != nil {
+		// This error could be due to file not found, parsing issues, or actual validation failures.
+		log.Fatalf("Validation against '%s' failed: %v", expectedResponseFilePath, validationErr)
 	}
+	fmt.Printf("All responses validated successfully against %s!\n", expectedResponseFilePath)
 
 	// Optional: Iterate through responses for manual checks or logging.
 	fmt.Println("\nIndividual response details (optional logging):")
