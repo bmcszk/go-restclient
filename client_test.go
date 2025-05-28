@@ -187,7 +187,7 @@ func TestExecuteFile_ParseError(t *testing.T) {
 
 func TestExecuteFile_NoRequestsInFile(t *testing.T) {
 	client, _ := NewClient()
-	_, err := client.ExecuteFile(context.Background(), "testdata/http_request_files/no_requests.http")
+	_, err := client.ExecuteFile(context.Background(), "testdata/http_request_files/comment_only_file.http")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no valid requests found in file")
 }
