@@ -47,6 +47,32 @@ Refer to `.cursor/rules/task_workflow.mdc` for guidelines on task creation and m
     1.  Acknowledge the mistake.
     2.  Document the mistake in `docs/learnings.md`, including a brief description of what went wrong.
     3.  Once the mistake is corrected, update the entry in `docs/learnings.md` with the resolution or what was learned.
+- **File Editing and Patch Management Strategy**:
+    - **Direct File Modification**:
+        - Use the `edit_file` tool to make changes *directly* to the target file.
+        - The `code_edit` parameter should contain the new or modified lines. Represent unchanged code blocks using the appropriate comment syntax for the language being edited (e.g., `// ... existing code ...` for Go, `<!-- ... existing code ... -->` for XML/HTML, `# ... existing code ...` for Python/Ruby/shell scripts, etc.).
+        - Ensure each edit contains sufficient context of unchanged lines around the modified code to resolve ambiguity.
+        - For creating new files, provide the entire file content in the `code_edit` field.
+    - **Verification and Retries**:
+        - After `edit_file` indicates success, use `read_file` to confirm the changes were applied exactly as intended.
+        - If the applied diff (shown in the `edit_file` tool's output) is not correct, or if `read_file` shows discrepancies, use the `reapply` tool, targeting the same file, to have the edit attempted again by a more capable model.
+        - If `reapply` also fails, or for very complex or widespread changes, break down the modification into several smaller, targeted `edit_file` calls, each focusing on a specific, coherent block of code. Verify each smaller edit before proceeding.
+    - **Generating Git Patch Files (When Explicitly Required)**:
+        - Patch files should generally *not* be created using `edit_file`.
+        - If a Git-formatted patch file is explicitly needed (e.g., for manual review, sharing, or specific Git workflows):
+            1.  First, ensure the target file(s) have been successfully modified using the `edit_file` (and `reapply` if needed) and `read_file` verification workflow.
+            2.  Stage the modified file(s) using the appropriate Git command (e.g., `git add <file_path>`).
+            3.  Then, generate the patch using the correct Git command:
+                *   For a diff of staged changes against `HEAD`: `git diff --cached > my_changes.patch`
+                *   To create patch files from specific commits (mailbox format): `git format-patch <commit-range/branch> --stdout > my_commit_series.patch` or `git format-patch -1 <commit_sha> -o patches/`
+    - **Applying External Git Patch Files**:
+        - If you are provided with a patch file to apply:
+            1.  First, inspect the patch content if possible (e.g., using `cat patch_file.patch`).
+            2.  Check if the patch can be applied cleanly: `git apply --check my_patch.patch`.
+            3.  If the patch is a plain diff (usually from `git diff`), apply it to the working directory (changes will be unstaged): `git apply my_patch.patch`.
+            4.  If the patch is in mailbox format (from `git format-patch`), apply it and create commits: `git am < my_patch.patch`. Use `git am --abort` to stop a problematic application.
+            5.  After applying, always verify the changes and run `make check`.
+    - **Avoiding `edit_file` for Patch Creation**: Do not attempt to use `edit_file` to write the *content* of a patch file. `edit_file` is for modifying the *source file itself*.
 
 ## Testing Guidelines
 - **End-to-End (E2E) / Integration Tests:** These tests verify the behavior of the system as a whole or integrated parts. They should be written in a Behavior-Driven Development (BDD) style using tools like Godog. These tests typically require a running instance of the application and its dependencies (like databases) managed via Docker Compose. Use Go build tags (e.g., `//go:build e2e`) to identify them.

@@ -1,6 +1,6 @@
 # Test Scenarios
 
-Last Updated: 2025-05-27
+Last Updated: 2025-05-28
 
 ## REQ-LIB-001: Parse request definitions from `.rest` or `.http` files
 
@@ -248,8 +248,6 @@ Last Updated: 2025-05-27
 
 - SCENARIO-LIB-016-001: Use `{{$timestamp}}` in request header.
   - Expected: Current UTC timestamp (Unix epoch seconds) is inserted.
-- SCENARIO-LIB-016-002: Use `{{$timestamp}}` in request body.
-  - Expected: Current UTC timestamp (Unix epoch seconds) is inserted.
 
 ## REQ-LIB-017: Support for {{$datetime format}} system variable
 
@@ -278,19 +276,36 @@ Last Updated: 2025-05-27
 
 ## REQ-LIB-020: Support for {{$dotenv variableName}} system variable
 
-- SCENARIO-LIB-020-001: Use `{{$dotenv API_KEY}}` with `.env` file present containing `API_KEY=mysecretkey`.
-  - Create `.env` file:
-    ```
-    API_KEY=mysecretkey
-    DB_HOST=localhost
-    ```
-  - File content:
-    ```http
-    GET https://api.example.com/data
-    X-Api-Key: {{API_KEY}}
-    ```
-  - Expected: `X-Api-Key` header sent as `mysecretkey`.
-- SCENARIO-LIB-020-002: Use `{{$dotenv VAR_NOT_IN_ENV_FILE}}` with `.env` file present but variable missing.
+- SCENARIO-LIB-020-001: Use `{{$dotenv DOTENV_VAR}}` where `DOTENV_VAR` exists in a `.env` file in the request file's directory.
+  - Expected: The value of `DOTENV_VAR` from the `.env` file is substituted.
+- SCENARIO-LIB-020-002: Use `{{$dotenv UNDEFINED_DOTENV_VAR}}` where `UNDEFINED_DOTENV_VAR` does not exist in the `.env` file.
   - Expected: Error or empty string substitution (behavior to be defined).
-- SCENARIO-LIB-020-003: Use `{{$dotenv SOME_VAR}}` with no `.env` file present.
+- SCENARIO-LIB-020-003: Use `{{$dotenv SOME_VAR}}` with no `.env` file present in the request file's directory.
   - Expected: Error or empty string substitution (behavior to be defined).
+
+## REQ-LIB-021: Programmatic custom variables for ExecuteFile
+
+- SCENARIO-LIB-021-001: Pass a map of custom variables to `ExecuteFile` and verify they are substituted in the URL.
+  - Example: `vars := map[string]string{"userId": "prog_user_123"}`
+  - File content: `GET https://api.example.com/users/{{userId}}`
+  - Expected: Request sent to `https://api.example.com/users/prog_user_123`.
+- SCENARIO-LIB-021-002: Pass a map of custom variables to `ExecuteFile` and verify they are substituted in headers.
+  - Example: `vars := map[string]string{"authToken": "prog_token_abc"}`
+  - File content: `GET /data\nAuthorization: Bearer {{authToken}}`
+  - Expected: `Authorization` header is `Bearer prog_token_abc`.
+- SCENARIO-LIB-021-003: Pass a map of custom variables to `ExecuteFile` and verify they are substituted in the body.
+  - Example: `vars := map[string]string{"orderId": "prog_order_456"}`
+  - File content: `POST /orders\nContent-Type: application/json\n\n{"id": "{{orderId}}"}`
+  - Expected: JSON body sent with `id` field as `prog_order_456`.
+- SCENARIO-LIB-021-004: Programmatic variables override variables defined in the request file.
+  - Example: `vars := map[string]string{"baseUrl": "https://prog.example.com"}`
+  - File content: `@baseUrl = https://file.example.com\nGET {{baseUrl}}/path`
+  - Expected: Request sent to `https://prog.example.com/path`.
+- SCENARIO-LIB-021-005: Variables defined in the file are still used if not overridden programmatically.
+  - Example: `vars := map[string]string{"otherVar": "prog_value"}`
+  - File content: `@fileVar = file_value\nGET /path?p1={{fileVar}}&p2={{otherVar}}`
+  - Expected: Request sent to `/path?p1=file_value&p2=prog_value`.
+- SCENARIO-LIB-021-006: Pass an empty map of variables to `ExecuteFile`.
+  - Expected: No error, and only file-defined variables (if any) are used.
+- SCENARIO-LIB-021-007: Pass `nil` as the variables map to `ExecuteFile`.
+  - Expected: No error, and only file-defined variables (if any) are used.

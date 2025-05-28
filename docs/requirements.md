@@ -24,6 +24,7 @@ Last Updated: 2025-05-27
 - REQ-LIB-018: The library must support a `{{$localDatetime format}}` system variable that provides the current local datetime formatted according to the given `format` string.
 - REQ-LIB-019: The library must support a `{{$processEnv variableName}}` system variable that substitutes the value of the specified system environment variable.
 - REQ-LIB-020: The library must support a `{{$dotenv variableName}}` system variable that substitutes the value of the specified variable from a `.env` file in the current working directory or a user-specified path.
+- REQ-LIB-021: The library must allow users to programmatically provide a map of custom variables during a call to `ExecuteFile`, which can be used for substitution in the request file, potentially overriding variables defined within the file itself.
 
 ## Non-Functional Requirements
 

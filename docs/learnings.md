@@ -117,3 +117,9 @@ Last Updated: 2025-05-28
 *   **Mistake**: When attempting to refactor `TestExecuteFile_WithRandomIntSystemVariable` to use external `.http` files, the `edit_file` tool incorrectly applied the diff, resulting in the deletion of `TestExecuteFile_WithDatetimeSystemVariable` and `TestExecuteFile_WithLocalDatetimeSystemVariable` from `client_test.go`.
 *   **Resolution**: The deleted functions will need to be restored from VCS or previous versions. The refactoring for `TestExecuteFile_WithRandomIntSystemVariable` will be re-attempted more carefully.
     *   **Update**: The functions were restored manually by the user. The subsequent refactoring attempt was successful.
+
+## 2025-05-28: `edit_file` Unreliability for `docs/tasks.md` and Patch File Creation
+
+*   **Issue**: The `edit_file` tool repeatedly failed to correctly update `docs/tasks.md`. Attempts to remove "Done" tasks and append new ones were not fully applied, or the tool reported "no changes made" when changes were expected. Furthermore, when trying to create a `.patch` file using `edit_file` to rectify the `docs/tasks.md` situation, the tool either cleared the patch file content or did not generate a proper diff.
+*   **Impact**: This significantly slowed down the documentation update process and required multiple attempts and alternative strategies (like using `cat` to get raw content for manual patch creation).
+*   **Learning**: `edit_file` can be unreliable for complex updates to markdown files, especially tables, and may also have issues generating patch diffs correctly. For critical file updates where `edit_file` proves problematic, falling back to manual patch creation (if the content can be obtained) and `git apply` might be necessary, or seeking user intervention for direct file manipulation. Documenting these tool limitations is important.
