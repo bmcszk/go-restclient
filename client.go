@@ -99,8 +99,26 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 	var multiErr *multierror.Error
 
 	for i, restClientReq := range parsedFile.Requests {
-		// Apply variables before executing the request
-		c.applyVariables(restClientReq, parsedFile.Variables)
+		// Substitute variables in RawURLString and parse it
+		substitutedRawURL := restClientReq.RawURLString
+		for k, v := range restClientReq.ActiveVariables {
+			placeholder := "{{" + k + "}}"
+			substitutedRawURL = strings.ReplaceAll(substitutedRawURL, placeholder, v)
+		}
+		finalParsedURL, parseErr := url.Parse(substitutedRawURL)
+		if parseErr != nil {
+			// If URL parsing fails after substitution, this is a critical error for this request
+			resp := &Response{Request: restClientReq}
+			resp.Error = fmt.Errorf("failed to parse URL after variable substitution: %s (original: %s): %w", substitutedRawURL, restClientReq.RawURLString, parseErr)
+			wrappedErr := fmt.Errorf("request %d (%s %s) failed URL parsing: %w", i+1, restClientReq.Method, restClientReq.RawURLString, resp.Error)
+			multiErr = multierror.Append(multiErr, wrappedErr)
+			responses[i] = resp
+			continue // Skip execution for this request
+		}
+		restClientReq.URL = finalParsedURL // Update the URL with the fully parsed and substituted one
+
+		// Apply variables to Headers and Body
+		c.applyVariables(restClientReq, restClientReq.ActiveVariables)
 
 		resp, execErr := c.executeRequest(ctx, restClientReq)
 		if execErr != nil {
@@ -110,14 +128,20 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 			if resp.Error == nil {
 				resp.Error = execErr
 			} else {
-				resp.Error = fmt.Errorf("critical pre-execution error: %w (original error: %s)", execErr, resp.Error)
+				// If resp.Error was already set (e.g., by URL parse failure), wrap execErr if it's new
+				resp.Error = fmt.Errorf("execution error: %w (prior error: %s)", execErr, resp.Error)
 			}
 			wrappedExecErr := fmt.Errorf("request %d (%s %s) failed with critical error: %w", i+1, restClientReq.Method, restClientReq.URL.String(), execErr)
 			multiErr = multierror.Append(multiErr, wrappedExecErr)
 		}
 
 		if resp != nil && resp.Error != nil {
-			wrappedRespErr := fmt.Errorf("request %d (%s %s) failed: %w", i+1, restClientReq.Method, restClientReq.URL.String(), resp.Error)
+			// Ensure URL string in error message is from the substituted URL if available, otherwise RawURLString
+			urlForError := restClientReq.RawURLString
+			if restClientReq.URL != nil {
+				urlForError = restClientReq.URL.String()
+			}
+			wrappedRespErr := fmt.Errorf("request %d (%s %s) failed: %w", i+1, restClientReq.Method, urlForError, resp.Error)
 			multiErr = multierror.Append(multiErr, wrappedRespErr)
 		}
 		responses[i] = resp
@@ -126,25 +150,10 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 	return responses, multiErr.ErrorOrNil()
 }
 
-// applyVariables substitutes placeholders in the request's URL, Headers, and Body.
+// applyVariables substitutes placeholders in the request's Headers, and Body.
 func (c *Client) applyVariables(req *Request, vars map[string]string) {
 	if req == nil || len(vars) == 0 {
 		return
-	}
-
-	// Substitute in URL
-	if req.URL != nil {
-		rawURL := req.URL.String()
-		for key, value := range vars {
-			placeholder := "{{" + key + "}}"
-			rawURL = strings.ReplaceAll(rawURL, placeholder, value)
-		}
-		// Re-parse the URL after substitution
-		parsedURL, err := url.Parse(rawURL)
-		if err == nil { // If parsing fails, keep the original URL
-			req.URL = parsedURL
-		}
-		// TODO: Log error if URL parsing fails after substitution?
 	}
 
 	// Substitute in Headers

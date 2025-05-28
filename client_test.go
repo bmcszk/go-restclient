@@ -454,3 +454,90 @@ func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 }
 
 // TODO: Test TLS details in Response struct (requires HTTPS server and more setup)
+
+func TestExecuteFile_WithCustomVariables(t *testing.T) {
+	var requestCount int32
+	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+		currentCount := atomic.AddInt32(&requestCount, 1)
+		t.Logf("Mock server received request #%d: %s %s", currentCount, r.Method, r.URL.Path)
+		switch r.URL.Path {
+		case "/users/testuser123": // SCENARIO-LIB-013-001, SCENARIO-LIB-013-002, SCENARIO-LIB-013-003
+			assert.Equal(t, http.MethodPost, r.Method)
+			bodyBytes, _ := io.ReadAll(r.Body)
+			assert.JSONEq(t, `{"id": "testuser123"}`, string(bodyBytes))
+			assert.Equal(t, "Bearer secret-token-value", r.Header.Get("Authorization"))
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "response for user testuser123")
+		case "/products/testuser123": // SCENARIO-LIB-013-004 (variable override for pathSegment)
+			assert.Equal(t, http.MethodGet, r.Method)
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "response from products/testuser123")
+		case "/items/{{undefined_path_var}}": // SCENARIO-LIB-013-005 (undefined variable left as-is in path)
+			assert.Equal(t, http.MethodGet, r.Method)
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "response for items (undefined_path_var)")
+		default:
+			t.Errorf("Unexpected request path to mock server: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer server.Close()
+
+	client, _ := NewClient()
+
+	requestFileContent := fmt.Sprintf(`
+@fullServerUrl = %s
+@pathSegment = users
+@userId = testuser123
+@token = secret-token-value
+
+# Request 1: Uses fullServerUrl, pathSegment, userId, token
+POST {{fullServerUrl}}/{{pathSegment}}/{{userId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "id": "{{userId}}"
+}
+
+###
+# Request 2: Override pathSegment, still uses fullServerUrl
+@pathSegment = products
+GET {{fullServerUrl}}/{{pathSegment}}/{{userId}}
+
+###
+# Request 3: Undefined variable in path, still uses fullServerUrl
+GET {{fullServerUrl}}/items/{{undefined_path_var}}
+
+`, server.URL) // Use full server.URL
+
+	tempFile, err := os.CreateTemp(t.TempDir(), "test_vars_*.http")
+	require.NoError(t, err)
+	defer func() { _ = os.Remove(tempFile.Name()) }()
+	_, err = tempFile.WriteString(requestFileContent)
+	require.NoError(t, err)
+	_ = tempFile.Close()
+
+	responses, err := client.ExecuteFile(context.Background(), tempFile.Name())
+	require.NoError(t, err, "ExecuteFile should not return an error for variable processing")
+	require.Len(t, responses, 3, "Expected 3 responses")
+	assert.EqualValues(t, 3, atomic.LoadInt32(&requestCount), "Mock server should have been hit 3 times")
+
+	// Check response 1 (SCENARIO-LIB-013-001, SCENARIO-LIB-013-002, SCENARIO-LIB-013-003)
+	resp1 := responses[0]
+	assert.NoError(t, resp1.Error)
+	assert.Equal(t, http.StatusOK, resp1.StatusCode)
+	assert.Equal(t, "response for user testuser123", resp1.BodyString)
+
+	// Check response 2 (SCENARIO-LIB-013-004)
+	resp2 := responses[1]
+	assert.NoError(t, resp2.Error)
+	assert.Equal(t, http.StatusOK, resp2.StatusCode)
+	assert.Equal(t, "response from products/testuser123", resp2.BodyString)
+
+	// Check response 3 (SCENARIO-LIB-013-005)
+	resp3 := responses[2]
+	assert.NoError(t, resp3.Error)
+	assert.Equal(t, http.StatusOK, resp3.StatusCode)
+	assert.Equal(t, "response for items (undefined_path_var)", resp3.BodyString)
+}

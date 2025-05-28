@@ -30,10 +30,10 @@ func parseRequestFile(filePath string) (*ParsedFile, error) {
 func parseRequests(reader io.Reader, filePath string) (*ParsedFile, error) {
 	scanner := bufio.NewScanner(reader)
 	parsedFile := &ParsedFile{
-		FilePath:  filePath,
-		Requests:  []*Request{},
-		Variables: make(map[string]string),
+		FilePath: filePath,
+		Requests: []*Request{},
 	}
+	currentFileVariables := make(map[string]string) // Variables accumulated in the file scope
 
 	var currentRequest *Request
 	var bodyLines []string
@@ -52,7 +52,7 @@ func parseRequests(reader io.Reader, filePath string) (*ParsedFile, error) {
 				varName := strings.TrimSpace(parts[0])
 				varValue := strings.TrimSpace(parts[1])
 				if varName != "" {
-					parsedFile.Variables[varName] = varValue
+					currentFileVariables[varName] = varValue
 				}
 			}
 			continue // Variable definition line, skip further processing for this line
@@ -65,6 +65,11 @@ func parseRequests(reader io.Reader, filePath string) (*ParsedFile, error) {
 					currentRequest.RawBody = strings.Join(bodyLines, "\n")
 					currentRequest.RawBody = strings.TrimRight(currentRequest.RawBody, " \t\n")
 					currentRequest.Body = strings.NewReader(currentRequest.RawBody)
+					// Assign a copy of the current file variables to this request
+					currentRequest.ActiveVariables = make(map[string]string)
+					for k, v := range currentFileVariables {
+						currentRequest.ActiveVariables[k] = v
+					}
 					parsedFile.Requests = append(parsedFile.Requests, currentRequest)
 				}
 				bodyLines = []string{}
@@ -104,10 +109,11 @@ func parseRequests(reader io.Reader, filePath string) (*ParsedFile, error) {
 					return nil, fmt.Errorf("line %d: invalid request line: %s. Expected METHOD URL [HTTP_VERSION]", lineNumber, processedLine)
 				}
 				currentRequest.Method = strings.ToUpper(parts[0])
-				parsedURL, err := url.Parse(parts[1])
-				if err != nil {
-					return nil, fmt.Errorf("line %d: invalid URL %s: %w", lineNumber, parts[1], err)
-				}
+				currentRequest.RawURLString = parts[1] // Store raw URL string
+				// Attempt an initial parse. If it contains unresolved variables, this might result
+				// in a partially valid URL or a URL with an error, which is fine for now.
+				// The final parse will happen after variable substitution in the client.
+				parsedURL, _ := url.Parse(parts[1]) // Best effort, ignore error here
 				currentRequest.URL = parsedURL
 				if len(parts) > 2 {
 					currentRequest.HTTPVersion = parts[2]
@@ -131,6 +137,11 @@ func parseRequests(reader io.Reader, filePath string) (*ParsedFile, error) {
 		rawJoinedBody := strings.Join(bodyLines, "\n")
 		currentRequest.RawBody = strings.TrimRight(rawJoinedBody, " \t\n")
 		currentRequest.Body = strings.NewReader(currentRequest.RawBody)
+		// Assign a copy of the current file variables to this last request
+		currentRequest.ActiveVariables = make(map[string]string)
+		for k, v := range currentFileVariables {
+			currentRequest.ActiveVariables[k] = v
+		}
 		parsedFile.Requests = append(parsedFile.Requests, currentRequest)
 	}
 
