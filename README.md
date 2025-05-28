@@ -112,60 +112,48 @@ import (
 )
 
 func main() {
-	// Example: Set an environment variable for $processEnv (if used in file)
-	// os.Setenv("ORDER_STATUS_FILTER", "pending")
-	// Example: Create a .env file for $dotenv (if used in file)
-	// _ = os.WriteFile(".env", []byte("USER_ID_FROM_ENV=user_from_dotenv_abc"), 0644)
-	// defer os.Remove(".env")
-
-
 	client, err := restclient.NewClient()
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
 	}
 
-	// Programmatic variables to pass to ExecuteFile
-	// These will override any 'userId' or 'authToken' defined in the .http file or environment.
 	programmaticAPIVars := map[string]string{
 		"userId":        "prog_user_override_123",
 		"authToken":     "prog_auth_token_xyz",
-		"productSuffix": "Deluxe", // This var might only be used programmatically
+		"productSuffix": "Deluxe",
 	}
 
-	requestFilePath := "api_requests.http" // Your .http file
+	requestFilePath := "api_requests.http"       // Your .http file
+	expectedResponseFilePath := "api_expected.hresp" // Your .hresp file for validation
 
-	// Pass programmatic vars as the optional third argument
 	responses, err := client.ExecuteFile(context.Background(), requestFilePath, programmaticAPIVars)
 	if err != nil {
-		// This error covers file-level issues or critical request setup failures.
 		log.Fatalf("Failed to execute request file: %v", err)
 	}
 
-	fmt.Printf("Executed %d requests from %s\n", len(responses), requestFilePath)
+	fmt.Printf("Executed %d requests from %s.\n", len(responses), requestFilePath)
 
-	// Print basic info for each response
-	for i, resp := range responses {
-		if resp.Error != nil {
-			fmt.Printf("Request #%d (%s %s) failed during execution: %v\n",
-				i+1, resp.Request.Method, resp.Request.RawURLString, resp.Error)
-			continue
-		}
-		// Note: resp.Request.URL will show the URL *after* all substitutions
-		fmt.Printf("Request #%d (%s %s): Status %s\n  Body: %s\n",
-			i+1, resp.Request.Method, resp.Request.URL, resp.Status, resp.BodyString)
-	}
-
-	// Optional: Validate against an expected response file
-	// ... (validation logic remains the same) ...
-	expectedResponseFilePath := "api_expected.hresp" // Assuming this file exists and matches executed requests
+	// Primary validation method: using an expected response file.
 	if _, statErr := os.Stat(expectedResponseFilePath); statErr == nil {
 		validationErr := restclient.ValidateResponses(expectedResponseFilePath, responses...)
 		if validationErr != nil {
-			log.Fatalf("Validation failed: %v", validationErr)
+			log.Fatalf("Validation against '%s' failed: %v", expectedResponseFilePath, validationErr)
 		}
-		fmt.Println("All responses validated successfully against " + expectedResponseFilePath + "!")
+		fmt.Printf("All responses validated successfully against %s!\n", expectedResponseFilePath)
 	} else {
-		fmt.Println("Expected response file not found or error stating: " + statErr.Error() + ", skipping validation.")
+		fmt.Printf("Expected response file '%s' not found, skipping validation. Error: %v\n", expectedResponseFilePath, statErr)
+	}
+
+	// Optional: Iterate through responses for manual checks or logging.
+	fmt.Println("\nIndividual response details (optional logging):")
+	for i, resp := range responses {
+		if resp.Error != nil {
+			fmt.Printf("Request #%d (%s %s) had an execution error: %v\n",
+				i+1, resp.Request.Method, resp.Request.RawURLString, resp.Error)
+			continue
+		}
+		fmt.Printf("Request #%d (%s %s): Status %s\n  Body: %s\n",
+			i+1, resp.Request.Method, resp.Request.URL, resp.Status, resp.BodyString)
 	}
 }
 ```
