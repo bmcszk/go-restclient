@@ -1,1 +1,0 @@
-GET {{.ServerURL}}/test/{{$randomInt -5 -1}} 
