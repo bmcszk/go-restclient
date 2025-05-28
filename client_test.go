@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -1097,6 +1098,144 @@ X-Random-ID: {{$randomInt 1 xyz}}
 				assert.Equal(t, http.StatusOK, resp.StatusCode)
 				tc.validate(t, interceptedRequest.URL, interceptedRequest.Header, interceptedRequest.Body)
 			}
+		})
+	}
+}
+
+func TestExecuteFile_WithDatetimeSystemVariable(t *testing.T) {
+	var interceptedRequest struct {
+		URL    string
+		Header string
+		Body   string
+	}
+
+	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+		interceptedRequest.URL = r.URL.String()
+		bodyBytes, _ := io.ReadAll(r.Body)
+		interceptedRequest.Body = string(bodyBytes)
+		interceptedRequest.Header = r.Header.Get("X-Request-DT")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, "ok")
+	})
+	defer server.Close()
+
+	client, _ := NewClient()
+
+	// Custom format for Go: YYYY-MM-DD HH:mm:ss -> 2006-01-02 15:04:05
+	customGoFormat := "2006-01-02 15:04:05"
+
+	tests := []struct {
+		name                string
+		httpVar             string // The variable part like `rfc1123` or `"YYYY-MM-DD HH:mm:ss"`
+		expectedFormat      string // Go time format string for parsing the output, or empty if expecting placeholder
+		expectAsPlaceholder bool   // If true, expect the variable to remain as a placeholder
+	}{
+		{
+			name:           "rfc1123",
+			httpVar:        "rfc1123",
+			expectedFormat: time.RFC1123,
+		},
+		{
+			name:           "iso8601",
+			httpVar:        "iso8601",
+			expectedFormat: time.RFC3339, // Go's equivalent
+		},
+		{
+			name:           "custom format double quotes",
+			httpVar:        fmt.Sprintf("\"%s\"", customGoFormat), // e.g. "2006-01-02 15:04:05"
+			expectedFormat: customGoFormat,
+		},
+		{
+			name:                "unknown keyword",
+			httpVar:             "badkeyword",
+			expectAsPlaceholder: true,
+		},
+		{
+			name:                "malformed custom format string (unclosed quote)",
+			httpVar:             "\"2006-01-02", // Unclosed double quote
+			expectAsPlaceholder: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fullHttpVar := fmt.Sprintf("{{$datetime %s}}", tc.httpVar)
+
+			requestFileContent := fmt.Sprintf(`
+GET %s/events/%s
+Content-Type: application/json
+X-Request-DT: %s
+
+{
+  "event_dt": "%s"
+}
+`, server.URL, fullHttpVar, fullHttpVar, fullHttpVar)
+
+			tempFile, err := os.CreateTemp(t.TempDir(), "test_datetime_*.http")
+			require.NoError(t, err)
+			// No defer remove, let each test run clean up or rely on t.TempDir()
+			_, err = tempFile.WriteString(requestFileContent)
+			require.NoError(t, err)
+			_ = tempFile.Close()
+
+			beforeRequest := time.Now().UTC()
+			responses, err := client.ExecuteFile(context.Background(), tempFile.Name())
+			afterRequest := time.Now().UTC()
+
+			require.NoError(t, err, "ExecuteFile should not error for datetime processing")
+			require.Len(t, responses, 1)
+			resp := responses[0]
+			require.NoError(t, resp.Error) // Expecting successful execution by client
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+			// Validate URL, Header, Body
+			valuesToTest := map[string]string{
+				"URL":    strings.TrimPrefix(interceptedRequest.URL, "/events/"),
+				"Header": interceptedRequest.Header,
+			}
+
+			// Special handling for body if it might be invalid JSON due to placeholder
+			if tc.name == "malformed custom format string (unclosed quote)" {
+				valuesToTest["BodyRaw"] = interceptedRequest.Body // Check raw body string
+			} else {
+				var bodyJSON map[string]string
+				err = json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON)
+				require.NoError(t, err, "Failed to unmarshal body for datetime test: %s. Body: %s", tc.name, interceptedRequest.Body)
+				valuesToTest["BodyJSON"] = bodyJSON["event_dt"]
+			}
+
+			for K, V := range valuesToTest {
+				t.Logf("Test: %s, Key: %s, Value: %s, Expected Placeholder: %t, Expected Format: %s", tc.name, K, V, tc.expectAsPlaceholder, tc.expectedFormat)
+				// If the value came from a URL path, it might be URL-encoded. Unescape it first.
+				actualValueToTest := V
+				if K == "URL" {
+					decodedVal, decodeErr := url.PathUnescape(V)
+					if decodeErr == nil {
+						actualValueToTest = decodedVal
+					}
+				}
+
+				if tc.expectAsPlaceholder {
+					if K == "BodyRaw" { // For raw body check, expect fullHttpVar within the JSON-like structure
+						expectedBodyContent := fmt.Sprintf(`{
+  "event_dt": "%s"
+}`, fullHttpVar)
+						assert.Equal(t, expectedBodyContent, actualValueToTest, "BodyRaw should contain the placeholder correctly formatted in JSON string")
+					} else {
+						assert.Equal(t, fullHttpVar, actualValueToTest, "%s value should be the placeholder %s", K, fullHttpVar)
+					}
+				} else {
+					parsedTime, parseErr := time.Parse(tc.expectedFormat, actualValueToTest)
+					assert.NoError(t, parseErr, "%s value '%s' (original '%s') should be parsable with format '%s'", K, actualValueToTest, V, tc.expectedFormat)
+					if parseErr == nil {
+						// Check if the parsed time is within a reasonable window of the request execution
+						// Allow a small delta (e.g., 2 seconds) to account for execution time
+						assert.WithinDuration(t, beforeRequest, parsedTime, 2*time.Second, "%s time should be close to request time (before)", K)
+						assert.WithinDuration(t, parsedTime, afterRequest.Add(1*time.Second), 2*time.Second, "%s time should be close to request time (after)", K) // Add 1s to after to ensure window
+					}
+				}
+			}
+			_ = os.Remove(tempFile.Name()) // Clean up temp file
 		})
 	}
 }

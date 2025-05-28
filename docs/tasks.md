@@ -31,8 +31,8 @@ Last Updated: 2025-05-28
 | TASK-045 | Add unit tests for REQ-LIB-015 (SCENARIO-LIB-015-001 to SCENARIO-LIB-015-004). | Done        | AI       | 2025-06-09 |
 | TASK-046 | Implement REQ-LIB-016: Support for `{{$timestamp}}` system variable.           | Done        | AI       | 2025-06-10 |
 | TASK-047 | Add unit tests for REQ-LIB-016 (SCENARIO-LIB-016-001 to SCENARIO-LIB-016-002). | Done        | AI       | 2025-06-10 |
-| TASK-048 | Implement REQ-LIB-017: Support for `{{$datetime format}}` system variable.     | Blocked     | AI       | 2025-06-11 |
-| TASK-049 | Add unit tests for REQ-LIB-017 (SCENARIO-LIB-017-001 to SCENARIO-LIB-017-004). | Blocked     | AI       | 2025-06-11 |
+| TASK-048 | Implement REQ-LIB-017: Support for `{{$datetime format}}` system variable.     | Done        | AI       | 2025-06-11 |
+| TASK-049 | Add unit tests for REQ-LIB-017 (SCENARIO-LIB-017-001 to SCENARIO-LIB-017-004). | Done        | AI       | 2025-06-11 |
 | TASK-050 | Implement REQ-LIB-018: Support for `{{$localDatetime format}}` system variable. | Blocked     | AI       | 2025-06-12 |
 | TASK-051 | Add unit tests for REQ-LIB-018 (SCENARIO-LIB-018-001 to SCENARIO-LIB-018-002). | Blocked     | AI       | 2025-06-12 |
 | TASK-052 | Implement REQ-LIB-019: Support for `{{$processEnv variableName}}` system variable. | Done        | AI       | 2025-06-13 |
