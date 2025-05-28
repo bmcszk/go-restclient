@@ -264,6 +264,15 @@ func (c *Client) substituteSystemVariables(text string) string {
 		return match // Should not happen if regex matches, but as a fallback
 	})
 
+	// Handle {{$timestamp}}
+	// Note: Using ReplaceAll ensures all occurrences are replaced. If multiple timestamps
+	// in the same string should be identical, this is correct. If they should be unique
+	// (like $guid), a loop with strings.Replace (count 1) would be needed, but for timestamp,
+	// all occurrences in one substitution pass having the same value is generally expected.
+	if strings.Contains(text, "{{$timestamp}}") {
+		text = strings.ReplaceAll(text, "{{$timestamp}}", fmt.Sprintf("%d", time.Now().UTC().Unix()))
+	}
+
 	// Handle {{$dotenv variableName}}
 	reDotEnv := regexp.MustCompile(`\{\{\$dotenv\s+([a-zA-Z_][a-zA-Z0-9_]*)\}\}`)
 	text = reDotEnv.ReplaceAllStringFunc(text, func(match string) string {
