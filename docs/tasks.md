@@ -1,6 +1,6 @@
 # Tasks
 
-Last Updated: 2025-05-28
+Last Updated: 2025-05-29
 
 | ID       | Description                                                                 | Status      | Assignee | Due Date   |
 | :------- | :-------------------------------------------------------------------------- | :---------- | :------- | :--------- |
@@ -12,5 +12,5 @@ Last Updated: 2025-05-28
 | TASK-060 | Add unit tests for `{{$regexp pattern}}` placeholder (SCENARIO-LIB-022-001 to SCENARIO-LIB-022-005). | In Progress | AI       | 2025-06-10 |
 | TASK-065 | Implement `{{$anyDatetime format}}` placeholder support in response body validation. | In Progress | AI       | 2025-06-11 |
 | TASK-066 | Add unit tests for `{{$anyDatetime format}}` placeholder (SCENARIO-LIB-025-001 to SCENARIO-LIB-025-006). | In Progress | AI       | 2025-06-11 |
-| TASK-067 | Implement `{{$any}}` placeholder support in response body validation.       | Done        | AI       | 2025-06-12 |
-| TASK-068 | Add unit tests for `{{$any}}` placeholder (SCENARIO-LIB-026-001 to SCENARIO-LIB-026-005). | Done        | AI       | 2025-06-12 |
+| TASK-069 | Implement `{{$anyTimestamp}}` placeholder support in response body validation. | Done        | AI       | 2025-06-13 |
+| TASK-070 | Add unit tests for `{{$anyTimestamp}}` placeholder (SCENARIO-LIB-024-001 to SCENARIO-LIB-024-003). | Done        | AI       | 2025-06-13 |
