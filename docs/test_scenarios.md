@@ -281,7 +281,9 @@ Last Updated: 2025-05-28
 - SCENARIO-LIB-020-002: Use `{{$dotenv UNDEFINED_DOTENV_VAR}}` where `UNDEFINED_DOTENV_VAR` does not exist in the `.env` file.
   - Expected: Error or empty string substitution (behavior to be defined).
 - SCENARIO-LIB-020-003: Use `{{$dotenv SOME_VAR}}` with no `.env` file present in the request file's directory.
-  - Expected: Error or empty string substitution (behavior to be defined).
+  - Expected: Error or empty string substitution (behavior should be defined, likely error).
+- SCENARIO-LIB-020-004: Use `{{$dotenv DOTENV_PATH=/custom/path/.env CUSTOM_VAR}}`.
+  - Expected: Value of `CUSTOM_VAR` from `/custom/path/.env` is used.
 
 ## REQ-LIB-021: Programmatic custom variables for ExecuteFile
 
@@ -309,3 +311,92 @@ Last Updated: 2025-05-28
   - Expected: No error, and only file-defined variables (if any) are used.
 - SCENARIO-LIB-021-007: Pass `nil` as the variables map to `ExecuteFile`.
   - Expected: No error, and only file-defined variables (if any) are used.
+
+## REQ-LIB-022: Support for `{{$regexp pattern}}` placeholder in `.hresp` files
+
+- SCENARIO-LIB-022-001: Validate a response body field against a simple regexp.
+  - Expected response: `HTTP/1.1 200 OK\nContent-Type: application/json\n\n{"id": "{{$regexp \\d+}}"}`
+  - Actual response body: `{"id": "123"}`
+  - Expected outcome: Validation passes.
+- SCENARIO-LIB-022-002: Validate a response body field against a regexp that does not match.
+  - Expected response: `HTTP/1.1 200 OK\nContent-Type: application/json\n\n{"status": "{{$regexp SUCCESS}}"`
+  - Actual response body: `{"status": "FAILED"}`
+  - Expected outcome: Validation fails, error indicates regexp mismatch.
+- SCENARIO-LIB-022-003: Validate a response body with multiple `{{$regexp}}` placeholders.
+  - Expected response: `HTTP/1.1 200 OK\nContent-Type: application/json\n\n{"userId": "{{$regexp U-\\w+}}", "transactionId": "{{$regexp T-[0-9]+}}"}`
+  - Actual response body: `{"userId": "U-abc", "transactionId": "T-12345"}`
+  - Expected outcome: Validation passes.
+- SCENARIO-LIB-022-004: Use `{{$regexp}}` with special characters in the pattern that need escaping in the `.hresp` file.
+  - Expected response: `HTTP/1.1 200 OK\n\nValue: {{$regexp ^\\\\d{3}\\.test\\$$}}` (pattern is `^\d{3}\.test$`)
+  - Actual response body: `Value: 123.test`
+  - Expected outcome: Validation passes.
+- SCENARIO-LIB-022-005: Invalid regexp pattern provided in `{{$regexp ...}}`.
+  - Expected response: `HTTP/1.1 200 OK\n\n{"data": "{{$regexp ([a-z}}"}` (unbalanced parenthesis)
+  - Expected outcome: Validation fails, error indicates invalid regular expression.
+
+## REQ-LIB-023: Support for `{{$anyGuid}}` placeholder in `.hresp` files
+
+- SCENARIO-LIB-023-001: Validate a response body field that contains a valid GUID using `{{$anyGuid}}`.
+  - Expected response: `HTTP/1.1 200 OK\nContent-Type: application/json\n\n{"correlationId": "{{$anyGuid}}"}`
+  - Actual response body: `{"correlationId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}` (where x is a hex char)
+  - Expected outcome: Validation passes.
+- SCENARIO-LIB-023-002: Validate a response body field using `{{$anyGuid}}` when the actual value is not a GUID.
+  - Expected response: `HTTP/1.1 200 OK\nContent-Type: application/json\n\n{"id": "{{$anyGuid}}"}`
+  - Actual response body: `{"id": "not-a-guid"}`
+  - Expected outcome: Validation fails, error indicates value is not a GUID.
+- SCENARIO-LIB-023-003: Use `{{$anyGuid}}` in a larger text block in the expected response.
+  - Expected response: `HTTP/1.1 200 OK\n\nSession started with ID: {{$anyGuid}}. Please use this for subsequent requests.`
+  - Actual response body: `Session started with ID: yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy. Please use this for subsequent requests.`
+  - Expected outcome: Validation passes.
+
+## REQ-LIB-024: Support for `{{$anyTimestamp}}` placeholder in `.hresp` files
+
+- SCENARIO-LIB-024-001: Validate a response body field that contains a valid Unix timestamp using `{{$anyTimestamp}}`.
+  - Expected response: `HTTP/1.1 200 OK\nContent-Type: application/json\n\n{"createdAt": "{{$anyTimestamp}}"}`
+  - Actual response body: `{"createdAt": "1678886400"}`
+  - Expected outcome: Validation passes.
+- SCENARIO-LIB-024-002: Validate a response body field using `{{$anyTimestamp}}` when the actual value is not a valid integer timestamp.
+  - Expected response: `HTTP/1.1 200 OK\nContent-Type: application/json\n\n{"timestamp": "{{$anyTimestamp}}"}`
+  - Actual response body: `{"timestamp": "not-a-timestamp"}`
+  - Expected outcome: Validation fails.
+- SCENARIO-LIB-024-003: Validate a response body field using `{{$anyTimestamp}}` when the actual value is a float.
+  - Expected response: `HTTP/1.1 200 OK\nContent-Type: application/json\n\n{"timestamp": "{{$anyTimestamp}}"}`
+  - Actual response body: `{"timestamp": "1678886400.5"}`
+  - Expected outcome: Validation fails.
+
+## REQ-LIB-025: Support for `{{$anyDatetime format}}` placeholder in `.hresp` files
+
+- SCENARIO-LIB-025-001: Validate a response body field with RFC1123 datetime using `{{$anyDatetime rfc1123}}`.
+  - Expected response: `HTTP/1.1 200 OK\nContent-Type: application/json\n\n{"lastModified": "{{$anyDatetime rfc1123}}"}`
+  - Actual response body: `{"lastModified": "Tue, 15 Mar 2023 12:00:00 GMT"}`
+  - Expected outcome: Validation passes.
+- SCENARIO-LIB-025-002: Validate a response body field with ISO8601 datetime using `{{$anyDatetime iso8601}}`.
+  - Expected response: `HTTP/1.1 200 OK\nContent-Type: application/json\n\n{"eventTime": "{{$anyDatetime iso8601}}"}`
+  - Actual response body: `{"eventTime": "2023-03-15T12:00:00Z"}`
+  - Expected outcome: Validation passes.
+- SCENARIO-LIB-025-003: Validate a response body field with custom Go layout `2006-01-02` using `{{$anyDatetime "2006-01-02"}}`.
+  - Expected response: `HTTP/1.1 200 OK\nContent-Type: application/json\n\n{"date": "{{$anyDatetime \"2006-01-02\"}}"}`
+  - Actual response body: `{"date": "2023-03-15"}`
+  - Expected outcome: Validation passes.
+- SCENARIO-LIB-025-004: Validate using `{{$anyDatetime rfc1123}}` when actual format is different.
+  - Expected response: `HTTP/1.1 200 OK\n\n{"timestamp": "{{$anyDatetime rfc1123}}"}`
+  - Actual response body: `{"timestamp": "2023-03-15"}`
+  - Expected outcome: Validation fails.
+- SCENARIO-LIB-025-005: Validate using `{{$anyDatetime "invalid-format-keyword"}}`.
+  - Expected response: `HTTP/1.1 200 OK\n\n{"time": "{{$anyDatetime \"invalid-format-keyword\"}}"}`
+  - Actual response body: `{"time": "12:34:56"}`
+  - Expected outcome: Validation fails, error indicates invalid format keyword.
+- SCENARIO-LIB-025-006: Validate using `{{$anyDatetime}}` (missing format argument).
+  - Expected response: `HTTP/1.1 200 OK\n\n{"time": "{{$anyDatetime}}"}`
+  - Actual response body: `{"time": "12:34:56"}`
+  - Expected outcome: Validation fails, error indicates missing format argument.
+
+## REQ-LIB-026: `{{$any}}` Placeholder
+
+| Scenario ID          | Description                                                                 | Test Data File                                      | Expected Outcome                                                                         |
+| :------------------- | :-------------------------------------------------------------------------- | :-------------------------------------------------- | :--------------------------------------------------------------------------------------- |
+| SCENARIO-LIB-026-001 | Validate `{{$any}}` matching a simple string.                             | `validator_body_any_simple_match.hresp`             | Passes                                                                                   |
+| SCENARIO-LIB-026-002 | Validate `{{$any}}` matching a string with special characters and spaces.   | `validator_body_any_special_chars_match.hresp`      | Passes                                                                                   |
+| SCENARIO-LIB-026-003 | Validate `{{$any}}` matching an empty string segment.                       | `validator_body_any_empty_segment_match.hresp`      | Passes                                                                                   |
+| SCENARIO-LIB-026-004 | Validate `{{$any}}` matching a multi-line string.                           | `validator_body_any_multiline_match.hresp`          | Passes                                                                                   |
+| SCENARIO-LIB-026-005 | Validate multiple `{{$any}}` placeholders in a single expected body.      | `validator_body_any_multiple_placeholders_match.hresp` | Passes                                                                                   |

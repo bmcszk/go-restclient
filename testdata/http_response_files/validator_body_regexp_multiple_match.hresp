@@ -1,0 +1,4 @@
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{"userId": "{{$regexp U-\w+}}", "transactionId": "{{$regexp T-[0-9]+}}"} 

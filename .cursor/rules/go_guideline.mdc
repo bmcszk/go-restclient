@@ -44,12 +44,7 @@ alwaysApply: true
             - USE `testify/assert` or `testify/require` for assertions.
             - USE `testify/mock` for mocks.
             - REQUIREMENTS: Must be FAST. NO Docker/external services.
-        - **E2E/Integration Tests (`//go:build e2e`):**
-            - Test system behavior (whole/integrated parts).
-            - STYLE: BDD (see `github.com/bmcszk/effective-monorepo/tree/feature/tilt/e2e` for non-Godog examples).
-            - 3rd Party REST Mocking (E2E): USE `unimock` (`github.com/bmcszk/unimock`).
-            - REQUIREMENTS: Running app & dependencies (e.g., Docker Compose).
-    - **Execution:** Unit and E2E tests MUST be runnable via dedicated Makefile targets (e.g., `make test-unit`, `make test-e2e`).
+    - **Execution:** Unit tests MUST be runnable via dedicated Makefile targets (e.g., `make test-unit`).
     - **Function Visibility & Test Coverage:**
         - If function visibility changes (public -> private), reassess need for its dedicated unit tests.
         - Private functions often tested indirectly via public API.
@@ -61,5 +56,5 @@ alwaysApply: true
         - `make check` MUST INCLUDE:
             - `go build ./...`
             - `golangci-lint run`
-            - Unit tests (e.g., `make test-unit` or `go test -tags=unit ./...`)
+            - Unit tests (e.g., `make test-unit`)
         - REQUIREMENTS: `make check` MUST NOT require Docker or external services.

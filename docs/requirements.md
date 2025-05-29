@@ -25,6 +25,11 @@ Last Updated: 2025-05-27
 - REQ-LIB-019: The library must support a `{{$processEnv variableName}}` system variable that substitutes the value of the specified system environment variable.
 - REQ-LIB-020: The library must support a `{{$dotenv variableName}}` system variable that substitutes the value of the specified variable from a `.env` file in the current working directory or a user-specified path.
 - REQ-LIB-021: The library must allow users to programmatically provide a map of custom variables during a call to `ExecuteFile`, which can be used for substitution in the request file, potentially overriding variables defined within the file itself.
+- REQ-LIB-022: The library must support a `{{$regexp pattern}}` placeholder in `.hresp` files for validating parts of an HTTP response body against a regular expression.
+- REQ-LIB-023: The library must support a `{{$anyGuid}}` placeholder in `.hresp` files for validating if a part of an HTTP response body is any valid GUID.
+- REQ-LIB-024: The library must support an `{{$anyTimestamp}}` placeholder in `.hresp` files for validating if a part of an HTTP response body is any valid Unix timestamp (integer).
+- REQ-LIB-025: The library must support an `{{$anyDatetime format}}` placeholder in `.hresp` files for validating if a part of an HTTP response body is a datetime string matching the given format (rfc1123, iso8601, or Go layout string).
+- REQ-LIB-026: The library must support a `{{$any}}` placeholder in the expected HTTP response body.
 
 ## Non-Functional Requirements
 
