@@ -1285,3 +1285,147 @@ func TestExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
 	assert.Equal(t, timestampFromHeader, timestampFromBody1, "Timestamp in Header and Body (event_time) should be the same")
 	assert.Equal(t, timestampFromBody1, timestampFromBody2, "Timestamp in Body (event_time and processed_at) should be the same")
 }
+
+func TestExecuteFile_IgnoreEmptyBlocks_Client(t *testing.T) {
+	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/first":
+			assert.Equal(t, http.MethodGet, r.Method)
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "response from /first")
+		case "/second":
+			assert.Equal(t, http.MethodGet, r.Method)
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "response from /second")
+		case "/req1":
+			assert.Equal(t, http.MethodGet, r.Method)
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = fmt.Fprint(w, "response from /req1")
+		case "/req2":
+			assert.Equal(t, http.MethodPost, r.Method)
+			bodyBytes, _ := io.ReadAll(r.Body)
+			assert.JSONEq(t, `{"key": "value"}`, string(bodyBytes))
+			w.WriteHeader(http.StatusCreated)
+			_, _ = fmt.Fprint(w, "response from /req2")
+		default:
+			t.Errorf("Unexpected request to mock server: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer server.Close()
+
+	client, _ := NewClient()
+
+	tests := []struct {
+		name               string
+		requestFileContent string // Raw content, will be written to a temp file
+		expectedResponses  int
+		expectedError      bool
+		responseValidators []func(t *testing.T, resp *Response)
+	}{
+		{
+			name: "SCENARIO-LIB-028-004: Valid request, then separator, then only comments",
+			requestFileContent: fmt.Sprintf(`
+GET %s/first
+
+###
+# This block is empty
+`, server.URL),
+			expectedResponses: 1,
+			expectedError:     false,
+			responseValidators: []func(t *testing.T, resp *Response){
+				func(t *testing.T, resp *Response) {
+					assert.NoError(t, resp.Error)
+					assert.Equal(t, http.StatusOK, resp.StatusCode)
+					assert.Equal(t, "response from /first", resp.BodyString)
+				},
+			},
+		},
+		{
+			name: "SCENARIO-LIB-028-005: Only comments, then separator, then valid request",
+			requestFileContent: fmt.Sprintf(`
+# This block is empty
+###
+GET %s/second
+`, server.URL),
+			expectedResponses: 1,
+			expectedError:     false,
+			responseValidators: []func(t *testing.T, resp *Response){
+				func(t *testing.T, resp *Response) {
+					assert.NoError(t, resp.Error)
+					assert.Equal(t, http.StatusOK, resp.StatusCode)
+					assert.Equal(t, "response from /second", resp.BodyString)
+				},
+			},
+		},
+		{
+			name: "SCENARIO-LIB-028-006: Valid request, separator with comments, then another valid request",
+			requestFileContent: fmt.Sprintf(`
+GET %s/req1
+
+### Comment for empty block
+# More comments
+
+###
+POST %s/req2
+Content-Type: application/json
+
+{
+  "key": "value"
+}
+`, server.URL, server.URL),
+			expectedResponses: 2,
+			expectedError:     false,
+			responseValidators: []func(t *testing.T, resp *Response){
+				func(t *testing.T, resp *Response) { // For GET /req1
+					assert.NoError(t, resp.Error)
+					assert.Equal(t, http.StatusAccepted, resp.StatusCode)
+					assert.Equal(t, "response from /req1", resp.BodyString)
+				},
+				func(t *testing.T, resp *Response) { // For POST /req2
+					assert.NoError(t, resp.Error)
+					assert.Equal(t, http.StatusCreated, resp.StatusCode)
+					assert.Equal(t, "response from /req2", resp.BodyString)
+				},
+			},
+		},
+		{
+			name: "File with only variable definitions - ExecuteFile",
+			requestFileContent: `
+@host=localhost
+@port=8080
+`,
+			expectedResponses: 0,
+			expectedError:     true, // Expect "no requests found in file"
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tempFile, err := os.CreateTemp(t.TempDir(), "test_*.http")
+			require.NoError(t, err)
+			defer os.Remove(tempFile.Name())
+
+			_, err = tempFile.WriteString(tt.requestFileContent)
+			require.NoError(t, err)
+			require.NoError(t, tempFile.Close())
+
+			responses, execErr := client.ExecuteFile(context.Background(), tempFile.Name())
+
+			if tt.expectedError {
+				assert.Error(t, execErr)
+				if strings.Contains(tt.name, "variable definitions") { // More specific check for this case
+					assert.Contains(t, execErr.Error(), "no requests found in file")
+				}
+			} else {
+				assert.NoError(t, execErr)
+				require.Len(t, responses, tt.expectedResponses, "Number of responses mismatch")
+				for i, validator := range tt.responseValidators {
+					if i < len(responses) {
+						validator(t, responses[i])
+					}
+				}
+			}
+		})
+	}
+}
