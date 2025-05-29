@@ -949,27 +949,27 @@ func TestValidateResponses_BodyAnyDatetimePlaceholder(t *testing.T) {
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"body mismatch (regexp/placeholder evaluation failed)"},
 		},
-		// {
-		// 	name:             "SCENARIO-LIB-025-005: invalid format keyword",
-		// 	actualResponse:   &Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"time": "12:34:56"}`},
-		// 	expectedFilePath: "testdata/http_response_files/validator_body_anydatetime_invalid_keyword.hresp",
-		// 	expectedErrCount: 1,
-		// 	expectedErrTexts: []string{"body mismatch (regexp/placeholder evaluation failed)", "Compiled Regex: ^\\{\"time\": \"(\\\\z.\\\\A)\"\\}\"$"},
-		// },
-		// {
-		// 	name:             "SCENARIO-LIB-025-006: missing format argument",
-		// 	actualResponse:   &Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"time": "12:34:56"}`},
-		// 	expectedFilePath: "testdata/http_response_files/validator_body_anydatetime_missing_format.hresp",
-		// 	expectedErrCount: 1,
-		// 	expectedErrTexts: []string{"body mismatch (regexp/placeholder evaluation failed)", "Compiled Regex: ^\\{\"time\": \"(\\\\z.\\\\A)\"\\}\"$"},
-		// },
-		// {
-		// 	name:             "custom format empty string literal \\"\\" - should fail",
-		// 	actualResponse:   &Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"date": ""}`},
-		// 	expectedFilePath: "testdata/http_response_files/validator_body_anydatetime_custom_empty_format.hresp",
-		// 	expectedErrCount: 1,
-		// 	expectedErrTexts: []string{"body mismatch (regexp/placeholder evaluation failed)", "Compiled Regex: ^\\{\"date\": \"(\\\\z.\\\\A)\"\\}\"$"},
-		// },
+		{
+			name:             "SCENARIO-LIB-025-005: invalid format keyword",
+			actualResponse:   &Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"time": "12:34:56"}`},
+			expectedFilePath: "testdata/http_response_files/validator_body_anydatetime_invalid_keyword.hresp",
+			expectedErrCount: 1,
+			expectedErrTexts: []string{"body mismatch (regexp/placeholder evaluation failed)", "(\\z.\\A)"},
+		},
+		{
+			name:             "SCENARIO-LIB-025-006: missing format argument",
+			actualResponse:   &Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"time": "12:34:56"}`},
+			expectedFilePath: "testdata/http_response_files/validator_body_anydatetime_missing_format.hresp",
+			expectedErrCount: 1,
+			expectedErrTexts: []string{"body mismatch (regexp/placeholder evaluation failed)", "(\\z.\\A)"},
+		},
+		{
+			name:             "custom format empty string literal \"\" - should fail",
+			actualResponse:   &Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"date": ""}`},
+			expectedFilePath: "testdata/http_response_files/validator_body_anydatetime_custom_empty_format.hresp",
+			expectedErrCount: 1,
+			expectedErrTexts: []string{"body mismatch (regexp/placeholder evaluation failed)", "(\\z.\\A)"},
+		},
 	}
 
 	for _, tt := range tests {
