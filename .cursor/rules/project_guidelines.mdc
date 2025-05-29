@@ -44,6 +44,10 @@ Project: Go library `github.com/bmcszk/go-restclient`.
         1. Acknowledge mistake.
         2. Document mistake in `docs/learnings.md` (what went wrong).
         3. After correction, UPDATE `docs/learnings.md` with resolution/lesson.
+    - **Problem Solving Strategy:** If stuck on a task (e.g., tool limitations, persistent errors):
+        1. Re-consult all relevant project guidelines and documentation (`.mdc` files, `docs/` folder).
+        2. If guidelines do not provide a path forward, perform a web search for potential solutions or workarounds. Prefix search queries with "cursor ai" to tailor results (e.g., "cursor ai golang edit_file not applying changes").
+        3. If still unable to resolve, clearly document the issue, attempted steps, and why progress is blocked, then await user guidance.
 
 ## 5. File Editing & Patch Management (AI Agent)
     - **A. Direct File Modification (`edit_file` tool):**
@@ -78,6 +82,16 @@ Project: Go library `github.com/bmcszk/go-restclient`.
         4. Mailbox format (`git format-patch`): `git am < my_patch.patch` (creates commits). Use `git am --abort` on issues.
         5. ALWAYS verify changes & run `make check` post-application.
     - **F. `edit_file` for Patch CONTENT: AVOID.** `edit_file` modifies source files, not for writing patch content.
+    - **G. Handling Problematic Large File Edits / Complex Refactors:**
+        - If `edit_file` or `reapply` consistently fails or produces incorrect diffs for a large file or complex refactoring task across multiple locations:
+            1. **Identify Problematic File(s):** Note the specific file(s) causing issues.
+            2. **Reject Changes:** Ensure no partial/corrupt changes from failed attempts are staged or kept.
+            3. **Reset File(s):** Use `git checkout -- <file_path>` or `git restore <file_path>` to revert the problematic file(s) to their last committed state (HEAD).
+            4. **Strategize Refactoring (If Applicable):** If the issue is due to complexity (e.g., refactoring a large function/struct used in many places):
+                - Consider if the large file/struct can be broken down into smaller, more manageable, and independently modifiable units/files. This might be a separate preliminary task.
+                - If splitting is feasible, propose and (if approved or per autonomy rules) perform the split first.
+            5. **Re-attempt Task on Smaller Units:** If files were split, or if the original task can be broken into smaller, more localized edits on the original file, attempt these smaller edits sequentially, verifying each with `read_file` and `make check` (if applicable) before proceeding.
+            6. **Manual Intervention**: If automated edits on smaller chunks still fail, or if splitting the file is not feasible/desired, explicitly state that the task requires manual intervention due to tool limitations with the specific file/complexity.
 
 ## 6. Testing Guidelines (Project Specific)
     - **Test Coverage:** MUST cover all functional requirements (`docs/requirements.md`) and scenarios (`docs/test_scenarios.md`). Validate key user flows & API interactions in realistic (Dockerized) environment.

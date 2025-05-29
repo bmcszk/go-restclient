@@ -30,6 +30,8 @@ Last Updated: 2025-05-27
 - REQ-LIB-024: The library must support an `{{$anyTimestamp}}` placeholder in `.hresp` files for validating if a part of an HTTP response body is any valid Unix timestamp (integer).
 - REQ-LIB-025: The library must support an `{{$anyDatetime format}}` placeholder in `.hresp` files for validating if a part of an HTTP response body is a datetime string matching the given format (rfc1123, iso8601, or Go layout string).
 - REQ-LIB-026: The library must support a `{{$any}}` placeholder in the expected HTTP response body.
+- REQ-LIB-027: The `###` separator can also act as a comment prefix, meaning any text after the separator on the same line is ignored for parsing purposes, applicable to both request and response definitions.
+- REQ-LIB-028: The library must ignore any block between `###` separators (or start/end of file) that does not contain a parsable request or response definition, and these ignored blocks should not affect the indexing of subsequent valid request/response blocks.
 
 ## Non-Functional Requirements
 

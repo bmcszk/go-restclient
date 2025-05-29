@@ -82,9 +82,7 @@ func TestValidateResponses_FileErrors(t *testing.T) {
 	t.Run("empty expected response file", func(t *testing.T) {
 		emptyFilePath := "testdata/http_response_files/validator_empty_expected.hresp"
 		err := ValidateResponses(emptyFilePath, actualResp)
-		assertMultierrorContains(t, err, 2, []string{
-			"failed to parse expected response file",
-			"no valid expected responses found in file",
+		assertMultierrorContains(t, err, 1, []string{
 			"mismatch in number of responses: got 1 actual, but expected 0",
 		})
 	})
