@@ -1,6 +1,6 @@
 # Go REST Client Library (`go-restclient`)
 
-Last Updated: 2025-05-28
+Last Updated: 2025-05-29
 
 ## Overview
 
@@ -36,6 +36,34 @@ This library is suitable for programmatic use within Go applications, particular
     - Validate headers: exact match for specified keys, or check if actual headers contain specified key-substring pairs.
     - Validate body: exact match or contains substrings.
 
+### Response Body Placeholders (`.hresp` files)
+
+When defining expected responses in `.hresp` files, the body section can use placeholders to match dynamic content. This is particularly useful for values that change with each request, like generated IDs, timestamps, or any arbitrary text.
+
+The following placeholders are supported in the expected response body:
+
+- **`{{$any}}`**: Matches any sequence of characters (including an empty string). This is useful for parts of the response body that are dynamic or not relevant to the current test. It's non-greedy.
+  *Example:* `{"message": "Processed item {{$any}} successfully"}`
+
+- **`{{$regexp 'pattern'}}`**: Matches text against the provided Go regular expression `pattern`. The pattern **must be enclosed in backticks (` `)**.
+  *Example:* `{"id": "{{$regexp `^[a-f0-9-]+$`}}"}` (matches a UUID-like string)
+  *Example:* `{"value": "{{$regexp `\d{3,5}`}}` (matches 3 to 5 digits)
+
+- **`{{$anyGuid}}`**: Matches a standard UUID string (e.g., `123e4567-e89b-12d3-a456-426614174000`).
+  *Example:* `{"correlationId": "{{$anyGuid}}"}`
+
+- **`{{$anyTimestamp}}`**: Matches a Unix timestamp (an integer representing seconds).
+  *Example:* `{"createdAt": "{{$anyTimestamp}}"}`
+
+- **`{{$anyDatetime 'format'}}`**: Matches a datetime string based on the provided `format`.
+    - Predefined formats: `'rfc1123'`, `'iso8601'`.
+    - Custom Go layout: If `format` is a Go `time.Parse` layout string, it must be **enclosed in double quotes** (e.g., `{{$anyDatetime ""2006-01-02""}}`).
+  *Example (RFC1123):* `{"lastModified": "{{$anyDatetime 'rfc1123'}}"}`
+  *Example (ISO8601):* `{"timestamp": "{{$anyDatetime 'iso8601'}}"}`
+  *Example (Custom Layout):* `{"eventDate": "{{$anyDatetime ""2006-01-02""}}"}`
+
+**Note on Placeholder Evaluation:** When a response body contains placeholders, the library constructs a single regular expression from the expected body. Each placeholder is converted into its corresponding regex pattern. Literals parts of the expected body are automatically escaped for regex. The entire actual response body is then matched against this master regex.
+
 ## Getting Started
 
 ### Prerequisites
@@ -49,6 +77,62 @@ go get github.com/bmcszk/go-restclient
 ```
 
 ## Usage
+
+### Client Configuration Options
+
+The `restclient.NewClient()` function accepts functional options to customize the client's behavior:
+
+- **`restclient.WithHTTPClient(customClient *http.Client)`**:
+  Allows you to provide your own `*http.Client` instance. This is useful for configuring custom transport, timeouts, redirects, TLS settings, etc. If not provided, a default `*http.Client` is used.
+
+  *Example:*
+  ```go
+  customTransport := &http.Transport{
+      TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+  }
+  httpClient := &http.Client{
+      Transport: customTransport,
+      Timeout:   15 * time.Second,
+  }
+  client, err := restclient.NewClient(restclient.WithHTTPClient(httpClient))
+  ```
+
+- **`restclient.WithBaseURL(baseURL string)`**:
+  Sets a base URL that will be prepended to all relative request URLs defined in `.http` files. If a request URL is absolute, the base URL is not used.
+
+  *Example:*
+  ```go
+  client, err := restclient.NewClient(restclient.WithBaseURL("https://api.example.com/v1"))
+  // A request to "/users" in an .http file will become "https://api.example.com/v1/users"
+  ```
+
+- **`restclient.WithDefaultHeader(key string, value string)`**:
+  Adds a single default header that will be included in every request sent by the client. If a request itself defines a header with the same key, the request's header value will typically take precedence (standard HTTP client behavior may vary slightly based on canonicalization, but usually the last one set for a key is used, or multiple are sent if the header key allows).
+
+  *Example:*
+  ```go
+  client, err := restclient.NewClient(restclient.WithDefaultHeader("X-Client-ID", "my-app-123"))
+  ```
+
+- **`restclient.WithDefaultHeaders(headers http.Header)`**:
+  Adds multiple default headers from an `http.Header` map. Similar precedence rules apply as with `WithDefaultHeader`.
+
+  *Example:*
+  ```go
+  defaultHeaders := make(http.Header)
+  defaultHeaders.Add("X-App-Name", "MyApplication")
+  defaultHeaders.Add("X-App-Version", "2.0.1")
+  client, err := restclient.NewClient(restclient.WithDefaultHeaders(defaultHeaders))
+  ```
+
+These options can be combined when creating a new client:
+```go
+client, err := restclient.NewClient(
+    restclient.WithBaseURL("https://api.myapp.com"),
+    restclient.WithDefaultHeader("Authorization", "Bearer default-token"),
+    // ... other options
+)
+```
 
 ### 1. Define HTTP Requests
 
@@ -111,7 +195,12 @@ import (
 )
 
 func main() {
-	client, err := restclient.NewClient()
+	client, err := restclient.NewClient(
+		// Example client options:
+		// restclient.WithBaseURL("https://api.global.com"),
+		// restclient.WithDefaultHeader("X-App-Version", "1.2.3"),
+		// restclient.WithHTTPClient(&http.Client{Timeout: 15 * time.Second}),
+	)
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
 	}
