@@ -400,3 +400,128 @@ Last Updated: 2025-05-28
 | SCENARIO-LIB-026-003 | Validate `{{$any}}` matching an empty string segment.                       | `validator_body_any_empty_segment_match.hresp`      | Passes                                                                                   |
 | SCENARIO-LIB-026-004 | Validate `{{$any}}` matching a multi-line string.                           | `validator_body_any_multiline_match.hresp`          | Passes                                                                                   |
 | SCENARIO-LIB-026-005 | Validate multiple `{{$any}}` placeholders in a single expected body.      | `validator_body_any_multiple_placeholders_match.hresp` | Passes                                                                                   |
+
+## REQ-LIB-027: `###` separator as comment prefix
+
+- SCENARIO-LIB-027-001: Parse a request file where `###` is followed by a comment on the same line.
+  - File content:
+    ```http
+    GET https://example.com/api/resource1
+    X-Test-Header: Value1
+
+    ### This is a comment for the first request block and should be ignored
+
+    POST https://example.com/api/resource2
+    Content-Type: application/json
+
+    {"key": "value"}
+    ```
+  - Expected outcome: Both requests are parsed correctly. The text "This is a comment for the first request block and should be ignored" is ignored.
+- SCENARIO-LIB-027-002: Parse a response file where `###` is followed by a comment on the same line.
+  - File content:
+    ```http
+    HTTP/1.1 200 OK
+    Content-Type: application/json
+
+    {"status": "success"}
+
+    ### This is a comment for the first response block
+
+    HTTP/1.1 404 Not Found
+    ```
+  - Expected outcome: Both responses are parsed correctly. The comment text is ignored.
+- SCENARIO-LIB-027-003: Parse a file with `###` followed by comment, with no newline before the next request/response.
+  - File content:
+    ```http
+    GET https://example.com/api/item1 ### Comment for item1
+    POST https://example.com/api/item2
+    ```
+  - Expected outcome: First request (GET) is parsed. The second request (POST) is also parsed. Comment is ignored.
+- SCENARIO-LIB-027-004: Parse a file where a line only contains `###` followed by a comment.
+  - File content:
+    ```http
+    GET https://example.com/api/data
+
+    ### This line is just a separator comment
+
+    PUT https://example.com/api/update
+    Content-Type: application/json
+
+    {"id": 1, "value": "new data"}
+    ```
+  - Expected outcome: Both requests are parsed correctly. The line with only the separator comment is treated as a simple separator.
+
+## REQ-LIB-028: Ignore blocks without request/response
+
+- SCENARIO-LIB-028-001: Parse a file with an empty block between two valid requests.
+  - File content:
+    ```http
+    GET https://example.com/api/first
+
+    ###
+
+    ### This block is effectively empty
+
+    POST https://example.com/api/second
+    Content-Type: application/json
+
+    {"data": "payload"}
+    ```
+  - Expected outcome: The first request (GET) is parsed as index 0. The second request (POST) is parsed as index 1. The empty block is ignored and does not increment the index.
+- SCENARIO-LIB-028-002: Parse a file with a block containing only comments between two valid requests.
+  - File content:
+    ```http
+    GET https://example.com/api/A
+
+    ###
+    # This is a commented out request
+    # GET https://example.com/api/commented
+    ###
+
+    GET https://example.com/api/B
+    ```
+  - Expected outcome: Request A is parsed as index 0. Request B is parsed as index 1. The block with only comments is ignored.
+- SCENARIO-LIB-028-003: Parse a file starting with an empty/comment-only block.
+  - File content:
+    ```http
+    ### This is an initial empty block with a comment
+    # Another comment
+    ###
+
+    GET https://example.com/api/valid
+    ```
+  - Expected outcome: The GET request is parsed as index 0.
+- SCENARIO-LIB-028-004: Parse a file ending with an empty/comment-only block.
+  - File content:
+    ```http
+    GET https://example.com/api/valid
+
+    ###
+    # Final comment block
+    ###
+    ```
+  - Expected outcome: The GET request is parsed as index 0. The trailing empty block is ignored.
+- SCENARIO-LIB-028-005: Parse a file with multiple consecutive empty/comment-only blocks.
+  - File content:
+    ```http
+    GET https://example.com/api/one
+
+    ###
+    # empty 1
+    ###
+    ###
+    # empty 2
+    ###
+
+    GET https://example.com/api/two
+    ```
+  - Expected outcome: Request "one" is index 0, request "two" is index 1.
+- SCENARIO-LIB-028-006: Parse a file containing only `###` separators and comments.
+  - File content:
+    ```http
+    ### Comment 1
+    # More comments
+    ###
+    ### Comment 2
+    ```
+  - Expected outcome: No requests/responses are parsed. The parser should handle this gracefully (e.g., return an empty list or an error indicating no valid content found, TBD).
