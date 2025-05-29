@@ -25,7 +25,6 @@ Project: Go library `github.com/bmcszk/go-restclient`.
 ## 3. Quality Assurance & Workflow
     - **Pre-commit Checks (MANDATORY):** BEFORE committing, VERIFY ALL changes by:
         1. Running `make check` (includes compile, lint, all unit tests).
-        2. Running all E2E tests (e.g., `make test-e2e`).
     - **Makefile Targets for Tools:** ENSURE all essential dev tools (sqlc, migrate, linters) have Makefile targets.
     - **Test Coverage:** See `.cursor/rules/requirement_workflow.mdc`.
     - **Task Completion & VC:** See `.cursor/rules/task_workflow.mdc`.
@@ -81,10 +80,5 @@ Project: Go library `github.com/bmcszk/go-restclient`.
     - **F. `edit_file` for Patch CONTENT: AVOID.** `edit_file` modifies source files, not for writing patch content.
 
 ## 6. Testing Guidelines (Project Specific)
-    - **E2E / Integration Tests (`//go:build e2e`):
-        - Verify system behavior (whole/integrated parts).
-        - Style: BDD (Godog or similar patterns, see `go_guideline.mdc` for non-Godog example).
-        - Requires running app & dependencies (Docker Compose).
-        - Build Tag: `//go:build e2e`.
-    - **E2E Test Coverage:** MUST cover all functional requirements (`docs/requirements.md`) and scenarios (`docs/test_scenarios.md`). Validate key user flows & API interactions in realistic (Dockerized) environment.
-    - **Makefile Targets:** Both Unit & E2E tests MUST be runnable via `make test-unit` and `make test-e2e`.
+    - **Test Coverage:** MUST cover all functional requirements (`docs/requirements.md`) and scenarios (`docs/test_scenarios.md`). Validate key user flows & API interactions in realistic (Dockerized) environment.
+    - **Makefile Targets:** Unit tests MUST be runnable via `make test-unit`.

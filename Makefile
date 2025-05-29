@@ -39,7 +39,7 @@ test: test-unit ## Run all tests
 
 test-unit: ## Run unit tests
 	@echo "Running unit tests..."
-	@go test -tags=unit -cover ./...
+	@go test -cover ./...
 
 # Dependencies
 install-lint: ## Install golangci-lint

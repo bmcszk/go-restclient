@@ -26,8 +26,8 @@ type Response struct {
 // This might be loaded from a file (e.g., request_name.expected.json or .http).
 // Or it could be defined programmatically.
 type ExpectedResponse struct {
-	StatusCode *int        `json:"statusCode,omitempty" yaml:"statusCode,omitempty"`
-	Status     *string     `json:"status,omitempty" yaml:"status,omitempty"`
-	Headers    http.Header `json:"headers,omitempty" yaml:"headers,omitempty"` // For header presence/value checks
-	Body       *string     `json:"body,omitempty" yaml:"body,omitempty"`       // Expected body content (exact match or regex)
+	StatusCode *int
+	Status     *string
+	Headers    http.Header // For header presence/value checks
+	Body       *string     // Expected body content (exact match or regex)
 }

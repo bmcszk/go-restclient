@@ -158,7 +158,7 @@ func main() {
 
 ### Running Tests
 
-- **Unit Tests:** `make test-unit` (or `go test -tags=unit ./...`)
+- **Unit Tests:** `make test-unit`
 
 ### Linting and Checks
 
