@@ -12,5 +12,5 @@
 | TRV-005 | Ensure library exclusively uses `.http` for expected responses (REQ-LIB-012 core logic).                     | Completed |              | Core logic assumed complete. See specific tests TRV-006, TRV-007.|
 | TRV-006 | Implement unit tests covering SCENARIO-LIB-012-001 (reject JSON response file). (REQ-LIB-012)                | Skipped   | TRV-005      | Migrated from TASK-034.                                          |
 | TRV-007 | Implement unit tests covering SCENARIO-LIB-012-002 (reject YAML response file). (REQ-LIB-012)               | Skipped   | TRV-005      | Migrated from TASK-035.                                          |
-| TRV-008 | Review and update documentation related to response validation.                                              | To Do     | TRV-001..005 | NFR-RV-002                                                       |
-| TRV-009 | Verify unit test coverage for all response validation features.                                              | To Do     | TRV-001..005 | NFR-RV-003                                                       | 
+| TRV-008 | Review and update documentation related to response validation.                                              | Done      | TRV-001..005 | NFR-RV-002                                                       |
+| TRV-009 | Verify unit test coverage for all response validation features.                                              | Done      | TRV-001..005 | NFR-RV-003. Current coverage 90.6%.                              | 
