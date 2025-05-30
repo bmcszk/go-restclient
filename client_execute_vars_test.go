@@ -16,440 +16,13 @@ import (
 	"testing"
 	"time"
 
-	"text/template"
-
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// Helper to create a mock server
-func startMockServer(handler http.HandlerFunc) *httptest.Server {
-	return httptest.NewServer(handler)
-}
-
-func TestNewClient(t *testing.T) {
-	c, err := NewClient()
-	require.NoError(t, err)
-	require.NotNil(t, c)
-	assert.NotNil(t, c.httpClient)
-	assert.Empty(t, c.BaseURL)
-	assert.NotNil(t, c.DefaultHeaders)
-	assert.Empty(t, c.DefaultHeaders)
-}
-
-// createTestFileFromTemplate processes a template file and returns the path to the processed file.
-func createTestFileFromTemplate(t *testing.T, templatePath string, data interface{}) string {
-	t.Helper()
-	tmplContent, err := os.ReadFile(templatePath)
-	require.NoError(t, err)
-
-	// Use different delimiters to avoid conflict with {{...}} used by the library itself
-	tmpl, err := template.New("testfile").Delims("[[", "]]").Parse(string(tmplContent))
-	require.NoError(t, err)
-
-	tempFile, err := os.CreateTemp(t.TempDir(), "processed_*.http")
-	require.NoError(t, err)
-
-	err = tmpl.Execute(tempFile, data)
-	require.NoError(t, err)
-
-	err = tempFile.Close()
-	require.NoError(t, err)
-
-	return tempFile.Name()
-}
-
-func TestNewClient_WithOptions(t *testing.T) {
-	customHTTPClient := &http.Client{Timeout: 15 * time.Second} // Note: time not imported yet
-	baseURL := "https://api.example.com"
-	defaultHeaderKey := "X-Default"
-	defaultHeaderValue := "DefaultValue"
-
-	c, err := NewClient(
-		WithHTTPClient(customHTTPClient),
-		WithBaseURL(baseURL),
-		WithDefaultHeader(defaultHeaderKey, defaultHeaderValue),
-	)
-	require.NoError(t, err)
-	require.NotNil(t, c)
-	assert.Equal(t, customHTTPClient, c.httpClient)
-	assert.Equal(t, baseURL, c.BaseURL)
-	assert.Equal(t, defaultHeaderValue, c.DefaultHeaders.Get(defaultHeaderKey))
-
-	// Test nil http client option
-	c2, err2 := NewClient(WithHTTPClient(nil))
-	require.NoError(t, err2)
-	require.NotNil(t, c2.httpClient, "httpClient should default if nil provided")
-}
-
-func TestExecuteFile_SingleRequest(t *testing.T) {
-	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, http.MethodGet, r.Method)
-		assert.Equal(t, "/users", r.URL.Path)
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "user data")
-	})
-	defer server.Close()
-
-	client, _ := NewClient()
-	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/single_request.http", struct{ ServerURL string }{ServerURL: server.URL})
-
-	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
-	require.NoError(t, err)
-	require.Len(t, responses, 1)
-	resp := responses[0]
-	require.NotNil(t, resp)
-	assert.NoError(t, resp.Error)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Equal(t, "user data", resp.BodyString)
-}
-
-func TestExecuteFile_MultipleRequests(t *testing.T) {
-	var requestCounter int
-	server := startMockServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCounter++
-		switch r.URL.Path {
-		case "/req1":
-			assert.Equal(t, http.MethodGet, r.Method)
-			w.WriteHeader(http.StatusOK)
-			_, _ = fmt.Fprint(w, "response1")
-		case "/req2":
-			assert.Equal(t, http.MethodPost, r.Method)
-			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
-			bodyBytes, err := io.ReadAll(r.Body)
-			require.NoError(t, err)
-			assert.JSONEq(t, `{"key": "value"}`, string(bodyBytes))
-			w.WriteHeader(http.StatusCreated)
-			_, _ = fmt.Fprint(w, "response2")
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-	defer server.Close()
-
-	client, _ := NewClient()
-	processedFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/multiple_requests.http", struct{ ServerURL string }{ServerURL: server.URL})
-
-	responses, err := client.ExecuteFile(context.Background(), processedFilePath)
-	require.NoError(t, err)
-	require.Len(t, responses, 2)
-	assert.Equal(t, 2, requestCounter, "Server should have received two requests")
-
-	resp1 := responses[0]
-	assert.NoError(t, resp1.Error)
-	assert.Equal(t, http.StatusOK, resp1.StatusCode)
-	assert.Equal(t, "response1", resp1.BodyString)
-
-	// Define expected response for request 1 & 2 in a single file
-	expectedFilePath := "testdata/http_response_files/client_multiple_requests_expected.hresp"
-
-	validationErr := ValidateResponses(expectedFilePath, resp1, responses[1])
-	assert.NoError(t, validationErr, "Validation errors for responses should be nil")
-
-	resp2 := responses[1]
-	assert.NoError(t, resp2.Error)
-	assert.Equal(t, http.StatusCreated, resp2.StatusCode)
-	assert.Equal(t, "response2", resp2.BodyString)
-}
-
-func TestExecuteFile_RequestWithError(t *testing.T) {
-	// serverURL := "http://localhost:12346" // Non-existent server for first request - This is now in the .http file
-	server2 := startMockServer(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "good response")
-	})
-	defer server2.Close()
-
-	client, _ := NewClient()
-	processedFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/request_with_error.http", struct{ ServerURL string }{ServerURL: server2.URL})
-
-	responses, err := client.ExecuteFile(context.Background(), processedFilePath)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "1 error occurred:")
-	assert.Contains(t, err.Error(), "http request failed")
-	assert.Contains(t, err.Error(), "request 1 (GET http://localhost:12346/bad) failed")
-
-	require.Len(t, responses, 2)
-
-	resp1 := responses[0]
-	assert.Error(t, resp1.Error)
-	assert.Contains(t, resp1.Error.Error(), "http request failed")
-
-	resp2 := responses[1]
-	assert.NoError(t, resp2.Error)
-	assert.Equal(t, http.StatusOK, resp2.StatusCode)
-	assert.Equal(t, "good response", resp2.BodyString)
-}
-
-func TestExecuteFile_ParseError(t *testing.T) {
-	client, _ := NewClient()
-	_, err := client.ExecuteFile(context.Background(), "testdata/http_request_files/parse_error.http")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no requests found in file testdata/http_request_files/parse_error.http")
-}
-
-func TestExecuteFile_NoRequestsInFile(t *testing.T) {
-	client, _ := NewClient()
-	_, err := client.ExecuteFile(context.Background(), "testdata/http_request_files/comment_only_file.http")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no requests found in file testdata/http_request_files/comment_only_file.http")
-}
-
-func TestExecuteFile_ValidThenInvalidSyntax(t *testing.T) {
-	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/first" {
-			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, "response from /first")
-		} else if r.Method == "INVALID_METHOD" && r.URL.Path == "/second" {
-			// The Go http server by default will respond with 501 Not Implemented
-			// if it receives a method it doesn't understand, or 405 if the handler is more specific.
-			// httptest.Server uses DefaultServeMux which would result in 404 if no path matches,
-			// but if a path *could* match but method doesn't, it's 405.
-			// Let's assume the default http server behavior for an unknown method is 501.
-			w.WriteHeader(http.StatusNotImplemented)
-			fmt.Fprint(w, "method not implemented")
-		} else {
-			t.Logf("Mock server received UNEXPECTED request: %s %s", r.Method, r.URL.Path)
-			w.WriteHeader(http.StatusTeapot)
-		}
-	})
-	defer server.Close()
-
-	client, _ := NewClient()
-	tempFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/valid_then_invalid_syntax.http", struct{ ServerURL string }{ServerURL: server.URL})
-
-	responses, err := client.ExecuteFile(context.Background(), tempFilePath)
-
-	// ExecuteFile itself should not return an error, as parsing succeeds and requests are attempted.
-	// Errors from server (like 501) are captured in the Response object, not as a Go error from ExecuteFile directly unless it's a client-side execution failure (e.g. network unreachable)
-	require.NoError(t, err, "ExecuteFile should not return an error if requests are merely rejected by server")
-
-	require.Len(t, responses, 2, "Should have two response objects")
-
-	// First response should be successful
-	resp1 := responses[0]
-	require.NotNil(t, resp1, "First response object should not be nil")
-	assert.NoError(t, resp1.Error, "Error in first response object should be nil")
-	assert.Equal(t, http.StatusOK, resp1.StatusCode)
-	assert.Equal(t, "response from /first", resp1.BodyString)
-
-	// Second response should indicate server error (e.g., 501 Not Implemented)
-	resp2 := responses[1]
-	require.NotNil(t, resp2, "Second response object should not be nil")
-	assert.NoError(t, resp2.Error, "Error in second object should be nil as it's a server response, not client-side exec error")
-	assert.Equal(t, http.StatusNotImplemented, resp2.StatusCode, "Status code for second response should be Not Implemented")
-	assert.Contains(t, resp2.BodyString, "method not implemented", "Body for second response should indicate method error")
-}
-
-func TestExecuteFile_MultipleErrors(t *testing.T) {
-	client, _ := NewClient()
-	filePath := "testdata/http_request_files/multiple_errors.http"
-
-	responses, err := client.ExecuteFile(context.Background(), filePath)
-
-	require.Error(t, err, "Expected an error from ExecuteFile when multiple requests fail")
-	assert.Contains(t, err.Error(), "request 1 (GET http://localhost:12347/badreq1) failed", "Error message should contain info about first failed request")
-	assert.Contains(t, err.Error(), ":12347: connect: connection refused", "Error message should contain specific connection error for first request")
-	assert.Contains(t, err.Error(), "request 2 (POST http://localhost:12348/badreq2) failed", "Error message should contain info about second failed request")
-	assert.Contains(t, err.Error(), ":12348: connect: connection refused", "Error message should contain specific connection error for second request")
-
-	require.Len(t, responses, 2, "Should receive two response objects, even if they contain errors")
-
-	resp1 := responses[0]
-	require.NotNil(t, resp1, "First response object should not be nil")
-	assert.Error(t, resp1.Error, "Error in first response object should be set")
-	assert.Contains(t, resp1.Error.Error(), ":12347: connect: connection refused")
-
-	resp2 := responses[1]
-	require.NotNil(t, resp2, "Second response object should not be nil")
-	assert.Error(t, resp2.Error, "Error in second response object should be set")
-	assert.Contains(t, resp2.Error.Error(), ":12348: connect: connection refused")
-}
-
-func TestExecuteFile_CapturesResponseHeaders(t *testing.T) {
-	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/vnd.api+json")
-		w.Header().Add("X-Custom-Header", "value1")
-		w.Header().Add("X-Custom-Header", "value2")
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "{\"data\": \"headers test\"}")
-	})
-	defer server.Close()
-
-	client, _ := NewClient()
-	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/captures_response_headers.http", struct{ ServerURL string }{ServerURL: server.URL})
-
-	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
-	require.NoError(t, err)
-	require.Len(t, responses, 1)
-
-	resp := responses[0]
-	require.NotNil(t, resp)
-	assert.NoError(t, resp.Error)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-	assert.Equal(t, "application/vnd.api+json", resp.Headers.Get("Content-Type"))
-	assert.Equal(t, []string{"value1", "value2"}, resp.Headers["X-Custom-Header"]) // Check multi-value header
-	assert.Empty(t, resp.Headers.Get("Non-Existent-Header"))
-}
-
-func TestExecuteFile_SimpleGetHTTP(t *testing.T) {
-	var interceptedReq *http.Request
-	mockTransport := &mockRoundTripper{
-		RoundTripFunc: func(req *http.Request) (*http.Response, error) {
-			interceptedReq = req.Clone(req.Context()) // Clone to inspect safely
-
-			// Return a dummy response
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader("mocked response")),
-				Header:     make(http.Header),
-			}, nil
-		},
-	}
-
-	clientWithMockTransport, err := NewClient(WithHTTPClient(&http.Client{Transport: mockTransport}))
-	require.NoError(t, err)
-
-	responses, err := clientWithMockTransport.ExecuteFile(context.Background(), "testdata/http_request_files/simple_get.http")
-	require.NoError(t, err, "ExecuteFile should not fail")
-	require.Len(t, responses, 1, "Expected one response")
-	resp := responses[0]
-	require.NotNil(t, resp, "Response should not be nil")
-	assert.NoError(t, resp.Error, "Response error should be nil")
-	assert.Equal(t, http.StatusOK, resp.StatusCode, "Expected status OK from mock")
-
-	require.NotNil(t, interceptedReq, "Request should have been intercepted")
-	assert.Equal(t, http.MethodGet, interceptedReq.Method, "Expected GET method")
-	assert.Equal(t, "https://jsonplaceholder.typicode.com/todos/1", interceptedReq.URL.String(), "Expected full URL from file")
-	assert.Empty(t, interceptedReq.Header, "Expected no headers from simple_get.http")
-}
-
-func TestExecuteFile_WithBaseURL(t *testing.T) {
-	var interceptedReq *http.Request
-	mockTransport := &mockRoundTripper{
-		RoundTripFunc: func(req *http.Request) (*http.Response, error) {
-			interceptedReq = req.Clone(req.Context())
-			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("mock"))}, nil
-		},
-	}
-
-	mockServerURL := "http://localhost:12345" // Dummy URL, won't be hit
-	client, err := NewClient(
-		WithBaseURL(mockServerURL+"/api"),
-		WithHTTPClient(&http.Client{Transport: mockTransport}),
-	)
-	require.NoError(t, err)
-
-	responses, err := client.ExecuteFile(context.Background(), "testdata/http_request_files/relative_path_get.http")
-	require.NoError(t, err)
-	require.Len(t, responses, 1)
-	assert.NoError(t, responses[0].Error)
-
-	require.NotNil(t, interceptedReq)
-	assert.Equal(t, mockServerURL, interceptedReq.URL.Scheme+"://"+interceptedReq.URL.Host)
-	assert.Equal(t, "/api/todos/1", interceptedReq.URL.Path)
-}
-
-func TestExecuteFile_WithDefaultHeaders(t *testing.T) {
-	var interceptedReq *http.Request
-	mockTransport := &mockRoundTripper{
-		RoundTripFunc: func(req *http.Request) (*http.Response, error) {
-			interceptedReq = req.Clone(req.Context())
-			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("mock"))}, nil
-		},
-	}
-
-	client, err := NewClient(
-		WithDefaultHeader("X-Default", "default-value"),
-		WithDefaultHeader("X-Override", "default-should-be-overridden"),
-		WithHTTPClient(&http.Client{Transport: mockTransport}),
-		WithBaseURL("http://dummyserver.com"), // Base URL needed for relative path in .http file
-	)
-	require.NoError(t, err)
-
-	responses, err := client.ExecuteFile(context.Background(), "testdata/http_request_files/get_with_override_header.http")
-	require.NoError(t, err)
-	require.Len(t, responses, 1)
-	assert.NoError(t, responses[0].Error)
-
-	require.NotNil(t, interceptedReq)
-	assert.Equal(t, "default-value", interceptedReq.Header.Get("X-Default"))
-	assert.Equal(t, "file-value", interceptedReq.Header.Get("X-Override"), "Header from file should override client default")
-	assert.Equal(t, "present", interceptedReq.Header.Get("X-File-Only"))
-}
-
-func TestExecuteFile_InvalidMethodInFile(t *testing.T) {
-	client, _ := NewClient()
-
-	responses, err := client.ExecuteFile(context.Background(), "testdata/http_request_files/invalid_method.http")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "1 error occurred:")
-	assert.Contains(t, err.Error(), "unsupported protocol scheme")
-	assert.Contains(t, err.Error(), "request 1 (INVALIDMETHOD /test) failed")
-
-	require.Len(t, responses, 1)
-
-	resp1 := responses[0]
-	assert.Error(t, resp1.Error, "Expected an error for invalid method/scheme")
-	assert.Contains(t, resp1.Error.Error(), "unsupported protocol scheme", "Error message should indicate unsupported protocol scheme")
-	assert.Contains(t, resp1.Error.Error(), "Invalidmethod", "Error message should contain the problematic method string as used")
-}
-
-func TestExecuteFile_MultipleRequests_GreaterThanTwo(t *testing.T) {
-	var requestCount int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cIdx := atomic.AddInt32(&requestCount, 1)
-		body, _ := io.ReadAll(r.Body)
-		defer r.Body.Close()
-		t.Logf("Mock server received request #%d: %s %s, Body: %s", cIdx, r.Method, r.URL.Path, string(body))
-
-		switch r.URL.Path {
-		case "/req1":
-			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, "response1")
-		case "/req2":
-			w.WriteHeader(http.StatusCreated)
-			fmt.Fprint(w, "response2")
-		case "/req3":
-			w.WriteHeader(http.StatusAccepted)
-			fmt.Fprint(w, "response3")
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-	defer server.Close()
-
-	client, _ := NewClient()
-	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/multiple_requests_gt2.http", struct{ ServerURL string }{ServerURL: server.URL})
-
-	actualResponses, err := client.ExecuteFile(context.Background(), requestFilePath)
-	require.NoError(t, err)
-	require.Len(t, actualResponses, 3, "Should have received 3 responses")
-
-	// Validate using the existing expected response file
-	expectedResponseFilePath := "testdata/http_response_files/multiple_responses_gt2_expected.http"
-
-	validationErr := ValidateResponses(expectedResponseFilePath, actualResponses...)
-	assert.NoError(t, validationErr, "Validation against multiple_responses_gt2_expected.http failed")
-}
-
-// mockRoundTripper is a helper for mocking http.RoundTripper
-type mockRoundTripper struct {
-	RoundTripFunc func(req *http.Request) (*http.Response, error)
-}
-
-func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	if m.RoundTripFunc != nil {
-		return m.RoundTripFunc(req)
-	}
-	return nil, fmt.Errorf("RoundTripFunc not set")
-}
-
-// TODO: Test TLS details in Response struct (requires HTTPS server and more setup)
-
 func TestExecuteFile_WithCustomVariables(t *testing.T) {
+	// Given
 	var requestCount int32
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
 		currentCount := atomic.AddInt32(&requestCount, 1)
@@ -478,10 +51,12 @@ func TestExecuteFile_WithCustomVariables(t *testing.T) {
 	defer server.Close()
 
 	client, _ := NewClient()
-
 	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/custom_variables.http", struct{ ServerURL string }{ServerURL: server.URL})
 
+	// When
 	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then
 	require.NoError(t, err, "ExecuteFile should not return an error for variable processing")
 	require.Len(t, responses, 3, "Expected 3 responses")
 	assert.EqualValues(t, 3, atomic.LoadInt32(&requestCount), "Mock server should have been hit 3 times")
@@ -506,6 +81,7 @@ func TestExecuteFile_WithCustomVariables(t *testing.T) {
 }
 
 func TestExecuteFile_WithGuidSystemVariable(t *testing.T) {
+	// Given
 	var interceptedRequest struct {
 		URL    string
 		Header string
@@ -522,10 +98,12 @@ func TestExecuteFile_WithGuidSystemVariable(t *testing.T) {
 	defer server.Close()
 
 	client, _ := NewClient()
-
 	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_guid.http", struct{ ServerURL string }{ServerURL: server.URL})
 
+	// When
 	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then
 	require.NoError(t, err, "ExecuteFile should not return an error for GUID processing")
 	require.Len(t, responses, 1, "Expected 1 response")
 
@@ -534,7 +112,6 @@ func TestExecuteFile_WithGuidSystemVariable(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// SCENARIO-LIB-014-001: {{$guid}} in URL
-	// Example URL: /users/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 	urlParts := strings.Split(interceptedRequest.URL, "/")
 	require.True(t, len(urlParts) >= 2, "URL should have at least two parts after splitting by /")
 	guidFromURL := urlParts[len(urlParts)-1]
@@ -562,7 +139,6 @@ func TestExecuteFile_WithGuidSystemVariable(t *testing.T) {
 	_, err = uuid.Parse(guidFromBody2)
 	assert.NoError(t, err, "GUID from body (correlationId) should be a valid UUID: %s", guidFromBody2)
 
-	// Check all GUIDs are different
 	assert.NotEqual(t, guidFromURL, guidFromHeader, "GUID from URL and header should be different")
 	assert.NotEqual(t, guidFromURL, guidFromBody1, "GUID from URL and body1 should be different")
 	assert.NotEqual(t, guidFromURL, guidFromBody2, "GUID from URL and body2 should be different")
@@ -572,16 +148,15 @@ func TestExecuteFile_WithGuidSystemVariable(t *testing.T) {
 }
 
 func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
-	// Set up environment variables for the test
+	// Given
 	const testEnvVarName = "GO_RESTCLIENT_TEST_VAR"
 	const testEnvVarValue = "test_env_value_123"
 	const undefinedEnvVarName = "GO_RESTCLIENT_UNDEFINED_VAR"
 
 	err := os.Setenv(testEnvVarName, testEnvVarValue)
 	require.NoError(t, err, "Failed to set environment variable for test")
-	defer func() { _ = os.Unsetenv(testEnvVarName) }() // Clean up
+	defer func() { _ = os.Unsetenv(testEnvVarName) }()
 
-	// Ensure the undefined variable is indeed not set
 	_ = os.Unsetenv(undefinedEnvVarName)
 
 	var interceptedRequest struct {
@@ -601,7 +176,6 @@ func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
 	defer server.Close()
 
 	client, _ := NewClient()
-
 	requestFilePath := createTestFileFromTemplate(t,
 		"testdata/http_request_files/system_var_process_env.http",
 		struct {
@@ -615,7 +189,10 @@ func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
 		},
 	)
 
+	// When
 	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then
 	require.NoError(t, err, "ExecuteFile should not return an error for $processEnv processing")
 	require.Len(t, responses, 1, "Expected 1 response")
 
@@ -623,15 +200,11 @@ func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
 	assert.NoError(t, resp.Error)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	// SCENARIO-LIB-019-001: Correctly substitutes an existing environment variable
-	// Check URL
+	// SCENARIO-LIB-019-001
 	expectedURL := fmt.Sprintf("/path-%s/data", testEnvVarValue)
 	assert.Equal(t, expectedURL, interceptedRequest.URL, "URL should contain substituted env variable")
-
-	// Check Header
 	assert.Equal(t, testEnvVarValue, interceptedRequest.Header, "X-Env-Value header should contain substituted env variable")
 
-	// Check Body
 	var bodyJSON map[string]string
 	err = json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON)
 	require.NoError(t, err, "Failed to unmarshal request body JSON")
@@ -640,27 +213,14 @@ func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
 	require.True(t, ok, "env_payload not found in body")
 	assert.Equal(t, testEnvVarValue, envPayload, "Body env_payload should contain substituted env variable")
 
-	// SCENARIO-LIB-019-002: Substitutes with an empty string if the environment variable is not defined
-	// Check undefined in URL (implicitly via full URL check) - the original path segment was `data`
-	// Check Header for undefined variable
-	// The Cache-Control header in the .http file was Cache-Control: {{$processEnv UNDEFINED_CACHE_VAR_SHOULD_BE_EMPTY}}
-	// The actual header sent to the mock server, after substitution, should be 'Cache-Control: '. The value part is empty.
-	// However, how Go's http.Request.Header handles this needs care. If the value is empty, it might omit the header or format it as 'Key:'.
-	// Let's check the Request object *before* it's sent, specifically the restClientReq.Headers
-	// This test is better performed by checking the effective header on the server side if possible, or by inspecting the RawRequest string.
-	// For now, let's check the 'undefined_payload' in the body.
-
+	// SCENARIO-LIB-019-002
 	undefinedPayload, ok := bodyJSON["undefined_payload"]
 	require.True(t, ok, "undefined_payload not found in body")
 	assert.Empty(t, undefinedPayload, "Body undefined_payload should be empty for an undefined env variable")
-
-	// Also explicitly check the Cache-Control header as received by the mock server
-	// A header with an empty value after substitution might be sent as "HeaderName: " or omitted.
-	// net/http server behavior: if a header `Key: ` is sent, `r.Header.Get("Key")` returns `""`.
-	// Let's assume the .http file explicitly defines Cache-Control, it should be present, even if value is empty after substitution.
 }
 
 func TestExecuteFile_WithDotEnvSystemVariable(t *testing.T) {
+	// Given
 	var interceptedRequest struct {
 		URL    string
 		Header string
@@ -678,12 +238,10 @@ func TestExecuteFile_WithDotEnvSystemVariable(t *testing.T) {
 	defer server.Close()
 
 	client, _ := NewClient()
-
-	// Create a temporary directory for the .http file and .env file
 	tempDir := t.TempDir()
 
-	// SCENARIO-LIB-020-001: Variable exists in .env file
-	// Create .env file
+	// Scenario 1: .env file exists and variable is present
+	// Given
 	dotEnvContent1 := "DOTENV_VAR1=dotenv_value_one\nDOTENV_VAR2=another val from dotenv"
 	dotEnvFile1Path := filepath.Join(tempDir, ".env")
 	err := os.WriteFile(dotEnvFile1Path, []byte(dotEnvContent1), 0644)
@@ -699,44 +257,39 @@ X-Dotenv-Value: {{$dotenv DOTENV_VAR2}}
   "missing_payload": "{{$dotenv MISSING_DOTENV_VAR}}"
 }
 `, server.URL)
-
 	httpFile1Path := filepath.Join(tempDir, "request1.http")
 	err = os.WriteFile(httpFile1Path, []byte(requestFileContent1), 0644)
 	require.NoError(t, err)
 
+	// When
 	responses1, err1 := client.ExecuteFile(context.Background(), httpFile1Path)
+
+	// Then
 	require.NoError(t, err1, "ExecuteFile (scenario 1) should not return an error for $dotenv processing")
 	require.Len(t, responses1, 1, "Expected 1 response for scenario 1")
-
 	resp1 := responses1[0]
 	assert.NoError(t, resp1.Error)
 	assert.Equal(t, http.StatusOK, resp1.StatusCode)
 
-	// Check URL (SCENARIO-LIB-020-001)
-	expectedURL1 := "/path-dotenv_value_one/data"
+	expectedURL1 := "/path-dotenv_value_one/data" // SCENARIO-LIB-020-001
 	assert.Equal(t, expectedURL1, interceptedRequest.URL, "URL (scenario 1) should contain substituted dotenv variable")
+	assert.Equal(t, "another val from dotenv", interceptedRequest.Header, "X-Dotenv-Value header (scenario 1) should contain substituted dotenv variable") // SCENARIO-LIB-020-001
 
-	// Check Header (SCENARIO-LIB-020-001)
-	assert.Equal(t, "another val from dotenv", interceptedRequest.Header, "X-Dotenv-Value header (scenario 1) should contain substituted dotenv variable")
-
-	// Check Body (SCENARIO-LIB-020-001 and SCENARIO-LIB-020-002)
 	var bodyJSON1 map[string]string
 	err = json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON1)
 	require.NoError(t, err, "Failed to unmarshal request body JSON (scenario 1)")
-
 	dotenvPayload1, ok1 := bodyJSON1["payload"]
 	require.True(t, ok1, "payload not found in body (scenario 1)")
-	assert.Equal(t, "dotenv_value_one", dotenvPayload1, "Body payload (scenario 1) should contain substituted dotenv variable")
-
+	assert.Equal(t, "dotenv_value_one", dotenvPayload1, "Body payload (scenario 1) should contain substituted dotenv variable") // SCENARIO-LIB-020-001
 	missingPayload1, ok2 := bodyJSON1["missing_payload"]
 	require.True(t, ok2, "missing_payload not found in body (scenario 1)")
-	assert.Empty(t, missingPayload1, "Body missing_payload (scenario 1) should be empty for a missing dotenv variable")
+	assert.Empty(t, missingPayload1, "Body missing_payload (scenario 1) should be empty for a missing dotenv variable") // SCENARIO-LIB-020-002
 
-	// Clean up .env for the next scenario - remove it so it's not found
+	// Scenario 2: .env file does not exist
+	// Given
 	err = os.Remove(dotEnvFile1Path)
 	require.NoError(t, err, "Failed to remove .env file for scenario 2 prep")
 
-	// SCENARIO-LIB-020-003: .env file not found
 	requestFileContent2 := fmt.Sprintf(`
 GET %s/path-{{$dotenv DOTENV_VAR_SHOULD_BE_EMPTY}}/data
 User-Agent: test-client
@@ -745,34 +298,33 @@ User-Agent: test-client
   "payload": "{{$dotenv DOTENV_VAR_ALSO_EMPTY}}"
 }
 `, server.URL)
-
 	httpFile2Path := filepath.Join(tempDir, "request2.http")
 	err = os.WriteFile(httpFile2Path, []byte(requestFileContent2), 0644)
 	require.NoError(t, err)
 
+	// When
 	responses2, err2 := client.ExecuteFile(context.Background(), httpFile2Path)
+
+	// Then
 	require.NoError(t, err2, "ExecuteFile (scenario 2) should not return an error if .env not found")
 	require.Len(t, responses2, 1, "Expected 1 response for scenario 2")
-
 	resp2 := responses2[0]
 	assert.NoError(t, resp2.Error)
 	assert.Equal(t, http.StatusOK, resp2.StatusCode)
 
-	// Check URL (SCENARIO-LIB-020-003)
-	expectedURL2 := "/path-/data" // DOTENV_VAR_SHOULD_BE_EMPTY becomes empty
+	expectedURL2 := "/path-/data" // SCENARIO-LIB-020-003
 	assert.Equal(t, expectedURL2, interceptedRequest.URL, "URL (scenario 2) should have empty substitution for dotenv variable")
 
-	// Check Body (SCENARIO-LIB-020-003)
 	var bodyJSON2 map[string]string
 	err = json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON2)
 	require.NoError(t, err, "Failed to unmarshal request body JSON (scenario 2)")
-
 	dotenvPayload2, ok3 := bodyJSON2["payload"]
 	require.True(t, ok3, "payload not found in body (scenario 2)")
-	assert.Empty(t, dotenvPayload2, "Body payload (scenario 2) should be empty if .env not found")
+	assert.Empty(t, dotenvPayload2, "Body payload (scenario 2) should be empty if .env not found") // SCENARIO-LIB-020-003
 }
 
 func TestExecuteFile_WithTimestampSystemVariable(t *testing.T) {
+	// Given
 	var interceptedRequest struct {
 		URL    string
 		Header string
@@ -790,70 +342,64 @@ func TestExecuteFile_WithTimestampSystemVariable(t *testing.T) {
 	defer server.Close()
 
 	client, _ := NewClient()
-
-	// Capture current time to compare against, allowing for slight delay
 	beforeTime := time.Now().UTC().Unix()
-
 	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_timestamp.http", struct{ ServerURL string }{ServerURL: server.URL})
 
+	// When
 	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then
 	require.NoError(t, err, "ExecuteFile should not return an error for $timestamp processing")
 	require.Len(t, responses, 1, "Expected 1 response")
-
 	resp := responses[0]
 	assert.NoError(t, resp.Error)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-
 	afterTime := time.Now().UTC().Unix()
 
-	// SCENARIO-LIB-016-001: {{$timestamp}} in URL, header, body
-	// Check URL
+	// SCENARIO-LIB-016-001
 	urlParts := strings.Split(interceptedRequest.URL, "/")
 	require.True(t, len(urlParts) >= 2, "URL path should have at least two parts")
 	timestampFromURLStr := urlParts[len(urlParts)-1]
 	timestampFromURL, parseErrURL := strconv.ParseInt(timestampFromURLStr, 10, 64)
-	assert.NoError(t, parseErrURL, "Timestamp from URL should be a valid integer")
+	assert.NoError(t, parseErrURL)
 	assert.GreaterOrEqual(t, timestampFromURL, beforeTime, "Timestamp from URL should be >= time before request")
 	assert.LessOrEqual(t, timestampFromURL, afterTime, "Timestamp from URL should be <= time after request")
 
-	// Check Header
 	timestampFromHeader, parseErrHeader := strconv.ParseInt(interceptedRequest.Header, 10, 64)
-	assert.NoError(t, parseErrHeader, "Timestamp from Header should be a valid integer")
+	assert.NoError(t, parseErrHeader)
 	assert.GreaterOrEqual(t, timestampFromHeader, beforeTime, "Timestamp from Header should be >= time before request")
 	assert.LessOrEqual(t, timestampFromHeader, afterTime, "Timestamp from Header should be <= time after request")
 
-	// Check Body
 	var bodyJSON map[string]string
 	err = json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON)
-	require.NoError(t, err, "Failed to unmarshal request body JSON")
-
+	require.NoError(t, err)
 	timestampFromBody1Str, ok1 := bodyJSON["event_time"]
-	require.True(t, ok1, "event_time not found in body")
+	require.True(t, ok1)
 	timestampFromBody1, parseErrBody1 := strconv.ParseInt(timestampFromBody1Str, 10, 64)
-	assert.NoError(t, parseErrBody1, "Timestamp from body (event_time) should be valid int")
+	assert.NoError(t, parseErrBody1)
 	assert.GreaterOrEqual(t, timestampFromBody1, beforeTime)
 	assert.LessOrEqual(t, timestampFromBody1, afterTime)
 
 	timestampFromBody2Str, ok2 := bodyJSON["processed_at"]
-	require.True(t, ok2, "processed_at not found in body")
+	require.True(t, ok2)
 	timestampFromBody2, parseErrBody2 := strconv.ParseInt(timestampFromBody2Str, 10, 64)
-	assert.NoError(t, parseErrBody2, "Timestamp from body (processed_at) should be valid int")
+	assert.NoError(t, parseErrBody2)
 	assert.GreaterOrEqual(t, timestampFromBody2, beforeTime)
 	assert.LessOrEqual(t, timestampFromBody2, afterTime)
 
-	// SCENARIO-LIB-016-002: Multiple {{$timestamp}} instances yield the same value for that pass
-	assert.Equal(t, timestampFromURL, timestampFromHeader, "Timestamp in URL and Header should be the same for one request pass")
-	assert.Equal(t, timestampFromHeader, timestampFromBody1, "Timestamp in Header and Body (event_time) should be the same")
-	assert.Equal(t, timestampFromBody1, timestampFromBody2, "Timestamp in Body (event_time and processed_at) should be the same")
+	// SCENARIO-LIB-016-002
+	assert.Equal(t, timestampFromURL, timestampFromHeader)
+	assert.Equal(t, timestampFromHeader, timestampFromBody1)
+	assert.Equal(t, timestampFromBody1, timestampFromBody2)
 }
 
 func TestExecuteFile_WithRandomIntSystemVariable(t *testing.T) {
+	// Given common setup for all subtests
 	var interceptedRequest struct {
 		URL    string
 		Header string
 		Body   string
 	}
-
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
 		interceptedRequest.URL = r.URL.String()
 		bodyBytes, _ := io.ReadAll(r.Body)
@@ -863,17 +409,15 @@ func TestExecuteFile_WithRandomIntSystemVariable(t *testing.T) {
 		_, _ = fmt.Fprint(w, "ok")
 	})
 	defer server.Close()
-
 	client, _ := NewClient()
 
-	// Test cases
 	tests := []struct {
 		name               string
-		httpFilePath       string // Changed from httpFileContent
+		httpFilePath       string
 		validate           func(t *testing.T, url, header, body string)
 		expectErrorInParse bool
-	}{ // SCENARIO-LIB-015-001: With valid min max args
-		{
+	}{
+		{ // SCENARIO-LIB-015-001
 			name:         "valid min max args",
 			httpFilePath: "testdata/http_request_files/system_var_randomint_valid_args.http",
 			validate: func(t *testing.T, url, header, body string) {
@@ -892,8 +436,7 @@ func TestExecuteFile_WithRandomIntSystemVariable(t *testing.T) {
 				assert.True(t, bodyJSON["value"] >= 100 && bodyJSON["value"] <= 105, "Body random int %d out of range [100,105]", bodyJSON["value"])
 			},
 		},
-		// SCENARIO-LIB-015-002: No args (default 0-100)
-		{
+		{ // SCENARIO-LIB-015-002
 			name:         "no args",
 			httpFilePath: "testdata/http_request_files/system_var_randomint_no_args.http",
 			validate: func(t *testing.T, url, header, body string) {
@@ -912,78 +455,57 @@ func TestExecuteFile_WithRandomIntSystemVariable(t *testing.T) {
 				assert.True(t, bodyJSON["value"] >= 0 && bodyJSON["value"] <= 100, "Body random int (no args) %d out of range [0,100]", bodyJSON["value"])
 			},
 		},
-		// SCENARIO-LIB-015-003: Swapped min max args
-		{
+		{ // SCENARIO-LIB-015-003
 			name:         "swapped min max args",
 			httpFilePath: "testdata/http_request_files/system_var_randomint_swapped_args.http",
 			validate: func(t *testing.T, url, header, body string) {
-				// For swapped min/max, the placeholder should remain if not processed by substituteSystemVariables
-				// The file system_var_randomint_swapped_args.http uses:
-				// URL: /rint/{{$randomInt 30 25}}/{{$randomInt 30 25}}
-				// Header X-Random-ID: {{$randomInt 30 25}}
-				// Body: {"value": "{{$randomInt 30 25}}"}
 				urlParts := strings.Split(url, "/")
-				// Example path: /rint/{{$randomInt 30 25}}/{{$randomInt 30 25}}
-				// urlParts would be ["", "rint", "{{$randomInt 30 25}}", "{{$randomInt 30 25}}"]
 				require.Len(t, urlParts, 4, "URL path should have 4 parts for swapped args test")
 				assert.Equal(t, "{{$randomInt 30 25}}", urlParts[2], "URL part1 for swapped_min_max_args should be the unresolved placeholder")
 				assert.Equal(t, "{{$randomInt 30 25}}", urlParts[3], "URL part2 for swapped_min_max_args should be the unresolved placeholder")
-
-				// Header is not used in system_var_randomint_swapped_args.http, so skip header check for this specific sub-test case or adjust file.
-				// Assuming the file *only* tests this via URL and Body for simplicity of this fix.
-				// If header was X-Random-ID: {{$randomInt 30 25}}, then:
-				// assert.Equal(t, "{{$randomInt 30 25}}", header, "Header for swapped_min_max_args should be the unresolved placeholder")
-
-				var bodyJSON map[string]string // Expecting string value
+				var bodyJSON map[string]string
 				err := json.Unmarshal([]byte(body), &bodyJSON)
 				require.NoError(t, err, "Failed to unmarshal body (swapped)")
 				assert.Equal(t, "{{$randomInt 30 25}}", bodyJSON["value"], "Body for swapped_min_max_args should be the unresolved placeholder")
 			},
 		},
-		// SCENARIO-LIB-015-004: Malformed args (non-integer)
-		{
+		{ // SCENARIO-LIB-015-004
 			name:         "malformed args",
 			httpFilePath: "testdata/http_request_files/system_var_randomint_malformed_args.http",
 			validate: func(t *testing.T, urlStr, header, body string) {
-				// Placeholder: {{$randomInt abc def}}
-				// Should remain as a literal string in the path
 				expectedLiteralPlaceholder := "{{$randomInt abc def}}"
 				assert.Contains(t, urlStr, expectedLiteralPlaceholder, "URL should contain literal malformed $randomInt")
 				assert.Equal(t, "{{$randomInt 1 xyz}}", header, "Header should retain malformed $randomInt")
-				var bodyJSON map[string]string // Expecting string due to non-substitution
+				var bodyJSON map[string]string
 				err := json.Unmarshal([]byte(body), &bodyJSON)
 				require.NoError(t, err, "Failed to unmarshal body (malformed)")
 				assert.Equal(t, "{{$randomInt foo bar}}", bodyJSON["value"], "Body should retain malformed $randomInt")
 			},
-			expectErrorInParse: false, // Changed: url.Parse might not fail on this. The literal string is sent.
+			expectErrorInParse: false,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			// Given specific setup for this subtest
 			requestFilePath := createTestFileFromTemplate(t, tc.httpFilePath, struct{ ServerURL string }{ServerURL: server.URL})
 
+			// When
 			responses, err := client.ExecuteFile(context.Background(), requestFilePath)
 
+			// Then
 			if tc.expectErrorInParse {
 				require.Error(t, err, "Expected an error during ExecuteFile for %s", tc.name)
-				// Specific error check can be added here if needed
-				return // Stop further validation if parsing was expected to fail
+				return
 			}
-
 			require.NoError(t, err, "ExecuteFile should not return an error for %s", tc.name)
 			require.Len(t, responses, 1, "Expected 1 response for %s", tc.name)
-
 			resp := responses[0]
 			assert.NoError(t, resp.Error, "Response error should be nil for %s", tc.name)
 			assert.Equal(t, http.StatusOK, resp.StatusCode, "Expected status OK for %s", tc.name)
 
-			// Unescape URL before validation if needed, especially for path parameters
-			// The mock server receives the path as is, but if we are checking against an
-			// expected path that had placeholders, the placeholders might be URL encoded.
-			// For this test, interceptedRequest.URL is the raw URL as received by the server.
 			actualURL := interceptedRequest.URL
-			if strings.Contains(actualURL, "%") { // Basic check for URL encoding
+			if strings.Contains(actualURL, "%") {
 				decodedURL, decodeErr := url.PathUnescape(actualURL)
 				if decodeErr == nil {
 					actualURL = decodedURL
@@ -995,12 +517,12 @@ func TestExecuteFile_WithRandomIntSystemVariable(t *testing.T) {
 }
 
 func TestExecuteFile_WithDatetimeSystemVariable(t *testing.T) {
+	// Given
 	var interceptedRequest struct {
 		URL    string
 		Header string
 		Body   string
 	}
-
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
 		interceptedRequest.URL = r.URL.String()
 		bodyBytes, _ := io.ReadAll(r.Body)
@@ -1010,70 +532,63 @@ func TestExecuteFile_WithDatetimeSystemVariable(t *testing.T) {
 		_, _ = fmt.Fprint(w, "ok")
 	})
 	defer server.Close()
-
 	client, _ := NewClient()
-
-	// Capture current time to compare against, allowing for slight delay
 	beforeTime := time.Now().UTC().Unix()
-
 	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_timestamp.http", struct{ ServerURL string }{ServerURL: server.URL})
 
+	// When
 	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then
 	require.NoError(t, err, "ExecuteFile should not return an error for $timestamp processing")
 	require.Len(t, responses, 1, "Expected 1 response")
-
 	resp := responses[0]
 	assert.NoError(t, resp.Error)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-
 	afterTime := time.Now().UTC().Unix()
 
-	// SCENARIO-LIB-016-001: {{$timestamp}} in URL, header, body
-	// Check URL
+	// SCENARIO-LIB-016-001
 	urlParts := strings.Split(interceptedRequest.URL, "/")
 	require.True(t, len(urlParts) >= 2, "URL path should have at least two parts")
 	timestampFromURLStr := urlParts[len(urlParts)-1]
 	timestampFromURL, parseErrURL := strconv.ParseInt(timestampFromURLStr, 10, 64)
-	assert.NoError(t, parseErrURL, "Timestamp from URL should be a valid integer")
+	assert.NoError(t, parseErrURL)
 	assert.GreaterOrEqual(t, timestampFromURL, beforeTime, "Timestamp from URL should be >= time before request")
 	assert.LessOrEqual(t, timestampFromURL, afterTime, "Timestamp from URL should be <= time after request")
 
-	// Check Header
 	timestampFromHeader, parseErrHeader := strconv.ParseInt(interceptedRequest.Header, 10, 64)
-	assert.NoError(t, parseErrHeader, "Timestamp from Header should be a valid integer")
+	assert.NoError(t, parseErrHeader)
 	assert.GreaterOrEqual(t, timestampFromHeader, beforeTime, "Timestamp from Header should be >= time before request")
 	assert.LessOrEqual(t, timestampFromHeader, afterTime, "Timestamp from Header should be <= time after request")
 
-	// Check Body
 	var bodyJSON map[string]string
 	err = json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON)
-	require.NoError(t, err, "Failed to unmarshal request body JSON")
-
+	require.NoError(t, err)
 	timestampFromBody1Str, ok1 := bodyJSON["event_time"]
-	require.True(t, ok1, "event_time not found in body")
+	require.True(t, ok1)
 	timestampFromBody1, parseErrBody1 := strconv.ParseInt(timestampFromBody1Str, 10, 64)
-	assert.NoError(t, parseErrBody1, "Timestamp from body (event_time) should be valid int")
+	assert.NoError(t, parseErrBody1)
 	assert.GreaterOrEqual(t, timestampFromBody1, beforeTime)
 	assert.LessOrEqual(t, timestampFromBody1, afterTime)
 
 	timestampFromBody2Str, ok2 := bodyJSON["processed_at"]
-	require.True(t, ok2, "processed_at not found in body")
+	require.True(t, ok2)
 	timestampFromBody2, parseErrBody2 := strconv.ParseInt(timestampFromBody2Str, 10, 64)
-	assert.NoError(t, parseErrBody2, "Timestamp from body (processed_at) should be valid int")
+	assert.NoError(t, parseErrBody2)
 	assert.GreaterOrEqual(t, timestampFromBody2, beforeTime)
 	assert.LessOrEqual(t, timestampFromBody2, afterTime)
 
-	// SCENARIO-LIB-016-002: Multiple {{$timestamp}} instances yield the same value for that pass
-	assert.Equal(t, timestampFromURL, timestampFromHeader, "Timestamp in URL and Header should be the same for one request pass")
-	assert.Equal(t, timestampFromHeader, timestampFromBody1, "Timestamp in Header and Body (event_time) should be the same")
-	assert.Equal(t, timestampFromBody1, timestampFromBody2, "Timestamp in Body (event_time and processed_at) should be the same")
+	// SCENARIO-LIB-016-002
+	assert.Equal(t, timestampFromURL, timestampFromHeader)
+	assert.Equal(t, timestampFromHeader, timestampFromBody1)
+	assert.Equal(t, timestampFromBody1, timestampFromBody2)
 }
 
 func TestExecuteFile_WithProgrammaticVariables(t *testing.T) {
+	// Given common setup for all subtests
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		bodyBytes, _ := io.ReadAll(r.Body)
 		defer r.Body.Close()
-		// Echo back the request details
 		w.Header().Set("X-Echo-Method", r.Method)
 		for k, v := range r.Header {
 			w.Header().Set("X-Echo-Header-"+k, strings.Join(v, ","))
@@ -1081,115 +596,97 @@ func TestExecuteFile_WithProgrammaticVariables(t *testing.T) {
 		w.Header().Set("X-Echo-Path", r.URL.Path)
 		w.Header().Set("X-Echo-Query", r.URL.RawQuery)
 		w.WriteHeader(http.StatusOK)
-		w.Write(bodyBytes) // Echo body
+		w.Write(bodyBytes)
 	}))
 	defer server.Close()
+	client, _ := NewClient()
 
 	tests := []struct {
 		name                 string
 		httpFileContent      string
 		programmaticVars     map[string]string
-		expectedPathContains string // For URL checks
-		expectedHeaderKey    string // For header checks
-		expectedHeaderValue  string // For header checks
-		expectedBodyContains string // For body checks
+		expectedPathContains string
+		expectedHeaderKey    string
+		expectedHeaderValue  string
+		expectedBodyContains string
 		expectError          bool
 	}{
 		{
-			name: "SCENARIO-LIB-021-001 Programmatic var in URL",
-			httpFileContent: `
-GET [[.ServerURL]]/users/{{userId}}
-`,
+			name:                 "SCENARIO-LIB-021-001 Programmatic var in URL",
+			httpFileContent:      `GET [[.ServerURL]]/users/{{userId}}`,
 			programmaticVars:     map[string]string{"userId": "prog_user_123"},
 			expectedPathContains: "/users/prog_user_123",
 		},
 		{
 			name: "SCENARIO-LIB-021-002 Programmatic var in Header",
-			httpFileContent: `
-GET [[.ServerURL]]/data
-X-Auth-Token: {{authToken}}
-`,
+			httpFileContent: `GET [[.ServerURL]]/data
+X-Auth-Token: {{authToken}}`,
 			programmaticVars:    map[string]string{"authToken": "prog_token_abc"},
 			expectedHeaderKey:   "X-Echo-Header-X-Auth-Token",
 			expectedHeaderValue: "prog_token_abc",
 		},
 		{
 			name: "SCENARIO-LIB-021-003 Programmatic var in Body",
-			httpFileContent: `
-POST [[.ServerURL]]/items
+			httpFileContent: `POST [[.ServerURL]]/items
 Content-Type: application/json
 
 {
 	"itemId": "{{itemId}}"
-}
-`,
+}`,
 			programmaticVars:     map[string]string{"itemId": "prog_item_789"},
 			expectedBodyContains: `{"itemId":"prog_item_789"}`,
 		},
 		{
 			name: "SCENARIO-LIB-021-004 Programmatic var overrides file var",
-			httpFileContent: `
-@host = file_host.com
-GET [[.ServerURL]]/{{host}}/path 
-`, // Request goes to mock server, host var is part of path
+			httpFileContent: `@host = file_host.com
+GET [[.ServerURL]]/{{host}}/path`,
 			programmaticVars:     map[string]string{"host": "prog_host.com"},
-			expectedPathContains: "/prog_host.com/path", // Check echoed path
-			// expectError: false, // No longer expect DNS error
+			expectedPathContains: "/prog_host.com/path",
 		},
 		{
 			name: "SCENARIO-LIB-021-005 Mixed programmatic and file vars",
-			httpFileContent: `
-@fileVar = file_val
-GET [[.ServerURL]]/info?q1={{fileVar}}&q2={{progVar}}
-`,
+			httpFileContent: `@fileVar = file_val
+GET [[.ServerURL]]/info?q1={{fileVar}}&q2={{progVar}}`,
 			programmaticVars:     map[string]string{"progVar": "prog_val"},
 			expectedPathContains: "/info?q1=file_val&q2=prog_val",
 		},
 		{
 			name: "SCENARIO-LIB-021-006 Empty programmatic vars map",
-			httpFileContent: `
-@fileVar = from_file
-GET [[.ServerURL]]/path?v={{fileVar}}
-`,
+			httpFileContent: `@fileVar = from_file
+GET [[.ServerURL]]/path?v={{fileVar}}`,
 			programmaticVars:     map[string]string{},
 			expectedPathContains: "/path?v=from_file",
 		},
 		{
 			name: "SCENARIO-LIB-021-007 Nil programmatic vars map",
-			httpFileContent: `
-@fileVar = from_file_too
-GET [[.ServerURL]]/another?v={{fileVar}}
-`,
+			httpFileContent: `@fileVar = from_file_too
+GET [[.ServerURL]]/another?v={{fileVar}}`,
 			programmaticVars:     nil,
 			expectedPathContains: "/another?v=from_file_too",
 		},
 	}
 
-	client, err := NewClient()
-	require.NoError(t, err)
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a temporary file to hold the httpFileContent as a template
+			// Given specific setup for this subtest
 			tempTemplateFile, err := os.CreateTemp(t.TempDir(), "test_template_*.http")
 			require.NoError(t, err)
 			_, err = tempTemplateFile.WriteString(tt.httpFileContent)
 			require.NoError(t, err)
 			err = tempTemplateFile.Close()
 			require.NoError(t, err)
-
-			// server.URL should be passed as part of a struct that the template expects.
 			processedFilePath := createTestFileFromTemplate(t, tempTemplateFile.Name(), struct{ ServerURL string }{ServerURL: server.URL})
 
+			// When
 			var responses []*Response
 			var execErr error
 			if tt.programmaticVars == nil && tt.name == "SCENARIO-LIB-021-007 Nil programmatic vars map" {
-				// Call ExecuteFile without the third argument for nil case
 				responses, execErr = client.ExecuteFile(context.Background(), processedFilePath)
 			} else {
 				responses, execErr = client.ExecuteFile(context.Background(), processedFilePath, tt.programmaticVars)
 			}
 
+			// Then
 			if tt.expectError {
 				require.Error(t, execErr)
 				return
@@ -1201,7 +698,6 @@ GET [[.ServerURL]]/another?v={{fileVar}}
 			require.Equal(t, http.StatusOK, resp.StatusCode)
 
 			if tt.expectedPathContains != "" {
-				// For URL/Path checks, the echoed path + query is a good target
 				echoedPath := resp.Headers.Get("X-Echo-Path")
 				echoedQuery := resp.Headers.Get("X-Echo-Query")
 				fullEchoedPath := echoedPath
@@ -1210,13 +706,10 @@ GET [[.ServerURL]]/another?v={{fileVar}}
 				}
 				assert.Contains(t, fullEchoedPath, tt.expectedPathContains, "Echoed path+query mismatch")
 			}
-
 			if tt.expectedHeaderKey != "" {
 				assert.Equal(t, tt.expectedHeaderValue, resp.Headers.Get(tt.expectedHeaderKey), "Echoed header mismatch")
 			}
-
 			if tt.expectedBodyContains != "" {
-				// Use JSONEq for comparing JSON bodies, as it handles formatting differences.
 				assert.JSONEq(t, tt.expectedBodyContains, string(resp.Body), "Response body mismatch")
 			}
 		})
@@ -1224,12 +717,12 @@ GET [[.ServerURL]]/another?v={{fileVar}}
 }
 
 func TestExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
+	// Given
 	var interceptedRequest struct {
 		URL    string
 		Header string
 		Body   string
 	}
-
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
 		interceptedRequest.URL = r.URL.String()
 		bodyBytes, _ := io.ReadAll(r.Body)
@@ -1296,150 +789,6 @@ func TestExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
 	assert.Equal(t, timestampFromURL, timestampFromHeader, "Timestamp in URL and Header should be the same for one request pass")
 	assert.Equal(t, timestampFromHeader, timestampFromBody1, "Timestamp in Header and Body (event_time) should be the same")
 	assert.Equal(t, timestampFromBody1, timestampFromBody2, "Timestamp in Body (event_time and processed_at) should be the same")
-}
-
-func TestExecuteFile_IgnoreEmptyBlocks_Client(t *testing.T) {
-	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/first":
-			assert.Equal(t, http.MethodGet, r.Method)
-			w.WriteHeader(http.StatusOK)
-			_, _ = fmt.Fprint(w, "response from /first")
-		case "/second":
-			assert.Equal(t, http.MethodGet, r.Method)
-			w.WriteHeader(http.StatusOK)
-			_, _ = fmt.Fprint(w, "response from /second")
-		case "/req1":
-			assert.Equal(t, http.MethodGet, r.Method)
-			w.WriteHeader(http.StatusAccepted)
-			_, _ = fmt.Fprint(w, "response from /req1")
-		case "/req2":
-			assert.Equal(t, http.MethodPost, r.Method)
-			bodyBytes, _ := io.ReadAll(r.Body)
-			assert.JSONEq(t, `{"key": "value"}`, string(bodyBytes))
-			w.WriteHeader(http.StatusCreated)
-			_, _ = fmt.Fprint(w, "response from /req2")
-		default:
-			t.Errorf("Unexpected request to mock server: %s %s", r.Method, r.URL.Path)
-			w.WriteHeader(http.StatusNotFound)
-		}
-	})
-	defer server.Close()
-
-	client, _ := NewClient()
-
-	tests := []struct {
-		name               string
-		requestFileContent string // Raw content, will be written to a temp file
-		expectedResponses  int
-		expectedError      bool
-		responseValidators []func(t *testing.T, resp *Response)
-	}{
-		{
-			name: "SCENARIO-LIB-028-004: Valid request, then separator, then only comments",
-			requestFileContent: fmt.Sprintf(`
-GET %s/first
-
-###
-# This block is empty
-`, server.URL),
-			expectedResponses: 1,
-			expectedError:     false,
-			responseValidators: []func(t *testing.T, resp *Response){
-				func(t *testing.T, resp *Response) {
-					assert.NoError(t, resp.Error)
-					assert.Equal(t, http.StatusOK, resp.StatusCode)
-					assert.Equal(t, "response from /first", resp.BodyString)
-				},
-			},
-		},
-		{
-			name: "SCENARIO-LIB-028-005: Only comments, then separator, then valid request",
-			requestFileContent: fmt.Sprintf(`
-# This block is empty
-###
-GET %s/second
-`, server.URL),
-			expectedResponses: 1,
-			expectedError:     false,
-			responseValidators: []func(t *testing.T, resp *Response){
-				func(t *testing.T, resp *Response) {
-					assert.NoError(t, resp.Error)
-					assert.Equal(t, http.StatusOK, resp.StatusCode)
-					assert.Equal(t, "response from /second", resp.BodyString)
-				},
-			},
-		},
-		{
-			name: "SCENARIO-LIB-028-006: Valid request, separator with comments, then another valid request",
-			requestFileContent: fmt.Sprintf(`
-GET %s/req1
-
-### Comment for empty block
-# More comments
-
-###
-POST %s/req2
-Content-Type: application/json
-
-{
-  "key": "value"
-}
-`, server.URL, server.URL),
-			expectedResponses: 2,
-			expectedError:     false,
-			responseValidators: []func(t *testing.T, resp *Response){
-				func(t *testing.T, resp *Response) { // For GET /req1
-					assert.NoError(t, resp.Error)
-					assert.Equal(t, http.StatusAccepted, resp.StatusCode)
-					assert.Equal(t, "response from /req1", resp.BodyString)
-				},
-				func(t *testing.T, resp *Response) { // For POST /req2
-					assert.NoError(t, resp.Error)
-					assert.Equal(t, http.StatusCreated, resp.StatusCode)
-					assert.Equal(t, "response from /req2", resp.BodyString)
-				},
-			},
-		},
-		{
-			name: "File with only variable definitions - ExecuteFile",
-			requestFileContent: `
-@host=localhost
-@port=8080
-`,
-			expectedResponses: 0,
-			expectedError:     true, // Expect "no requests found in file"
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tempFile, err := os.CreateTemp(t.TempDir(), "test_*.http")
-			require.NoError(t, err)
-			defer os.Remove(tempFile.Name())
-
-			_, err = tempFile.WriteString(tt.requestFileContent)
-			require.NoError(t, err)
-			require.NoError(t, tempFile.Close())
-
-			responses, execErr := client.ExecuteFile(context.Background(), tempFile.Name())
-
-			if tt.expectedError {
-				assert.Error(t, execErr)
-				if strings.Contains(tt.name, "variable definitions") { // More specific check for this case
-					assert.Contains(t, execErr.Error(), "no requests found in file")
-				}
-			} else {
-				assert.NoError(t, execErr)
-				require.Len(t, responses, tt.expectedResponses, "Number of responses mismatch")
-				for i, validator := range tt.responseValidators {
-					if i < len(responses) {
-						validator(t, responses[i])
-					}
-				}
-			}
-		})
-	}
 }
 
 func TestExecuteFile_VariableFunctionConsistency(t *testing.T) {
