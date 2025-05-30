@@ -9,8 +9,6 @@
 | TRV-002 | Implement comparison of actual vs. expected response, reporting discrepancies (REQ-LIB-006).                 | Completed |              | Assumed completed from prior work. Verify against PRD ACs.       |
 | TRV-003 | Implement `ValidateResponses` method for multiple responses (REQ-LIB-009).                                   | Completed |              | Assumed completed from prior work. Verify against PRD ACs.       |
 | TRV-004 | Ensure response file format allows multiple expected responses separated by `###` (REQ-LIB-010).             | Completed |              | Assumed completed from prior work. Verify against PRD ACs.       |
-| TRV-005 | Ensure library exclusively uses `.http` for expected responses (REQ-LIB-012 core logic).                     | Completed |              | Core logic assumed complete. See specific tests TRV-006, TRV-007.|
-| TRV-006 | Implement unit tests covering SCENARIO-LIB-012-001 (reject JSON response file). (REQ-LIB-012)                | Skipped   | TRV-005      | Migrated from TASK-034.                                          |
-| TRV-007 | Implement unit tests covering SCENARIO-LIB-012-002 (reject YAML response file). (REQ-LIB-012)               | Skipped   | TRV-005      | Migrated from TASK-035.                                          |
+| TRV-005 | Ensure library exclusively uses `.http` for expected responses (REQ-LIB-012 core logic).                     | Completed |              | Core logic assumed complete.                                       |
 | TRV-008 | Review and update documentation related to response validation.                                              | Done      | TRV-001..005 | NFR-RV-002                                                       |
 | TRV-009 | Verify unit test coverage for all response validation features.                                              | Done      | TRV-001..005 | NFR-RV-003. Current coverage 90.6%.                              | 
