@@ -122,9 +122,13 @@ Content-Type: application/json
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Given: test case setup (input string tt.fileContent)
 			reader := strings.NewReader(tt.fileContent)
+
+			// When: parsing the request file
 			parsedFile, err := parseRequests(reader, "test.http")
 
+			// Then: assert expected outcomes
 			if tt.expectedError {
 				assert.Error(t, err)
 			} else {
@@ -189,8 +193,13 @@ POST https://example.com/api/item2
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Given: test case setup (input string tt.fileContent)
 			reader := strings.NewReader(tt.fileContent)
+
+			// When: parsing the request file
 			parsedFile, err := parseRequests(reader, "test.http")
+
+			// Then: assert expected outcomes
 			require.NoError(t, err)
 			require.NotNil(t, parsedFile)
 			assert.Len(t, parsedFile.Requests, tt.expectedCount)
@@ -244,8 +253,13 @@ HTTP/1.1 404 Not Found
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Given: test case setup (input string tt.fileContent)
 			reader := strings.NewReader(tt.fileContent)
+
+			// When: parsing the expected responses
 			parsedResponses, err := parseExpectedResponses(reader, "test.hresp")
+
+			// Then: assert expected outcomes
 			require.NoError(t, err)
 			require.NotNil(t, parsedResponses)
 			assert.Len(t, parsedResponses, tt.expectedCount)
@@ -257,6 +271,126 @@ HTTP/1.1 404 Not Found
 			if tt.expectedCount > 1 && len(parsedResponses) > 1 {
 				require.NotNil(t, parsedResponses[1].Status)
 				assert.Equal(t, tt.expResp2Status, *parsedResponses[1].Status)
+			}
+		})
+	}
+}
+
+func TestParseExpectedResponses_Simple(t *testing.T) {
+	// Given
+	tests := []struct {
+		name             string
+		content          string
+		expectedCount    int
+		expectedStatus   *string
+		expectedHeaders  map[string]string
+		expectedBodyJSON string
+		expectedBody     *string
+		expectError      bool
+	}{
+		{
+			name: "SCENARIO-LIB-007-001: Full valid response",
+			content: `HTTP/1.1 200 OK
+Content-Type: application/json
+X-Test-Header: TestValue
+
+{
+  "message": "success"
+}`,
+			expectedCount:  1,
+			expectedStatus: ptr("200 OK"),
+			expectedHeaders: map[string]string{
+				"Content-Type":  "application/json",
+				"X-Test-Header": "TestValue",
+			},
+			expectedBodyJSON: `{"message": "success"}`,
+		},
+		{
+			name:           "SCENARIO-LIB-007-002: Status line only",
+			content:        `HTTP/1.1 404 Not Found`,
+			expectedCount:  1,
+			expectedStatus: ptr("404 Not Found"),
+		},
+		{
+			name: "SCENARIO-LIB-007-003: Status and headers only",
+			content: `HTTP/1.1 201 Created
+Cache-Control: no-cache`,
+			expectedCount:  1,
+			expectedStatus: ptr("201 Created"),
+			expectedHeaders: map[string]string{
+				"Cache-Control": "no-cache",
+			},
+		},
+		{
+			name: "SCENARIO-LIB-007-004: Status and body only",
+			content: `HTTP/1.1 500 Internal Server Error
+
+<error>Server Error</error>`,
+			expectedCount:  1,
+			expectedStatus: ptr("500 Internal Server Error"),
+			expectedBody:   ptr("<error>Server Error</error>"),
+		},
+		{
+			name:          "SCENARIO-LIB-007-005: Empty content",
+			content:       ``,
+			expectedCount: 0,
+			expectError:   false, // Empty content is not an error, just no responses.
+		},
+		{
+			name:          "SCENARIO-LIB-007-006: Malformed status line",
+			content:       `HTTP/1.1OK`, // No space
+			expectedCount: 0,
+			expectError:   true,
+		},
+		{
+			name: "Multiple responses",
+			content: `HTTP/1.1 200 OK
+Content-Type: text/plain
+
+Response 1
+###
+HTTP/1.1 201 Created
+
+Response 2`,
+			expectedCount: 2,
+			// We'll just check count for this multi-response, details in _SeparatorComments
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given
+			reader := strings.NewReader(tt.content)
+
+			// When
+			parsedResponses, err := parseExpectedResponses(reader, "test.hresp")
+
+			// Then
+			if tt.expectError {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, parsedResponses, tt.expectedCount)
+
+			if tt.expectedCount == 1 && len(parsedResponses) == 1 {
+				resp := parsedResponses[0]
+				if tt.expectedStatus != nil {
+					require.NotNil(t, resp.Status)
+					assert.Equal(t, *tt.expectedStatus, *resp.Status)
+				}
+				if tt.expectedHeaders != nil {
+					for k, v := range tt.expectedHeaders {
+						assert.Equal(t, v, resp.Headers.Get(k))
+					}
+				}
+				if tt.expectedBodyJSON != "" {
+					require.NotNil(t, resp.Body)
+					assert.JSONEq(t, tt.expectedBodyJSON, *resp.Body)
+				} else if tt.expectedBody != nil {
+					require.NotNil(t, resp.Body)
+					assert.Equal(t, *tt.expectedBody, *resp.Body)
+				}
 			}
 		})
 	}
