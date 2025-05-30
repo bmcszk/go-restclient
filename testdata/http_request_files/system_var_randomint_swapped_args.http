@@ -1,5 +1,6 @@
-GET [[.ServerURL]]/item/{{$randomInt 30 25}}/swapped
+GET [[.ServerURL]]/rint/{{$randomInt 30 25}}/{{$randomInt 30 25}}
+X-Random-ID: {{$randomInt 30 25}}
 
 {
-  "value": {{$randomInt 90 80}}
+  "value": "{{$randomInt 30 25}}"
 } 
