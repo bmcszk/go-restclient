@@ -132,9 +132,10 @@ func TestValidateResponses_WithSampleFile(t *testing.T) {
 			tt.actualModifier(actualTest)
 
 			currentExpectedFilePath := tt.expectedFileSource
+			client, _ := NewClient()
 
 			// When
-			err := ValidateResponses(currentExpectedFilePath, actualTest)
+			err := client.ValidateResponses(currentExpectedFilePath, []*Response{actualTest})
 
 			// Then
 			if tt.expectedErrCount == 0 {
@@ -231,9 +232,10 @@ func TestValidateResponses_PartialExpected(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Given: actualResponse and expectedFilePath from the test case tt
+			client, _ := NewClient()
 
 			// When
-			err := ValidateResponses(tt.expectedFilePath, tt.actualResponse)
+			err := client.ValidateResponses(tt.expectedFilePath, []*Response{tt.actualResponse})
 
 			// Then
 			if tt.expectedErrCount == 0 {

@@ -24,12 +24,14 @@ import (
 )
 
 // Client is the main struct for interacting with the REST client library.
-// It will hold configuration and methods to execute requests.
+// It holds configuration like the HTTP client, base URL, default headers,
+// and programmatic variables for substitution.
 type Client struct {
 	httpClient        *http.Client
 	BaseURL           string
 	DefaultHeaders    http.Header
 	currentDotEnvVars map[string]string
+	programmaticVars  map[string]interface{}
 }
 
 // NewClient creates a new instance of the REST client.
@@ -57,7 +59,6 @@ type ClientOption func(*Client) error
 func WithHTTPClient(hc *http.Client) ClientOption {
 	return func(c *Client) error {
 		if hc == nil {
-			// Default to a new client if nil is provided
 			c.httpClient = &http.Client{}
 		} else {
 			c.httpClient = hc
@@ -94,12 +95,49 @@ func WithDefaultHeaders(headers http.Header) ClientOption {
 	}
 }
 
-// ExecuteFile parses a request file, executes all requests found, and returns their responses.
+// WithVars sets programmatic variables for the client instance.
+// These variables can be used in .http and .hresp files.
+// Programmatic variables have the highest precedence during substitution,
+// overriding file-defined variables, environment variables, and .env variables.
+// If called multiple times, the provided vars are merged with existing ones,
+// with new values for existing keys overwriting old ones.
+func WithVars(vars map[string]interface{}) ClientOption {
+	return func(c *Client) error {
+		if c.programmaticVars == nil {
+			c.programmaticVars = make(map[string]interface{})
+		}
+		for k, v := range vars {
+			c.programmaticVars[k] = v
+		}
+		return nil
+	}
+}
+
+// ExecuteFile parses a request file (.http, .rest), executes all requests found, and returns their responses.
 // It returns an error if the file cannot be parsed or no requests are found.
 // Individual request execution errors are stored within each Response object.
-// programmaticVars, if provided, will override any variables defined in the request file.
-func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string, programmaticVars ...map[string]string) ([]*Response, error) {
-	parsedFile, err := parseRequestFile(requestFilePath)
+//
+// Variable Substitution Workflow:
+// 1. File Parsing (`parseRequestFile`):
+//   - Loads .env file from the request file's directory.
+//   - Generates request-scoped system variables (e.g., `{{$uuid}}`) once for the entire file parsing pass.
+//   - Resolves `@variable = value` definitions. The `value` itself can contain placeholders,
+//     which are resolved using: Client programmatic vars > request-scoped system vars > OS env vars > .env vars.
+//
+// 2. Request Execution (within `ExecuteFile` loop for each request):
+//   - Re-generates request-scoped system variables (e.g., `{{$uuid}}`) *once per individual request* to ensure
+//     uniqueness if needed across multiple requests in the same file, but consistency within a single request.
+//   - For each part of the request (URL, headers, body):
+//     a. `resolveVariablesInText` is called: This handles general placeholder substitution with precedence:
+//     Client programmatic vars > file-scoped `@vars` > request-scoped system vars > OS env vars > .env vars > fallback.
+//     It resolves simple system variables like `{{$uuid}}` from the request-scoped map.
+//     It leaves dynamic system variables (e.g., `{{$dotenv NAME}}`) untouched for the next step.
+//     b. `substituteDynamicSystemVariables` is called: This handles system variables requiring arguments
+//     (e.g., `{{$dotenv NAME}}`, `{{$processEnv NAME}}`, `{{$randomInt MIN MAX}}`).
+//
+// Programmatic variables for substitution can be set on the Client using `WithVars()`.
+func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Response, error) {
+	parsedFile, err := parseRequestFile(requestFilePath, c)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse request file %s: %w", requestFilePath, err)
 	}
@@ -107,18 +145,11 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string, progra
 		return nil, fmt.Errorf("no requests found in file %s", requestFilePath)
 	}
 
-	// Load .env file from the same directory as the request file
 	c.currentDotEnvVars = make(map[string]string)
 	envFilePath := filepath.Join(filepath.Dir(requestFilePath), ".env")
 	if _, err := os.Stat(envFilePath); err == nil {
 		loadedVars, loadErr := godotenv.Read(envFilePath)
-		if loadErr != nil {
-			// Log or return an error? For now, let's treat a load error as non-fatal,
-			// meaning $dotenv vars will just be empty if the file is malformed.
-			// Or, we could append to multiErr.
-			// For now, just print a warning perhaps, or let it be silent.
-			// Let's be silent for now, consistent with undefined vars being empty.
-		} else {
+		if loadErr == nil {
 			c.currentDotEnvVars = loadedVars
 		}
 	}
@@ -126,77 +157,88 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string, progra
 	responses := make([]*Response, len(parsedFile.Requests))
 	var multiErr *multierror.Error
 
+	osEnvGetter := func(key string) (string, bool) {
+		return os.LookupEnv(key)
+	}
+
 	for i, restClientReq := range parsedFile.Requests {
-		// Create a new map for merged variables to avoid modifying the original parsed request's ActiveVariables directly yet.
-		mergedVariables := make(map[string]string)
-		// Copy file-defined variables first
-		for k, v := range restClientReq.ActiveVariables {
-			mergedVariables[k] = v
-		}
-		// Then, override with programmatic variables if provided
-		if len(programmaticVars) > 0 && programmaticVars[0] != nil {
-			for k, v := range programmaticVars[0] {
-				mergedVariables[k] = v
-			}
-		}
-		// Update the request's ActiveVariables with the merged map for subsequent use
-		restClientReq.ActiveVariables = mergedVariables
+		requestScopedSystemVars := c.generateRequestScopedSystemVariables()
 
-		// Pre-evaluate system variables within the values of ActiveVariables
-		// This ensures that if a variable's value contains a system function (e.g., @myId = {{$uuid}}),
-		// that function is evaluated once and its result is stored.
-		// Subsequent uses of {{myId}} will then use this same pre-evaluated value.
-		for k, v := range restClientReq.ActiveVariables {
-			restClientReq.ActiveVariables[k] = c.substituteSystemVariables(v)
-		}
-
-		// Substitute custom variables in RawURLString
-		substitutedRawURL := restClientReq.RawURLString
-		for k, v := range restClientReq.ActiveVariables { // Use the now merged ActiveVariables
-			placeholder := "{{" + k + "}}"
-			substitutedRawURL = strings.ReplaceAll(substitutedRawURL, placeholder, v)
-		}
-
-		// Substitute system variables in RawURLString
-		substitutedRawURL = c.substituteSystemVariables(substitutedRawURL)
+		substitutedRawURL := c.resolveVariablesInText(
+			restClientReq.RawURLString,
+			c.programmaticVars,
+			restClientReq.ActiveVariables,
+			requestScopedSystemVars,
+			osEnvGetter,
+			c.currentDotEnvVars,
+		)
+		substitutedRawURL = c.substituteDynamicSystemVariables(substitutedRawURL)
 
 		finalParsedURL, parseErr := url.Parse(substitutedRawURL)
 		if parseErr != nil {
-			// If URL parsing fails after substitution, this is a critical error for this request
 			resp := &Response{Request: restClientReq}
 			resp.Error = fmt.Errorf("failed to parse URL after variable substitution: %s (original: %s): %w", substitutedRawURL, restClientReq.RawURLString, parseErr)
 			wrappedErr := fmt.Errorf("request %d (%s %s) failed URL parsing: %w", i+1, restClientReq.Method, restClientReq.RawURLString, resp.Error)
 			multiErr = multierror.Append(multiErr, wrappedErr)
 			responses[i] = resp
-			continue // Skip execution for this request
+			continue
 		}
-		restClientReq.URL = finalParsedURL // Update the URL with the fully parsed and substituted one
+		restClientReq.URL = finalParsedURL
 
-		// Apply variables to Headers and Body
-		c.applyVariables(restClientReq, restClientReq.ActiveVariables)
+		if restClientReq.Headers != nil {
+			for key, values := range restClientReq.Headers {
+				newValues := make([]string, len(values))
+				for j, val := range values {
+					resolvedVal := c.resolveVariablesInText(
+						val,
+						c.programmaticVars,
+						restClientReq.ActiveVariables,
+						requestScopedSystemVars,
+						osEnvGetter,
+						c.currentDotEnvVars,
+					)
+					newValues[j] = c.substituteDynamicSystemVariables(resolvedVal)
+				}
+				restClientReq.Headers[key] = newValues
+			}
+		}
+
+		if restClientReq.RawBody != "" {
+			resolvedBody := c.resolveVariablesInText(
+				restClientReq.RawBody,
+				c.programmaticVars,
+				restClientReq.ActiveVariables,
+				requestScopedSystemVars,
+				osEnvGetter,
+				c.currentDotEnvVars,
+			)
+			restClientReq.RawBody = c.substituteDynamicSystemVariables(resolvedBody)
+			restClientReq.Body = strings.NewReader(restClientReq.RawBody)
+		}
 
 		resp, execErr := c.executeRequest(ctx, restClientReq)
 		if execErr != nil {
 			if resp == nil {
 				resp = &Response{Request: restClientReq}
 			}
-			if resp.Error == nil {
+			currentErr := resp.Error
+			if currentErr == nil {
 				resp.Error = execErr
 			} else {
-				// If resp.Error was already set (e.g., by URL parse failure), wrap execErr if it's new
-				resp.Error = fmt.Errorf("execution error: %w (prior error: %s)", execErr, resp.Error)
+				resp.Error = fmt.Errorf("execution error: %w (prior error: %s)", execErr, currentErr)
 			}
-			wrappedExecErr := fmt.Errorf("request %d (%s %s) failed with critical error: %w", i+1, restClientReq.Method, restClientReq.URL.String(), execErr)
-			multiErr = multierror.Append(multiErr, wrappedExecErr)
-		}
-
-		if resp != nil && resp.Error != nil {
-			// Ensure URL string in error message is from the substituted URL if available, otherwise RawURLString
 			urlForError := restClientReq.RawURLString
 			if restClientReq.URL != nil {
 				urlForError = restClientReq.URL.String()
 			}
-			wrappedRespErr := fmt.Errorf("request %d (%s %s) failed: %w", i+1, restClientReq.Method, urlForError, resp.Error)
+			wrappedExecErr := fmt.Errorf("request %d (%s %s) failed with critical error: %w", i+1, restClientReq.Method, urlForError, execErr)
+			multiErr = multierror.Append(multiErr, wrappedExecErr)
+		} else if resp != nil && resp.Error != nil {
+			urlForError := restClientReq.RawURLString
+			if restClientReq.URL != nil {
+				urlForError = restClientReq.URL.String()
+			}
+			wrappedRespErr := fmt.Errorf("request %d (%s %s) processing resulted in error: %w", i+1, restClientReq.Method, urlForError, resp.Error)
 			multiErr = multierror.Append(multiErr, wrappedRespErr)
 		}
 		responses[i] = resp
@@ -205,77 +247,99 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string, progra
 	return responses, multiErr.ErrorOrNil()
 }
 
-// applyVariables substitutes custom placeholders in the request's Headers, and Body.
-// It then substitutes system variables.
-func (c *Client) applyVariables(req *Request, vars map[string]string) {
-	if req == nil {
-		return
-	}
+// resolveVariablesInText is the primary substitution engine for non-system variables and request-scoped system variables.
+// It iterates through placeholders like `{{varName | fallback}}` and resolves them based on a defined precedence.
+// Dynamic system variables (like {{$dotenv NAME}}) are left untouched by this function.
+// Precedence (highest to lowest):
+// 1. Client programmatic variables (clientProgrammaticVars)
+// 2. Request file-defined variables (fileScopedVars, from @name=value)
+// 3. Request-scoped system variables (requestScopedSystemVars, e.g., a single UUID for the request)
+// 4. OS Environment variables
+// 5. Variables from .env file (dotEnvVars)
+// 6. Fallback value provided in the placeholder itself.
+func (c *Client) resolveVariablesInText(text string, clientProgrammaticVars map[string]interface{}, fileScopedVars map[string]string, requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool), dotEnvVars map[string]string) string {
+	re := regexp.MustCompile(`{{\s*(.*?)\s*}}`)
 
-	// Substitute custom variables in Headers
-	if len(vars) > 0 {
-		for headerKey, headerValues := range req.Headers {
-			newValues := make([]string, len(headerValues))
-			for i, val := range headerValues {
-				tempVal := val
-				for key, value := range vars {
-					placeholder := "{{" + key + "}}"
-					tempVal = strings.ReplaceAll(tempVal, placeholder, value)
+	return re.ReplaceAllStringFunc(text, func(match string) string {
+		directive := strings.TrimSpace(match[2 : len(match)-2])
+
+		var varName string
+		var fallbackValue string
+		hasFallback := false
+
+		if strings.Contains(directive, "|") {
+			parts := strings.SplitN(directive, "|", 2)
+			varName = strings.TrimSpace(parts[0])
+			fallbackValue = strings.TrimSpace(parts[1])
+			hasFallback = true
+		} else {
+			varName = directive
+		}
+
+		// 1. Request-scoped System Variables (if varName starts with $)
+		// These are simple, pre-generated variables like $uuid, $timestamp, $randomInt (no-args).
+		if strings.HasPrefix(varName, "$") {
+			if requestScopedSystemVars != nil {
+				if val, ok := requestScopedSystemVars[varName]; ok {
+					return val
 				}
-				newValues[i] = tempVal
 			}
-			req.Headers[headerKey] = newValues
+			// If it's a $-prefixed varName not in requestScopedSystemVars,
+			// it could be a dynamic one (e.g. {{$dotenv NAME}}, {{$randomInt MIN MAX}})
+			// or an unknown one. These are left for substituteDynamicSystemVariables.
+			// So, we return the original 'match' here to preserve the placeholder for the next stage.
+			return match
 		}
-	}
 
-	// Substitute system variables in Headers
-	for headerKey, headerValues := range req.Headers {
-		newValues := make([]string, len(headerValues))
-		for i, val := range headerValues {
-			newValues[i] = c.substituteSystemVariables(val)
-		}
-		req.Headers[headerKey] = newValues
-	}
-
-	// Substitute in RawBody
-	if req.RawBody != "" {
-		bodyChanged := false
-		currentBody := req.RawBody
-
-		// Substitute custom variables
-		if len(vars) > 0 {
-			tempCustomSubstBody := currentBody
-			for key, value := range vars {
-				placeholder := "{{" + key + "}}"
-				tempCustomSubstBody = strings.ReplaceAll(tempCustomSubstBody, placeholder, value)
-			}
-			if tempCustomSubstBody != currentBody {
-				currentBody = tempCustomSubstBody
-				bodyChanged = true
+		// 2. Client Programmatic Variables (map[string]interface{})
+		if clientProgrammaticVars != nil {
+			if val, ok := clientProgrammaticVars[varName]; ok {
+				return fmt.Sprintf("%v", val)
 			}
 		}
 
-		// Substitute system variables
-		tempSystemSubstBody := c.substituteSystemVariables(currentBody)
-		if tempSystemSubstBody != currentBody {
-			currentBody = tempSystemSubstBody
-			bodyChanged = true
+		// 3. File-scoped Variables (map[string]string, from @name=value)
+		if fileScopedVars != nil {
+			if val, ok := fileScopedVars[varName]; ok {
+				return val
+			}
 		}
 
-		if bodyChanged {
-			req.RawBody = currentBody
-			// Important: Update the Body io.Reader as well
-			req.Body = strings.NewReader(req.RawBody)
+		// 4. OS Environment Variables
+		if osEnvGetter != nil {
+			if envVal, ok := osEnvGetter(varName); ok {
+				return envVal
+			}
 		}
-	}
+
+		// 5. .env file variables
+		if dotEnvVars != nil {
+			if val, ok := dotEnvVars[varName]; ok {
+				return val
+			}
+		}
+
+		// 6. Fallback Value
+		// Must be checked AFTER all other potential sources for varName.
+		if hasFallback {
+			return fallbackValue
+		}
+
+		return match // Return original placeholder if not found and no fallback
+	})
 }
 
-// substituteSystemVariables replaces known system variable placeholders in a given text.
-func (c *Client) substituteSystemVariables(text string) string {
-	originalTextForLogging := text // Keep a copy for logging
+// substituteDynamicSystemVariables handles system variables that require argument parsing or dynamic evaluation at substitution time.
+// These are typically {{$processEnv VAR}}, {{$dotenv VAR}}, and {{$randomInt MIN MAX}}.
+// Other simple system variables like {{$uuid}} or {{$timestamp}}
+// should have been pre-resolved and substituted by resolveVariablesInText via the
+// requestScopedSystemVars map.
+func (c *Client) substituteDynamicSystemVariables(text string) string {
+	originalTextForLogging := text // Keep a copy for logging. Used if we add more complex types with logging.
+	_ = originalTextForLogging     // Avoid unused variable error if no logging exists below.
 
-	// Handle {{$randomInt min max}} - MUST be before {{$randomInt}} (no-args)
-	reRandomIntWithArgs := regexp.MustCompile(`\{\{\$randomInt\s+(-?\d+)\s+(-?\d+)\}\}`)
+	// Handle {{$randomInt min max}}
+	reRandomIntWithArgs := regexp.MustCompile(`{{\$randomInt\s+(-?\d+)\s+(-?\d+)}}`)
 	text = reRandomIntWithArgs.ReplaceAllStringFunc(text, func(match string) string {
 		parts := reRandomIntWithArgs.FindStringSubmatch(match)
 		if len(parts) == 3 {
@@ -288,42 +352,12 @@ func (c *Client) substituteSystemVariables(text string) string {
 		return match // Return original match if parsing fails or min > max
 	})
 
-	// Handle {{$guid}} - for backward compatibility or explicit choice.
-	// This is treated as an alias for {{$uuid}}.
-	// Each occurrence should yield a new GUID.
-	for strings.Contains(text, "{{$guid}}") {
-		newGUID := uuid.NewString()
-		if originalTextForLogging == text { // Log only for the first replacement of $guid in this originalText
-			fmt.Printf("[DEBUG] substituteSystemVariables: input='%s', op='$guid', first_replaced_with='%s'\n", originalTextForLogging, newGUID)
-		}
-		text = strings.Replace(text, "{{$guid}}", newGUID, 1)
-	}
-
-	// REQ-LIB-008: $uuid
-	// Each occurrence should yield a new UUID.
-	for strings.Contains(text, "{{$uuid}}") {
-		newUUID := uuid.NewString()
-		// Log only for the first replacement of $uuid in this originalText (if $guid didn't already log for it)
-		if originalTextForLogging == text && !strings.Contains(originalTextForLogging, "{{$guid}}") {
-			fmt.Printf("[DEBUG] substituteSystemVariables: input='%s', op='$uuid', first_replaced_with='%s'\n", originalTextForLogging, newUUID)
-		}
-		text = strings.Replace(text, "{{$uuid}}", newUUID, 1)
-	}
-
-	// REQ-LIB-009: $timestamp
-	if strings.Contains(text, "{{$timestamp}}") {
-		timestampStr := strconv.FormatInt(time.Now().UTC().Unix(), 10)
-		text = strings.ReplaceAll(text, "{{$timestamp}}", timestampStr)
-	}
-
-	// REQ-LIB-010: $randomInt (no arguments, 0-100 as per common expectation/previous tests)
-	if strings.Contains(text, "{{$randomInt}}") {
-		randomIntStr := strconv.Itoa(rand.Intn(101)) // 0-100 inclusive
-		text = strings.ReplaceAll(text, "{{$randomInt}}", randomIntStr)
-	}
+	// NOTE: {{$guid}}, {{$uuid}}, {{$timestamp}}, {{$randomInt (no-args)}}
+	// are EXCLUDED here as they are now handled by generateRequestScopedSystemVariables
+	// and substituted in resolveVariablesInText.
 
 	// REQ-LIB-011: $dotenv MY_VARIABLE_NAME
-	reDotEnv := regexp.MustCompile(`\{\{\$dotenv\s+([a-zA-Z_][a-zA-Z0-9_]*)\}\}`)
+	reDotEnv := regexp.MustCompile(`{{\$dotenv\s+([a-zA-Z_][a-zA-Z0-9_]*)}}`)
 	text = reDotEnv.ReplaceAllStringFunc(text, func(match string) string {
 		parts := reDotEnv.FindStringSubmatch(match)
 		if len(parts) == 2 {
@@ -337,7 +371,7 @@ func (c *Client) substituteSystemVariables(text string) string {
 	})
 
 	// REQ-LIB-012: $processEnv MY_ENV_VAR
-	reProcessEnv := regexp.MustCompile(`\{\{\$processEnv\s+([a-zA-Z_][a-zA-Z0-9_]*)\}\}`)
+	reProcessEnv := regexp.MustCompile(`{{\$processEnv\s+([a-zA-Z_][a-zA-Z0-9_]*)}}`)
 	text = reProcessEnv.ReplaceAllStringFunc(text, func(match string) string {
 		parts := reProcessEnv.FindStringSubmatch(match)
 		if len(parts) == 2 {
@@ -385,6 +419,22 @@ func (c *Client) substituteSystemVariables(text string) string {
 	*/
 
 	return text
+}
+
+// generateRequestScopedSystemVariables creates a map of system variables that are generated once per request.
+// This ensures that if, for example, {{$uuid}} is used multiple times within the same request
+// (e.g., in the URL and a header), it resolves to the same value for that specific request.
+func (c *Client) generateRequestScopedSystemVariables() map[string]string {
+	vars := make(map[string]string)
+	vars["$uuid"] = uuid.NewString()
+	vars["$guid"] = vars["$uuid"] // Alias $guid to $uuid for consistency
+	vars["$timestamp"] = strconv.FormatInt(time.Now().UTC().Unix(), 10)
+	vars["$randomInt"] = strconv.Itoa(rand.Intn(101)) // 0-100 inclusive
+	// Add other simple, no-argument system variables here if any
+
+	// For logging/debugging purposes, to see what was generated once per request
+	// fmt.Printf("[DEBUG] Generated request-scoped system variables: %v\n", vars)
+	return vars
 }
 
 // executeRequest sends a given Request and returns the Response.
@@ -498,5 +548,5 @@ func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Respo
 }
 
 // TODO: Add other public methods as needed, e.g.:
-// - Execute(request *Request) (*Response, error) for programmatic requests
-// - Methods for setting request-specific options (timeout, retries etc.)
+// - Execute(ctx context.Context, request *Request, options ...RequestOption) (*Response, error)
+// - A method to validate a single response if users construct ExpectedResponse manually.

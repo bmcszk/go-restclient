@@ -25,7 +25,7 @@ func TestExecuteFile_InvalidMethodInFile(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "1 error occurred:")
 	assert.Contains(t, err.Error(), "unsupported protocol scheme")
-	assert.Contains(t, err.Error(), "request 1 (INVALIDMETHOD /test) failed")
+	assert.Contains(t, err.Error(), "request 1 (INVALIDMETHOD /test) processing resulted in error")
 
 	require.Len(t, responses, 1)
 

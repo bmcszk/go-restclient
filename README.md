@@ -200,34 +200,35 @@ func main() {
 		// restclient.WithBaseURL("https://api.global.com"),
 		// restclient.WithDefaultHeader("X-App-Version", "1.2.3"),
 		// restclient.WithHTTPClient(&http.Client{Timeout: 15 * time.Second}),
+		// Programmatic variables are now set via WithVars
+		restclient.WithVars(map[string]interface{}{
+			"userId":        "prog_user_override_123",
+			"authToken":     "prog_auth_token_xyz",
+			"productSuffix": "Deluxe",
+		}),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
 	}
 
-	programmaticAPIVars := map[string]string{
-		"userId":        "prog_user_override_123",
-		"authToken":     "prog_auth_token_xyz",
-		"productSuffix": "Deluxe",
-	}
-
 	requestFilePath := "api_requests.http"       // Your .http file
 	expectedResponseFilePath := "api_expected.hresp" // Your .hresp file for validation
 
-	responses, err := client.ExecuteFile(context.Background(), requestFilePath, programmaticAPIVars)
+	responses, err := client.ExecuteFile(context.Background(), requestFilePath) // No programmaticAPIVars here
 	if err != nil {
 		log.Fatalf("Failed to execute request file: %v", err)
 	}
 
 	fmt.Printf("Executed %d requests from %s.\n", len(responses), requestFilePath)
 
-	// Primary validation method: using an expected response file.
-	validationErr := restclient.ValidateResponses(expectedResponseFilePath, responses...)
+	// Validate the responses
+	// The client instance is used for variable substitution within the .hresp file (e.g., for {{$uuid}})
+	validationErr := client.ValidateResponses(expectedResponseFilePath, responses) // Pass the slice directly
 	if validationErr != nil {
-		// This error could be due to file not found, parsing issues, or actual validation failures.
-		log.Fatalf("Validation against '%s' failed: %v", expectedResponseFilePath, validationErr)
+		log.Fatalf("Response validation failed: %v", validationErr)
 	}
-	fmt.Printf("All responses validated successfully against %s!\n", expectedResponseFilePath)
+
+	fmt.Println("All requests executed and validated successfully!")
 
 	// Optional: Iterate through responses for manual checks or logging.
 	fmt.Println("\nIndividual response details (optional logging):")

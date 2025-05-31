@@ -53,9 +53,10 @@ func TestValidateResponses_BodyRegexpPlaceholder(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Given: actualResponse and expectedFilePath from the test case tt
+			client, _ := NewClient()
 
 			// When
-			err := ValidateResponses(tt.expectedFilePath, tt.actualResponse)
+			err := client.ValidateResponses(tt.expectedFilePath, []*Response{tt.actualResponse})
 
 			// Then
 			if tt.expectedErrCount == 0 {
@@ -100,9 +101,10 @@ func TestValidateResponses_BodyAnyGuidPlaceholder(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Given: actualResponse and expectedFilePath from the test case tt
+			client, _ := NewClient()
 
 			// When
-			err := ValidateResponses(tt.expectedFilePath, tt.actualResponse)
+			err := client.ValidateResponses(tt.expectedFilePath, []*Response{tt.actualResponse})
 
 			// Then
 			if tt.expectedErrCount == 0 {
@@ -148,9 +150,10 @@ func TestValidateResponses_BodyAnyTimestampPlaceholder(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Given: actualResponse and expectedFilePath from the test case tt
+			client, _ := NewClient()
 
 			// When
-			err := ValidateResponses(tt.expectedFilePath, tt.actualResponse)
+			err := client.ValidateResponses(tt.expectedFilePath, []*Response{tt.actualResponse})
 
 			// Then
 			if tt.expectedErrCount == 0 {
@@ -234,9 +237,10 @@ func TestValidateResponses_BodyAnyDatetimePlaceholder(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Given: actualResponse and expectedFilePath from the test case tt
+			client, _ := NewClient()
 
 			// When
-			err := ValidateResponses(tt.expectedFilePath, tt.actualResponse)
+			err := client.ValidateResponses(tt.expectedFilePath, []*Response{tt.actualResponse})
 
 			// Then
 			if tt.expectedErrCount == 0 {
@@ -299,9 +303,10 @@ func TestValidateResponses_BodyAnyPlaceholder(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Given: actualResponse and expectedFilePath from the test case tt
+			client, _ := NewClient()
 
 			// When
-			err := ValidateResponses(tt.expectedFilePath, tt.actualResponse)
+			err := client.ValidateResponses(tt.expectedFilePath, []*Response{tt.actualResponse})
 
 			// Then
 			if tt.expectedErrCount == 0 {

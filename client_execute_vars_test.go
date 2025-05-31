@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -139,12 +138,12 @@ func TestExecuteFile_WithGuidSystemVariable(t *testing.T) {
 	_, err = uuid.Parse(guidFromBody2)
 	assert.NoError(t, err, "GUID from body (correlationId) should be a valid UUID: %s", guidFromBody2)
 
-	assert.NotEqual(t, guidFromURL, guidFromHeader, "GUID from URL and header should be different")
-	assert.NotEqual(t, guidFromURL, guidFromBody1, "GUID from URL and body1 should be different")
-	assert.NotEqual(t, guidFromURL, guidFromBody2, "GUID from URL and body2 should be different")
-	assert.NotEqual(t, guidFromHeader, guidFromBody1, "GUID from header and body1 should be different")
-	assert.NotEqual(t, guidFromHeader, guidFromBody2, "GUID from header and body2 should be different")
-	assert.NotEqual(t, guidFromBody1, guidFromBody2, "GUIDs from body (transactionId and correlationId) should be different")
+	// With request-scoped system variables, all {{$guid}} ({{$uuid}}) instances should resolve to the SAME value.
+	assert.Equal(t, guidFromURL, guidFromHeader, "GUID from URL and header should be the same")
+	assert.Equal(t, guidFromURL, guidFromBody1, "GUID from URL and body1 should be the same")
+	// For this test, the .http file uses {{$guid}} twice in the body for different fields.
+	// These should now resolve to the same request-scoped GUID.
+	assert.Equal(t, guidFromBody1, guidFromBody2, "GUIDs from body (transactionId and correlationId) should be the same")
 }
 
 func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
@@ -585,135 +584,68 @@ func TestExecuteFile_WithDatetimeSystemVariable(t *testing.T) {
 }
 
 func TestExecuteFile_WithProgrammaticVariables(t *testing.T) {
-	// Given common setup for all subtests
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Given
+	var interceptedRequest struct {
+		URL    string
+		Header string
+		Body   string
+	}
+	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
 		bodyBytes, _ := io.ReadAll(r.Body)
-		defer r.Body.Close()
-		w.Header().Set("X-Echo-Method", r.Method)
-		for k, v := range r.Header {
-			w.Header().Set("X-Echo-Header-"+k, strings.Join(v, ","))
-		}
-		w.Header().Set("X-Echo-Path", r.URL.Path)
-		w.Header().Set("X-Echo-Query", r.URL.RawQuery)
+		interceptedRequest.URL = r.URL.Path // Only path for easier assertion
+		interceptedRequest.Header = r.Header.Get("X-Test-Header")
+		interceptedRequest.Body = string(bodyBytes)
 		w.WriteHeader(http.StatusOK)
-		w.Write(bodyBytes)
-	}))
+	})
 	defer server.Close()
-	client, _ := NewClient()
 
-	tests := []struct {
-		name                 string
-		httpFileContent      string
-		programmaticVars     map[string]string
-		expectedPathContains string
-		expectedHeaderKey    string
-		expectedHeaderValue  string
-		expectedBodyContains string
-		expectError          bool
-	}{
-		{
-			name:                 "SCENARIO-LIB-021-001 Programmatic var in URL",
-			httpFileContent:      `GET [[.ServerURL]]/users/{{userId}}`,
-			programmaticVars:     map[string]string{"userId": "prog_user_123"},
-			expectedPathContains: "/users/prog_user_123",
-		},
-		{
-			name: "SCENARIO-LIB-021-002 Programmatic var in Header",
-			httpFileContent: `GET [[.ServerURL]]/data
-X-Auth-Token: {{authToken}}`,
-			programmaticVars:    map[string]string{"authToken": "prog_token_abc"},
-			expectedHeaderKey:   "X-Echo-Header-X-Auth-Token",
-			expectedHeaderValue: "prog_token_abc",
-		},
-		{
-			name: "SCENARIO-LIB-021-003 Programmatic var in Body",
-			httpFileContent: `POST [[.ServerURL]]/items
-Content-Type: application/json
-
-{
-	"itemId": "{{itemId}}"
-}`,
-			programmaticVars:     map[string]string{"itemId": "prog_item_789"},
-			expectedBodyContains: `{"itemId":"prog_item_789"}`,
-		},
-		{
-			name: "SCENARIO-LIB-021-004 Programmatic var overrides file var",
-			httpFileContent: `@host = file_host.com
-GET [[.ServerURL]]/{{host}}/path`,
-			programmaticVars:     map[string]string{"host": "prog_host.com"},
-			expectedPathContains: "/prog_host.com/path",
-		},
-		{
-			name: "SCENARIO-LIB-021-005 Mixed programmatic and file vars",
-			httpFileContent: `@fileVar = file_val
-GET [[.ServerURL]]/info?q1={{fileVar}}&q2={{progVar}}`,
-			programmaticVars:     map[string]string{"progVar": "prog_val"},
-			expectedPathContains: "/info?q1=file_val&q2=prog_val",
-		},
-		{
-			name: "SCENARIO-LIB-021-006 Empty programmatic vars map",
-			httpFileContent: `@fileVar = from_file
-GET [[.ServerURL]]/path?v={{fileVar}}`,
-			programmaticVars:     map[string]string{},
-			expectedPathContains: "/path?v=from_file",
-		},
-		{
-			name: "SCENARIO-LIB-021-007 Nil programmatic vars map",
-			httpFileContent: `@fileVar = from_file_too
-GET [[.ServerURL]]/another?v={{fileVar}}`,
-			programmaticVars:     nil,
-			expectedPathContains: "/another?v=from_file_too",
-		},
+	clientProgrammaticVars := map[string]interface{}{
+		"prog_baseUrl":         server.URL,
+		"prog_path":            "items",
+		"prog_id":              "prog123",
+		"prog_headerVal":       "ProgrammaticHeaderValue",
+		"prog_bodyField":       "dataFromProgrammatic",
+		"file_var_to_override": "overridden_by_programmatic",
+		"PROG_ENV_VAR":         "programmatic_wins_over_env",
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Given specific setup for this subtest
-			tempTemplateFile, err := os.CreateTemp(t.TempDir(), "test_template_*.http")
-			require.NoError(t, err)
-			_, err = tempTemplateFile.WriteString(tt.httpFileContent)
-			require.NoError(t, err)
-			err = tempTemplateFile.Close()
-			require.NoError(t, err)
-			processedFilePath := createTestFileFromTemplate(t, tempTemplateFile.Name(), struct{ ServerURL string }{ServerURL: server.URL})
+	// Set an OS env var that will be overridden by programmatic var
+	_ = os.Setenv("PROG_ENV_VAR", "env_value_should_be_overridden")
+	defer os.Unsetenv("PROG_ENV_VAR")
 
-			// When
-			var responses []*Response
-			var execErr error
-			if tt.programmaticVars == nil && tt.name == "SCENARIO-LIB-021-007 Nil programmatic vars map" {
-				responses, execErr = client.ExecuteFile(context.Background(), processedFilePath)
-			} else {
-				responses, execErr = client.ExecuteFile(context.Background(), processedFilePath, tt.programmaticVars)
-			}
+	client, err := NewClient(WithVars(clientProgrammaticVars))
+	require.NoError(t, err)
 
-			// Then
-			if tt.expectError {
-				require.Error(t, execErr)
-				return
-			}
-			require.NoError(t, execErr)
-			require.Len(t, responses, 1)
-			resp := responses[0]
-			require.NoError(t, resp.Error)
-			require.Equal(t, http.StatusOK, resp.StatusCode)
+	requestFilePath := "testdata/http_request_files/programmatic_variables.http"
 
-			if tt.expectedPathContains != "" {
-				echoedPath := resp.Headers.Get("X-Echo-Path")
-				echoedQuery := resp.Headers.Get("X-Echo-Query")
-				fullEchoedPath := echoedPath
-				if echoedQuery != "" {
-					fullEchoedPath += "?" + echoedQuery
-				}
-				assert.Contains(t, fullEchoedPath, tt.expectedPathContains, "Echoed path+query mismatch")
-			}
-			if tt.expectedHeaderKey != "" {
-				assert.Equal(t, tt.expectedHeaderValue, resp.Headers.Get(tt.expectedHeaderKey), "Echoed header mismatch")
-			}
-			if tt.expectedBodyContains != "" {
-				assert.JSONEq(t, tt.expectedBodyContains, string(resp.Body), "Response body mismatch")
-			}
-		})
-	}
+	// When
+	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then
+	require.NoError(t, err)
+	require.Len(t, responses, 1)
+	resp := responses[0]
+	assert.NoError(t, resp.Error)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Assertions for the request sent to the server
+	assert.Equal(t, "/items/prog123", interceptedRequest.URL, "URL path mismatch")
+	assert.Equal(t, "ProgrammaticHeaderValue", interceptedRequest.Header, "X-Test-Header mismatch")
+
+	var bodyJSON map[string]string
+	err = json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON)
+	require.NoError(t, err, "Failed to unmarshal request body JSON")
+
+	assert.Equal(t, "dataFromProgrammatic", bodyJSON["field"], "Body field 'field' mismatch")
+	assert.Equal(t, "overridden_by_programmatic", bodyJSON["overridden_file_var"], "Body field 'overridden_file_var' mismatch")
+	assert.Equal(t, "programmatic_wins_over_env", bodyJSON["env_var_check"], "Body field 'env_var_check' mismatch")
+	assert.Equal(t, "file_only", bodyJSON["file_only_check"], "Body field 'file_only_check' mismatch")
+
+	// Also check headers received by the server for variable substitution confirmation
+	// These were set up in the new programmatic_variables.http file to check different sources
+	assert.Equal(t, "overridden_by_programmatic", resp.Request.Headers.Get("X-File-Var"))
+	assert.Equal(t, "programmatic_wins_over_env", resp.Request.Headers.Get("X-Env-Var"))
+	assert.Equal(t, "file_only", resp.Request.Headers.Get("X-Unused-File-Var"))
 }
 
 func TestExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
@@ -786,9 +718,9 @@ func TestExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
 	assert.LessOrEqual(t, timestampFromBody2, afterTime)
 
 	// SCENARIO-LIB-016-002: Multiple {{$timestamp}} instances yield the same value for that pass
-	assert.Equal(t, timestampFromURL, timestampFromHeader, "Timestamp in URL and Header should be the same for one request pass")
-	assert.Equal(t, timestampFromHeader, timestampFromBody1, "Timestamp in Header and Body (event_time) should be the same")
-	assert.Equal(t, timestampFromBody1, timestampFromBody2, "Timestamp in Body (event_time and processed_at) should be the same")
+	assert.Equal(t, timestampFromURL, timestampFromHeader)
+	assert.Equal(t, timestampFromHeader, timestampFromBody1)
+	assert.Equal(t, timestampFromBody1, timestampFromBody2)
 }
 
 func TestExecuteFile_VariableFunctionConsistency(t *testing.T) {

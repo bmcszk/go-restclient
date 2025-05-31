@@ -41,3 +41,4 @@ coverage.html
 /.cursor/rules/task_workflow.mdc
 /.cursor/rules/testing_guidelines.mdc
 /.cursorignore
+/.cursor/rules/*.bak.*/

@@ -7,7 +7,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/joho/godotenv"
 )
 
 const (
@@ -16,18 +19,64 @@ const (
 )
 
 // ParseRequestFile reads a .rest or .http file and parses it into a ParsedFile struct
-// containing one or more Request definitions.
-func parseRequestFile(filePath string) (*ParsedFile, error) {
+// containing one or more Request definitions. It requires a `client` instance to access
+// programmatic and request-scoped system variables, which are used at parse time to resolve
+// the values of file-level variables (e.g., `@host = {{programmatic_var}}` or `@api_key = {{$uuid}}`).
+//
+// The `filePath` is used for opening the file and for context in error messages.
+// A .env file in the same directory as `filePath` will also be loaded and used for resolving
+// `@variable` definitions if present.
+func parseRequestFile(filePath string, client *Client) (*ParsedFile, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open request file %s: %w", filePath, err)
 	}
-	defer func() { _ = file.Close() }() // Correctly ignore error for defer file.Close()
+	defer func() { _ = file.Close() }()
 
-	return parseRequests(file, filePath)
+	// Load .env file from the same directory as the request file for @var resolution time
+	dotEnvVarsForParser := make(map[string]string)
+	envFilePath := filepath.Join(filepath.Dir(filePath), ".env")
+	if _, statErr := os.Stat(envFilePath); statErr == nil {
+		loadedVars, loadErr := godotenv.Read(envFilePath)
+		if loadErr == nil {
+			dotEnvVarsForParser = loadedVars
+		}
+	}
+	osEnvGetter := func(key string) (string, bool) { return os.LookupEnv(key) }
+
+	// Generate request-scoped system variables once for this file parsing pass
+	var requestScopedSystemVarsForFileParse map[string]string
+	if client != nil {
+		requestScopedSystemVarsForFileParse = client.generateRequestScopedSystemVariables()
+	} else {
+		requestScopedSystemVarsForFileParse = make(map[string]string)
+	}
+
+	return parseRequests(file, filePath, client, requestScopedSystemVarsForFileParse, osEnvGetter, dotEnvVarsForParser)
 }
 
-func parseRequests(reader io.Reader, filePath string) (*ParsedFile, error) {
+// reqScopedSystemVarsForParser is generated once per file parsing pass for resolving @-vars consistently.
+// var reqScopedSystemVarsForParser map[string]string // REMOVED GLOBAL
+
+// parseRequests performs the core parsing logic for an HTTP request file (e.g., .http, .rest).
+// It takes an io.Reader for the content, the original filePath for context, a client instance,
+// pre-generated requestScopedSystemVars for resolving @-variables, an osEnvGetter, and dotEnvVars.
+//
+// Inside this function:
+//   - It scans the input line by line.
+//   - It identifies request separators (`###`), comments (`#`), and variable definitions (`@name = value`).
+//   - When an `@variable = value` is encountered, its `value` is immediately resolved using the provided
+//     `client` (for its programmatic variables), `requestScopedSystemVars`, `osEnvGetter`, and `dotEnvVars`.
+//     The resolved value is stored in `currentFileVariables`.
+//   - For each request parsed, a copy of `currentFileVariables` is assigned to `request.ActiveVariables`.
+//     These active variables are later used by `client.ExecuteFile` when resolving placeholders in the
+//     request URL, headers, and body.
+//
+// Returns a `ParsedFile` struct containing all parsed requests or an error if issues occur.
+func parseRequests(reader io.Reader, filePath string, client *Client,
+	requestScopedSystemVars map[string]string,
+	osEnvGetter func(string) (string, bool),
+	dotEnvVars map[string]string) (*ParsedFile, error) {
 	scanner := bufio.NewScanner(reader)
 	parsedFile := &ParsedFile{
 		FilePath: filePath,
@@ -45,9 +94,7 @@ func parseRequests(reader io.Reader, filePath string) (*ParsedFile, error) {
 		originalLine := scanner.Text()
 		trimmedLine := strings.TrimSpace(originalLine)
 
-		// 1. Check for Request Separator (###)
-		// If a line starts with ###, treat any string after ### on that line as a comment.
-		// Finalize previous request, start new one. No name from this line.
+		// Request Separator (###)
 		if strings.HasPrefix(trimmedLine, requestSeparator) {
 			if currentRequest != nil && (currentRequest.Method != "" || len(bodyLines) > 0) {
 				currentRequest.RawBody = strings.Join(bodyLines, "\n")
@@ -62,42 +109,45 @@ func parseRequests(reader io.Reader, filePath string) (*ParsedFile, error) {
 			bodyLines = []string{}
 			parsingBody = false
 			currentRequest = &Request{Headers: make(http.Header), FilePath: filePath, LineNumber: lineNumber}
-			// Request name is NOT extracted from the separator line itself as per REQ-LIB-027.
-			continue // Move to next line
+			// Request name is NOT extracted from the separator line itself.
+			continue
 		}
 
-		// 2. Check for Variable Definitions (@name = value)
-		// Must be checked before general comments, as variable lines are not comments.
+		// Variable Definitions (@name = value)
 		if strings.HasPrefix(trimmedLine, "@") {
 			parts := strings.SplitN(trimmedLine[1:], "=", 2)
 			if len(parts) == 2 {
 				varName := strings.TrimSpace(parts[0])
 				varValue := strings.TrimSpace(parts[1])
 				if varName != "" {
-					currentFileVariables[varName] = varValue
+					// Resolve varValue immediately
+					resolvedVarValue := varValue
+					if client != nil {
+						// For resolving @-vars, file-scoped vars (currentFileVariables) are not used as a source for themselves.
+						resolvedVarValue = client.resolveVariablesInText(varValue, client.programmaticVars, nil, requestScopedSystemVars, osEnvGetter, dotEnvVars)
+						resolvedVarValue = client.substituteDynamicSystemVariables(resolvedVarValue)
+					}
+					currentFileVariables[varName] = resolvedVarValue
 				}
 			}
 			continue // Variable definition line, skip further processing
 		}
 
-		// 3. Check for Regular Comments (#)
-		// If a line starts with # (but not ###, already handled), it's a comment.
-		if strings.HasPrefix(trimmedLine, commentPrefix) { // commentPrefix is "#"
-			continue // Move to next line
+		// Regular Comments (#)
+		if strings.HasPrefix(trimmedLine, commentPrefix) {
+			continue
 		}
 
 		// If none of the above, then it's part of the request (method/URL, header, or body line)
-		processedLine := trimmedLine // For method/header parsing, body uses originalLine
+		processedLine := trimmedLine
 
-		// Ensure currentRequest is initialized if this is the first meaningful line.
 		if currentRequest == nil {
 			currentRequest = &Request{Headers: make(http.Header), FilePath: filePath, LineNumber: lineNumber}
 		}
 
 		if processedLine == "" && !parsingBody {
-			// This signifies the end of headers and start of the body,
-			// or it's just an empty line between headers (which is fine).
-			// It only transitions to parsingBody if a method has been identified.
+			// Empty line: signifies end of headers and start of body,
+			// or just an empty line between headers.
 			if currentRequest != nil && currentRequest.Method != "" {
 				parsingBody = true
 			}
@@ -105,7 +155,7 @@ func parseRequests(reader io.Reader, filePath string) (*ParsedFile, error) {
 		}
 
 		if parsingBody {
-			bodyLines = append(bodyLines, originalLine) // Use original line for body
+			bodyLines = append(bodyLines, originalLine)
 		} else {
 			// Parsing request line (METHOD URL [VERSION]) or headers (Key: Value)
 			if currentRequest.Method == "" { // First non-comment, non-empty, non-variable line is the request line
@@ -141,11 +191,11 @@ func parseRequests(reader io.Reader, filePath string) (*ParsedFile, error) {
 					currentRequest.RawURLString = urlStr
 					currentRequest.HTTPVersion = httpVersion
 					// Best-effort initial parse. This URL might contain variables.
-					parsedURL, _ := url.Parse(urlStr) // Best effort, ignore error here
+					parsedURL, _ := url.Parse(urlStr)
 					currentRequest.URL = parsedURL
 
 					if finalizeAfterThisLine {
-						// This request is now complete due to same-line ### separator comment
+						// Request complete due to same-line ### separator comment
 						currentRequest.RawBody = strings.Join(bodyLines, "\n") // Should be empty here
 						currentRequest.RawBody = strings.TrimRight(currentRequest.RawBody, " \t\n")
 						currentRequest.Body = strings.NewReader(currentRequest.RawBody)
@@ -200,16 +250,34 @@ func parseRequests(reader io.Reader, filePath string) (*ParsedFile, error) {
 }
 
 // ParseExpectedResponseFile reads a file and parses it into a slice of ExpectedResponse definitions.
+//
+// DEPRECATED: This function is deprecated and will be removed or made internal in a future version.
+// It does not support variable substitution. Users should migrate to using `ValidateResponses` from the
+// `validator.go` file, which handles .hresp file parsing, variable extraction, and substitution
+// before validation. For direct parsing of already substituted .hresp content, one can read the file
+// into an `io.Reader` and use `parseExpectedResponses` directly.
 func parseExpectedResponseFile(filePath string) ([]*ExpectedResponse, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open expected response file %s: %w", filePath, err)
 	}
-	defer func() { _ = file.Close() }()
+	defer func() { _ = file.Close() }() // Correctly ignore error for defer file.Close()
 
-	return parseExpectedResponses(file, filePath)
+	return parseExpectedResponses(file, filePath) // filePath is used for error reporting within parseExpectedResponses
 }
 
+// parseExpectedResponses parses expected HTTP response definitions from an io.Reader.
+// It expects the content provided by the reader to be the raw .hresp format, typically after
+// any variable substitutions have already been performed (e.g., by `resolveAndSubstitute`).
+//
+// The `filePath` argument is used for context in error messages only and does not imply that this
+// function reads from the file system directly. It processes content line by line, interpreting
+// status lines, headers, and body sections, separated by "###". Comments (#) and lines starting
+// with "@" (which should have been processed prior to calling this function if they were variable
+// definitions) are ignored.
+//
+// Returns a slice of `ExpectedResponse` structs or an error if parsing fails (e.g., due to
+// malformed status lines or headers).
 func parseExpectedResponses(reader io.Reader, filePath string) ([]*ExpectedResponse, error) {
 	scanner := bufio.NewScanner(reader)
 	var expectedResponses []*ExpectedResponse
@@ -225,9 +293,7 @@ func parseExpectedResponses(reader io.Reader, filePath string) ([]*ExpectedRespo
 		originalLine := scanner.Text()
 		trimmedLine := strings.TrimSpace(originalLine)
 
-		// 1. Check for Response Separator (###)
-		// If a line starts with ###, treat any string after ### on that line as a comment.
-		// Finalize previous response, start new one.
+		// Request Separator (###)
 		if strings.HasPrefix(trimmedLine, requestSeparator) {
 			processedAnyLine = true // Mark that we've processed a significant line
 			// Current response (before separator) is complete. Add it if it has content.
@@ -246,21 +312,9 @@ func parseExpectedResponses(reader io.Reader, filePath string) ([]*ExpectedRespo
 			continue // Consumed separator line (and its comment), move to next line.
 		}
 
-		// 2. Check for Regular Comments (#)
-		// If a line starts with # (but not ###, already handled), it's a comment.
-		if strings.HasPrefix(trimmedLine, commentPrefix) { // commentPrefix is "#"
-			// If it's a comment within the body (e.g. # within a JSON string), it should be kept.
-			// The original logic for comments in bodies was:
-			// if parsingBody && strings.TrimSpace(strings.TrimPrefix(processedLine, commentPrefix)) == ""
-			// This is too specific (only blank comments). Let's simplify: if parsingBody, comments are part of body.
-			if parsingBody {
-				// Body lines are added with originalLine later, so this comment will be included if it's part of body text.
-				// No explicit action needed here if we let body parsing handle it.
-			} else {
-				// If not parsing body, this # comment is a structural comment, so skip the line.
-				continue
-			}
-			// If we reached here, it means it was a comment in the body. Let it fall through to body processing.
+		// Regular Comments (#)
+		if strings.HasPrefix(trimmedLine, commentPrefix) || strings.HasPrefix(trimmedLine, "@") { // commentPrefix is "#"
+			continue // Move to next line
 		}
 
 		// If we are here, the line is not a separator and not a non-body comment.

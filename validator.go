@@ -2,6 +2,7 @@ package restclient
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 
@@ -20,26 +21,52 @@ var ( //nolint:gochecknoglobals
 	anyPlaceholderFinder          = regexp.MustCompile(`\{\{\$any\}\}`)
 )
 
-const guidRegexPattern = `[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}` //nolint:gochecknoglobals
-const timestampRegexPattern = `\d+`                                                                    //nolint:gochecknoglobals
+const guidRegexPattern = `[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}`
+const timestampRegexPattern = `\d+`
+
 // Regex for RFC1123: e.g., Mon, 02 Jan 2006 15:04:05 MST
-const rfc1123RegexPattern = `[A-Za-z]{3},\s\d{2}\s[A-Za-z]{3}\s\d{4}\s\d{2}:\d{2}:\d{2}\s[A-Z]{3}` //nolint:gochecknoglobals
+const rfc1123RegexPattern = `[A-Za-z]{3},\s\d{2}\s[A-Za-z]{3}\s\d{4}\s\d{2}:\d{2}:\d{2}\s[A-Z]{3}`
+
 // Regex for a common ISO8601/RFC3339 form: e.g., 2006-01-02T15:04:05Z or 2006-01-02T15:04:05+07:00
-const iso8601RegexPattern = `\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|([+-]\d{2}:\d{2}))` // Added optional milliseconds //nolint:gochecknoglobals
-const genericDatetimeRegexPattern = `[\w\d\s.:\-,+/TZ()]+`                                     //nolint:gochecknoglobals
-const nonMatchingRegexPattern = `\z.\A`                                                        // Valid but never matches                                         //nolint:gochecknoglobals
-const anyRegexPattern = `(?s).*?`                                                              // Matches any char (incl newline), non-greedy, no outer group //nolint:gochecknoglobals
+const iso8601RegexPattern = `\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|([+-]\d{2}:\d{2}))` // Added optional milliseconds
+const genericDatetimeRegexPattern = `[\w\d\s.:\-,+/TZ()]+`
+const nonMatchingRegexPattern = `\z.\A` // Valid but never matches
+const anyRegexPattern = `(?s).*?`       // Matches any char (incl newline), non-greedy, no outer group
 
 // ValidateResponses compares a slice of actual HTTP responses against a set of expected responses
-// parsed from the specified file. It returns a consolidated error (multierror) if any
-// discrepancies are found, or nil if all validations pass.
-func ValidateResponses(responseFilePath string, actualResponses ...*Response) error {
+// parsed from the specified .hresp file. It leverages the client's configuration for variable substitution.
+//
+// As a method on the `Client`, it uses `c.programmaticVars` for programmatic variables and the client instance `c`
+// itself for resolving system variables (e.g., {{$uuid}}) within the .hresp content.
+// Variables can also be defined in the .hresp file using `@name = value` syntax.
+// The precedence for variable resolution is detailed in `hresp_vars.go:resolveAndSubstitute`.
+//
+// It returns a consolidated error (multierror) if any discrepancies are found (e.g., status mismatch,
+// header mismatch, body mismatch, or count mismatch between actual and expected responses), or nil
+// if all validations pass. Errors during file reading, @define extraction, variable substitution, or
+// .hresp parsing are also returned.
+func (c *Client) ValidateResponses(responseFilePath string, actualResponses []*Response) error {
 	var errs *multierror.Error
 
 	// Attempt to parse the expected responses from the file.
-	expectedResponses, parseErr := parseExpectedResponseFile(responseFilePath)
+	hrespFileContent, err := os.ReadFile(responseFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to read expected response file %s: %w", responseFilePath, err)
+	}
+
+	fileVars, contentWithoutDefines, err := extractHrespDefines(string(hrespFileContent))
+	if err != nil {
+		return fmt.Errorf("failed to extract @defines from %s: %w", responseFilePath, err)
+	}
+
+	substitutedContent, err := resolveAndSubstitute(contentWithoutDefines, fileVars, c)
+	if err != nil {
+		return fmt.Errorf("failed to substitute variables in %s: %w", responseFilePath, err)
+	}
+
+	expectedResponses, parseErr := parseExpectedResponses(strings.NewReader(substitutedContent), responseFilePath)
 	if parseErr != nil {
-		errs = multierror.Append(errs, fmt.Errorf("failed to parse expected response file '%s': %w", responseFilePath, parseErr))
+		errs = multierror.Append(errs, fmt.Errorf("failed to parse expected response file '%s' after variable substitution: %w", responseFilePath, parseErr))
 	}
 
 	// Determine effective counts for actual and expected responses.
@@ -54,13 +81,11 @@ func ValidateResponses(responseFilePath string, actualResponses ...*Response) er
 		errs = multierror.Append(errs, fmt.Errorf("mismatch in number of responses: got %d actual, but expected %d from file '%s'", effectiveNumActual, effectiveNumExpected, responseFilePath))
 	}
 
-	// If parsing failed, we cannot proceed with per-response validation. Return collected errors so far.
 	if parseErr != nil {
 		return errs.ErrorOrNil()
 	}
 
-	// If there was no parse error, but counts mismatched, return the count mismatch error.
-	if effectiveNumActual != effectiveNumExpected { // This implies parseErr was nil to reach here
+	if effectiveNumActual != effectiveNumExpected {
 		return errs.ErrorOrNil()
 	}
 
@@ -158,14 +183,14 @@ func compareBodies(responseFilePath string, responseIndex int, expectedBody, act
 		regexpMatchIndices := regexpPlaceholderFinder.FindStringSubmatchIndex(remainingExpectedBody)
 		anyGuidMatchIndices := anyGuidPlaceholderFinder.FindStringSubmatchIndex(remainingExpectedBody)
 		anyTimestampMatchIndices := anyTimestampPlaceholderFinder.FindStringSubmatchIndex(remainingExpectedBody)
-		anyDatetimeMatchIndices := anyDatetimePlaceholderFinder.FindStringSubmatchIndex(remainingExpectedBody) // With arg
-		anyDatetimeNoArgMatchIndices := anyDatetimeNoArgFinder.FindStringSubmatchIndex(remainingExpectedBody)  // No arg
+		anyDatetimeMatchIndices := anyDatetimePlaceholderFinder.FindStringSubmatchIndex(remainingExpectedBody)
+		anyDatetimeNoArgMatchIndices := anyDatetimeNoArgFinder.FindStringSubmatchIndex(remainingExpectedBody)
 		anyMatchIndices := anyPlaceholderFinder.FindStringSubmatchIndex(remainingExpectedBody)
 
 		// Determine which placeholder is next (if any)
 		var earliestMatchIndices []int
 		var placeholderType string
-		var placeholderArg string // Initialize here, to be filled IF the chosen type has an arg
+		var placeholderArg string
 
 		currentMatchPos := len(remainingExpectedBody) + 1
 
@@ -203,11 +228,9 @@ func compareBodies(responseFilePath string, responseIndex int, expectedBody, act
 			break
 		}
 
-		// Append literal part before the current placeholder
 		literalPart := remainingExpectedBody[:earliestMatchIndices[0]]
 		finalRegexPattern.WriteString(regexp.QuoteMeta(literalPart))
 
-		// Append regex for the current placeholder
 		switch placeholderType {
 		case "regexp":
 			placeholderArg = remainingExpectedBody[earliestMatchIndices[2]:earliestMatchIndices[3]]
@@ -237,11 +260,10 @@ func compareBodies(responseFilePath string, responseIndex int, expectedBody, act
 				selectedPattern = iso8601RegexPattern
 			} else if len(formatArg) >= 2 && formatArg[0] == '"' && formatArg[len(formatArg)-1] == '"' {
 				customLayout := formatArg[1 : len(formatArg)-1]
-				if customLayout != "" { // e.g. "2006-01-02"
+				if customLayout != "" {
 					selectedPattern = genericDatetimeRegexPattern
-				} // If customLayout is "", selectedPattern remains nonMatchingRegexPattern
+				}
 			}
-			// If formatArg is an unrecognized keyword, selectedPattern remains nonMatchingRegexPattern
 			finalRegexPattern.WriteString("(")
 			finalRegexPattern.WriteString(selectedPattern)
 			finalRegexPattern.WriteString(")")
@@ -255,7 +277,6 @@ func compareBodies(responseFilePath string, responseIndex int, expectedBody, act
 			finalRegexPattern.WriteString(")")
 		}
 
-		// Advance position in remainingExpectedBody
 		remainingExpectedBody = remainingExpectedBody[earliestMatchIndices[1]:]
 	}
 
@@ -263,8 +284,6 @@ func compareBodies(responseFilePath string, responseIndex int, expectedBody, act
 
 	compiledRegex, err := regexp.Compile(finalRegexPattern.String())
 	if err != nil {
-		// If the pattern is our nonMatchingRegexPattern, this compilation itself shouldn't fail.
-		// Failure here means a user-supplied regexp was bad, or a chosen const pattern is bad.
 		return fmt.Errorf("validation for response #%d ('%s'): failed to compile master regex from expected body: %w. Pattern: %s", responseIndex, responseFilePath, err, finalRegexPattern.String())
 	}
 
@@ -283,7 +302,7 @@ func compareBodies(responseFilePath string, responseIndex int, expectedBody, act
 	return nil
 }
 
-// Helper function to count non-nil actual responses
+// countNonNilActuals counts non-nil responses in a slice.
 func countNonNilActuals(responses []*Response) int {
 	count := 0
 	for _, r := range responses {

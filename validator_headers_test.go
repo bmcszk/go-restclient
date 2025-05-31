@@ -80,9 +80,10 @@ func TestValidateResponses_Headers(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Given: actualResponse and expectedFilePath from the test case tt
+			client, _ := NewClient()
 
 			// When
-			err := ValidateResponses(tt.expectedFilePath, tt.actualResponse)
+			err := client.ValidateResponses(tt.expectedFilePath, []*Response{tt.actualResponse})
 
 			// Then
 			if tt.expectedErrCount == 0 {
@@ -130,9 +131,10 @@ func TestValidateResponses_HeadersContain(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Given: actualResponse and expectedFilePath from the test case tt
+			client, _ := NewClient()
 
 			// When
-			err := ValidateResponses(tt.expectedFilePath, tt.actualResponse)
+			err := client.ValidateResponses(tt.expectedFilePath, []*Response{tt.actualResponse})
 
 			// Then
 			if tt.expectedErrCount == 0 {
