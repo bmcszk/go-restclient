@@ -24,10 +24,10 @@ This library is suitable for programmatic use within Go applications, particular
         - `{{$localDatetime format}}`: Current local datetime, same `format` options as `$datetime`.
         - `{{$processEnv VAR_NAME}}`: Value of environment variable `VAR_NAME`.
         - `{{$dotenv VAR_NAME}}`: Value of `VAR_NAME` from a `.env` file in the request file's directory.
-    - **Programmatic Variables:** Pass a `map[string]string` of variables directly to `ExecuteFile`. These override file-defined and environment variables of the same name.
+    - **Programmatic Variables:** Pass a `map[string]interface{}` of variables via the `WithVars` client option (e.g., `restclient.WithVars(vars)`). These override file-defined and environment variables of the same name.
 - **HTTP Request Execution:**
-    - Create a `Client` with options (custom `http.Client`, `BaseURL`, default headers).
-    - Execute requests from a `.http` file using `ExecuteFile(ctx, filePath, [programmaticVars])`.
+    - Create a `Client` with options (custom `http.Client`, `BaseURL`, default headers, programmatic variables via `WithVars`).
+    - Execute requests from a `.http` file using `ExecuteFile(ctx context.Context, filePath string)`.
     - Captures detailed response information: status, headers, body, duration.
     - Handles errors during request execution and stores them within the `Response` object.
 - **Response Validation:**
@@ -196,11 +196,6 @@ import (
 
 func main() {
 	client, err := restclient.NewClient(
-		// Example client options:
-		// restclient.WithBaseURL("https://api.global.com"),
-		// restclient.WithDefaultHeader("X-App-Version", "1.2.3"),
-		// restclient.WithHTTPClient(&http.Client{Timeout: 15 * time.Second}),
-		// Programmatic variables are now set via WithVars
 		restclient.WithVars(map[string]interface{}{
 			"userId":        "prog_user_override_123",
 			"authToken":     "prog_auth_token_xyz",
@@ -211,36 +206,22 @@ func main() {
 		log.Fatalf("Failed to create client: %v", err)
 	}
 
-	requestFilePath := "api_requests.http"       // Your .http file
-	expectedResponseFilePath := "api_expected.hresp" // Your .hresp file for validation
+	requestFilePath := "api_requests.http"
+	expectedResponseFilePath := "api_expected.hresp"
 
-	responses, err := client.ExecuteFile(context.Background(), requestFilePath) // No programmaticAPIVars here
+	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
 	if err != nil {
 		log.Fatalf("Failed to execute request file: %v", err)
 	}
 
 	fmt.Printf("Executed %d requests from %s.\n", len(responses), requestFilePath)
 
-	// Validate the responses
-	// The client instance is used for variable substitution within the .hresp file (e.g., for {{$uuid}})
-	validationErr := client.ValidateResponses(expectedResponseFilePath, responses...) // Pass the slice with ... for variadic
+	validationErr := client.ValidateResponses(expectedResponseFilePath, responses...)
 	if validationErr != nil {
 		log.Fatalf("Response validation failed: %v", validationErr)
 	}
 
 	fmt.Println("All requests executed and validated successfully!")
-
-	// Optional: Iterate through responses for manual checks or logging.
-	fmt.Println("\nIndividual response details (optional logging):")
-	for i, resp := range responses {
-		if resp.Error != nil {
-			fmt.Printf("Request #%d (%s %s) had an execution error: %v\n",
-				i+1, resp.Request.Method, resp.Request.RawURLString, resp.Error)
-			continue
-		}
-		fmt.Printf("Request #%d (%s %s): Status %s\n  Body: %s\n",
-			i+1, resp.Request.Method, resp.Request.URL, resp.Status, resp.BodyString)
-	}
 }
 ```
 
