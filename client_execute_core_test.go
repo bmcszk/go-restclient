@@ -81,7 +81,7 @@ func TestExecuteFile_MultipleRequests(t *testing.T) {
 	assert.Equal(t, "response1", resp1.BodyString)
 
 	expectedFilePath := "testdata/http_response_files/client_multiple_requests_expected.hresp"
-	validationErr := client.ValidateResponses(expectedFilePath, []*Response{resp1, responses[1]})
+	validationErr := client.ValidateResponses(expectedFilePath, resp1, responses[1])
 	assert.NoError(t, validationErr)
 
 	resp2 := responses[1]
@@ -317,6 +317,6 @@ func TestExecuteFile_MultipleRequests_GreaterThanTwo(t *testing.T) {
 
 	expectedResponseFilePath := "testdata/http_response_files/multiple_responses_gt2_expected.http"
 
-	validationErr := client.ValidateResponses(expectedResponseFilePath, actualResponses)
+	validationErr := client.ValidateResponses(expectedResponseFilePath, actualResponses...)
 	assert.NoError(t, validationErr, "Validation of responses against file failed")
 }

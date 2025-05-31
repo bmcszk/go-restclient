@@ -33,8 +33,9 @@ const genericDatetimeRegexPattern = `[\w\d\s.:\-,+/TZ()]+`
 const nonMatchingRegexPattern = `\z.\A` // Valid but never matches
 const anyRegexPattern = `(?s).*?`       // Matches any char (incl newline), non-greedy, no outer group
 
-// ValidateResponses compares a slice of actual HTTP responses against a set of expected responses
+// ValidateResponses compares actual HTTP responses against a set of expected responses
 // parsed from the specified .hresp file. It leverages the client's configuration for variable substitution.
+// The `actualResponses` parameter is variadic, allowing zero or more responses to be passed.
 //
 // As a method on the `Client`, it uses `c.programmaticVars` for programmatic variables and the client instance `c`
 // itself for resolving system variables (e.g., {{$uuid}}) within the .hresp content.
@@ -45,7 +46,7 @@ const anyRegexPattern = `(?s).*?`       // Matches any char (incl newline), non-
 // header mismatch, body mismatch, or count mismatch between actual and expected responses), or nil
 // if all validations pass. Errors during file reading, @define extraction, variable substitution, or
 // .hresp parsing are also returned.
-func (c *Client) ValidateResponses(responseFilePath string, actualResponses []*Response) error {
+func (c *Client) ValidateResponses(responseFilePath string, actualResponses ...*Response) error {
 	var errs *multierror.Error
 
 	// Attempt to parse the expected responses from the file.

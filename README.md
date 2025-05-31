@@ -223,7 +223,7 @@ func main() {
 
 	// Validate the responses
 	// The client instance is used for variable substitution within the .hresp file (e.g., for {{$uuid}})
-	validationErr := client.ValidateResponses(expectedResponseFilePath, responses) // Pass the slice directly
+	validationErr := client.ValidateResponses(expectedResponseFilePath, responses...) // Pass the slice with ... for variadic
 	if validationErr != nil {
 		log.Fatalf("Response validation failed: %v", validationErr)
 	}

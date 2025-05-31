@@ -60,7 +60,7 @@ func TestValidateResponses_StatusString(t *testing.T) {
 			client, _ := NewClient()
 
 			// When
-			err := client.ValidateResponses(tt.expectedFilePath, []*Response{tt.actualResponse})
+			err := client.ValidateResponses(tt.expectedFilePath, tt.actualResponse)
 
 			// Then
 			if tt.expectedErrCount == 0 {
@@ -162,7 +162,7 @@ func TestValidateResponses_StatusCode(t *testing.T) {
 			}
 
 			// When
-			err := client.ValidateResponses(tt.expectedFilePath, []*Response{actual})
+			err := client.ValidateResponses(tt.expectedFilePath, actual)
 
 			// Then
 			if currentExpectedErrCount == 0 {

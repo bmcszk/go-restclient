@@ -56,7 +56,7 @@ func TestValidateResponses_BodyRegexpPlaceholder(t *testing.T) {
 			client, _ := NewClient()
 
 			// When
-			err := client.ValidateResponses(tt.expectedFilePath, []*Response{tt.actualResponse})
+			err := client.ValidateResponses(tt.expectedFilePath, tt.actualResponse)
 
 			// Then
 			if tt.expectedErrCount == 0 {
@@ -104,7 +104,7 @@ func TestValidateResponses_BodyAnyGuidPlaceholder(t *testing.T) {
 			client, _ := NewClient()
 
 			// When
-			err := client.ValidateResponses(tt.expectedFilePath, []*Response{tt.actualResponse})
+			err := client.ValidateResponses(tt.expectedFilePath, tt.actualResponse)
 
 			// Then
 			if tt.expectedErrCount == 0 {
@@ -153,7 +153,7 @@ func TestValidateResponses_BodyAnyTimestampPlaceholder(t *testing.T) {
 			client, _ := NewClient()
 
 			// When
-			err := client.ValidateResponses(tt.expectedFilePath, []*Response{tt.actualResponse})
+			err := client.ValidateResponses(tt.expectedFilePath, tt.actualResponse)
 
 			// Then
 			if tt.expectedErrCount == 0 {
@@ -240,7 +240,7 @@ func TestValidateResponses_BodyAnyDatetimePlaceholder(t *testing.T) {
 			client, _ := NewClient()
 
 			// When
-			err := client.ValidateResponses(tt.expectedFilePath, []*Response{tt.actualResponse})
+			err := client.ValidateResponses(tt.expectedFilePath, tt.actualResponse)
 
 			// Then
 			if tt.expectedErrCount == 0 {
@@ -306,7 +306,7 @@ func TestValidateResponses_BodyAnyPlaceholder(t *testing.T) {
 			client, _ := NewClient()
 
 			// When
-			err := client.ValidateResponses(tt.expectedFilePath, []*Response{tt.actualResponse})
+			err := client.ValidateResponses(tt.expectedFilePath, tt.actualResponse)
 
 			// Then
 			if tt.expectedErrCount == 0 {

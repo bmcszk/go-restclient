@@ -65,7 +65,7 @@ func TestValidateResponses_Body_ExactMatch(t *testing.T) {
 			client, _ := NewClient()
 
 			// When
-			err := client.ValidateResponses(tt.expectedFilePath, []*Response{tt.actualResponse})
+			err := client.ValidateResponses(tt.expectedFilePath, tt.actualResponse)
 
 			// Then
 			if tt.expectedErrCount == 0 {
@@ -115,7 +115,7 @@ func TestValidateResponses_BodyContains(t *testing.T) {
 			client, _ := NewClient()
 
 			// When
-			err := client.ValidateResponses(tt.expectedFilePath, []*Response{tt.actualResponse})
+			err := client.ValidateResponses(tt.expectedFilePath, tt.actualResponse)
 
 			// Then
 			if tt.expectedErrCount == 0 {
@@ -159,7 +159,7 @@ func TestValidateResponses_BodyNotContains(t *testing.T) {
 			client, _ := NewClient()
 
 			// When
-			err := client.ValidateResponses(tt.expectedFilePath, []*Response{tt.actualResponse})
+			err := client.ValidateResponses(tt.expectedFilePath, tt.actualResponse)
 
 			// Then
 			if tt.expectedErrCount == 0 {
