@@ -57,9 +57,10 @@ func TestValidateResponses_StatusString(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Given: actualResponse and expectedFilePath from the test case tt
+			client, _ := NewClient()
 
 			// When
-			err := ValidateResponses(tt.expectedFilePath, tt.actualResponse)
+			err := client.ValidateResponses(tt.expectedFilePath, tt.actualResponse)
 
 			// Then
 			if tt.expectedErrCount == 0 {
@@ -142,6 +143,7 @@ func TestValidateResponses_StatusCode(t *testing.T) {
 				actual.Status = "0"   // Default if StatusCode is 0 (from nil actualResponseCode)
 				actual.StatusCode = 0 // ensure StatusCode is also 0 if actualResponseCode is nil
 			}
+			client, _ := NewClient()
 
 			currentExpectedErrCount := tt.expectedErrCount
 			var currentExpectedErrTexts []string
@@ -160,7 +162,7 @@ func TestValidateResponses_StatusCode(t *testing.T) {
 			}
 
 			// When
-			err := ValidateResponses(tt.expectedFilePath, actual)
+			err := client.ValidateResponses(tt.expectedFilePath, actual)
 
 			// Then
 			if currentExpectedErrCount == 0 {

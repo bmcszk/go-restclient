@@ -81,8 +81,8 @@ func TestExecuteFile_MultipleRequests(t *testing.T) {
 	assert.Equal(t, "response1", resp1.BodyString)
 
 	expectedFilePath := "testdata/http_response_files/client_multiple_requests_expected.hresp"
-	validationErr := ValidateResponses(expectedFilePath, resp1, responses[1])
-	assert.NoError(t, validationErr, "Validation errors for responses should be nil")
+	validationErr := client.ValidateResponses(expectedFilePath, resp1, responses[1])
+	assert.NoError(t, validationErr)
 
 	resp2 := responses[1]
 	assert.NoError(t, resp2.Error)
@@ -107,8 +107,7 @@ func TestExecuteFile_RequestWithError(t *testing.T) {
 	// Then
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "1 error occurred:")
-	assert.Contains(t, err.Error(), "http request failed")
-	assert.Contains(t, err.Error(), "request 1 (GET http://localhost:12346/bad) failed")
+	assert.Contains(t, err.Error(), "request 1 (GET http://localhost:12346/bad) processing resulted in error")
 
 	require.Len(t, responses, 2)
 
@@ -197,9 +196,9 @@ func TestExecuteFile_MultipleErrors(t *testing.T) {
 
 	// Then
 	require.Error(t, err, "Expected an error from ExecuteFile when multiple requests fail")
-	assert.Contains(t, err.Error(), "request 1 (GET http://localhost:12347/badreq1) failed", "Error message should contain info about first failed request")
+	assert.Contains(t, err.Error(), "request 1 (GET http://localhost:12347/badreq1) processing resulted in error", "Error message should contain info about first failed request")
 	assert.Contains(t, err.Error(), ":12347: connect: connection refused", "Error message should contain specific connection error for first request")
-	assert.Contains(t, err.Error(), "request 2 (POST http://localhost:12348/badreq2) failed", "Error message should contain info about second failed request")
+	assert.Contains(t, err.Error(), "request 2 (POST http://localhost:12348/badreq2) processing resulted in error", "Error message should contain info about second failed request")
 	assert.Contains(t, err.Error(), ":12348: connect: connection refused", "Error message should contain specific connection error for second request")
 
 	require.Len(t, responses, 2, "Should receive two response objects, even if they contain errors")
@@ -318,6 +317,6 @@ func TestExecuteFile_MultipleRequests_GreaterThanTwo(t *testing.T) {
 
 	expectedResponseFilePath := "testdata/http_response_files/multiple_responses_gt2_expected.http"
 
-	validationErr := ValidateResponses(expectedResponseFilePath, actualResponses...)
-	assert.NoError(t, validationErr, "Validation against multiple_responses_gt2_expected.http failed")
+	validationErr := client.ValidateResponses(expectedResponseFilePath, actualResponses...)
+	assert.NoError(t, validationErr, "Validation of responses against file failed")
 }

@@ -16,9 +16,10 @@ func TestValidateResponses_NilAndEmptyActuals(t *testing.T) {
 	t.Run("nil actual response slice", func(t *testing.T) {
 		// Given
 		var nilActuals []*Response // nil slice
+		client, _ := NewClient()
 
 		// When
-		err := ValidateResponses(testFilePath, nilActuals...)
+		err := client.ValidateResponses(testFilePath, nilActuals...)
 
 		// Then
 		require.Error(t, err)
@@ -28,9 +29,10 @@ func TestValidateResponses_NilAndEmptyActuals(t *testing.T) {
 	t.Run("empty actual response slice", func(t *testing.T) {
 		// Given
 		emptyActuals := []*Response{} // empty slice
+		client, _ := NewClient()
 
 		// When
-		err := ValidateResponses(testFilePath, emptyActuals...)
+		err := client.ValidateResponses(testFilePath, emptyActuals...)
 
 		// Then
 		require.Error(t, err)
@@ -40,9 +42,10 @@ func TestValidateResponses_NilAndEmptyActuals(t *testing.T) {
 	t.Run("slice with one nil actual response", func(t *testing.T) {
 		// Given
 		oneNilActual := []*Response{nil}
+		client, _ := NewClient()
 
 		// When
-		err := ValidateResponses(testFilePath, oneNilActual...)
+		err := client.ValidateResponses(testFilePath, oneNilActual...)
 
 		// Then
 		require.Error(t, err)
@@ -56,16 +59,17 @@ func TestValidateResponses_NilAndEmptyActuals(t *testing.T) {
 func TestValidateResponses_FileErrors(t *testing.T) {
 	// Given
 	actualResp := &Response{StatusCode: 200}
+	client, _ := NewClient()
 
 	t.Run("missing expected response file", func(t *testing.T) {
 		// Given: actualResp defined above, expected file path is "nonexistent.hresp"
 
 		// When
-		err := ValidateResponses("nonexistent.hresp", actualResp)
+		err := client.ValidateResponses("nonexistent.hresp", actualResp)
 
 		// Then
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to parse expected response file")
+		assert.Contains(t, err.Error(), "failed to read expected response file")
 		assert.Contains(t, err.Error(), "nonexistent.hresp")
 	})
 
@@ -74,7 +78,7 @@ func TestValidateResponses_FileErrors(t *testing.T) {
 		emptyFilePath := "testdata/http_response_files/validator_empty_expected.hresp"
 
 		// When
-		err := ValidateResponses(emptyFilePath, actualResp)
+		err := client.ValidateResponses(emptyFilePath, actualResp)
 
 		// Then
 		assertMultierrorContains(t, err, 1, []string{
@@ -87,7 +91,7 @@ func TestValidateResponses_FileErrors(t *testing.T) {
 		malformedFilePath := "testdata/http_response_files/validator_malformed_status.hresp"
 
 		// When
-		err := ValidateResponses(malformedFilePath, actualResp)
+		err := client.ValidateResponses(malformedFilePath, actualResp)
 
 		// Then
 		assertMultierrorContains(t, err, 2, []string{

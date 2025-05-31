@@ -126,7 +126,7 @@ Content-Type: application/json
 			reader := strings.NewReader(tt.fileContent)
 
 			// When: parsing the request file
-			parsedFile, err := parseRequests(reader, "test.http")
+			parsedFile, err := parseRequests(reader, "test.http", nil, make(map[string]string), func(string) (string, bool) { return "", false }, make(map[string]string))
 
 			// Then: assert expected outcomes
 			if tt.expectedError {
@@ -197,7 +197,7 @@ POST https://example.com/api/item2
 			reader := strings.NewReader(tt.fileContent)
 
 			// When: parsing the request file
-			parsedFile, err := parseRequests(reader, "test.http")
+			parsedFile, err := parseRequests(reader, "test.http", nil, make(map[string]string), func(string) (string, bool) { return "", false }, make(map[string]string))
 
 			// Then: assert expected outcomes
 			require.NoError(t, err)
