@@ -6,28 +6,54 @@ import (
 	"net/url"
 )
 
+// Script represents a JavaScript script, either inline or from an external file.
+// It's used for pre-request and response handler scripts.
+type Script struct {
+	Path       string // Path to an external .js file, if applicable.
+	Content    string // Inline script content, if applicable.
+	IsExternal bool   // True if the script is from an external file.
+}
+
 // Request represents a parsed HTTP request from a .rest file.
 type Request struct {
-	Name            string // Optional name for the request (from ### Name comment)
-	Method          string
-	RawURLString    string // The raw URL string as read from the file
-	URL             *url.URL
-	HTTPVersion     string // e.g., "HTTP/1.1"
-	Headers         http.Header
-	Body            io.Reader         // For streaming body content
-	RawBody         string            // Store the raw body string for potential reuse/inspection
-	ActiveVariables map[string]string // Variables active for this specific request
+	// Name is an optional identifier for the request.
+	// Parsed from "### Request Name" or "// @name Request Name" or "# @name Request Name".
+	Name         string
+	Method       string
+	RawURLString string   // The raw URL string as read from the file, before variable substitution
+	URL          *url.URL // Parsed URL, potentially after variable substitution
+	HTTPVersion  string   // e.g., "HTTP/1.1"
+	Headers      http.Header
+	Body         io.Reader // For streaming body content after processing
+	RawBody      string    // Store the raw body string as read from the file, before variable substitution
 
-	// FilePath is the path to the .rest file this request was parsed from.
-	// Useful for context or finding associated expected response files.
+	// ActiveVariables are variables resolved at the time of request execution,
+	// sourced from environment, global scope (from previous scripts), and pre-request scripts.
+	ActiveVariables map[string]string
+
+	// PreRequestScript contains details of the JavaScript to be run before this request.
+	PreRequestScript *Script
+	// ResponseHandlerScript contains details of the JavaScript to be run after this request.
+	ResponseHandlerScript *Script
+
+	// FilePath is the absolute path to the .rest or .http file this request was parsed from.
+	// Used for context, resolving relative paths for imports, script files, etc.
 	FilePath string
-	// LineNumber is the starting line number of this request in the file.
+	// LineNumber is the starting line number of this request definition in the source file.
 	LineNumber int
 }
 
-// ParsedFile represents all requests parsed from a single .rest file.
-// This might be useful if a single file can contain multiple request blocks.
+// ParsedFile represents all content parsed from a single .rest or .http file.
+// It holds multiple requests, environment context, and global variables accumulated during execution.
 type ParsedFile struct {
+	// FilePath is the absolute path to the parsed .rest or .http file.
 	FilePath string
+	// Requests is a list of all HTTP requests defined in the file.
 	Requests []*Request
+	// EnvironmentVariables are key-value pairs loaded from an associated environment file (e.g., http-client.env.json).
+	// These are used as a base for variable substitution.
+	EnvironmentVariables map[string]string
+	// GlobalVariables are key-value pairs accumulated during the execution of requests in this file (or imported files).
+	// These are set by `client.global.set()` in response handler scripts and are available to subsequent requests.
+	GlobalVariables map[string]string
 }
