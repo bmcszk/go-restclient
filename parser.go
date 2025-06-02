@@ -137,7 +137,9 @@ func parseRequests(reader io.Reader, filePath string, client *Client,
 					resolvedVarValue := varValue
 					if client != nil {
 						// For resolving @-vars, file-scoped vars (currentFileVariables) are not used as a source for themselves.
-						resolvedVarValue = client.resolveVariablesInText(varValue, client.programmaticVars, nil, requestScopedSystemVars, osEnvGetter, dotEnvVars)
+						// EnvironmentVars and GlobalVars are passed as nil here because they are not applicable
+						// during the initial parsing of @-variables. They apply during request execution.
+						resolvedVarValue = client.resolveVariablesInText(varValue, client.programmaticVars, nil, nil, nil, requestScopedSystemVars, osEnvGetter, dotEnvVars)
 						resolvedVarValue = client.substituteDynamicSystemVariables(resolvedVarValue)
 					}
 					currentFileVariables[varName] = resolvedVarValue

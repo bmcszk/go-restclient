@@ -128,8 +128,11 @@ func WithVars(vars map[string]interface{}) ClientOption {
 //   - Re-generates request-scoped system variables (e.g., `{{$uuid}}`) *once per individual request* to ensure
 //     uniqueness if needed across multiple requests in the same file, but consistency within a single request.
 //   - For each part of the request (URL, headers, body):
-//     a. `resolveVariablesInText` is called: This handles general placeholder substitution with precedence:
-//     Client programmatic vars > file-scoped `@vars` > request-scoped system vars > OS env vars > .env vars > fallback.
+//     a. `resolveVariablesInText` is called. For {{variableName}} placeholders (where 'variableName' does not start with '$'),
+//     the precedence is: Client programmatic vars > file-scoped `@vars` (rcRequest.ActiveVariables) >
+//     Environment vars (parsedFile.EnvironmentVariables) > Global vars (parsedFile.GlobalVariables) >
+//     OS env vars > .env vars > fallback.
+//     System variables like {{$uuid}} are resolved from the request-scoped map if the placeholder is {{$systemVarName}}.
 //     It resolves simple system variables like `{{$uuid}}` from the request-scoped map.
 //     It leaves dynamic system variables (e.g., `{{$dotenv NAME}}`) untouched for the next step.
 //     b. `substituteDynamicSystemVariables` is called: This handles system variables requiring arguments
@@ -168,6 +171,8 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 			restClientReq.RawURLString,
 			c.programmaticVars,
 			restClientReq.ActiveVariables,
+			parsedFile.EnvironmentVariables, // Added for T3
+			parsedFile.GlobalVariables,      // Added for T3
 			requestScopedSystemVars,
 			osEnvGetter,
 			c.currentDotEnvVars,
@@ -193,6 +198,8 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 						val,
 						c.programmaticVars,
 						restClientReq.ActiveVariables,
+						parsedFile.EnvironmentVariables, // Added for T3
+						parsedFile.GlobalVariables,      // Added for T3
 						requestScopedSystemVars,
 						osEnvGetter,
 						c.currentDotEnvVars,
@@ -208,6 +215,8 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 				restClientReq.RawBody,
 				c.programmaticVars,
 				restClientReq.ActiveVariables,
+				parsedFile.EnvironmentVariables, // Added for T3
+				parsedFile.GlobalVariables,      // Added for T3
 				requestScopedSystemVars,
 				osEnvGetter,
 				c.currentDotEnvVars,
@@ -249,15 +258,18 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 
 // resolveVariablesInText is the primary substitution engine for non-system variables and request-scoped system variables.
 // It iterates through placeholders like `{{varName | fallback}}` and resolves them based on a defined precedence.
-// Dynamic system variables (like {{$dotenv NAME}}) are left untouched by this function.
-// Precedence (highest to lowest):
+// Dynamic system variables (like {{$dotenv NAME}}) are left untouched by this function for substituteDynamicSystemVariables.
+//
+// Precedence for {{variableName}} placeholders (where 'variableName' does not start with '$'):
 // 1. Client programmatic variables (clientProgrammaticVars)
-// 2. Request file-defined variables (fileScopedVars, from @name=value)
-// 3. Request-scoped system variables (requestScopedSystemVars, e.g., a single UUID for the request)
-// 4. OS Environment variables
-// 5. Variables from .env file (dotEnvVars)
-// 6. Fallback value provided in the placeholder itself.
-func (c *Client) resolveVariablesInText(text string, clientProgrammaticVars map[string]interface{}, fileScopedVars map[string]string, requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool), dotEnvVars map[string]string) string {
+// 2. Request file-defined variables (fileScopedVars, from @name=value, effectively rcRequest.ActiveVariables)
+// 3. Environment variables (environmentVars, from selected environment like http-client.env.json)
+// 4. Global variables (globalVars, from http-client.private.env.json or similar)
+// 5. OS Environment variables (via osEnvGetter)
+// 6. Variables from .env file (dotEnvVars)
+// 7. Fallback value provided in the placeholder itself.
+// System variables (e.g., {{$uuid}}, {{$timestamp}}) are handled if the placeholder is like {{$systemVarName}} (i.e. varName starts with '$').
+func (c *Client) resolveVariablesInText(text string, clientProgrammaticVars map[string]interface{}, fileScopedVars map[string]string, environmentVars map[string]string, globalVars map[string]string, requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool), dotEnvVars map[string]string) string {
 	re := regexp.MustCompile(`{{\s*(.*?)\s*}}`)
 
 	return re.ReplaceAllStringFunc(text, func(match string) string {
@@ -298,28 +310,42 @@ func (c *Client) resolveVariablesInText(text string, clientProgrammaticVars map[
 			}
 		}
 
-		// 3. File-scoped Variables (map[string]string, from @name=value)
+		// 3. File-scoped Variables (map[string]string, from @name=value or rcRequest.ActiveVariables)
 		if fileScopedVars != nil {
 			if val, ok := fileScopedVars[varName]; ok {
 				return val
 			}
 		}
 
-		// 4. OS Environment Variables
+		// 4. Environment Variables (from http-client.env.json or selected environment)
+		if environmentVars != nil {
+			if val, ok := environmentVars[varName]; ok {
+				return val
+			}
+		}
+
+		// 5. Global Variables (from http-client.private.env.json or similar)
+		if globalVars != nil {
+			if val, ok := globalVars[varName]; ok {
+				return val
+			}
+		}
+
+		// 6. OS Environment Variables
 		if osEnvGetter != nil {
 			if envVal, ok := osEnvGetter(varName); ok {
 				return envVal
 			}
 		}
 
-		// 5. .env file variables
+		// 7. .env file variables
 		if dotEnvVars != nil {
 			if val, ok := dotEnvVars[varName]; ok {
 				return val
 			}
 		}
 
-		// 6. Fallback Value
+		// 8. Fallback Value
 		// Must be checked AFTER all other potential sources for varName.
 		if hasFallback {
 			return fallbackValue
