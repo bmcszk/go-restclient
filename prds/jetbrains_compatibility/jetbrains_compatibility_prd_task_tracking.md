@@ -1,7 +1,7 @@
 | Task ID | Description                                                                 | Status | Dependencies | Notes                                                                                                |
 |---------|-----------------------------------------------------------------------------|--------|--------------|------------------------------------------------------------------------------------------------------|
 | T1      | **Parser:** Enhance parser to support multiple requests (`###` separator)     | Completed |              | Parse name from separator line. Logic in `parser.go` updated.                                |
-| T2      | **Parser:** Add support for request naming (`### Name` and `// @name Name`)   | ToDo   | T1           | Extend `Request` struct if needed, update parsing.                                                   |
+| T2      | **Parser:** Add support for request naming (`### Name` and `// @name Name`) | Completed | T1           | Parser now handles `// @name` and `# @name` comments, overriding `### Name` if present. Logic in `parser.go` updated. |
 | T3      | **Variables:** Implement `{{variable_name}}` substitution mechanism         | ToDo   |              | Affects URL, headers, body. Needs a robust way to find and replace.                                  |
 | T4      | **Environments:** Implement `http-client.env.json` loading                  | ToDo   | T3           | Parse JSON, allow environment selection (e.g., CLI flag), integrate with variable substitution.        |
 | T5      | **JS Engine:** Integrate a Go JavaScript engine (e.g., `goja`)              | ToDo   |              | Core dependency for scripting.                                                                       |

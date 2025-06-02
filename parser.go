@@ -146,8 +146,41 @@ func parseRequests(reader io.Reader, filePath string, client *Client,
 			continue // Variable definition line, skip further processing
 		}
 
-		// Regular Comments (#)
-		if strings.HasPrefix(trimmedLine, commentPrefix) {
+		// Comments (# or //)
+		isHashComment := strings.HasPrefix(trimmedLine, commentPrefix) // commentPrefix is "#"
+		isSlashComment := strings.HasPrefix(trimmedLine, "//")
+
+		if isHashComment || isSlashComment {
+			var commentContent string
+			if isHashComment {
+				commentContent = strings.TrimSpace(trimmedLine[len(commentPrefix):])
+			} else { // isSlashComment
+				commentContent = strings.TrimSpace(trimmedLine[len("//"):])
+			}
+
+			if strings.HasPrefix(commentContent, "@name ") {
+				requestNameFromComment := strings.TrimSpace(commentContent[len("@name "):])
+				if requestNameFromComment != "" {
+					if currentRequest == nil {
+						// This @name appears before any other request content (like METHOD URL or ### separator for the current block).
+						// Initialize a request placeholder. LineNumber points to this @name comment.
+						// If a METHOD URL line follows, it will populate this currentRequest.
+						currentRequest = &Request{
+							Name:            requestNameFromComment,
+							Headers:         make(http.Header),
+							FilePath:        filePath,
+							LineNumber:      lineNumber, // Line number of the @name comment itself
+							ActiveVariables: make(map[string]string),
+						}
+					} else {
+						// @name applies to the current request, potentially overriding a name set by ###
+						// or setting the name if it's the first request in a file (implicitly defined).
+						currentRequest.Name = requestNameFromComment
+					}
+				}
+			}
+			// After processing a potential @name directive, or if it's just a regular comment,
+			// always skip the comment line for other parsing rules (like METHOD/URL, header, body).
 			continue
 		}
 
