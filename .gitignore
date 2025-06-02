@@ -42,3 +42,13 @@ coverage.html
 /.cursor/rules/testing_guidelines.mdc
 /.cursorignore
 /.cursor/rules/*.bak.*/
+/.windsurf.back/
+/.windsurf/rules/go_guideline.md
+/.windsurf/rules/go_project_setup_guideline.md
+/.windsurf/rules/migration_to_prd_process_helper.md
+/.windsurf/rules/prd_workflow.md
+/.windsurf/rules/project_guidelines.md
+/.windsurf/rules/requirement_workflow.md
+/.windsurf/rules/task_workflow.md
+/.windsurf/rules/testing_guidelines.md
+/.windsurfignore

@@ -96,20 +96,33 @@ func parseRequests(reader io.Reader, filePath string, client *Client,
 
 		// Request Separator (###)
 		if strings.HasPrefix(trimmedLine, requestSeparator) {
-			if currentRequest != nil && (currentRequest.Method != "" || len(bodyLines) > 0) {
+			// Finalize the previous request, if any and if it's substantial
+			if currentRequest != nil && (currentRequest.Method != "" || currentRequest.RawURLString != "" || len(bodyLines) > 0) {
 				currentRequest.RawBody = strings.Join(bodyLines, "\n")
-				currentRequest.RawBody = strings.TrimRight(currentRequest.RawBody, " \t\n")
+				currentRequest.RawBody = strings.TrimRight(currentRequest.RawBody, " \t\r\n") // Trim trailing whitespace/newlines
 				currentRequest.Body = strings.NewReader(currentRequest.RawBody)
-				currentRequest.ActiveVariables = make(map[string]string)
+
+				// Ensure ActiveVariables is initialized and populated with current file-level variables
+				if currentRequest.ActiveVariables == nil { // Should usually be pre-initialized if request was created
+					currentRequest.ActiveVariables = make(map[string]string)
+				}
 				for k, v := range currentFileVariables {
 					currentRequest.ActiveVariables[k] = v
 				}
 				parsedFile.Requests = append(parsedFile.Requests, currentRequest)
 			}
+
+			// Start a new request
 			bodyLines = []string{}
 			parsingBody = false
-			currentRequest = &Request{Headers: make(http.Header), FilePath: filePath, LineNumber: lineNumber}
-			// Request name is NOT extracted from the separator line itself.
+			requestName := strings.TrimSpace(trimmedLine[len(requestSeparator):])
+			currentRequest = &Request{
+				Name:            requestName,
+				Headers:         make(http.Header),
+				FilePath:        filePath,
+				LineNumber:      lineNumber,              // Line number where ### was found
+				ActiveVariables: make(map[string]string), // Initialize, will be populated before adding to parsedFile.Requests or here if needed immediately
+			}
 			continue
 		}
 
@@ -141,8 +154,15 @@ func parseRequests(reader io.Reader, filePath string, client *Client,
 		// If none of the above, then it's part of the request (method/URL, header, or body line)
 		processedLine := trimmedLine
 
-		if currentRequest == nil {
-			currentRequest = &Request{Headers: make(http.Header), FilePath: filePath, LineNumber: lineNumber}
+		if currentRequest == nil { // This is the first request in the file or after initial comments/vars
+			currentRequest = &Request{
+				Headers:         make(http.Header),
+				FilePath:        filePath,
+				LineNumber:      lineNumber,              // Line number of the first significant line of this request
+				ActiveVariables: make(map[string]string), // Initialize, will be populated before adding
+			}
+			// Name for the first request (if not starting with ###) will be empty by default.
+			// It can be set by `// @name RequestName` (handled in Task T2).
 		}
 
 		if processedLine == "" && !parsingBody {
@@ -223,13 +243,16 @@ func parseRequests(reader io.Reader, filePath string, client *Client,
 		}
 	}
 
-	// Add the last request if any
-	if currentRequest != nil && (currentRequest.Method != "" || len(bodyLines) > 0) {
-		rawJoinedBody := strings.Join(bodyLines, "\n")
-		currentRequest.RawBody = strings.TrimRight(rawJoinedBody, " \t\n")
+	// After the loop, add the last pending request, if any and if it's substantial
+	if currentRequest != nil && (currentRequest.Method != "" || currentRequest.RawURLString != "" || len(bodyLines) > 0) {
+		currentRequest.RawBody = strings.Join(bodyLines, "\n")
+		currentRequest.RawBody = strings.TrimRight(currentRequest.RawBody, " \t\r\n") // Trim trailing whitespace/newlines
 		currentRequest.Body = strings.NewReader(currentRequest.RawBody)
-		// Assign a copy of the current file variables to this last request
-		currentRequest.ActiveVariables = make(map[string]string)
+
+		// Ensure ActiveVariables is initialized and populated with current file-level variables
+		if currentRequest.ActiveVariables == nil {
+			currentRequest.ActiveVariables = make(map[string]string)
+		}
 		for k, v := range currentFileVariables {
 			currentRequest.ActiveVariables[k] = v
 		}
