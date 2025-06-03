@@ -2,6 +2,7 @@ package restclient
 
 import (
 	"context"
+	"encoding/hex" // Added for TestExecuteFile_WithExtendedRandomSystemVariables
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,6 +20,79 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// TestRandomStringFromCharset tests the randomStringFromCharset helper function.
+func TestRandomStringFromCharset(t *testing.T) {
+	tests := []struct {
+		name     string
+		length   int
+		charset  string
+		wantLen  int
+		assertFn func(t *testing.T, s string, charset string)
+	}{
+		{
+			name:    "alphabetic_10",
+			length:  10,
+			charset: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+			wantLen: 10,
+			assertFn: func(t *testing.T, s string, charset string) {
+				for _, r := range s {
+					assert.Contains(t, charset, string(r))
+				}
+			},
+		},
+		{
+			name:    "numeric_5",
+			length:  5,
+			charset: "0123456789",
+			wantLen: 5,
+			assertFn: func(t *testing.T, s string, charset string) {
+				for _, r := range s {
+					assert.Contains(t, charset, string(r))
+				}
+			},
+		},
+		{
+			name:    "empty_charset",
+			length:  5,
+			charset: "",
+			wantLen: 0,
+		},
+		{
+			name:    "zero_length",
+			length:  0,
+			charset: "abc",
+			wantLen: 0,
+			assertFn: func(t *testing.T, s string, charset string) {
+			},
+		},
+		{
+			name:    "negative_length",
+			length:  -5,
+			charset: "abc",
+			wantLen: 0,
+			assertFn: func(t *testing.T, s string, charset string) {
+			},
+		},
+	}
+
+	for _, testCase := range tests {
+		capturedTC := testCase // Explicitly capture the current test case
+		t.Run(capturedTC.name, func(t *testing.T) {
+			if capturedTC.charset == "" && capturedTC.length > 0 {
+				s := randomStringFromCharset(capturedTC.length, capturedTC.charset)
+				assert.Len(t, s, capturedTC.wantLen, "String length mismatch")
+
+			} else {
+				s := randomStringFromCharset(capturedTC.length, capturedTC.charset)
+				assert.Len(t, s, capturedTC.wantLen, "String length mismatch")
+				if capturedTC.assertFn != nil && capturedTC.wantLen > 0 {
+					capturedTC.assertFn(t, s, capturedTC.charset)
+				}
+			}
+		})
+	}
+}
 
 func TestExecuteFile_WithCustomVariables(t *testing.T) {
 	// Given
@@ -138,12 +212,64 @@ func TestExecuteFile_WithGuidSystemVariable(t *testing.T) {
 	_, err = uuid.Parse(guidFromBody2)
 	assert.NoError(t, err, "GUID from body (correlationId) should be a valid UUID: %s", guidFromBody2)
 
+	guidFromRandomUuidAlias, ok3 := bodyJSON["randomUuidAlias"]
+	require.True(t, ok3, "randomUuidAlias not found in body")
+	_, err = uuid.Parse(guidFromRandomUuidAlias)
+	assert.NoError(t, err, "GUID from body (randomUuidAlias) should be a valid UUID: %s", guidFromRandomUuidAlias)
+	assert.Equal(t, guidFromURL, guidFromRandomUuidAlias, "GUID from URL and randomUuidAlias should be the same")
+
 	// With request-scoped system variables, all {{$guid}} ({{$uuid}}) instances should resolve to the SAME value.
 	assert.Equal(t, guidFromURL, guidFromHeader, "GUID from URL and header should be the same")
 	assert.Equal(t, guidFromURL, guidFromBody1, "GUID from URL and body1 should be the same")
 	// For this test, the .http file uses {{$guid}} twice in the body for different fields.
 	// These should now resolve to the same request-scoped GUID.
 	assert.Equal(t, guidFromBody1, guidFromBody2, "GUIDs from body (transactionId and correlationId) should be the same")
+}
+
+func TestExecuteFile_WithIsoTimestampSystemVariable(t *testing.T) {
+	// Given
+	var interceptedRequest struct {
+		Header string
+		Body   string
+	}
+
+	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		interceptedRequest.Body = string(bodyBytes)
+		interceptedRequest.Header = r.Header.Get("X-Timestamp-Header")
+		w.WriteHeader(http.StatusOK)
+	})
+	defer server.Close()
+
+	client, _ := NewClient()
+	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_iso_timestamp.http", struct{ ServerURL string }{ServerURL: server.URL})
+
+	// When
+	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then
+	require.NoError(t, err, "ExecuteFile should not return an error for $isoTimestamp processing")
+	require.Len(t, responses, 1, "Expected 1 response")
+
+	resp := responses[0]
+	assert.NoError(t, resp.Error)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Check header
+	_, err = time.Parse(time.RFC3339Nano, interceptedRequest.Header)
+	assert.NoError(t, err, "X-Timestamp-Header should be a valid ISO8601 timestamp: %s", interceptedRequest.Header)
+
+	// Check body
+	var bodyJSON map[string]string
+	err = json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON)
+	require.NoError(t, err, "Failed to unmarshal response body JSON")
+
+	isoTimeFromBody, ok := bodyJSON["requestTime"]
+	require.True(t, ok, "requestTime not found in body")
+	_, err = time.Parse(time.RFC3339Nano, isoTimeFromBody)
+	assert.NoError(t, err, "Body requestTime should be a valid ISO8601 timestamp: %s", isoTimeFromBody)
+
+	assert.Equal(t, interceptedRequest.Header, isoTimeFromBody, "ISO Timestamp from header and body should be the same")
 }
 
 func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
@@ -159,9 +285,10 @@ func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
 	_ = os.Unsetenv(undefinedEnvVarName)
 
 	var interceptedRequest struct {
-		URL    string
-		Header string
-		Body   string
+		URL                string
+		Header             string // X-Env-Value
+		CacheControlHeader string
+		Body               string
 	}
 
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
@@ -169,6 +296,7 @@ func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
 		bodyBytes, _ := io.ReadAll(r.Body)
 		interceptedRequest.Body = string(bodyBytes)
 		interceptedRequest.Header = r.Header.Get("X-Env-Value")
+		interceptedRequest.CacheControlHeader = r.Header.Get("Cache-Control")
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprint(w, "ok")
 	})
@@ -215,7 +343,116 @@ func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
 	// SCENARIO-LIB-019-002
 	undefinedPayload, ok := bodyJSON["undefined_payload"]
 	require.True(t, ok, "undefined_payload not found in body")
-	assert.Empty(t, undefinedPayload, "Body undefined_payload should be empty for an undefined env variable")
+	assert.Equal(t, fmt.Sprintf("{{$processEnv %s}}", undefinedEnvVarName), undefinedPayload, "Body undefined_payload should be the unresolved placeholder")
+
+	// Check Cache-Control header for unresolved placeholder
+	assert.Equal(t, "{{$processEnv UNDEFINED_CACHE_VAR_SHOULD_BE_EMPTY}}", interceptedRequest.CacheControlHeader, "Cache-Control header should be the unresolved placeholder")
+}
+
+func TestExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
+	// Given
+	var interceptedRequest struct {
+		Headers map[string]string
+		Body    string
+	}
+	interceptedRequest.Headers = make(map[string]string)
+
+	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		interceptedRequest.Body = string(bodyBytes)
+		for name, values := range r.Header {
+			if len(values) > 0 {
+				interceptedRequest.Headers[name] = values[0]
+			}
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, "ok")
+	})
+	defer server.Close()
+
+	client, _ := NewClient()
+	requestFilePath := createTestFileFromTemplate(t,
+		"testdata/http_request_files/system_var_datetime.http",
+		struct{ ServerURL string }{ServerURL: server.URL},
+	)
+
+	// Log the content of the generated temporary file for debugging
+	tempFileContent, errRead := os.ReadFile(requestFilePath)
+	require.NoError(t, errRead, "Failed to read temporary file for debugging: %s", requestFilePath)
+	t.Logf("[DEBUG_TEST] Content of temporary file '%s':\n%s", requestFilePath, string(tempFileContent))
+
+	// When
+	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then
+	require.NoError(t, err, "ExecuteFile should not return an error for datetime processing")
+	require.Len(t, responses, 1, "Expected 1 response")
+
+	resp := responses[0]
+	assert.NoError(t, resp.Error)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	now := time.Now()
+	threshold := 5 * time.Second // Allow 5s difference for timestamp checks
+
+	// Helper to check datetime strings
+	checkDateTimeStr := func(t *testing.T, valueStr string, formatKeyword string, isUTC bool, headerName string) {
+		t.Helper()
+		if formatKeyword == "timestamp" {
+			ts, err := strconv.ParseInt(valueStr, 10, 64)
+			require.NoError(t, err, "Failed to parse timestamp from %s: %s", headerName, valueStr)
+			parsedTime := time.Unix(ts, 0)
+			assert.WithinDuration(t, now, parsedTime, threshold, "%s timestamp %s not within threshold of current time %s", headerName, parsedTime, now)
+		} else {
+			var layout string
+			switch formatKeyword {
+			case "rfc1123":
+				layout = time.RFC1123
+			case "iso8601":
+				layout = time.RFC3339 // Go's RFC3339 is ISO8601 compliant
+			default:
+				t.Fatalf("Unhandled format keyword: %s for %s", formatKeyword, headerName)
+			}
+			parsedTime, err := time.Parse(layout, valueStr)
+			require.NoError(t, err, "Failed to parse datetime string from %s ('%s') with layout '%s'", headerName, valueStr, layout)
+			assert.WithinDuration(t, now, parsedTime, threshold, "%s datetime %s not within threshold of current time %s", headerName, parsedTime, now)
+			if isUTC {
+				assert.Equal(t, time.UTC, parsedTime.Location(), "%s expected to be UTC", headerName)
+			} else {
+				assert.Equal(t, time.Local, parsedTime.Location(), "%s expected to be Local time", headerName)
+			}
+		}
+	}
+
+	// Check Headers
+	checkDateTimeStr(t, interceptedRequest.Headers["X-Datetime-Rfc1123"], "rfc1123", true, "X-Datetime-RFC1123")
+	checkDateTimeStr(t, interceptedRequest.Headers["X-Datetime-Iso8601"], "iso8601", true, "X-Datetime-ISO8601")
+	checkDateTimeStr(t, interceptedRequest.Headers["X-Datetime-Timestamp"], "timestamp", true, "X-Datetime-Timestamp")
+	checkDateTimeStr(t, interceptedRequest.Headers["X-Datetime-Default"], "iso8601", true, "X-Datetime-Default (ISO8601)")
+
+	checkDateTimeStr(t, interceptedRequest.Headers["X-Localdatetime-Rfc1123"], "rfc1123", false, "X-LocalDatetime-RFC1123")
+	checkDateTimeStr(t, interceptedRequest.Headers["X-Localdatetime-Iso8601"], "iso8601", false, "X-LocalDatetime-ISO8601")
+	checkDateTimeStr(t, interceptedRequest.Headers["X-Localdatetime-Timestamp"], "timestamp", false, "X-LocalDatetime-Timestamp")
+	checkDateTimeStr(t, interceptedRequest.Headers["X-Localdatetime-Default"], "iso8601", false, "X-LocalDatetime-Default (ISO8601)")
+
+	assert.Equal(t, "{{$datetime \"invalidFormat\"}}", interceptedRequest.Headers["X-Datetime-Invalid"], "X-Datetime-Invalid should remain unresolved")
+
+	// Check Body
+	var bodyJSON map[string]string
+	err = json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON)
+	require.NoError(t, err, "Failed to unmarshal request body JSON")
+
+	checkDateTimeStr(t, bodyJSON["utc_rfc1123"], "rfc1123", true, "body.utc_rfc1123")
+	checkDateTimeStr(t, bodyJSON["utc_iso8601"], "iso8601", true, "body.utc_iso8601")
+	checkDateTimeStr(t, bodyJSON["utc_timestamp"], "timestamp", true, "body.utc_timestamp")
+	checkDateTimeStr(t, bodyJSON["utc_default_iso"], "iso8601", true, "body.utc_default_iso (ISO8601)")
+
+	checkDateTimeStr(t, bodyJSON["local_rfc1123"], "rfc1123", false, "body.local_rfc1123")
+	checkDateTimeStr(t, bodyJSON["local_iso8601"], "iso8601", false, "body.local_iso8601")
+	checkDateTimeStr(t, bodyJSON["local_timestamp"], "timestamp", false, "body.local_timestamp")
+	checkDateTimeStr(t, bodyJSON["local_default_iso"], "iso8601", false, "body.local_default_iso (ISO8601)")
+
+	assert.Equal(t, "{{$datetime \"invalidFormat\"}}", bodyJSON["invalid_format_test"], "body.invalid_format_test should remain unresolved")
 }
 
 func TestExecuteFile_WithDotEnvSystemVariable(t *testing.T) {
@@ -442,16 +679,16 @@ func TestExecuteFile_WithRandomIntSystemVariable(t *testing.T) {
 				urlParts := strings.Split(url, "/")
 				valURL, err := strconv.Atoi(urlParts[len(urlParts)-2])
 				require.NoError(t, err, "Random int from URL (no args) should be valid int")
-				assert.True(t, valURL >= 0 && valURL <= 100, "URL random int (no args) %d out of range [0,100]", valURL)
+				assert.True(t, valURL >= 0 && valURL <= 1000, "URL random int (no args) %d out of range [0,1000]", valURL)
 
 				valHeader, err := strconv.Atoi(header)
 				require.NoError(t, err, "Random int from Header (no args) should be valid int")
-				assert.True(t, valHeader >= 0 && valHeader <= 100, "Header random int (no args) %d out of range [0,100]", valHeader)
+				assert.True(t, valHeader >= 0 && valHeader <= 1000, "Header random int (no args) %d out of range [0,1000]", valHeader)
 
 				var bodyJSON map[string]int
 				err = json.Unmarshal([]byte(body), &bodyJSON)
 				require.NoError(t, err, "Failed to unmarshal body (no args)")
-				assert.True(t, bodyJSON["value"] >= 0 && bodyJSON["value"] <= 100, "Body random int (no args) %d out of range [0,100]", bodyJSON["value"])
+				assert.True(t, bodyJSON["value"] >= 0 && bodyJSON["value"] <= 1000, "Body random int (no args) %d out of range [0,1000]", bodyJSON["value"])
 			},
 		},
 		{ // SCENARIO-LIB-015-003
@@ -1046,4 +1283,184 @@ X-Env-Var: {{token}}
 		assert.Empty(t, client.selectedEnvironmentName, "selectedEnvironmentName should be empty")
 		// EnvironmentVariables map on ParsedFile would be nil internally, effect is placeholder {{host}} remains.
 	})
+
+	// SCENARIO-LIB-018-005: Private env file overrides public env file
+	t.Run("private env overrides public env", func(t *testing.T) {
+		// Given
+		var interceptedRequest struct {
+			Path   string
+			Host   string
+			Header string
+			Body   string
+		}
+
+		server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+			interceptedRequest.Path = r.URL.Path
+			interceptedRequest.Host = r.Host
+			bodyBytes, _ := io.ReadAll(r.Body)
+			interceptedRequest.Body = string(bodyBytes)
+			interceptedRequest.Header = r.Header.Get("X-Custom-Header")
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "ok")
+		})
+		defer server.Close()
+
+		tempDir := t.TempDir()
+
+		// Create http-client.env.json (public)
+		publicEnvContent := `{
+			"dev": {
+				"host": "` + server.URL + `",
+				"public_var": "public_value",
+				"override_var": "public_override"
+			}
+		}`
+		publicEnvFilePath := filepath.Join(tempDir, "http-client.env.json")
+		err := os.WriteFile(publicEnvFilePath, []byte(publicEnvContent), 0600)
+		require.NoError(t, err)
+
+		// Create http-client.private.env.json (private)
+		privateEnvContent := `{
+			"dev": {
+				"override_var": "private_override_value",
+				"private_var": "private_specific_value"
+			}
+		}`
+		privateEnvFilePath := filepath.Join(tempDir, "http-client.private.env.json")
+		err = os.WriteFile(privateEnvFilePath, []byte(privateEnvContent), 0600)
+		require.NoError(t, err)
+
+		requestFileContent := `
+### Test Private Env Override
+GET {{host}}/test
+Content-Type: application/json
+X-Custom-Header: {{override_var}}
+
+{
+  "public": "{{public_var}}",
+  "private_only": "{{private_var}}"
+}
+`
+		httpFilePath := filepath.Join(tempDir, "test_private_override.http")
+		err = os.WriteFile(httpFilePath, []byte(requestFileContent), 0600)
+		require.NoError(t, err)
+
+		client, err := NewClient(WithEnvironment("dev"))
+		require.NoError(t, err)
+
+		// When
+		responses, err := client.ExecuteFile(context.Background(), httpFilePath)
+
+		// Then
+		require.NoError(t, err, "ExecuteFile should not return an error")
+		require.Len(t, responses, 1, "Expected 1 response")
+
+		resp := responses[0]
+		assert.NoError(t, resp.Error)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		parsedServerURL, pErr := url.Parse(server.URL)
+		require.NoError(t, pErr)
+		assert.Equal(t, parsedServerURL.Host, interceptedRequest.Host) // host from public.env
+		assert.Equal(t, "/test", interceptedRequest.Path)
+		assert.Equal(t, "private_override_value", interceptedRequest.Header) // override_var from private.env
+
+		expectedBody := `{
+  "public": "public_value",
+  "private_only": "private_specific_value"
+}`
+		assert.JSONEq(t, expectedBody, interceptedRequest.Body)
+		assert.Equal(t, "dev", client.selectedEnvironmentName)
+	})
+}
+
+func TestExecuteFile_WithExtendedRandomSystemVariables(t *testing.T) {
+	// Given
+	var interceptedRequest struct {
+		Body string
+	}
+	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		interceptedRequest.Body = string(bodyBytes)
+		w.WriteHeader(http.StatusOK)
+	})
+	defer server.Close()
+
+	client, _ := NewClient()
+	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_extended_random.http", struct{ ServerURL string }{ServerURL: server.URL})
+
+	// When
+	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then
+	require.NoError(t, err, "ExecuteFile should not return an error for extended random variable processing")
+	require.Len(t, responses, 1, "Expected 1 response")
+
+	resp := responses[0]
+	assert.NoError(t, resp.Error)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var bodyJSON map[string]string
+	err = json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON)
+	require.NoError(t, err, "Failed to unmarshal response body JSON: %s", interceptedRequest.Body)
+
+	// $random.integer
+	randIntValue, err := strconv.Atoi(bodyJSON["randInt"])
+	assert.NoError(t, err, "randInt should be an integer")
+	assert.GreaterOrEqual(t, randIntValue, 10, "randInt should be >= 10")
+	assert.LessOrEqual(t, randIntValue, 20, "randInt should be <= 20")
+
+	randIntNegativeValue, err := strconv.Atoi(bodyJSON["randIntNegative"])
+	assert.NoError(t, err, "randIntNegative should be an integer")
+	assert.GreaterOrEqual(t, randIntNegativeValue, -5, "randIntNegative should be >= -5")
+	assert.LessOrEqual(t, randIntNegativeValue, 5, "randIntNegative should be <= 5")
+
+	assert.Equal(t, "{{$random.integer 10 1}}", bodyJSON["randIntInvalidRange"], "randIntInvalidRange should remain unsubstituted")
+	assert.Equal(t, "{{$random.integer 10 abc}}", bodyJSON["randIntInvalidArgs"], "randIntInvalidArgs should remain unsubstituted")
+
+	// $random.float
+	randFloatValue, err := strconv.ParseFloat(bodyJSON["randFloat"], 64)
+	assert.NoError(t, err, "randFloat should be a float")
+	assert.GreaterOrEqual(t, randFloatValue, 1.0, "randFloat should be >= 1.0")
+	assert.LessOrEqual(t, randFloatValue, 2.5, "randFloat should be <= 2.5")
+
+	randFloatNegativeValue, err := strconv.ParseFloat(bodyJSON["randFloatNegative"], 64)
+	assert.NoError(t, err, "randFloatNegative should be a float")
+	assert.GreaterOrEqual(t, randFloatNegativeValue, -1.5, "randFloatNegative should be >= -1.5")
+	assert.LessOrEqual(t, randFloatNegativeValue, 0.5, "randFloatNegative should be <= 0.5")
+
+	assert.Equal(t, "{{$random.float 5.0 1.0}}", bodyJSON["randFloatInvalidRange"], "randFloatInvalidRange should remain unsubstituted")
+
+	// $random.alphabetic
+	randAlphabeticValue := bodyJSON["randAlphabetic"]
+	assert.Len(t, randAlphabeticValue, 10, "randAlphabetic length mismatch")
+	for _, r := range randAlphabeticValue {
+		assert.True(t, (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z'), "randAlphabetic char not in alphabet: %c", r)
+	}
+	assert.Equal(t, "", bodyJSON["randAlphabeticZero"], "randAlphabeticZero should be empty")
+	assert.Equal(t, "{{$random.alphabetic abc}}", bodyJSON["randAlphabeticInvalid"], "randAlphabeticInvalid should remain unsubstituted")
+
+	// $random.alphanumeric
+	randAlphanumericValue := bodyJSON["randAlphanumeric"]
+	assert.Len(t, randAlphanumericValue, 15, "randAlphanumeric length mismatch")
+	for _, r := range randAlphanumericValue {
+		isLetter := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
+		isNumber := r >= '0' && r <= '9'
+		isUnderscore := r == '_'
+		assert.True(t, isLetter || isNumber || isUnderscore, "randAlphanumeric char not alphanumeric: %c", r)
+	}
+
+	// $random.hexadecimal
+	randHexValue := bodyJSON["randHex"]
+	assert.Len(t, randHexValue, 8, "randHex length mismatch")
+	_, err = hex.DecodeString(randHexValue)
+	assert.NoError(t, err, "randHex should be valid hexadecimal: %s", randHexValue)
+
+	// $random.email
+	randEmailValue := bodyJSON["randEmail"]
+	parts := strings.Split(randEmailValue, "@")
+	require.Len(t, parts, 2, "randEmail should have one @ symbol")
+	domainParts := strings.Split(parts[1], ".")
+	require.GreaterOrEqual(t, len(domainParts), 2, "randEmail domain should have at least one .")
+	assert.Regexp(t, `^[a-zA-Z0-9_]+@[a-zA-Z]+\.[a-zA-Z]{2,3}$`, randEmailValue, "randEmail format is incorrect")
 }

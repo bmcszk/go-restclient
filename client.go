@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -189,6 +190,7 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 		substitutedRawURL = c.substituteDynamicSystemVariables(substitutedRawURL)
 
 		finalParsedURL, parseErr := url.Parse(substitutedRawURL)
+
 		if parseErr != nil {
 			resp := &Response{Request: restClientReq}
 			resp.Error = fmt.Errorf("failed to parse URL after variable substitution: %s (original: %s): %w", substitutedRawURL, restClientReq.RawURLString, parseErr)
@@ -198,6 +200,8 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 			continue
 		}
 		restClientReq.URL = finalParsedURL
+
+		// "[DEBUG_EXECUTEFILE_HEADERS_AFTER_PARSE]", "filePath", requestFilePath, "reqName", restClientReq.Name, "initialHeaders", restClientReq.Headers)
 
 		if restClientReq.Headers != nil {
 			for key, values := range restClientReq.Headers {
@@ -214,10 +218,13 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 						c.currentDotEnvVars,
 					)
 					newValues[j] = c.substituteDynamicSystemVariables(resolvedVal)
+					// "[DEBUG_HEADER_FINAL]", "key", key, "index", j, "finalValue", newValues[j]) // Added for debugging header values
 				}
 				restClientReq.Headers[key] = newValues
 			}
 		}
+
+		// "[DEBUG_EXECUTEFILE_HEADERS_BEFORE_EXECREQ]", "filePath", requestFilePath, "reqName", restClientReq.Name, "headers", restClientReq.Headers)
 
 		if restClientReq.RawBody != "" {
 			resolvedBody := c.resolveVariablesInText(
@@ -231,6 +238,7 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 				c.currentDotEnvVars,
 			)
 			restClientReq.RawBody = c.substituteDynamicSystemVariables(resolvedBody)
+			// "[DEBUG_FINAL_RAW_BODY]", "rawBody", restClientReq.RawBody) // New log statement
 			restClientReq.Body = strings.NewReader(restClientReq.RawBody)
 		}
 
@@ -352,6 +360,7 @@ func (c *Client) resolveVariablesInText(text string, clientProgrammaticVars map[
 			if val, ok := dotEnvVars[varName]; ok {
 				return val
 			}
+			// If not in dotEnvVars, continue to fallback or return match
 		}
 
 		// 8. Fallback Value
@@ -364,12 +373,28 @@ func (c *Client) resolveVariablesInText(text string, clientProgrammaticVars map[
 	})
 }
 
+// randomStringFromCharset generates a random string of a given length using characters from the provided charset.
+// randomStringFromCharset generates a random string of a given length using characters from the provided charset.
+func randomStringFromCharset(length int, charset string) string {
+	if length <= 0 || len(charset) == 0 { // Added len(charset) == 0 check
+		return ""
+	}
+	source := rand.NewSource(time.Now().UnixNano())
+	rng := rand.New(source)
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[rng.Intn(len(charset))]
+	}
+	return string(b)
+}
+
 // substituteDynamicSystemVariables handles system variables that require argument parsing or dynamic evaluation at substitution time.
 // These are typically {{$processEnv VAR}}, {{$dotenv VAR}}, and {{$randomInt MIN MAX}}.
 // Other simple system variables like {{$uuid}} or {{$timestamp}}
 // should have been pre-resolved and substituted by resolveVariablesInText via the
 // requestScopedSystemVars map.
 func (c *Client) substituteDynamicSystemVariables(text string) string {
+	// "[DEBUG_DYN_VARS_INPUT]", "inputText", text)
 	originalTextForLogging := text // Keep a copy for logging. Used if we add more complex types with logging.
 	_ = originalTextForLogging     // Avoid unused variable error if no logging exists below.
 
@@ -385,6 +410,92 @@ func (c *Client) substituteDynamicSystemVariables(text string) string {
 			}
 		}
 		return match // Return original match if parsing fails or min > max
+	})
+
+	// Handle {{$random.integer min max}}
+	reRandomDotInteger := regexp.MustCompile(`{{\$random\.integer\s+(-?\d+)\s+(-?\d+)}}`)
+	text = reRandomDotInteger.ReplaceAllStringFunc(text, func(match string) string {
+		parts := reRandomDotInteger.FindStringSubmatch(match)
+		if len(parts) == 3 {
+			min, errMin := strconv.Atoi(parts[1])
+			max, errMax := strconv.Atoi(parts[2])
+			if errMin == nil && errMax == nil && min <= max {
+				return strconv.Itoa(rand.Intn(max-min+1) + min)
+			}
+		}
+		slog.Warn("Failed to parse $random.integer, returning original match", "match", match)
+		return match
+	})
+
+	// Handle {{$random.float min max}}
+	reRandomDotFloat := regexp.MustCompile(`{{\$random\.float\s+(-?\d*\.?\d+)\s+(-?\d*\.?\d+)}}`)
+	text = reRandomDotFloat.ReplaceAllStringFunc(text, func(match string) string {
+		parts := reRandomDotFloat.FindStringSubmatch(match)
+		if len(parts) == 3 {
+			min, errMin := strconv.ParseFloat(parts[1], 64)
+			max, errMax := strconv.ParseFloat(parts[2], 64)
+			if errMin == nil && errMax == nil && min <= max {
+				return strconv.FormatFloat(min+rand.Float64()*(max-min), 'f', -1, 64)
+			}
+		}
+		slog.Warn("Failed to parse $random.float, returning original match", "match", match)
+		return match
+	})
+
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	const alphanumeric = letters + "0123456789_"
+	const hexChars = "0123456789abcdef"
+
+	// Handle {{$random.alphabetic length}}
+	reRandomDotAlphabetic := regexp.MustCompile(`{{\$random\.alphabetic\s+(\d+)}}`)
+	text = reRandomDotAlphabetic.ReplaceAllStringFunc(text, func(match string) string {
+		parts := reRandomDotAlphabetic.FindStringSubmatch(match)
+		if len(parts) == 2 {
+			length, err := strconv.Atoi(parts[1])
+			if err == nil && length >= 0 {
+				return randomStringFromCharset(length, letters)
+			}
+		}
+		slog.Warn("Failed to parse $random.alphabetic, returning original match", "match", match)
+		return match
+	})
+
+	// Handle {{$random.alphanumeric length}}
+	reRandomDotAlphanumeric := regexp.MustCompile(`{{\$random\.alphanumeric\s+(\d+)}}`)
+	text = reRandomDotAlphanumeric.ReplaceAllStringFunc(text, func(match string) string {
+		parts := reRandomDotAlphanumeric.FindStringSubmatch(match)
+		if len(parts) == 2 {
+			length, err := strconv.Atoi(parts[1])
+			if err == nil && length >= 0 {
+				return randomStringFromCharset(length, alphanumeric)
+			}
+		}
+		slog.Warn("Failed to parse $random.alphanumeric, returning original match", "match", match)
+		return match
+	})
+
+	// Handle {{$random.hexadecimal length}}
+	reRandomDotHexadecimal := regexp.MustCompile(`{{\$random\.hexadecimal\s+(\d+)}}`)
+	text = reRandomDotHexadecimal.ReplaceAllStringFunc(text, func(match string) string {
+		parts := reRandomDotHexadecimal.FindStringSubmatch(match)
+		if len(parts) == 2 {
+			length, err := strconv.Atoi(parts[1])
+			if err == nil && length >= 0 {
+				return randomStringFromCharset(length, hexChars)
+			}
+		}
+		slog.Warn("Failed to parse $random.hexadecimal, returning original match", "match", match)
+		return match
+	})
+
+	// Handle {{$random.email}}
+	reRandomDotEmail := regexp.MustCompile(`{{\$random\.email}}`)
+	text = reRandomDotEmail.ReplaceAllStringFunc(text, func(match string) string {
+		// Simple email pattern: user@domain.tld
+		user := randomStringFromCharset(rand.Intn(10)+5, alphanumeric) // 5-14 chars for user
+		domain := randomStringFromCharset(rand.Intn(5)+5, letters)     // 5-9 chars for domain
+		tld := randomStringFromCharset(rand.Intn(2)+2, letters)        // 2-3 chars for tld
+		return fmt.Sprintf("%s@%s.%s", user, domain, tld)
 	})
 
 	// NOTE: {{$guid}}, {{$uuid}}, {{$timestamp}}, {{$randomInt (no-args)}}
@@ -414,44 +525,74 @@ func (c *Client) substituteDynamicSystemVariables(text string) string {
 			if val, ok := os.LookupEnv(varName); ok {
 				return val
 			}
-			return "" // Variable not found in process env, return empty string
+			return match // Variable not found in process env, return original placeholder (PRD)
 		}
 		return match // Should not happen
 	})
 
-	// REQ-LIB-029 & REQ-LIB-030: Datetime variables
-	// These were more complex and might have their own regex. For now, assume they were separate calls
-	// or integrated carefully. This part needs to match the *actual* original logic for datetime.
-	// For this focused fix, I am restoring the structure from a typical simple system variable handler.
-	// IF THE ORIGINAL HAD COMPLEX REGEX FOR DATETIME HERE, THIS IS A SIMPLIFICATION.
-	// Example of how datetime *might* have been (if simple ReplaceAll, which is unlikely given its complexity):
-	// text = strings.ReplaceAll(text, "{{$datetime ...}}", evaluateDatetime(...))
-	// text = strings.ReplaceAll(text, "{{$localDatetime ...}}", evaluateLocalDatetime(...))
+	// REQ-LIB-029 & REQ-LIB-030: Datetime variables ($datetime, $localDatetime)
+	reDateTimeRelated := regexp.MustCompile(`{{\$(datetime|localDatetime)((?:\s*(?:"[^"]*"|[^"\s}]+))*)\s*}}`)
+	text = reDateTimeRelated.ReplaceAllStringFunc(text, func(match string) string {
+		captures := reDateTimeRelated.FindStringSubmatch(match)
+		if len(captures) < 3 { // Should have full match, type, and args part
+			slog.Warn("Could not parse datetime/localDatetime variable, captures unexpected", "match", match, "capturesCount", len(captures))
+			return match // Safety return
+		}
+		varType := captures[1] // "datetime" or "localDatetime"
+		argsStr := strings.TrimSpace(captures[2])
 
-	// IMPORTANT: The original datetime substitution logic needs to be preserved.
-	// The following are placeholders if the original logic was more complex than simple ReplaceAll.
-	// If the original used `reDateTime.ReplaceAllStringFunc` and `reLocalDateTime.ReplaceAllStringFunc`,
-	// those blocks should be here.
-	// For now, assuming a simplified structure for this edit's focus.
+		var formatStr string
+		// var offsetStr string // TODO: Implement offset parsing in a subsequent step
 
-	// Placeholder for original $datetime logic (MUST BE VERIFIED/RESTORED FROM ORIGINAL)
-	// For example, if it used a regex like reDateTime:
-	/*
-		reDateTime := regexp.MustCompile(`\{\{\$datetime\s+...complex regex...\}\}`)
-		text = reDateTime.ReplaceAllStringFunc(text, func(match string) string {
-			// ... original $datetime evaluation ...
-			return "evaluated_datetime"
-		})
-	*/
+		// Regex to parse arguments: captures quoted strings or unquoted non-space sequences
+		argPartsRegex := regexp.MustCompile(`(?:\"([^\"]*)\"|([^\"\\s}]+))`)
+		parsedArgsMatches := argPartsRegex.FindAllStringSubmatch(argsStr, -1)
 
-	// Placeholder for original $localDatetime logic (MUST BE VERIFIED/RESTORED FROM ORIGINAL)
-	/*
-		reLocalDateTime := regexp.MustCompile(`\{\{\$localDatetime\s+...complex regex...\}\}`)
-		text = reLocalDateTime.ReplaceAllStringFunc(text, func(match string) string {
-			// ... original $localDatetime evaluation ...
-			return "evaluated_local_datetime"
-		})
-	*/
+		parsedArgs := []string{}
+		for _, m := range parsedArgsMatches {
+			if m[1] != "" { // Quoted argument
+				parsedArgs = append(parsedArgs, m[1])
+			} else if m[2] != "" { // Unquoted argument
+				parsedArgs = append(parsedArgs, m[2])
+			}
+		}
+
+		if len(parsedArgs) > 0 {
+			formatStr = parsedArgs[0]
+		} else {
+			// Default format if none provided, as per common expectations (e.g., ISO8601)
+			formatStr = "iso8601"
+		}
+		// "[DEBUG_DATETIME] Determined formatStr", "varType", varType, "argsStr", argsStr, "parsedFormatStr", formatStr, "originalMatch", match)
+		// if len(parsedArgs) > 1 {
+		// offsetStr = parsedArgs[1] // TODO: Implement offset parsing
+		// }
+
+		var now time.Time
+		if varType == "datetime" {
+			now = time.Now().UTC()
+		} else { // localDatetime
+			now = time.Now() // System's local time zone
+		}
+
+		// TODO: Implement offset application using offsetStr and 'now' in a subsequent step
+
+		var resultStr string
+		switch strings.ToLower(formatStr) {
+		case "rfc1123":
+			resultStr = now.Format(time.RFC1123)
+		case "iso8601":
+			resultStr = now.Format(time.RFC3339)
+		case "timestamp":
+			resultStr = strconv.FormatInt(now.Unix(), 10)
+		default:
+			// TODO: Implement custom Java format string translation to Go layout in a subsequent step
+			// slog.Warn("Unsupported or custom datetime format, returning original match for now", "format", formatStr, "variableType", varType, "originalMatch", match)
+			return match
+		}
+
+		return resultStr
+	})
 
 	return text
 }
@@ -462,9 +603,11 @@ func (c *Client) substituteDynamicSystemVariables(text string) string {
 func (c *Client) generateRequestScopedSystemVariables() map[string]string {
 	vars := make(map[string]string)
 	vars["$uuid"] = uuid.NewString()
-	vars["$guid"] = vars["$uuid"] // Alias $guid to $uuid for consistency
+	vars["$guid"] = vars["$uuid"]        // Alias $guid to $uuid
+	vars["$random.uuid"] = vars["$uuid"] // Add $random.uuid as alias
 	vars["$timestamp"] = strconv.FormatInt(time.Now().UTC().Unix(), 10)
-	vars["$randomInt"] = strconv.Itoa(rand.Intn(101)) // 0-100 inclusive
+	vars["$isoTimestamp"] = time.Now().UTC().Format(time.RFC3339) // Add $isoTimestamp
+	vars["$randomInt"] = strconv.Itoa(rand.Intn(1001))            // 0-1000 inclusive as per PRD
 	// Add other simple, no-argument system variables here if any
 
 	// For logging/debugging purposes, to see what was generated once per request
@@ -512,15 +655,31 @@ func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Respo
 		}
 	}
 	for key, values := range rcRequest.Headers {
-		httpReq.Header.Del(key)
+		// "[DEBUG_HEADER_LOOP_ITERATION]", "original_key", key, "canonicalKey", textproto.CanonicalMIMEHeaderKey(key), "values_from_rcRequest", values)
+		// "[DEBUG_HEADER_STATE_BEFORE_DEL]", "canonicalKey", canonicalKey, "slice_in_httpReq", httpReq.Header[canonicalKey])
+
+		httpReq.Header.Del(key) // Uses canonicalKey internally
+		// "[DEBUG_HEADER_STATE_AFTER_DEL]", "canonicalKey", textproto.CanonicalMIMEHeaderKey(key), "slice_in_httpReq", httpReq.Header[textproto.CanonicalMIMEHeaderKey(key)])
+
 		for _, value := range values {
-			httpReq.Header.Add(key, value)
+			httpReq.Header.Add(key, value) // Uses canonicalKey internally
+			// "[DEBUG_HEADER_STATE_AFTER_ADD]", "canonicalKey", canonicalKey, "slice_in_httpReq", httpReq.Header[canonicalKey], "value_idx", i)
 		}
+		// "[DEBUG_HEADER_STATE_AFTER_ALL_ADDS_FOR_KEY]", "canonicalKey", canonicalKey, "slice_in_httpReq", httpReq.Header[canonicalKey])
 	}
+
+	// "[DEBUG_SPECIFIC_HEADER_AFTER_LOOP]",
+	// 	"key_original", "X-Datetime-RFC1123",
+	// 	"value_get", httpReq.Header.Get("X-Datetime-RFC1123"),
+	// 	"key_canonical", "X-Datetime-Rfc1123",
+	// 	"value_slice_direct", httpReq.Header["X-Datetime-Rfc1123"],
+	// )
+
 	if httpReq.Header.Get("Host") == "" && httpReq.URL.Host != "" {
 		httpReq.Host = httpReq.URL.Host
 	}
 
+	// "[DEBUG_HTTPREQ_FINAL_HEADERS]", "headers", httpReq.Header) // Added for debugging
 	startTime := time.Now()
 	httpResp, err := c.httpClient.Do(httpReq)
 	duration := time.Since(startTime)
