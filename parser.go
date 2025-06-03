@@ -20,6 +20,43 @@ const (
 	commentPrefix    = "#"
 )
 
+// loadEnvironmentFile attempts to load a specific environment's variables from a JSON file.
+// It returns the variables map or nil if the environment/file is not found or on error.
+func loadEnvironmentFile(filePath string, selectedEnvName string) (map[string]string, error) {
+	if selectedEnvName == "" {
+		return nil, nil // No environment selected, nothing to load
+	}
+
+	if _, statErr := os.Stat(filePath); statErr != nil {
+		if os.IsNotExist(statErr) {
+			slog.Debug("Environment file not found.", "file", filePath)
+			return nil, nil // File not found is not an error, just means no vars from this file
+		}
+		// Another error occurred trying to stat the file (e.g., permissions)
+		slog.Warn("Error checking environment file", "error", statErr, "file", filePath)
+		return nil, fmt.Errorf("checking environment file %s: %w", filePath, statErr)
+	}
+
+	envFileBytes, readErr := os.ReadFile(filePath)
+	if readErr != nil {
+		slog.Warn("Failed to read environment file", "error", readErr, "file", filePath)
+		return nil, fmt.Errorf("reading environment file %s: %w", filePath, readErr)
+	}
+
+	var allEnvs map[string]map[string]string
+	if unmarshalErr := json.Unmarshal(envFileBytes, &allEnvs); unmarshalErr != nil {
+		slog.Warn("Failed to unmarshal environment file", "error", unmarshalErr, "file", filePath)
+		return nil, fmt.Errorf("unmarshalling environment file %s: %w", filePath, unmarshalErr)
+	}
+
+	if selectedEnvVars, ok := allEnvs[selectedEnvName]; ok {
+		return selectedEnvVars, nil
+	}
+
+	slog.Debug("Selected environment not found in environment file", "environment", selectedEnvName, "file", filePath)
+	return nil, nil // Environment not found in this file
+}
+
 // ParseRequestFile reads a .rest or .http file and parses it into a ParsedFile struct
 // containing one or more Request definitions. It requires a `client` instance to access
 // programmatic and request-scoped system variables, which are used at parse time to resolve
@@ -61,31 +98,41 @@ func parseRequestFile(filePath string, client *Client) (*ParsedFile, error) {
 
 	// Load http-client.env.json for environment-specific variables (Task T4)
 	if client != nil && client.selectedEnvironmentName != "" && parsedFile != nil {
-		httpClientEnvFilePath := filepath.Join(filepath.Dir(filePath), "http-client.env.json")
-		if _, statErr := os.Stat(httpClientEnvFilePath); statErr == nil {
-			envFileBytes, readErr := os.ReadFile(httpClientEnvFilePath)
-			if readErr == nil {
-				var allEnvs map[string]map[string]string
-				if unmarshalErr := json.Unmarshal(envFileBytes, &allEnvs); unmarshalErr == nil {
-					if selectedEnvVars, ok := allEnvs[client.selectedEnvironmentName]; ok {
-						parsedFile.EnvironmentVariables = selectedEnvVars
-					} else {
-						slog.Warn("Selected environment not found in http-client.env.json", "environment", client.selectedEnvironmentName, "file", httpClientEnvFilePath)
-						// For now, EnvironmentVariables will remain nil/empty
-					}
-				} else {
-					slog.Warn("Failed to unmarshal http-client.env.json", "error", unmarshalErr, "file", httpClientEnvFilePath)
-				}
-			} else {
-				slog.Warn("Failed to read http-client.env.json", "error", readErr, "file", httpClientEnvFilePath)
-			}
+		mergedEnvVars := make(map[string]string)
+		fileDir := filepath.Dir(filePath)
+
+		// Load public environment file: http-client.env.json
+		publicEnvFilePath := filepath.Join(fileDir, "http-client.env.json")
+		publicEnvVars, err := loadEnvironmentFile(publicEnvFilePath, client.selectedEnvironmentName)
+		if err != nil {
+			// Log the error but continue, as the private file might still provide vars
+			slog.Warn("Error loading public environment file", "file", publicEnvFilePath, "error", err)
+		}
+		for k, v := range publicEnvVars {
+			mergedEnvVars[k] = v
+		}
+
+		// Load private environment file: http-client.private.env.json
+		privateEnvFilePath := filepath.Join(fileDir, "http-client.private.env.json")
+		privateEnvVars, err := loadEnvironmentFile(privateEnvFilePath, client.selectedEnvironmentName)
+		if err != nil {
+			slog.Warn("Error loading private environment file", "file", privateEnvFilePath, "error", err)
+		}
+		for k, v := range privateEnvVars { // Override with private vars
+			mergedEnvVars[k] = v
+		}
+
+		if len(mergedEnvVars) > 0 {
+			parsedFile.EnvironmentVariables = mergedEnvVars
 		} else {
-			if os.IsNotExist(statErr) {
-				slog.Debug("http-client.env.json not found, proceeding without environment-specific variables from this file.", "file", httpClientEnvFilePath)
-			} else {
-				// Another error occurred trying to stat http-client.env.json (e.g., permissions)
-				slog.Warn("Error checking for http-client.env.json", "error", statErr, "file", httpClientEnvFilePath)
+			// This case can happen if neither file exists, or selected env is not in them, or files are empty/invalid.
+			// Ensure EnvironmentVariables is not nil if no vars were loaded, to maintain consistency with how it might be accessed.
+			// However, if it was already initialized (e.g. to an empty map by default in ParsedFile struct), this might not be strictly necessary.
+			// For safety, let's ensure it's an empty map if nothing was merged.
+			if parsedFile.EnvironmentVariables == nil {
+				parsedFile.EnvironmentVariables = make(map[string]string)
 			}
+			slog.Debug("No environment variables loaded for selected environment", "environment", client.selectedEnvironmentName, "public_file", publicEnvFilePath, "private_file", privateEnvFilePath)
 		}
 	}
 
@@ -116,10 +163,12 @@ func parseRequests(reader io.Reader, filePath string, client *Client,
 	dotEnvVars map[string]string) (*ParsedFile, error) {
 	scanner := bufio.NewScanner(reader)
 	parsedFile := &ParsedFile{
-		FilePath: filePath,
-		Requests: []*Request{},
+		FilePath:      filePath,
+		Requests:      []*Request{},
+		FileVariables: make(map[string]string), // Initialize FileVariables
 	}
 	currentFileVariables := make(map[string]string) // Variables accumulated in the file scope
+	justSawEmptyLineSeparator := false              // Flag to indicate the previous line was an empty separator
 
 	var currentRequest *Request
 	var bodyLines []string
@@ -152,6 +201,7 @@ func parseRequests(reader io.Reader, filePath string, client *Client,
 			// Start a new request
 			bodyLines = []string{}
 			parsingBody = false
+			justSawEmptyLineSeparator = false // Reset flag when a new request block starts
 			requestName := strings.TrimSpace(trimmedLine[len(requestSeparator):])
 			currentRequest = &Request{
 				Name:            requestName,
@@ -218,8 +268,8 @@ func parseRequests(reader io.Reader, filePath string, client *Client,
 					}
 				}
 			}
-			// After processing a potential @name directive, or if it's just a regular comment,
-			// always skip the comment line for other parsing rules (like METHOD/URL, header, body).
+			// A comment line is not an empty separator, so reset the flag.
+			justSawEmptyLineSeparator = false
 			continue
 		}
 
@@ -237,20 +287,48 @@ func parseRequests(reader io.Reader, filePath string, client *Client,
 			// It can be set by `// @name RequestName` (handled in Task T2).
 		}
 
-		if processedLine == "" && !parsingBody {
-			// Empty line: signifies end of headers and start of body,
-			// or just an empty line between headers.
-			if currentRequest != nil && currentRequest.Method != "" {
-				parsingBody = true
+		// "[DEBUG_PARSER_LINE_STATE]",
+		// 	"lineNumber", lineNumber,
+		// 	"trimmedLine", trimmedLine,
+		// 	"processedLine", processedLine,
+		// 	"currentRequestMethod", currentRequest.Method,
+		// 	"parsingBody", parsingBody,
+		// 	"numHeaders", len(currentRequest.Headers),
+		// 	"filePath", filePath,
+		// )
+
+		// Handle empty lines explicitly first
+		if processedLine == "" {
+			if currentRequest.Method != "" && !parsingBody {
+				// This empty line *could* be the separator before the body,
+				// or just an empty line between headers, or between request-line and first header.
+				// "[DEBUG_PARSER_ENCOUNTERED_EMPTY_LINE_POTENTIAL_SEPARATOR]", "lineNumber", lineNumber)
+				justSawEmptyLineSeparator = true // Set flag: next non-empty line should be body
+			} else if parsingBody {
+				// Empty line while already parsing body, append to body
+				bodyLines = append(bodyLines, originalLine) // Append original line to preserve formatting
 			}
+			// In all cases of an empty line, we continue to the next line.
 			continue
 		}
 
+		// If we reach here, processedLine is NOT empty.
+
+		// If the *previous* line was an empty line acting as a potential separator,
+		// then this current non-empty line MUST be the start of the body.
+		if justSawEmptyLineSeparator {
+			// "[DEBUG_PARSER_IMMEDIATE_BODY_TRANSITION_DUE_TO_FLAG]", "lineNumber", lineNumber, "processedLine", processedLine)
+			parsingBody = true
+			bodyLines = append(bodyLines, originalLine) // Add this line to body as it's the first body line
+			justSawEmptyLineSeparator = false           // Reset the flag as it has served its purpose
+			continue                                    // Move to the next line, now in body parsing mode
+		}
+
 		if parsingBody {
-			bodyLines = append(bodyLines, originalLine)
+			bodyLines = append(bodyLines, originalLine) // Add original line to preserve whitespace
 		} else {
-			// Parsing request line (METHOD URL [VERSION]) or headers (Key: Value)
-			if currentRequest.Method == "" { // First non-comment, non-empty, non-variable line is the request line
+			// Not parsing body, and line is not empty. Must be a request line or a header.
+			if currentRequest.Method == "" { // Expecting a request line
 				parts := strings.SplitN(processedLine, " ", 2)
 				if len(parts) >= 2 { // Need at least METHOD and URL
 					method := strings.ToUpper(strings.TrimSpace(parts[0]))
@@ -305,11 +383,19 @@ func parseRequests(reader io.Reader, filePath string, client *Client,
 					}
 				}
 			} else { // Parsing headers
+				// "[DEBUG_PARSER_HEADER_INPUT]", "lineNumber", lineNumber, "processedLine", processedLine)
+				// "[DEBUG_CONTAINS_COLON_CHECK]", "lineNumber", lineNumber, "processedLine", processedLine, "containsColon", strings.Contains(processedLine, ":"))
 				parts := strings.SplitN(processedLine, ":", 2)
 				if len(parts) == 2 {
 					key := strings.TrimSpace(parts[0])
 					value := strings.TrimSpace(parts[1])
-					currentRequest.Headers.Add(key, value)
+					currentRequest.Headers.Add(key, value) // Add to current request's headers
+				} else {
+					// This line is not a valid header (no colon, or malformed).
+					// Assume this is the start of the body.
+					// "[DEBUG_PARSER_NOT_HEADER_SWITCH_TO_BODY]", "lineNumber", lineNumber, "processedLine", processedLine, "partsLen", len(parts))
+					parsingBody = true
+					bodyLines = append(bodyLines, originalLine) // Add this line to body as it's the first body line
 				}
 			}
 		}
@@ -333,6 +419,15 @@ func parseRequests(reader io.Reader, filePath string, client *Client,
 
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("error reading request file %s: %w", filePath, err)
+	}
+
+	// Assign accumulated file-level variables to the ParsedFile struct
+	// Ensure FileVariables is initialized (it should be by the struct instantiation)
+	if parsedFile.FileVariables == nil {
+		parsedFile.FileVariables = make(map[string]string)
+	}
+	for k, v := range currentFileVariables {
+		parsedFile.FileVariables[k] = v
 	}
 
 	// REQ-LIB-028: Ignore any block between separators that doesn't have a request.

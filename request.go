@@ -56,4 +56,7 @@ type ParsedFile struct {
 	// GlobalVariables are key-value pairs accumulated during the execution of requests in this file (or imported files).
 	// These are set by `client.global.set()` in response handler scripts and are available to subsequent requests.
 	GlobalVariables map[string]string
+	// FileVariables are key-value pairs defined directly within the .http file using the `@name = value` syntax.
+	// Their scope is the current file, and they are resolved at parse time.
+	FileVariables map[string]string
 }

@@ -22,12 +22,15 @@ func createTestFileFromTemplate(t *testing.T, templatePath string, data interfac
 	tmplContent, err := os.ReadFile(templatePath)
 	require.NoError(t, err)
 
+	t.Logf("[DEBUG_CREATE_TEST_FILE] Original template content for %s:\n%s", templatePath, string(tmplContent))
+
 	// Use different delimiters to avoid conflict with {{...}} used by the library itself
 	tmpl, err := template.New("testfile").Delims("[[", "]]").Parse(string(tmplContent))
 	require.NoError(t, err)
 
 	tempFile, err := os.CreateTemp(t.TempDir(), "processed_*.http")
 	require.NoError(t, err)
+	tempFileName := tempFile.Name() // Get name before closing for reliable access
 
 	err = tmpl.Execute(tempFile, data)
 	require.NoError(t, err)
@@ -35,7 +38,12 @@ func createTestFileFromTemplate(t *testing.T, templatePath string, data interfac
 	err = tempFile.Close()
 	require.NoError(t, err)
 
-	return tempFile.Name()
+	// Read back the content of the temporary file to log what was actually written
+	writtenContent, readErr := os.ReadFile(tempFileName)
+	require.NoError(t, readErr, "Failed to read back temp file for debugging: %s", tempFileName)
+	t.Logf("[DEBUG_CREATE_TEST_FILE] Content written to temp file %s:\n%s", tempFileName, string(writtenContent))
+
+	return tempFileName
 }
 
 // mockRoundTripper is a helper for mocking http.RoundTripper

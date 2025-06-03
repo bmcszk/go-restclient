@@ -1,5 +1,5 @@
 **Version:** 1.0
-**Date:** 2025-06-02
+**Date:** 2025-06-03
 **Status:** Draft
 
 # Product Requirements Document: JetBrains HTTP Client Compatibility
@@ -14,7 +14,7 @@ This document outlines the requirements for enhancing `go-restclient` to achieve
 *   Support multiple requests within a single file.
 *   Implement variable substitution using `{{variable_name}}` syntax.
 *   Support environment-specific configurations via an environment file.
-*   Enable pre-request and post-request scripting using JavaScript.
+
 *   Allow importing requests from other `.http` files.
 *   Handle common request body content types.
 
@@ -42,34 +42,13 @@ This document outlines the requirements for enhancing `go-restclient` to achieve
     *   The file should contain a JSON object where keys are environment names and values are objects of key-value pairs.
     *   Example: `{"dev": {"host": "localhost:3000"}, "prod": {"host": "api.example.com"}}`
 *   **FR2.3:** Allow specifying an active environment for a run (e.g., via CLI flag).
-*   **FR2.4:** Variables defined in scripts (see 4.4) should also be available for substitution.
+*   **FR2.4:** Support for dynamic variables (e.g., `{{$uuid}}`, `{{$timestamp}}`, `{{$randomInt}}`) and system environment variables (e.g., `{{$env.MY_VAR}}`).
+*   **FR2.5:** Support in-place variables defined within the `.http` file using `@name = value` syntax.
 
 ### 4.3. Request Imports
 
 *   **FR3.1:** Support importing requests or shared components from other `.http` files.
 *   **FR3.2:** Assumed import syntax (pending confirmation): `// @import "path/to/another.http"` or `# @import "path/to/another.http"`. The imported file's requests should be usable.
-
-### 4.4. JavaScript Scripting
-
-*   **FR4.1:** Embed a JavaScript interpreter (e.g., `goja`).
-*   **FR4.2:** **Pre-request Scripts:**
-    *   Execute JS code *before* a request is sent.
-    *   Syntax: Inline `< {% script_code %}` or external `< path/to/script.js`.
-    *   Provide a `request` object to the script, allowing modification of variables for the current request (e.g., `request.variables.set("key", "value")`).
-*   **FR4.3:** **Response Handler (Post-request) Scripts:**
-    *   Execute JS code *after* a response is received.
-    *   Syntax: Inline `> {% script_code %}` or external `> path/to/script.js`.
-    *   Provide a `client` object:
-        *   `client.global.set("varName", value)`: Store variables globally for subsequent requests.
-        *   `client.test("Test Name", function() { /* ... */ })`: Define a test case.
-        *   `client.assert(condition, "Failure message")`: Perform assertions.
-        *   `client.log("message")`: Log messages.
-    *   Provide a `response` object:
-        *   `response.status`: HTTP status code (number).
-        *   `response.contentType`: Response content type (string).
-        *   `response.body`: Response body (parsed as JSON/XML if applicable, otherwise string).
-        *   `response.headers`: Object representing response headers.
-*   **FR4.4:** Support ES6 module `import` and `export` within JS scripts for modularity.
 
 ### 4.5. Request Body Handling
 
@@ -82,7 +61,7 @@ This document outlines the requirements for enhancing `go-restclient` to achieve
 
 *   **FR6.1:** Allow execution of a specific named request from a file.
 *   **FR6.2:** Allow execution of all requests in a file sequentially.
-*   **FR6.3:** Variables set by `client.global.set()` in one request's script must be available to subsequent requests in the same execution run.
+*   **FR6.3:** Environment variables and in-place variables should persist and be available across all requests executed in a single run within their defined scope.
 
 ## 5. Non-Functional Requirements
 
@@ -96,7 +75,8 @@ This document outlines the requirements for enhancing `go-restclient` to achieve
 *   Advanced SSL/TLS client certificate configuration.
 *   Proxy configuration via `.http` file syntax.
 *   UI-specific integrations of the JetBrains client (e.g., run configurations UI, direct browser opening).
-*   Response history persistence beyond the current session of `client.global` variables.
+*   JavaScript-based pre-request and post-request scripting (including `client.global.set`, `client.test`, `client.assert`, `request.variables.set`, etc.).
+*   Response history persistence related to script-based `client.global` variables.
 *   Automatic conversion from/to cURL or Postman collections.
 
 ## 7. Open Questions / Assumptions to Verify

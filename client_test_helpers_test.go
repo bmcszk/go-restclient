@@ -1,0 +1,43 @@
+package restclient
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
+
+func TestCreateTestFileFromTemplate_DebugOutput(t *testing.T) {
+	templateFileName := "system_var_datetime.http"
+	wd, err := os.Getwd()
+	require.NoError(t, err, "Failed to get working directory")
+	templatePath := filepath.Join(wd, "testdata", "http_request_files", templateFileName)
+
+	// Check if the source template file exists
+	_, err = os.Stat(templatePath)
+	require.NoError(t, err, "Source template file %s does not exist", templatePath)
+
+	t.Logf("Attempting to process template: %s", templatePath)
+
+	data := struct{ ServerURL string }{ServerURL: "http://localhost:12345/mockserver"}
+
+	// Call the function under test
+	// The t.Logf calls inside createTestFileFromTemplate should execute here
+	processedFilePath := createTestFileFromTemplate(t, templatePath, data)
+	require.NotEmpty(t, processedFilePath, "createTestFileFromTemplate returned an empty path")
+
+	// Clean up the created temporary file
+	// We do this even if the test fails to ensure no lingering temp files
+	// if the test requires the file to exist for further checks, this should be deferred or handled differently.
+	// For this specific debug test, we just want to see the logs from createTestFileFromTemplate.
+	defer func() {
+		errRemove := os.Remove(processedFilePath)
+		if errRemove != nil {
+			t.Logf("Warning: failed to remove temporary file %s: %v", processedFilePath, errRemove)
+		}
+	}()
+
+	t.Logf("TestCreateTestFileFromTemplate_DebugOutput completed. Processed file was: %s", processedFilePath)
+	// No specific assertions needed here, the goal is to observe t.Logf output from the helper.
+}
