@@ -230,7 +230,12 @@ func parseRequests(reader io.Reader, filePath string, client *Client,
 						resolvedVarValue = client.substituteDynamicSystemVariables(resolvedVarValue)
 					}
 					currentFileVariables[varName] = resolvedVarValue
+				} else {
+					return nil, fmt.Errorf("line %d: variable name cannot be empty in definition: %s", lineNumber, originalLine)
 				}
+			} else {
+				// This means no '=' was found, or it was the first character after '@'
+				return nil, fmt.Errorf("line %d: malformed in-place variable definition, missing '=' or name: %s", lineNumber, originalLine)
 			}
 			continue // Variable definition line, skip further processing
 		}

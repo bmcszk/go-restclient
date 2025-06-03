@@ -2139,6 +2139,48 @@ GET %s{{my_path_from_env}}/data
 		assert.Equal(t, expectedPath, capturedURLPath, "The URL path should be correctly substituted with the OS environment variable via {{$env.VAR_NAME}} in-place var")
 	})
 
-	// TODO: Add more sub-tests for other scenarios:
-	// - malformed definitions (e.g., @name_no_value, @=value)
+	t.Run("inplace_variable_malformed_definitions", func(t *testing.T) {
+		tests := []struct {
+			name            string
+			httpFileContent string
+			expectedError   string // Substring of the expected error message from ExecuteFile
+		}{
+			{
+				name: "name_only_no_equals_no_value",
+				httpFileContent: `
+@name_only_var
+
+### Test Request
+GET http://localhost/test
+`,
+				expectedError: "malformed in-place variable definition, missing '=' or name",
+			},
+			{
+				name: "no_name_equals_value",
+				httpFileContent: `
+@=value_only_val
+
+### Test Request
+GET http://localhost/test
+`,
+				expectedError: "variable name cannot be empty in definition",
+			},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				requestFilePath := createTempHTTPFileFromString(t, tc.httpFileContent)
+				client, err := NewClient()
+				require.NoError(t, err)
+
+				_, execErr := client.ExecuteFile(context.Background(), requestFilePath)
+
+				require.Error(t, execErr, "ExecuteFile should return an error for malformed variable definition")
+				assert.Contains(t, execErr.Error(), "failed to parse request file", "Error message should indicate parsing failure") // Updated general error check
+				assert.Contains(t, execErr.Error(), tc.expectedError, "Error message should contain specific malformed reason")
+			})
+		}
+	})
+
+	// All in-place variable scenarios covered.
 }
