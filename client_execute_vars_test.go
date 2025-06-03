@@ -1952,11 +1952,45 @@ GET %s{{my_home_dir}}/files
 		assert.Equal(t, testEnvVarValue+"/files", capturedURLPath, "The URL path should be correctly substituted with the OS environment variable via in-place var")
 	})
 
+	t.Run("inplace_variable_in_header", func(t *testing.T) {
+		// Given: an .http file with an in-place variable used in a header
+		const headerKey = "X-Auth-Token"
+		const headerValue = "secret-token-12345"
+
+		var capturedHeaders http.Header
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedHeaders = r.Header
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		fileContent := fmt.Sprintf(`
+@my_token = %s
+
+### Test Request With In-Place Var in Header
+GET %s/some/path
+%s: {{my_token}}
+`, headerValue, server.URL, headerKey)
+
+		requestFilePath := createTempHTTPFileFromString(t, fileContent)
+
+		client, err := NewClient()
+		require.NoError(t, err)
+
+		// When: the .http file is executed
+		results, execErr := client.ExecuteFile(context.Background(), requestFilePath)
+
+		// Then: no error should occur and the header should be correctly substituted
+		require.NoError(t, execErr, "ExecuteFile should not return an error")
+		require.Len(t, results, 1, "Should have one result")
+		require.Nil(t, results[0].Error, "Request execution error should be nil")
+		assert.Equal(t, headerValue, capturedHeaders.Get(headerKey), "The header should be correctly substituted with the in-place variable")
+	})
+
 	// TODO: Add more sub-tests for other scenarios:
-	// - variable in header
 	// - variable in body
 	// - variable defined with another variable (e.g., @var2 = {{var1}})
-	// - variable defined with system variable (e.g., @var_uuid = {{$uuid}})
-	// - variable defined with OS env variable (e.g., @var_env = {{$env.MY_TEST_VAR}})
+	// - variable defined with system variable (e.g., @var_uuid = {{$uuid}}) // This is partially covered
+	// - variable defined with OS env variable (e.g., @var_env = {{$env.MY_TEST_VAR}}) // This is partially covered by the fixed test
 	// - malformed definitions (e.g., @name_no_value, @=value)
 }
