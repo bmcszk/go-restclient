@@ -34,3 +34,14 @@ Last Updated: 2025-05-29
 - **Resolution Attempted**: Direct `edit_file` calls, delete file then `edit_file` to recreate.
 - **Next Step**: Test `SCENARIO-LIB-022-004` has been commented out to allow other `$regexp` tests to pass and the feature to be largely completed. This specific scenario remains unresolved due to tool limitations with file content manipulation.
 - **Learning**: Confirms the severe limitations of `edit_file` with backslash-sensitive content. The discrepancy between `edit_file` success reports and `read_file` actual content for such cases suggests a deeper issue in the toolchain for these specific string patterns. Manual file correction by the user was bypassed per guidelines, leading to this test being temporarily disabled.
+
+## 2025-06-04: Repeated `replace_file_content` Failures and File State Desynchronization
+
+*   **Issue**: When attempting to add a new sub-test (`inplace_variable_defined_by_another_inplace_variable`) to `client_execute_vars_test.go`, an initial error was made by incorrectly constructing the `ReplacementContent` for the `replace_file_content` tool. This introduced a syntax error (an extraneous `})`). Subsequent attempts to fix this syntax error using `replace_file_content` failed. One attempt reported that the `TargetContent` (`\n\t})\n`) was not unique, indicating that the actual file content had diverged from my understanding, likely due to the previous partial or failed edits.
+*   **Impact**: This prevented the successful addition of the new test case and consumed several steps in unsuccessful correction attempts. The lint error `expected declaration, found ')'` (ID: `6d5132f7-0c89-4a11-bf87-f18357ce2891`) persisted.
+*   **Resolution Strategy**:
+    1.  Document this learning.
+    2.  Reset `client_execute_vars_test.go` to the last known good commit (`da44e62`) using `git checkout [commit-hash] -- [file-path]`. This ensures a clean state.
+    3.  Re-attempt the addition of the sub-test, carefully applying the lesson from memory `3c59b9f1-a1f9-4f6e-9cc5-573ff2e8e4d6` to avoid the initial `ReplacementContent` error.
+*   **Learning**: When `replace_file_content` fails repeatedly, especially with "target content not unique" or when diffs don't match expectations, it's a strong indicator that the agent's internal model of the file content is out of sync. Instead of further iterative `replace_file_content` calls which might worsen the situation or operate on incorrect assumptions, resetting the file to a known good state (e.g., last commit) is a more robust recovery strategy before re-attempting the intended modification. This aligns with the "Handling Problematic Large File Edits / Complex Refactors" guideline in `ai_tool_usage_code_editing.md`.
+

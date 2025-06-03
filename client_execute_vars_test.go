@@ -2029,8 +2029,43 @@ Content-Type: application/json
 		assert.JSONEq(t, expectedBody, string(capturedBody), "The request body should be correctly substituted with the in-place variable")
 	})
 
+	t.Run("inplace_variable_defined_by_another_inplace_variable", func(t *testing.T) {
+		// Given: an .http file with an in-place variable defined by another in-place variable
+		const basePathValue = "/api/v1"
+		const resourcePathValue = "items"
+		var capturedURLPath string
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedURLPath = r.URL.Path
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		fileContent := fmt.Sprintf(`
+@base_path = %s
+@resource = %s
+@full_url_segment = {{base_path}}/{{resource}}/123
+
+### Test Request With Nested In-Place Var in URL
+GET %s{{full_url_segment}}
+`, basePathValue, resourcePathValue, server.URL)
+
+		requestFilePath := createTempHTTPFileFromString(t, fileContent)
+
+		client, err := NewClient()
+		require.NoError(t, err)
+
+		// When: the .http file is executed
+		results, execErr := client.ExecuteFile(context.Background(), requestFilePath)
+
+		// Then: no error should occur and the URL path should be correctly substituted
+		require.NoError(t, execErr, "ExecuteFile should not return an error")
+		require.Len(t, results, 1, "Should have one result")
+		require.Nil(t, results[0].Error, "Request execution error should be nil")
+		assert.Equal(t, "/api/v1/items/123", capturedURLPath, "The URL path should be correctly substituted with nested in-place variables")
+	})
+
 	// TODO: Add more sub-tests for other scenarios:
-	// - variable defined with another variable (e.g., @var2 = {{var1}})
 	// - variable defined with system variable (e.g., @var_uuid = {{$uuid}}) // This is partially covered
 	// - variable defined with OS env variable (e.g., @var_env = {{$env.MY_TEST_VAR}}) // This is partially covered by the fixed test
 	// - malformed definitions (e.g., @name_no_value, @=value)
