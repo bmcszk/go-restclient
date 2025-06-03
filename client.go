@@ -498,6 +498,19 @@ func (c *Client) substituteDynamicSystemVariables(text string) string {
 		return fmt.Sprintf("%s@%s.%s", user, domain, tld)
 	})
 
+	// Handle {{$env.VAR_NAME}}
+	reSystemEnvVar := regexp.MustCompile(`{{\$env\.([A-Za-z_][A-Za-z0-9_]*?)}}`)
+	text = reSystemEnvVar.ReplaceAllStringFunc(text, func(match string) string {
+		parts := reSystemEnvVar.FindStringSubmatch(match)
+		if len(parts) == 2 {
+			varName := parts[1]
+			// os.Getenv returns empty string if var is not set, which is desired.
+			return os.Getenv(varName)
+		}
+		slog.Warn("Failed to parse $env.VAR_NAME, returning original match", "match", match)
+		return match
+	})
+
 	// NOTE: {{$guid}}, {{$uuid}}, {{$timestamp}}, {{$randomInt (no-args)}}
 	// are EXCLUDED here as they are now handled by generateRequestScopedSystemVariables
 	// and substituted in resolveVariablesInText.
