@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -1539,4 +1540,234 @@ func TestExecuteFile_WithExtendedRandomSystemVariables(t *testing.T) {
 	domainParts := strings.Split(parts[1], ".")
 	require.GreaterOrEqual(t, len(domainParts), 2, "randEmail domain should have at least one .")
 	assert.Regexp(t, `^[a-zA-Z0-9_]+@[a-zA-Z]+\.[a-zA-Z]{2,3}$`, randEmailValue, "randEmail format is incorrect")
+}
+
+// createTempHTTPFileFromString creates a temporary .http file with the given content.
+// It returns the path to the file and registers a cleanup function to remove the temp directory.
+func createTempHTTPFileFromString(t *testing.T, content string) string {
+	t.Helper()
+	tempDir, err := os.MkdirTemp("", "test-http-inplace-")
+	require.NoError(t, err)
+	t.Cleanup(func() { os.RemoveAll(tempDir) })
+
+	filePath := filepath.Join(tempDir, "test.http")
+	err = os.WriteFile(filePath, []byte(content), 0644)
+	require.NoError(t, err)
+	return filePath
+}
+
+func TestExecuteFile_InPlaceVariables(t *testing.T) {
+	t.Run("simple_variable_in_url", func(t *testing.T) {
+		// Given
+		var capturedPath string
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedPath = r.URL.Path
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		}))
+		defer server.Close()
+
+		httpFileContent := fmt.Sprintf(`
+@hostname = %s
+@path_segment = /api/v1/items
+
+GET {{hostname}}{{path_segment}}/123
+`, server.URL)
+
+		requestFilePath := createTempHTTPFileFromString(t, httpFileContent)
+
+		client, err := NewClient()
+		require.NoError(t, err)
+
+		// When
+		responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+
+		// Then
+		require.NoError(t, err, "ExecuteFile should not return an error")
+		require.Len(t, responses, 1, "Expected 1 response")
+
+		resp := responses[0]
+		assert.NoError(t, resp.Error, "Response error should be nil")
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "Status code mismatch")
+
+		// Verify the server received the request with the substituted URL
+		expectedPath := "/api/v1/items/123"
+		assert.Equal(t, expectedPath, capturedPath, "Captured path by server mismatch")
+
+		// Verify ParsedFile.FileVariables
+		parsedFile, pErr := parseRequestFile(requestFilePath, client)
+		require.NoError(t, pErr)
+		require.NotNil(t, parsedFile.FileVariables)
+		assert.Equal(t, server.URL, parsedFile.FileVariables["hostname"])
+		assert.Equal(t, "/api/v1/items", parsedFile.FileVariables["path_segment"])
+	})
+
+	t.Run("variable_in_header", func(t *testing.T) {
+		// Given
+		var capturedHeaders http.Header
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedHeaders = r.Header
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		}))
+		defer server.Close()
+
+		httpFileContent := fmt.Sprintf(`
+@auth_token = Bearer_secret_token_123
+
+GET %s/checkheaders
+Authorization: {{auth_token}}
+User-Agent: test-client
+`, server.URL)
+
+		requestFilePath := createTempHTTPFileFromString(t, httpFileContent)
+
+		client, err := NewClient()
+		require.NoError(t, err)
+
+		// When
+		responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+
+		// Then
+		require.NoError(t, err, "ExecuteFile should not return an error")
+		require.Len(t, responses, 1, "Expected 1 response")
+
+		resp := responses[0]
+		assert.NoError(t, resp.Error, "Response error should be nil")
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "Status code mismatch")
+
+		// Verify the server received the request with the substituted header
+		assert.Equal(t, "Bearer_secret_token_123", capturedHeaders.Get("Authorization"))
+		assert.Equal(t, "test-client", capturedHeaders.Get("User-Agent")) // Ensure other headers are preserved
+
+		// Verify ParsedFile.FileVariables
+		parsedFile, pErr := parseRequestFile(requestFilePath, client)
+		require.NoError(t, pErr)
+		require.NotNil(t, parsedFile.FileVariables)
+		assert.Equal(t, "Bearer_secret_token_123", parsedFile.FileVariables["auth_token"])
+	})
+
+	t.Run("variable_in_body", func(t *testing.T) {
+		// Given
+		var capturedBody []byte
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var err error
+			capturedBody, err = io.ReadAll(r.Body)
+			require.NoError(t, err)
+			defer r.Body.Close()
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"created"}`))
+		}))
+		defer server.Close()
+
+		httpFileContent := fmt.Sprintf(`
+@product_name = SuperWidget
+@product_id = SW1000
+@product_price = 49.99
+
+POST %s/products
+Content-Type: application/json
+
+{
+  "id": "{{product_id}}",
+  "name": "{{product_name}}",
+  "price": {{product_price}}
+}
+`, server.URL)
+
+		requestFilePath := createTempHTTPFileFromString(t, httpFileContent)
+
+		client, err := NewClient()
+		require.NoError(t, err)
+
+		// When
+		responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+
+		// Then
+		require.NoError(t, err, "ExecuteFile should not return an error")
+		require.Len(t, responses, 1, "Expected 1 response")
+
+		resp := responses[0]
+		assert.NoError(t, resp.Error, "Response error should be nil")
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "Status code mismatch")
+
+		// Verify the server received the request with the substituted body
+		expectedBodyJSON := `{
+  "id": "SW1000",
+  "name": "SuperWidget",
+  "price": 49.99
+}`
+		assert.JSONEq(t, expectedBodyJSON, string(capturedBody), "Captured body by server mismatch")
+
+		// Verify ParsedFile.FileVariables
+		parsedFile, pErr := parseRequestFile(requestFilePath, client)
+		require.NoError(t, pErr)
+		require.NotNil(t, parsedFile.FileVariables)
+		assert.Equal(t, "SuperWidget", parsedFile.FileVariables["product_name"])
+		assert.Equal(t, "SW1000", parsedFile.FileVariables["product_id"])
+		assert.Equal(t, "49.99", parsedFile.FileVariables["product_price"])
+	})
+
+	t.Run("variable_defined_by_another_variable", func(t *testing.T) {
+		// Given
+		var capturedURL string
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedURL = r.URL.String()
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		}))
+		defer server.Close()
+
+		// Use server.URL to make the test robust against dynamic port allocation
+		parsedServerURL, psuErr := url.Parse(server.URL)
+		require.NoError(t, psuErr)
+		hostFromServer := parsedServerURL.Host // e.g., 127.0.0.1:PORT
+
+		httpFileContent := fmt.Sprintf(`
+@my_host = %s
+@base_api_path = /api/v2
+@full_api_url = http://{{my_host}}{{base_api_path}}
+@items_endpoint = {{full_api_url}}/items
+
+GET {{items_endpoint}}?host_check={{my_host}}
+`, hostFromServer)
+
+		requestFilePath := createTempHTTPFileFromString(t, httpFileContent)
+
+		client, err := NewClient()
+		require.NoError(t, err)
+
+		// When
+		responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+
+		// Then
+		require.NoError(t, err, "ExecuteFile should not return an error")
+		require.Len(t, responses, 1, "Expected 1 response")
+
+		resp := responses[0]
+		assert.NoError(t, resp.Error, "Response error should be nil")
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "Status code mismatch")
+
+		// Verify the server received the request at the correctly resolved URL
+		expectedPathAndQuery := fmt.Sprintf("/api/v2/items?host_check=%s", hostFromServer)
+		assert.Equal(t, expectedPathAndQuery, capturedURL)
+
+		// Verify ParsedFile.FileVariables (should store raw definitions)
+		parsedFile, pErr := parseRequestFile(requestFilePath, client)
+		require.NoError(t, pErr)
+		require.NotNil(t, parsedFile.FileVariables)
+		assert.Equal(t, hostFromServer, parsedFile.FileVariables["my_host"])
+		assert.Equal(t, "/api/v2", parsedFile.FileVariables["base_api_path"])
+		assert.Equal(t, "http://{{my_host}}{{base_api_path}}", parsedFile.FileVariables["full_api_url"])
+		assert.Equal(t, "{{full_api_url}}/items", parsedFile.FileVariables["items_endpoint"])
+	})
+
+	// Add more sub-tests here for other scenarios:
+	// - variable in header
+	// - variable in body
+	// - variable defined with another variable (e.g., @var2 = {{var1}})
+	// - variable defined with system variable (e.g., @var_uuid = {{$uuid}})
+	// - variable defined with OS env variable (e.g., @var_env = {{$env.MY_TEST_VAR}})
+	// - precedence: in-place vs http-client.env.json vs .env
+	// - malformed definitions (e.g., @name_no_value, @=value)
 }

@@ -287,91 +287,104 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 // 7. Fallback value provided in the placeholder itself.
 // System variables (e.g., {{$uuid}}, {{$timestamp}}) are handled if the placeholder is like {{$systemVarName}} (i.e. varName starts with '$').
 func (c *Client) resolveVariablesInText(text string, clientProgrammaticVars map[string]interface{}, fileScopedVars map[string]string, environmentVars map[string]string, globalVars map[string]string, requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool), dotEnvVars map[string]string) string {
-	re := regexp.MustCompile(`{{\s*(.*?)\s*}}`)
+	const maxIterations = 10 // Safety break for circular dependencies
+	currentText := text
 
-	return re.ReplaceAllStringFunc(text, func(match string) string {
-		directive := strings.TrimSpace(match[2 : len(match)-2])
+	for i := 0; i < maxIterations; i++ {
+		previousText := currentText
+		re := regexp.MustCompile(`{{\s*(.*?)\s*}}`)
 
-		var varName string
-		var fallbackValue string
-		hasFallback := false
+		currentText = re.ReplaceAllStringFunc(previousText, func(match string) string {
+			directive := strings.TrimSpace(match[2 : len(match)-2])
 
-		if strings.Contains(directive, "|") {
-			parts := strings.SplitN(directive, "|", 2)
-			varName = strings.TrimSpace(parts[0])
-			fallbackValue = strings.TrimSpace(parts[1])
-			hasFallback = true
-		} else {
-			varName = directive
-		}
+			var varName string
+			var fallbackValue string
+			hasFallback := false
 
-		// 1. Request-scoped System Variables (if varName starts with $)
-		// These are simple, pre-generated variables like $uuid, $timestamp, $randomInt (no-args).
-		if strings.HasPrefix(varName, "$") {
-			if requestScopedSystemVars != nil {
-				if val, ok := requestScopedSystemVars[varName]; ok {
+			if strings.Contains(directive, "|") {
+				parts := strings.SplitN(directive, "|", 2)
+				varName = strings.TrimSpace(parts[0])
+				fallbackValue = strings.TrimSpace(parts[1])
+				hasFallback = true
+			} else {
+				varName = directive
+			}
+
+			// 1. Request-scoped System Variables (if varName starts with $)
+			// These are simple, pre-generated variables like $uuid, $timestamp, $randomInt (no-args).
+			if strings.HasPrefix(varName, "$") {
+				if requestScopedSystemVars != nil {
+					if val, ok := requestScopedSystemVars[varName]; ok {
+						return val
+					}
+				}
+				// If it's a $-prefixed varName not in requestScopedSystemVars,
+				// it could be a dynamic one (e.g. {{$dotenv NAME}}, {{$randomInt MIN MAX}})
+				// or an unknown one. These are left for substituteDynamicSystemVariables.
+				// So, we return the original 'match' here to preserve the placeholder for the next stage.
+				return match
+			}
+
+			// 2. Client Programmatic Variables (map[string]interface{})
+			if clientProgrammaticVars != nil {
+				if val, ok := clientProgrammaticVars[varName]; ok {
+					return fmt.Sprintf("%v", val)
+				}
+			}
+
+			// 3. File-scoped Variables (map[string]string, from @name=value or rcRequest.ActiveVariables)
+			if fileScopedVars != nil {
+				if val, ok := fileScopedVars[varName]; ok {
 					return val
 				}
 			}
-			// If it's a $-prefixed varName not in requestScopedSystemVars,
-			// it could be a dynamic one (e.g. {{$dotenv NAME}}, {{$randomInt MIN MAX}})
-			// or an unknown one. These are left for substituteDynamicSystemVariables.
-			// So, we return the original 'match' here to preserve the placeholder for the next stage.
-			return match
-		}
 
-		// 2. Client Programmatic Variables (map[string]interface{})
-		if clientProgrammaticVars != nil {
-			if val, ok := clientProgrammaticVars[varName]; ok {
-				return fmt.Sprintf("%v", val)
+			// 4. Environment Variables (from http-client.env.json or selected environment)
+			if environmentVars != nil {
+				if val, ok := environmentVars[varName]; ok {
+					return val
+				}
 			}
-		}
 
-		// 3. File-scoped Variables (map[string]string, from @name=value or rcRequest.ActiveVariables)
-		if fileScopedVars != nil {
-			if val, ok := fileScopedVars[varName]; ok {
-				return val
+			// 5. Global Variables (from http-client.private.env.json or similar)
+			if globalVars != nil {
+				if val, ok := globalVars[varName]; ok {
+					return val
+				}
 			}
-		}
 
-		// 4. Environment Variables (from http-client.env.json or selected environment)
-		if environmentVars != nil {
-			if val, ok := environmentVars[varName]; ok {
-				return val
+			// 6. OS Environment Variables
+			if osEnvGetter != nil {
+				if envVal, ok := osEnvGetter(varName); ok {
+					return envVal
+				}
 			}
-		}
 
-		// 5. Global Variables (from http-client.private.env.json or similar)
-		if globalVars != nil {
-			if val, ok := globalVars[varName]; ok {
-				return val
+			// 7. .env file variables
+			if dotEnvVars != nil {
+				if val, ok := dotEnvVars[varName]; ok {
+					return val
+				}
+				// If not in dotEnvVars, continue to fallback or return match
 			}
-		}
 
-		// 6. OS Environment Variables
-		if osEnvGetter != nil {
-			if envVal, ok := osEnvGetter(varName); ok {
-				return envVal
+			// 8. Fallback Value
+			// Must be checked AFTER all other potential sources for varName.
+			if hasFallback {
+				return fallbackValue
 			}
-		}
 
-		// 7. .env file variables
-		if dotEnvVars != nil {
-			if val, ok := dotEnvVars[varName]; ok {
-				return val
-			}
-			// If not in dotEnvVars, continue to fallback or return match
-		}
+			return match // Return original placeholder if not found and no fallback
+		}) // End of ReplaceAllStringFunc
 
-		// 8. Fallback Value
-		// Must be checked AFTER all other potential sources for varName.
-		if hasFallback {
-			return fallbackValue
+		if currentText == previousText {
+			break // No more substitutions made in this pass
 		}
-
-		return match // Return original placeholder if not found and no fallback
-	})
-}
+		// If we are on the last iteration and still making changes, it might be a circular dependency.
+		// The currentText will be returned as is, potentially with unresolved variables.
+	} // End of for loop
+	return currentText
+} // End of function resolveVariablesInText
 
 // randomStringFromCharset generates a random string of a given length using characters from the provided charset.
 // randomStringFromCharset generates a random string of a given length using characters from the provided charset.
