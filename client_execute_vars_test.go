@@ -1909,6 +1909,49 @@ GET %s/{{my_request_id}}/resource
 		assert.NotEqual(t, "{{my_request_id}}", pathSegments[0], "The UUID part should not be the literal in-place variable")
 	})
 
+	t.Run("inplace_variable_defined_by_os_env_variable", func(t *testing.T) {
+		// Given: an OS environment variable and an .http file with an in-place variable defined by it
+		const testEnvVarName = "TEST_USER_HOME_INPLACE"
+		const testEnvVarValue = "/testhome/userdir" // This value starts with a slash
+		t.Setenv(testEnvVarName, testEnvVarValue)
+
+		// Debug: Check if t.Setenv is working as expected in the test goroutine
+		val, ok := os.LookupEnv(testEnvVarName)
+		require.True(t, ok, "os.LookupEnv should find the var set by t.Setenv")
+		require.Equal(t, testEnvVarValue, val, "os.LookupEnv should return the correct value set by t.Setenv")
+
+		var capturedURLPath string
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedURLPath = r.URL.Path
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		// server.URL does not have a trailing slash. {{my_home_dir}} will resolve to testEnvVarValue, which starts with a slash.
+		// So, %s{{my_home_dir}} ensures no double slash.
+		fileContent := fmt.Sprintf(`
+@my_home_dir = {{$processEnv %s}}
+
+### Test Request With OS Env Var In In-Place Var
+GET %s{{my_home_dir}}/files
+`, testEnvVarName, server.URL)
+
+		requestFilePath := createTempHTTPFileFromString(t, fileContent)
+
+		client, err := NewClient()
+		require.NoError(t, err)
+
+		// When: the .http file is executed
+		results, execErr := client.ExecuteFile(context.Background(), requestFilePath)
+
+		// Then: no error should occur and the path should contain the resolved OS env variable
+		require.NoError(t, execErr, "ExecuteFile should not return an error for in-place OS env var")
+		require.Len(t, results, 1, "Should have one result for in-place OS env var")
+		require.Nil(t, results[0].Error, "Request execution error should be nil for in-place OS env var")
+		// capturedURLPath should be "/testhome/userdir/files"
+		assert.Equal(t, testEnvVarValue+"/files", capturedURLPath, "The URL path should be correctly substituted with the OS environment variable via in-place var")
+	})
+
 	// TODO: Add more sub-tests for other scenarios:
 	// - variable in header
 	// - variable in body
