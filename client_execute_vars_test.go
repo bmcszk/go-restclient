@@ -829,3 +829,221 @@ func TestExecuteFile_VariableFunctionConsistency(t *testing.T) {
 	assert.Equal(t, capturedHeaderTimestamp, finalBodyJSON["timestamp"].(string))
 	assert.Equal(t, capturedHeaderRandomInt, finalBodyJSON["randomInt"].(string))
 }
+
+// TestExecuteFile_WithHttpClientEnvJson tests variable substitution from http-client.env.json (Task T4)
+func TestExecuteFile_WithHttpClientEnvJson(t *testing.T) {
+	// SCENARIO-LIB-018-001: Env selected, http-client.env.json exists, env exists in file
+	t.Run("env selected, file exists, env exists in file", func(t *testing.T) {
+		// Given
+		var interceptedRequest struct {
+			Path   string
+			Host   string
+			Header string
+			Body   string
+			Method string
+		}
+
+		server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+			interceptedRequest.Path = r.URL.Path
+			interceptedRequest.Host = r.Host
+			bodyBytes, _ := io.ReadAll(r.Body)
+			interceptedRequest.Body = string(bodyBytes)
+			interceptedRequest.Header = r.Header.Get("X-Env-Var")
+			interceptedRequest.Method = r.Method
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "ok")
+		})
+		defer server.Close()
+
+		// Create a temporary directory for test files
+		tempDir := t.TempDir()
+
+		// Create http-client.env.json
+		envContent := `{
+			"dev": {
+				"host": "` + server.URL + `",
+				"token": "dev-token",
+				"user_id": "dev-user",
+				"common_var": "env_common_dev"
+			},
+			"prod": {
+				"host": "https://prod.example.com",
+				"token": "prod-token",
+				"user_id": "prod-user",
+				"common_var": "env_common_prod"
+			}
+		}`
+		envFilePath := filepath.Join(tempDir, "http-client.env.json")
+		err := os.WriteFile(envFilePath, []byte(envContent), 0600)
+		require.NoError(t, err)
+
+		// Create request file
+		requestFileContent := `
+### Test Request with Env Vars
+# @name testWithEnv
+POST {{host}}/resource/{{user_id}}
+Content-Type: application/json
+X-Env-Var: {{token}}
+
+{
+  "message": "Hello from {{user_id}}",
+  "common": "{{common_var}}"
+}
+`
+		httpFilePath := filepath.Join(tempDir, "test_env_vars.http")
+		err = os.WriteFile(httpFilePath, []byte(requestFileContent), 0600)
+		require.NoError(t, err)
+
+		client, err := NewClient(WithEnvironment("dev"))
+		require.NoError(t, err)
+
+		// When
+		responses, err := client.ExecuteFile(context.Background(), httpFilePath)
+
+		// Then
+		require.NoError(t, err, "ExecuteFile should not return an error")
+		require.Len(t, responses, 1, "Expected 1 response")
+
+		resp := responses[0]
+		assert.NoError(t, resp.Error)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		assert.Equal(t, http.MethodPost, interceptedRequest.Method)
+		parsedServerURL, pErr := url.Parse(server.URL)
+		require.NoError(t, pErr)
+		assert.Equal(t, parsedServerURL.Host, interceptedRequest.Host)
+		assert.Equal(t, "/resource/dev-user", interceptedRequest.Path)
+		assert.Equal(t, "dev-token", interceptedRequest.Header)
+		expectedBody := `{
+  "message": "Hello from dev-user",
+  "common": "env_common_dev"
+}`
+		assert.JSONEq(t, expectedBody, interceptedRequest.Body)
+		assert.Equal(t, "dev", client.selectedEnvironmentName) // Verify client has the env name
+		// EnvironmentVariables are used internally; their effect is checked by the substituted values above.
+	})
+
+	// SCENARIO-LIB-018-002: Env selected, http-client.env.json exists, but env NOT in file
+	t.Run("env selected, file exists, env NOT in file", func(t *testing.T) {
+		// Given
+		serverURL := "http://localhost:12345" // A dummy URL, server won't actually be hit with {{host}}
+		server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+			// This handler might not be reached if {{host}} isn't resolved by any mechanism
+			// and the HTTP client fails before sending.
+			w.WriteHeader(http.StatusOK)
+		})
+		defer server.Close()
+
+		tempDir := t.TempDir()
+		envContent := `{
+			"dev": {
+				"host": "` + serverURL /* Use the dummy serverURL here for consistency */ + `",
+				"token": "dev-token"
+			}
+		}`
+		envFilePath := filepath.Join(tempDir, "http-client.env.json")
+		err := os.WriteFile(envFilePath, []byte(envContent), 0600)
+		require.NoError(t, err)
+
+		requestFileContent := `GET {{host}}/path`
+		httpFilePath := filepath.Join(tempDir, "test_env_vars_missing_env.http")
+		err = os.WriteFile(httpFilePath, []byte(requestFileContent), 0600)
+		require.NoError(t, err)
+
+		client, err := NewClient(WithEnvironment("staging"))
+		require.NoError(t, err)
+
+		// When
+		responses, err := client.ExecuteFile(context.Background(), httpFilePath)
+
+		// Then
+		require.Error(t, err)                                               // ExecuteFile itself should return an error if a request fails this way
+		assert.Contains(t, err.Error(), "unsupported protocol scheme \"\"") // Check the error from ExecuteFile
+		require.Len(t, responses, 1)
+		resp := responses[0]
+		require.NotNil(t, resp)
+		assert.Error(t, resp.Error) // Expect an error because {{host}} is not resolved, leading to bad URL
+		assert.Contains(t, resp.Error.Error(), "unsupported protocol scheme \"\"")
+
+		// Check that {{host}} was not replaced because 'staging' env was not found
+		// The RawURLString should still contain the placeholder as it was in the file.
+		assert.True(t, strings.Contains(resp.Request.RawURLString, "{{host}}"), "RawURLString should still contain {{host}}")
+		assert.Equal(t, "staging", client.selectedEnvironmentName)
+		// EnvironmentVariables map on ParsedFile would be nil internally, effect is placeholder {{host}} remains.
+	})
+
+	// SCENARIO-LIB-018-003: Env selected, but http-client.env.json does NOT exist
+	t.Run("env selected, file does NOT exist", func(t *testing.T) {
+		// Given
+		server := startMockServer(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+		defer server.Close()
+
+		tempDir := t.TempDir()
+		// http-client.env.json is NOT created in tempDir
+
+		requestFileContent := `GET {{host}}/path`
+		httpFilePath := filepath.Join(tempDir, "test_env_vars_no_env_file.http")
+		err := os.WriteFile(httpFilePath, []byte(requestFileContent), 0600)
+		require.NoError(t, err)
+
+		client, err := NewClient(WithEnvironment("dev"))
+		require.NoError(t, err)
+
+		// When
+		responses, err := client.ExecuteFile(context.Background(), httpFilePath)
+
+		// Then
+		require.Error(t, err)                                               // ExecuteFile itself should return an error if a request fails this way
+		assert.Contains(t, err.Error(), "unsupported protocol scheme \"\"") // Check the error from ExecuteFile
+		require.Len(t, responses, 1)
+		resp := responses[0]
+		require.NotNil(t, resp)
+		assert.Error(t, resp.Error) // Expect an error because {{host}} is not resolved, leading to bad URL
+		assert.Contains(t, resp.Error.Error(), "unsupported protocol scheme \"\"")
+		assert.True(t, strings.Contains(resp.Request.RawURLString, "{{host}}"), "RawURLString should still contain {{host}}")
+		assert.Equal(t, "dev", client.selectedEnvironmentName)
+		// EnvironmentVariables map on ParsedFile would be nil internally, effect is placeholder {{host}} remains.
+	})
+
+	// SCENARIO-LIB-018-004: No env selected, http-client.env.json exists
+	t.Run("no env selected, file exists", func(t *testing.T) {
+		// Given
+		serverURL := "http://localhost:54321"
+		server := startMockServer(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+		defer server.Close()
+
+		tempDir := t.TempDir()
+		envContent := `{
+			"dev": {
+				"host": "` + serverURL + `",
+				"token": "dev-token"
+			}
+		}`
+		envFilePath := filepath.Join(tempDir, "http-client.env.json")
+		err := os.WriteFile(envFilePath, []byte(envContent), 0600)
+		require.NoError(t, err)
+
+		requestFileContent := `GET {{host}}/path`
+		httpFilePath := filepath.Join(tempDir, "test_no_env_selected.http")
+		err = os.WriteFile(httpFilePath, []byte(requestFileContent), 0600)
+		require.NoError(t, err)
+
+		client, err := NewClient() // No WithEnvironment option
+		require.NoError(t, err)
+
+		// When
+		responses, err := client.ExecuteFile(context.Background(), httpFilePath)
+
+		// Then
+		require.Error(t, err)                                               // ExecuteFile itself should return an error if a request fails this way
+		assert.Contains(t, err.Error(), "unsupported protocol scheme \"\"") // Check the error from ExecuteFile
+		require.Len(t, responses, 1)
+		resp := responses[0]
+		require.NotNil(t, resp)
+		assert.Error(t, resp.Error) // Expect an error because {{host}} is not resolved, leading to bad URL
+		assert.Contains(t, resp.Error.Error(), "unsupported protocol scheme \"\"")
+		assert.True(t, strings.Contains(resp.Request.RawURLString, "{{host}}"), "RawURLString should still contain {{host}}")
+		assert.Empty(t, client.selectedEnvironmentName, "selectedEnvironmentName should be empty")
+		// EnvironmentVariables map on ParsedFile would be nil internally, effect is placeholder {{host}} remains.
+	})
+}

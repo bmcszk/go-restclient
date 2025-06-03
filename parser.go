@@ -2,8 +2,10 @@ package restclient
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -52,7 +54,42 @@ func parseRequestFile(filePath string, client *Client) (*ParsedFile, error) {
 		requestScopedSystemVarsForFileParse = make(map[string]string)
 	}
 
-	return parseRequests(file, filePath, client, requestScopedSystemVarsForFileParse, osEnvGetter, dotEnvVarsForParser)
+	parsedFile, err := parseRequests(file, filePath, client, requestScopedSystemVarsForFileParse, osEnvGetter, dotEnvVarsForParser)
+	if err != nil {
+		return nil, err // Error already wrapped by parseRequests or is a direct parsing error
+	}
+
+	// Load http-client.env.json for environment-specific variables (Task T4)
+	if client != nil && client.selectedEnvironmentName != "" && parsedFile != nil {
+		httpClientEnvFilePath := filepath.Join(filepath.Dir(filePath), "http-client.env.json")
+		if _, statErr := os.Stat(httpClientEnvFilePath); statErr == nil {
+			envFileBytes, readErr := os.ReadFile(httpClientEnvFilePath)
+			if readErr == nil {
+				var allEnvs map[string]map[string]string
+				if unmarshalErr := json.Unmarshal(envFileBytes, &allEnvs); unmarshalErr == nil {
+					if selectedEnvVars, ok := allEnvs[client.selectedEnvironmentName]; ok {
+						parsedFile.EnvironmentVariables = selectedEnvVars
+					} else {
+						slog.Warn("Selected environment not found in http-client.env.json", "environment", client.selectedEnvironmentName, "file", httpClientEnvFilePath)
+						// For now, EnvironmentVariables will remain nil/empty
+					}
+				} else {
+					slog.Warn("Failed to unmarshal http-client.env.json", "error", unmarshalErr, "file", httpClientEnvFilePath)
+				}
+			} else {
+				slog.Warn("Failed to read http-client.env.json", "error", readErr, "file", httpClientEnvFilePath)
+			}
+		} else {
+			if os.IsNotExist(statErr) {
+				slog.Debug("http-client.env.json not found, proceeding without environment-specific variables from this file.", "file", httpClientEnvFilePath)
+			} else {
+				// Another error occurred trying to stat http-client.env.json (e.g., permissions)
+				slog.Warn("Error checking for http-client.env.json", "error", statErr, "file", httpClientEnvFilePath)
+			}
+		}
+	}
+
+	return parsedFile, nil
 }
 
 // reqScopedSystemVarsForParser is generated once per file parsing pass for resolving @-vars consistently.

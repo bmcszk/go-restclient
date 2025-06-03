@@ -27,11 +27,12 @@ import (
 // It holds configuration like the HTTP client, base URL, default headers,
 // and programmatic variables for substitution.
 type Client struct {
-	httpClient        *http.Client
-	BaseURL           string
-	DefaultHeaders    http.Header
-	currentDotEnvVars map[string]string
-	programmaticVars  map[string]interface{}
+	httpClient              *http.Client
+	BaseURL                 string
+	DefaultHeaders          http.Header
+	currentDotEnvVars       map[string]string
+	programmaticVars        map[string]interface{}
+	selectedEnvironmentName string // Added for T4
 }
 
 // NewClient creates a new instance of the REST client.
@@ -109,6 +110,14 @@ func WithVars(vars map[string]interface{}) ClientOption {
 		for k, v := range vars {
 			c.programmaticVars[k] = v
 		}
+		return nil
+	}
+}
+
+// WithEnvironment sets the name of the environment to be used from http-client.env.json.
+func WithEnvironment(name string) ClientOption {
+	return func(c *Client) error {
+		c.selectedEnvironmentName = name
 		return nil
 	}
 }
