@@ -2065,8 +2065,45 @@ GET %s{{full_url_segment}}
 		assert.Equal(t, "/api/v1/items/123", capturedURLPath, "The URL path should be correctly substituted with nested in-place variables")
 	})
 
+	t.Run("inplace_variable_defined_by_uuid_system_variable", func(t *testing.T) {
+		// Given: an .http file with an in-place variable defined by the {{$uuid}} system variable
+		var capturedHeaderValue string
+		const headerKey = "X-Request-ID"
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedHeaderValue = r.Header.Get(headerKey)
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		fileContent := fmt.Sprintf(`
+@my_request_uuid = {{$uuid}}
+
+### Test Request With UUID In-Place Var in Header
+GET %s/some/path
+%s: {{my_request_uuid}}
+`, server.URL, headerKey)
+
+		requestFilePath := createTempHTTPFileFromString(t, fileContent)
+
+		client, err := NewClient()
+		require.NoError(t, err)
+
+		// When: the .http file is executed
+		results, execErr := client.ExecuteFile(context.Background(), requestFilePath)
+
+		// Then: no error should occur and the header should contain a valid UUID
+		require.NoError(t, execErr, "ExecuteFile should not return an error")
+		require.Len(t, results, 1, "Should have one result")
+		require.Nil(t, results[0].Error, "Request execution error should be nil")
+
+		// Validate that the captured header value is a valid UUID
+		_, err = uuid.Parse(capturedHeaderValue)
+		assert.NoError(t, err, "Header value should be a valid UUID. Got: %s", capturedHeaderValue)
+		assert.NotEmpty(t, capturedHeaderValue, "Captured UUID header should not be empty")
+	})
+
 	// TODO: Add more sub-tests for other scenarios:
-	// - variable defined with system variable (e.g., @var_uuid = {{$uuid}}) // This is partially covered
 	// - variable defined with OS env variable (e.g., @var_env = {{$env.MY_TEST_VAR}}) // This is partially covered by the fixed test
 	// - malformed definitions (e.g., @name_no_value, @=value)
 }
