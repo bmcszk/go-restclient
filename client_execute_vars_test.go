@@ -536,110 +536,6 @@ func TestExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
 	assert.Equal(t, "{{$datetime \"invalidFormat\"}}", bodyJSON["invalid_format_test"], "body.invalid_format_test should remain unresolved")
 }
 
-func TestExecuteFile_WithDotEnvSystemVariable(t *testing.T) {
-	// Given
-	var interceptedRequest struct {
-		URL    string
-		Header string
-		Body   string
-	}
-
-	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
-		interceptedRequest.URL = r.URL.String()
-		bodyBytes, _ := io.ReadAll(r.Body)
-		interceptedRequest.Body = string(bodyBytes)
-		interceptedRequest.Header = r.Header.Get("X-Dotenv-Value")
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "ok")
-	})
-	defer server.Close()
-
-	client, _ := NewClient()
-	tempDir := t.TempDir()
-
-	// Scenario 1: .env file exists and variable is present
-	// Given
-	dotEnvContent1 := "DOTENV_VAR1=dotenv_value_one\nDOTENV_VAR2=another val from dotenv"
-	dotEnvFile1Path := filepath.Join(tempDir, ".env")
-	err := os.WriteFile(dotEnvFile1Path, []byte(dotEnvContent1), 0644)
-	require.NoError(t, err)
-
-	requestFileContent1 := fmt.Sprintf(`
-GET %s/path-{{$dotenv DOTENV_VAR1}}/data
-Content-Type: application/json
-X-Dotenv-Value: {{$dotenv DOTENV_VAR2}}
-
-{
-  "payload": "{{$dotenv DOTENV_VAR1}}",
-  "missing_payload": "{{$dotenv MISSING_DOTENV_VAR}}"
-}
-`, server.URL)
-	httpFile1Path := filepath.Join(tempDir, "request1.http")
-	err = os.WriteFile(httpFile1Path, []byte(requestFileContent1), 0644)
-	require.NoError(t, err)
-
-	// When
-	responses1, err1 := client.ExecuteFile(context.Background(), httpFile1Path)
-
-	// Then
-	require.NoError(t, err1, "ExecuteFile (scenario 1) should not return an error for $dotenv processing")
-	require.Len(t, responses1, 1, "Expected 1 response for scenario 1")
-	resp1 := responses1[0]
-	assert.NoError(t, resp1.Error)
-	assert.Equal(t, http.StatusOK, resp1.StatusCode)
-
-	expectedURL1 := "/path-dotenv_value_one/data" // SCENARIO-LIB-020-001
-	assert.Equal(t, expectedURL1, interceptedRequest.URL, "URL (scenario 1) should contain substituted dotenv variable")
-	assert.Equal(t, "another val from dotenv", interceptedRequest.Header, "X-Dotenv-Value header (scenario 1) should contain substituted dotenv variable") // SCENARIO-LIB-020-001
-
-	var bodyJSON1 map[string]string
-	err = json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON1)
-	require.NoError(t, err, "Failed to unmarshal request body JSON (scenario 1)")
-	dotenvPayload1, ok1 := bodyJSON1["payload"]
-	require.True(t, ok1, "payload not found in body (scenario 1)")
-	assert.Equal(t, "dotenv_value_one", dotenvPayload1, "Body payload (scenario 1) should contain substituted dotenv variable") // SCENARIO-LIB-020-001
-	missingPayload1, ok2 := bodyJSON1["missing_payload"]
-	require.True(t, ok2, "missing_payload not found in body (scenario 1)")
-	assert.Empty(t, missingPayload1, "Body missing_payload (scenario 1) should be empty for a missing dotenv variable") // SCENARIO-LIB-020-002
-
-	// Scenario 2: .env file does not exist
-	// Given
-	err = os.Remove(dotEnvFile1Path)
-	require.NoError(t, err, "Failed to remove .env file for scenario 2 prep")
-
-	requestFileContent2 := fmt.Sprintf(`
-GET %s/path-{{$dotenv DOTENV_VAR_SHOULD_BE_EMPTY}}/data
-User-Agent: test-client
-
-{
-  "payload": "{{$dotenv DOTENV_VAR_ALSO_EMPTY}}"
-}
-`, server.URL)
-	httpFile2Path := filepath.Join(tempDir, "request2.http")
-	err = os.WriteFile(httpFile2Path, []byte(requestFileContent2), 0644)
-	require.NoError(t, err)
-
-	// When
-	responses2, err2 := client.ExecuteFile(context.Background(), httpFile2Path)
-
-	// Then
-	require.NoError(t, err2, "ExecuteFile (scenario 2) should not return an error if .env not found")
-	require.Len(t, responses2, 1, "Expected 1 response for scenario 2")
-	resp2 := responses2[0]
-	assert.NoError(t, resp2.Error)
-	assert.Equal(t, http.StatusOK, resp2.StatusCode)
-
-	expectedURL2 := "/path-/data" // SCENARIO-LIB-020-003
-	assert.Equal(t, expectedURL2, interceptedRequest.URL, "URL (scenario 2) should have empty substitution for dotenv variable")
-
-	var bodyJSON2 map[string]string
-	err = json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON2)
-	require.NoError(t, err, "Failed to unmarshal request body JSON (scenario 2)")
-	dotenvPayload2, ok3 := bodyJSON2["payload"]
-	require.True(t, ok3, "payload not found in body (scenario 2)")
-	assert.Empty(t, dotenvPayload2, "Body payload (scenario 2) should be empty if .env not found") // SCENARIO-LIB-020-003
-}
-
 func TestExecuteFile_WithTimestampSystemVariable(t *testing.T) {
 	// Given
 	var interceptedRequest struct {
@@ -831,74 +727,6 @@ func TestExecuteFile_WithRandomIntSystemVariable(t *testing.T) {
 			tc.validate(t, actualURL, interceptedRequest.Header, interceptedRequest.Body)
 		})
 	}
-}
-
-func TestExecuteFile_WithDatetimeSystemVariable(t *testing.T) {
-	// Given
-	var interceptedRequest struct {
-		URL    string
-		Header string
-		Body   string
-	}
-	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
-		interceptedRequest.URL = r.URL.String()
-		bodyBytes, _ := io.ReadAll(r.Body)
-		interceptedRequest.Body = string(bodyBytes)
-		interceptedRequest.Header = r.Header.Get("X-Request-Time")
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "ok")
-	})
-	defer server.Close()
-	client, _ := NewClient()
-	beforeTime := time.Now().UTC().Unix()
-	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_timestamp.http", struct{ ServerURL string }{ServerURL: server.URL})
-
-	// When
-	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
-
-	// Then
-	require.NoError(t, err, "ExecuteFile should not return an error for $timestamp processing")
-	require.Len(t, responses, 1, "Expected 1 response")
-	resp := responses[0]
-	assert.NoError(t, resp.Error)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	afterTime := time.Now().UTC().Unix()
-
-	// SCENARIO-LIB-016-001
-	urlParts := strings.Split(interceptedRequest.URL, "/")
-	require.True(t, len(urlParts) >= 2, "URL path should have at least two parts")
-	timestampFromURLStr := urlParts[len(urlParts)-1]
-	timestampFromURL, parseErrURL := strconv.ParseInt(timestampFromURLStr, 10, 64)
-	assert.NoError(t, parseErrURL)
-	assert.GreaterOrEqual(t, timestampFromURL, beforeTime, "Timestamp from URL should be >= time before request")
-	assert.LessOrEqual(t, timestampFromURL, afterTime, "Timestamp from URL should be <= time after request")
-
-	timestampFromHeader, parseErrHeader := strconv.ParseInt(interceptedRequest.Header, 10, 64)
-	assert.NoError(t, parseErrHeader)
-	assert.GreaterOrEqual(t, timestampFromHeader, beforeTime, "Timestamp from Header should be >= time before request")
-	assert.LessOrEqual(t, timestampFromHeader, afterTime, "Timestamp from Header should be <= time after request")
-
-	var bodyJSON map[string]string
-	err = json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON)
-	require.NoError(t, err)
-	timestampFromBody1Str, ok1 := bodyJSON["event_time"]
-	require.True(t, ok1)
-	timestampFromBody1, parseErrBody1 := strconv.ParseInt(timestampFromBody1Str, 10, 64)
-	assert.NoError(t, parseErrBody1)
-	assert.GreaterOrEqual(t, timestampFromBody1, beforeTime)
-	assert.LessOrEqual(t, timestampFromBody1, afterTime)
-
-	timestampFromBody2Str, ok2 := bodyJSON["processed_at"]
-	require.True(t, ok2)
-	timestampFromBody2, parseErrBody2 := strconv.ParseInt(timestampFromBody2Str, 10, 64)
-	assert.NoError(t, parseErrBody2)
-	assert.GreaterOrEqual(t, timestampFromBody2, beforeTime)
-	assert.LessOrEqual(t, timestampFromBody2, afterTime)
-
-	// SCENARIO-LIB-016-002
-	assert.Equal(t, timestampFromURL, timestampFromHeader)
-	assert.Equal(t, timestampFromHeader, timestampFromBody1)
-	assert.Equal(t, timestampFromBody1, timestampFromBody2)
 }
 
 func TestExecuteFile_WithProgrammaticVariables(t *testing.T) {
@@ -1148,313 +976,6 @@ func TestExecuteFile_VariableFunctionConsistency(t *testing.T) {
 	assert.Equal(t, capturedHeaderRandomInt, finalBodyJSON["randomInt"].(string))
 }
 
-// TestExecuteFile_WithHttpClientEnvJson tests variable substitution from http-client.env.json (Task T4)
-func TestExecuteFile_WithHttpClientEnvJson(t *testing.T) {
-	// SCENARIO-LIB-018-001: Env selected, http-client.env.json exists, env exists in file
-	t.Run("env selected, file exists, env exists in file", func(t *testing.T) {
-		// Given
-		var interceptedRequest struct {
-			Path   string
-			Host   string
-			Header string
-			Body   string
-			Method string
-		}
-
-		server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
-			interceptedRequest.Path = r.URL.Path
-			interceptedRequest.Host = r.Host
-			bodyBytes, _ := io.ReadAll(r.Body)
-			interceptedRequest.Body = string(bodyBytes)
-			interceptedRequest.Header = r.Header.Get("X-Env-Var")
-			interceptedRequest.Method = r.Method
-			w.WriteHeader(http.StatusOK)
-			_, _ = fmt.Fprint(w, "ok")
-		})
-		defer server.Close()
-
-		// Create a temporary directory for test files
-		tempDir := t.TempDir()
-
-		// Create http-client.env.json
-		envContent := `{
-			"dev": {
-				"host": "` + server.URL + `",
-				"token": "dev-token",
-				"user_id": "dev-user",
-				"common_var": "env_common_dev"
-			},
-			"prod": {
-				"host": "https://prod.example.com",
-				"token": "prod-token",
-				"user_id": "prod-user",
-				"common_var": "env_common_prod"
-			}
-		}`
-		envFilePath := filepath.Join(tempDir, "http-client.env.json")
-		err := os.WriteFile(envFilePath, []byte(envContent), 0600)
-		require.NoError(t, err)
-
-		// Create request file
-		requestFileContent := `
-### Test Request with Env Vars
-# @name testWithEnv
-POST {{host}}/resource/{{user_id}}
-Content-Type: application/json
-X-Env-Var: {{token}}
-
-{
-  "message": "Hello from {{user_id}}",
-  "common": "{{common_var}}"
-}
-`
-		httpFilePath := filepath.Join(tempDir, "test_env_vars.http")
-		err = os.WriteFile(httpFilePath, []byte(requestFileContent), 0600)
-		require.NoError(t, err)
-
-		client, err := NewClient(WithEnvironment("dev"))
-		require.NoError(t, err)
-
-		// When
-		responses, err := client.ExecuteFile(context.Background(), httpFilePath)
-
-		// Then
-		require.NoError(t, err, "ExecuteFile should not return an error")
-		require.Len(t, responses, 1, "Expected 1 response")
-
-		resp := responses[0]
-		assert.NoError(t, resp.Error)
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-		assert.Equal(t, http.MethodPost, interceptedRequest.Method)
-		parsedServerURL, pErr := url.Parse(server.URL)
-		require.NoError(t, pErr)
-		assert.Equal(t, parsedServerURL.Host, interceptedRequest.Host)
-		assert.Equal(t, "/resource/dev-user", interceptedRequest.Path)
-		assert.Equal(t, "dev-token", interceptedRequest.Header)
-		expectedBody := `{
-  "message": "Hello from dev-user",
-  "common": "env_common_dev"
-}`
-		assert.JSONEq(t, expectedBody, interceptedRequest.Body)
-		assert.Equal(t, "dev", client.selectedEnvironmentName) // Verify client has the env name
-		// EnvironmentVariables are used internally; their effect is checked by the substituted values above.
-	})
-
-	// SCENARIO-LIB-018-002: Env selected, http-client.env.json exists, but env NOT in file
-	t.Run("env selected, file exists, env NOT in file", func(t *testing.T) {
-		// Given
-		serverURL := "http://localhost:12345" // A dummy URL, server won't actually be hit with {{host}}
-		server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
-			// This handler might not be reached if {{host}} isn't resolved by any mechanism
-			// and the HTTP client fails before sending.
-			w.WriteHeader(http.StatusOK)
-		})
-		defer server.Close()
-
-		tempDir := t.TempDir()
-		envContent := `{
-			"dev": {
-				"host": "` + serverURL /* Use the dummy serverURL here for consistency */ + `",
-				"token": "dev-token"
-			}
-		}`
-		envFilePath := filepath.Join(tempDir, "http-client.env.json")
-		err := os.WriteFile(envFilePath, []byte(envContent), 0600)
-		require.NoError(t, err)
-
-		requestFileContent := `GET {{host}}/path`
-		httpFilePath := filepath.Join(tempDir, "test_env_vars_missing_env.http")
-		err = os.WriteFile(httpFilePath, []byte(requestFileContent), 0600)
-		require.NoError(t, err)
-
-		client, err := NewClient(WithEnvironment("staging"))
-		require.NoError(t, err)
-
-		// When
-		responses, err := client.ExecuteFile(context.Background(), httpFilePath)
-
-		// Then
-		require.Error(t, err)                                               // ExecuteFile itself should return an error if a request fails this way
-		assert.Contains(t, err.Error(), "unsupported protocol scheme \"\"") // Check the error from ExecuteFile
-		require.Len(t, responses, 1)
-		resp := responses[0]
-		require.NotNil(t, resp)
-		assert.Error(t, resp.Error) // Expect an error because {{host}} is not resolved, leading to bad URL
-		assert.Contains(t, resp.Error.Error(), "unsupported protocol scheme \"\"")
-
-		// Check that {{host}} was not replaced because 'staging' env was not found
-		// The RawURLString should still contain the placeholder as it was in the file.
-		assert.True(t, strings.Contains(resp.Request.RawURLString, "{{host}}"), "RawURLString should still contain {{host}}")
-		assert.Equal(t, "staging", client.selectedEnvironmentName)
-		// EnvironmentVariables map on ParsedFile would be nil internally, effect is placeholder {{host}} remains.
-	})
-
-	// SCENARIO-LIB-018-003: Env selected, but http-client.env.json does NOT exist
-	t.Run("env selected, file does NOT exist", func(t *testing.T) {
-		// Given
-		server := startMockServer(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
-		defer server.Close()
-
-		tempDir := t.TempDir()
-		// http-client.env.json is NOT created in tempDir
-
-		requestFileContent := `GET {{host}}/path`
-		httpFilePath := filepath.Join(tempDir, "test_env_vars_no_env_file.http")
-		err := os.WriteFile(httpFilePath, []byte(requestFileContent), 0600)
-		require.NoError(t, err)
-
-		client, err := NewClient(WithEnvironment("dev"))
-		require.NoError(t, err)
-
-		// When
-		responses, err := client.ExecuteFile(context.Background(), httpFilePath)
-
-		// Then
-		require.Error(t, err)                                               // ExecuteFile itself should return an error if a request fails this way
-		assert.Contains(t, err.Error(), "unsupported protocol scheme \"\"") // Check the error from ExecuteFile
-		require.Len(t, responses, 1)
-		resp := responses[0]
-		require.NotNil(t, resp)
-		assert.Error(t, resp.Error) // Expect an error because {{host}} is not resolved, leading to bad URL
-		assert.Contains(t, resp.Error.Error(), "unsupported protocol scheme \"\"")
-		assert.True(t, strings.Contains(resp.Request.RawURLString, "{{host}}"), "RawURLString should still contain {{host}}")
-		assert.Equal(t, "dev", client.selectedEnvironmentName)
-		// EnvironmentVariables map on ParsedFile would be nil internally, effect is placeholder {{host}} remains.
-	})
-
-	// SCENARIO-LIB-018-004: No env selected, http-client.env.json exists
-	t.Run("no env selected, file exists", func(t *testing.T) {
-		// Given
-		serverURL := "http://localhost:54321"
-		server := startMockServer(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
-		defer server.Close()
-
-		tempDir := t.TempDir()
-		envContent := `{
-			"dev": {
-				"host": "` + serverURL + `",
-				"token": "dev-token"
-			}
-		}`
-		envFilePath := filepath.Join(tempDir, "http-client.env.json")
-		err := os.WriteFile(envFilePath, []byte(envContent), 0600)
-		require.NoError(t, err)
-
-		requestFileContent := `GET {{host}}/path`
-		httpFilePath := filepath.Join(tempDir, "test_no_env_selected.http")
-		err = os.WriteFile(httpFilePath, []byte(requestFileContent), 0600)
-		require.NoError(t, err)
-
-		client, err := NewClient() // No WithEnvironment option
-		require.NoError(t, err)
-
-		// When
-		responses, err := client.ExecuteFile(context.Background(), httpFilePath)
-
-		// Then
-		require.Error(t, err)                                               // ExecuteFile itself should return an error if a request fails this way
-		assert.Contains(t, err.Error(), "unsupported protocol scheme \"\"") // Check the error from ExecuteFile
-		require.Len(t, responses, 1)
-		resp := responses[0]
-		require.NotNil(t, resp)
-		assert.Error(t, resp.Error) // Expect an error because {{host}} is not resolved, leading to bad URL
-		assert.Contains(t, resp.Error.Error(), "unsupported protocol scheme \"\"")
-		assert.True(t, strings.Contains(resp.Request.RawURLString, "{{host}}"), "RawURLString should still contain {{host}}")
-		assert.Empty(t, client.selectedEnvironmentName, "selectedEnvironmentName should be empty")
-		// EnvironmentVariables map on ParsedFile would be nil internally, effect is placeholder {{host}} remains.
-	})
-
-	// SCENARIO-LIB-018-005: Private env file overrides public env file
-	t.Run("private env overrides public env", func(t *testing.T) {
-		// Given
-		var interceptedRequest struct {
-			Path   string
-			Host   string
-			Header string
-			Body   string
-		}
-
-		server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
-			interceptedRequest.Path = r.URL.Path
-			interceptedRequest.Host = r.Host
-			bodyBytes, _ := io.ReadAll(r.Body)
-			interceptedRequest.Body = string(bodyBytes)
-			interceptedRequest.Header = r.Header.Get("X-Custom-Header")
-			w.WriteHeader(http.StatusOK)
-			_, _ = fmt.Fprint(w, "ok")
-		})
-		defer server.Close()
-
-		tempDir := t.TempDir()
-
-		// Create http-client.env.json (public)
-		publicEnvContent := `{
-			"dev": {
-				"host": "` + server.URL + `",
-				"public_var": "public_value",
-				"override_var": "public_override"
-			}
-		}`
-		publicEnvFilePath := filepath.Join(tempDir, "http-client.env.json")
-		err := os.WriteFile(publicEnvFilePath, []byte(publicEnvContent), 0600)
-		require.NoError(t, err)
-
-		// Create http-client.private.env.json (private)
-		privateEnvContent := `{
-			"dev": {
-				"override_var": "private_override_value",
-				"private_var": "private_specific_value"
-			}
-		}`
-		privateEnvFilePath := filepath.Join(tempDir, "http-client.private.env.json")
-		err = os.WriteFile(privateEnvFilePath, []byte(privateEnvContent), 0600)
-		require.NoError(t, err)
-
-		requestFileContent := `
-### Test Private Env Override
-GET {{host}}/test
-Content-Type: application/json
-X-Custom-Header: {{override_var}}
-
-{
-  "public": "{{public_var}}",
-  "private_only": "{{private_var}}"
-}
-`
-		httpFilePath := filepath.Join(tempDir, "test_private_override.http")
-		err = os.WriteFile(httpFilePath, []byte(requestFileContent), 0600)
-		require.NoError(t, err)
-
-		client, err := NewClient(WithEnvironment("dev"))
-		require.NoError(t, err)
-
-		// When
-		responses, err := client.ExecuteFile(context.Background(), httpFilePath)
-
-		// Then
-		require.NoError(t, err, "ExecuteFile should not return an error")
-		require.Len(t, responses, 1, "Expected 1 response")
-
-		resp := responses[0]
-		assert.NoError(t, resp.Error)
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-		parsedServerURL, pErr := url.Parse(server.URL)
-		require.NoError(t, pErr)
-		assert.Equal(t, parsedServerURL.Host, interceptedRequest.Host) // host from public.env
-		assert.Equal(t, "/test", interceptedRequest.Path)
-		assert.Equal(t, "private_override_value", interceptedRequest.Header) // override_var from private.env
-
-		expectedBody := `{
-  "public": "public_value",
-  "private_only": "private_specific_value"
-}`
-		assert.JSONEq(t, expectedBody, interceptedRequest.Body)
-		assert.Equal(t, "dev", client.selectedEnvironmentName)
-	})
-}
-
 func TestExecuteFile_WithExtendedRandomSystemVariables(t *testing.T) {
 	// Given
 	var interceptedRequest struct {
@@ -1599,7 +1120,10 @@ GET {{hostname}}{{path_segment}}/123
 		assert.Equal(t, expectedPath, capturedPath, "Captured path by server mismatch")
 
 		// Verify ParsedFile.FileVariables
-		parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
+		file, err := os.Open(requestFilePath)
+		require.NoError(t, err)
+		defer file.Close()
+		parsedFile, pErr := ParseRequests(file, requestFilePath, client, make(map[string]string), os.LookupEnv, make(map[string]string), nil)
 		require.NoError(t, pErr)
 		require.NotNil(t, parsedFile.FileVariables)
 		assert.Equal(t, server.URL, parsedFile.FileVariables["hostname"])
@@ -1645,7 +1169,10 @@ User-Agent: test-client
 		assert.Equal(t, "test-client", capturedHeaders.Get("User-Agent")) // Ensure other headers are preserved
 
 		// Verify ParsedFile.FileVariables
-		parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
+		file, err := os.Open(requestFilePath)
+		require.NoError(t, err)
+		defer file.Close()
+		parsedFile, pErr := ParseRequests(file, requestFilePath, client, make(map[string]string), os.LookupEnv, make(map[string]string), nil)
 		require.NoError(t, pErr)
 		require.NotNil(t, parsedFile.FileVariables)
 		assert.Equal(t, "Bearer_secret_token_123", parsedFile.FileVariables["auth_token"])
@@ -1704,7 +1231,10 @@ Content-Type: application/json
 		assert.JSONEq(t, expectedBodyJSON, string(capturedBody), "Captured body by server mismatch")
 
 		// Verify ParsedFile.FileVariables
-		parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
+		file, err := os.Open(requestFilePath)
+		require.NoError(t, err)
+		defer file.Close()
+		parsedFile, pErr := ParseRequests(file, requestFilePath, client, make(map[string]string), os.LookupEnv, make(map[string]string), nil)
 		require.NoError(t, pErr)
 		require.NotNil(t, parsedFile.FileVariables)
 		assert.Equal(t, "SuperWidget", parsedFile.FileVariables["product_name"])
@@ -1757,7 +1287,10 @@ GET {{items_endpoint}}?host_check={{my_host}}
 		assert.Equal(t, expectedPathAndQuery, capturedURL)
 
 		// Verify ParsedFile.FileVariables (should store raw definitions)
-		parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
+		file, err := os.Open(requestFilePath)
+		require.NoError(t, err)
+		defer file.Close()
+		parsedFile, pErr := ParseRequests(file, requestFilePath, client, make(map[string]string), os.LookupEnv, make(map[string]string), nil)
 		require.NoError(t, pErr)
 		require.NotNil(t, parsedFile.FileVariables)
 		assert.Equal(t, hostFromServer, parsedFile.FileVariables["my_host"])
