@@ -3,7 +3,9 @@ package restclient
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/joho/godotenv"
 	"io"
 	"log/slog"
 	"net/http"
@@ -11,8 +13,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/joho/godotenv"
 )
 
 const (
@@ -65,97 +65,159 @@ func loadEnvironmentFile(filePath string, selectedEnvName string) (map[string]st
 // The `filePath` is used for opening the file and for context in error messages.
 // A .env file in the same directory as `filePath` will also be loaded and used for resolving
 // `@variable` definitions if present.
-func parseRequestFile(filePath string, client *Client, importStack []string) (*ParsedFile, error) {
+func ParseRequestFile(filePath string, client *Client, importStack []string) (*ParsedFile, error) {
+	content, err := parseFileContent(filePath)
+	if err != nil {
+		// For the initial call, parseFileContent's error is fine.
+		// For recursive calls, this error will be wrapped by the caller with import context.
+		return nil, err
+	}
+
+	// Prepare arguments for parseRequests
+	reader := strings.NewReader(content)
+	// client.generateRequestScopedSystemVariables() is available based on client.go
+	var requestScopedSystemVars map[string]string
+	if client != nil {
+		requestScopedSystemVars = client.generateRequestScopedSystemVariables()
+	} else {
+		requestScopedSystemVars = make(map[string]string) // Provide empty map if client is nil
+	}
+	// osEnvGetter is a standard library function
+	osEnvGetter := os.LookupEnv
+	dotEnvVars := make(map[string]string)
+	// Load .env file specific to the current filePath directory
+	localEnvFilePath := filepath.Join(filepath.Dir(filePath), ".env")
+	if _, err := os.Stat(localEnvFilePath); err == nil {
+		loadedDotEnvVars, loadErr := godotenv.Read(localEnvFilePath)
+		if loadErr == nil {
+			for k, v := range loadedDotEnvVars {
+				dotEnvVars[k] = v
+			}
+		} else {
+			slog.Warn("Error loading .env file", "file", localEnvFilePath, "error", loadErr)
+		}
+	}
+
+	// If a client is provided and an environment is selected, load and merge environment-specific JSON vars
+	if client != nil && client.selectedEnvironmentName != "" {
+		// Load public env vars (http-client.env.json)
+		publicEnvJsonFilePath := filepath.Join(filepath.Dir(filePath), "http-client.env.json")
+		publicEnvSpecificVars, publicEnvLoadErr := loadEnvironmentFile(publicEnvJsonFilePath, client.selectedEnvironmentName)
+		if publicEnvLoadErr != nil {
+			slog.Warn("Error loading public environment-specific variables from JSON", "file", publicEnvJsonFilePath, "environment", client.selectedEnvironmentName, "error", publicEnvLoadErr)
+		} else if publicEnvSpecificVars != nil {
+			for k, v := range publicEnvSpecificVars {
+				dotEnvVars[k] = v // Override or add, public JSON vars take precedence over .env
+			}
+			slog.Debug("Successfully loaded and merged public environment-specific variables from JSON", "file", publicEnvJsonFilePath, "environment", client.selectedEnvironmentName)
+		}
+
+		// Load private env vars (http-client.private.env.json)
+		// These will override public and .env variables
+		privateEnvJsonFilePath := filepath.Join(filepath.Dir(filePath), "http-client.private.env.json")
+		privateEnvSpecificVars, privateEnvLoadErr := loadEnvironmentFile(privateEnvJsonFilePath, client.selectedEnvironmentName)
+		if privateEnvLoadErr != nil {
+			slog.Warn("Error loading private environment-specific variables from JSON", "file", privateEnvJsonFilePath, "environment", client.selectedEnvironmentName, "error", privateEnvLoadErr)
+		} else if privateEnvSpecificVars != nil {
+			for k, v := range privateEnvSpecificVars {
+				dotEnvVars[k] = v // Override or add, private JSON vars take precedence over public JSON and .env
+			}
+			slog.Debug("Successfully loaded and merged private environment-specific variables from JSON", "file", privateEnvJsonFilePath, "environment", client.selectedEnvironmentName)
+		}
+	}
+
+	currentParsedFile, err := ParseRequests(reader, filePath, client, requestScopedSystemVars, osEnvGetter, dotEnvVars, importStack)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing initial requests from %s: %w", filePath, err)
+	}
+	// currentParsedFile is guaranteed non-nil if err is nil by ParseRequests contract.
+	currentParsedFile.EffectiveEnvironmentVariables = dotEnvVars // Store the merged env vars
+
+	// Store direct imports to return, as tests expect only direct imports in the final ParsedFile.ImportedFiles field.
+	directImports := make([]string, len(currentParsedFile.ImportedFiles))
+	copy(directImports, currentParsedFile.ImportedFiles)
+
+	mergedRequests := []*Request{}
+	finalMergedFileVariables := make(map[string]string)
+
+	// Process imports first to establish base variables and requests
+	// Variables from later imports override earlier ones.
+	for _, importedRawPath := range currentParsedFile.ImportedFiles { // Iterate over the direct imports from current file
+		resolvedImportPath := importedRawPath
+		if !filepath.IsAbs(importedRawPath) {
+			resolvedImportPath = filepath.Join(filepath.Dir(filePath), importedRawPath)
+		}
+
+		// Check for circular imports
+		isCircular := false
+		for _, stackedPath := range importStack {
+			if stackedPath == resolvedImportPath {
+				isCircular = true
+				break
+			}
+		}
+		if isCircular {
+			return nil, fmt.Errorf("circular import detected: %s trying to import %s (stack: %v)", filePath, resolvedImportPath, importStack)
+		}
+
+		newImportStack := append(importStack, filePath)                                         // Add current file to stack before diving deeper
+		importedParsedFile, err := ParseRequestFile(resolvedImportPath, client, newImportStack) // Pass client recursively
+		if err != nil {
+			// Check if the error is due to file not found
+			if os.IsNotExist(errors.Unwrap(err)) { // errors.Unwrap requires 'errors' package
+				return nil, fmt.Errorf("imported file not found: %s (imported by %s): %w", resolvedImportPath, filePath, err)
+			}
+			return nil, fmt.Errorf("error parsing imported file %s (imported by %s): %w", resolvedImportPath, filePath, err)
+		}
+
+		// Merge Requests (imported requests come first)
+		mergedRequests = append(mergedRequests, importedParsedFile.Requests...)
+
+		// Merge file variables from the imported file.
+		// Variables from this `importedParsedFile` will override those from previous imports in the same loop (earlier directives).
+		for k, v := range importedParsedFile.FileVariables {
+			finalMergedFileVariables[k] = v
+		}
+		// Note: currentParsedFile.ImportedFiles should retain only direct imports of *this* file.
+		// The recursive calls manage their own nested imports internally.
+	}
+
+	// Add requests from the current file (they come after all imported requests)
+	mergedRequests = append(mergedRequests, currentParsedFile.Requests...)
+	currentParsedFile.Requests = mergedRequests
+
+	// Merge file variables from the current file, overriding any imported ones
+	for k, v := range currentParsedFile.FileVariables { // These are variables defined directly in filePath
+		finalMergedFileVariables[k] = v
+	}
+	currentParsedFile.FileVariables = finalMergedFileVariables
+
+	// Restore direct imports for the final ParsedFile object, as per test expectations.
+	currentParsedFile.ImportedFiles = directImports
+
+	return currentParsedFile, nil
+}
+
+func parseFileContent(filePath string) (string, error) {
+	// Ensure filePath is absolute for consistent error reporting and file operations.
 	absFilePath, err := filepath.Abs(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get absolute path for %s: %w", filePath, err)
+		return "", fmt.Errorf("failed to get absolute path for %s: %w", filePath, err)
 	}
 
-	for _, importedPath := range importStack {
-		if importedPath == absFilePath {
-			return nil, fmt.Errorf("circular import detected: '%s' already in import stack %v", absFilePath, importStack)
-		}
-	}
-	newImportStack := append(importStack, absFilePath)
-
-	file, err := os.Open(absFilePath) // Use absolute path
+	contentBytes, err := os.ReadFile(absFilePath) // Use os.ReadFile for simplicity
 	if err != nil {
-		return nil, fmt.Errorf("failed to open request file %s: %w", absFilePath, err)
+		// Return the error directly. The caller (parseRequestFile) will handle os.IsNotExist if needed.
+		// This also makes parseFileContent more general, as it doesn't need to know about import stacks.
+		return "", fmt.Errorf("failed to read file %s: %w", absFilePath, err)
 	}
-	defer func() { _ = file.Close() }()
-
-	// Load .env file from the same directory as the request file for @var resolution time
-	dotEnvVarsForParser := make(map[string]string)
-	envFilePath := filepath.Join(filepath.Dir(filePath), ".env")
-	if _, statErr := os.Stat(envFilePath); statErr == nil {
-		loadedVars, loadErr := godotenv.Read(envFilePath)
-		if loadErr == nil {
-			dotEnvVarsForParser = loadedVars
-		}
-	}
-	osEnvGetter := func(key string) (string, bool) { return os.LookupEnv(key) }
-
-	// Generate request-scoped system variables once for this file parsing pass
-	var requestScopedSystemVarsForFileParse map[string]string
-	if client != nil {
-		requestScopedSystemVarsForFileParse = client.generateRequestScopedSystemVariables()
-	} else {
-		requestScopedSystemVarsForFileParse = make(map[string]string)
-	}
-
-	// Pass absFilePath for context, and newImportStack for recursion tracking
-	parsedFile, err := parseRequests(file, absFilePath, client, requestScopedSystemVarsForFileParse, osEnvGetter, dotEnvVarsForParser, newImportStack)
-	if err != nil {
-		return nil, err // Error already wrapped by parseRequests or is a direct parsing error
-	}
-
-	// Load http-client.env.json for environment-specific variables (Task T4)
-	if client != nil && client.selectedEnvironmentName != "" && parsedFile != nil {
-		mergedEnvVars := make(map[string]string)
-		fileDir := filepath.Dir(filePath)
-
-		// Load public environment file: http-client.env.json
-		publicEnvFilePath := filepath.Join(fileDir, "http-client.env.json")
-		publicEnvVars, err := loadEnvironmentFile(publicEnvFilePath, client.selectedEnvironmentName)
-		if err != nil {
-			// Log the error but continue, as the private file might still provide vars
-			slog.Warn("Error loading public environment file", "file", publicEnvFilePath, "error", err)
-		}
-		for k, v := range publicEnvVars {
-			mergedEnvVars[k] = v
-		}
-
-		// Load private environment file: http-client.private.env.json
-		privateEnvFilePath := filepath.Join(fileDir, "http-client.private.env.json")
-		privateEnvVars, err := loadEnvironmentFile(privateEnvFilePath, client.selectedEnvironmentName)
-		if err != nil {
-			slog.Warn("Error loading private environment file", "file", privateEnvFilePath, "error", err)
-		}
-		for k, v := range privateEnvVars { // Override with private vars
-			mergedEnvVars[k] = v
-		}
-
-		if len(mergedEnvVars) > 0 {
-			parsedFile.EnvironmentVariables = mergedEnvVars
-		} else {
-			// This case can happen if neither file exists, or selected env is not in them, or files are empty/invalid.
-			// Ensure EnvironmentVariables is not nil if no vars were loaded, to maintain consistency with how it might be accessed.
-			// However, if it was already initialized (e.g. to an empty map by default in ParsedFile struct), this might not be strictly necessary.
-			// For safety, let's ensure it's an empty map if nothing was merged.
-			if parsedFile.EnvironmentVariables == nil {
-				parsedFile.EnvironmentVariables = make(map[string]string)
-			}
-			slog.Debug("No environment variables loaded for selected environment", "environment", client.selectedEnvironmentName, "public_file", publicEnvFilePath, "private_file", privateEnvFilePath)
-		}
-	}
-
-	return parsedFile, nil
+	return string(contentBytes), nil
 }
 
 // reqScopedSystemVarsForParser is generated once per file parsing pass for resolving @-vars consistently.
 // var reqScopedSystemVarsForParser map[string]string // REMOVED GLOBAL
 
-// parseRequests performs the core parsing logic for an HTTP request file (e.g., .http, .rest).
+// ParseRequests performs the core parsing logic for an HTTP request file (e.g., .http, .rest).
 // It takes an io.Reader for the content, the original filePath for context, a client instance,
 // pre-generated requestScopedSystemVars for resolving @-variables, an osEnvGetter, and dotEnvVars.
 //
@@ -170,7 +232,7 @@ func parseRequestFile(filePath string, client *Client, importStack []string) (*P
 //     request URL, headers, and body.
 //
 // Returns a `ParsedFile` struct containing all parsed requests or an error if issues occur.
-func parseRequests(reader io.Reader, filePath string, client *Client,
+func ParseRequests(reader io.Reader, filePath string, client *Client,
 	requestScopedSystemVars map[string]string,
 	osEnvGetter func(string) (string, bool),
 	dotEnvVars map[string]string,
@@ -232,6 +294,37 @@ func parseRequests(reader io.Reader, filePath string, client *Client,
 			continue
 		}
 
+		// Import Directives (e.g., // @import "path/to/file.http" or # @import "path/to/file.http")
+		// This block only identifies the import directive and records the path.
+		// The actual parsing and merging of imported files is handled by the ParseRequestFile function's loop.
+		if strings.HasPrefix(trimmedLine, "// @import") || strings.HasPrefix(trimmedLine, "# @import") {
+			importPrefix := ""
+			if strings.HasPrefix(trimmedLine, "// @import") {
+				importPrefix = "// @import"
+			} else { // Must be # @import
+				importPrefix = "# @import"
+			}
+
+			// Ensure there's a space after the directive before the quoted path
+			if len(trimmedLine) > len(importPrefix) && trimmedLine[len(importPrefix)] == ' ' {
+				pathPart := strings.TrimSpace(trimmedLine[len(importPrefix)+1:]) // +1 for the space
+				if len(pathPart) > 1 && pathPart[0] == '"' && pathPart[len(pathPart)-1] == '"' {
+					importedFilePath := pathPart[1 : len(pathPart)-1]
+					if importedFilePath != "" {
+						parsedFile.ImportedFiles = append(parsedFile.ImportedFiles, importedFilePath)
+						slog.Debug("Identified import directive", "path", importedFilePath, "line", lineNumber, "file", filePath)
+					} else {
+						slog.Warn("Empty path in import directive", "line", lineNumber, "content", originalLine, "filePath", filePath)
+					}
+				} else {
+					slog.Warn("Malformed import directive: path not correctly quoted", "line", lineNumber, "content", originalLine, "filePath", filePath)
+				}
+			} else {
+				slog.Warn("Malformed import directive: missing space after directive or path", "line", lineNumber, "content", originalLine, "filePath", filePath)
+			}
+			continue // Skip further processing for this line
+		}
+
 		// Variable Definitions (@name = value)
 		if strings.HasPrefix(trimmedLine, "@") {
 			parts := strings.SplitN(trimmedLine[1:], "=", 2)
@@ -257,50 +350,6 @@ func parseRequests(reader io.Reader, filePath string, client *Client,
 				return nil, fmt.Errorf("line %d: malformed in-place variable definition, missing '=' or name: %s", lineNumber, originalLine)
 			}
 			continue // Variable definition line, skip further processing
-		}
-
-		// @import directive
-		if strings.HasPrefix(trimmedLine, "// @import ") || strings.HasPrefix(trimmedLine, "# @import ") {
-			prefixLen := 0
-			if strings.HasPrefix(trimmedLine, "// @import ") {
-				prefixLen = len("// @import ")
-			} else {
-				prefixLen = len("# @import ")
-			}
-			pathPart := strings.TrimSpace(trimmedLine[prefixLen:])
-			if len(pathPart) > 1 && strings.HasPrefix(pathPart, "\"") && strings.HasSuffix(pathPart, "\"") {
-				importedFilePath := pathPart[1 : len(pathPart)-1]
-				slog.Debug("Found @import directive", "importingFile", filePath, "importedFileRelativePath", importedFilePath, "lineNumber", lineNumber)
-
-				absImportedFilePath := filepath.Clean(filepath.Join(filepath.Dir(filePath), importedFilePath))
-
-				slog.Debug("Attempting to import file", "absolutePath", absImportedFilePath, "importingFile", filePath)
-
-				importedData, err := parseRequestFile(absImportedFilePath, client, importStack) // parseRequestFile handles circular checks
-				if err != nil {
-					// Wrap error with context about the import operation
-					return nil, fmt.Errorf("line %d: error importing file '%s' (from '%s'): %w", lineNumber, importedFilePath, filePath, err)
-				}
-
-				if importedData != nil {
-					// Merge requests
-					parsedFile.Requests = append(parsedFile.Requests, importedData.Requests...)
-					slog.Debug("Merged requests from imported file", "importedFile", absImportedFilePath, "requestCount", len(importedData.Requests))
-
-					// Merge file variables: imported variables are added if not already defined in the current file (or by a previous import)
-					// Variables defined later in the current file will naturally override these.
-					for key, val := range importedData.FileVariables {
-						if _, exists := currentFileVariables[key]; !exists {
-							currentFileVariables[key] = val
-						}
-					}
-					slog.Debug("Merged file variables from imported file", "importedFile", absImportedFilePath, "variableCount", len(importedData.FileVariables))
-				}
-				continue // Skip processing this line further
-			} else {
-				slog.Warn("Malformed @import directive: path not correctly quoted", "lineContent", originalLine, "lineNumber", lineNumber, "filePath", filePath)
-			}
-			continue // Import directive line, skip further processing
 		}
 
 		// Comments (# or //)
@@ -515,33 +564,29 @@ func parseRequests(reader io.Reader, filePath string, client *Client,
 // ParseExpectedResponseFile reads a file and parses it into a slice of ExpectedResponse definitions.
 //
 // DEPRECATED: This function is deprecated and will be removed or made internal in a future version.
-// It does not support variable substitution. Users should migrate to using `ValidateResponses` from the
-// `validator.go` file, which handles .hresp file parsing, variable extraction, and substitution
+// Use `Client.ValidateResponse` or `Client.Validate` which handle variable substitution internally
 // before validation. For direct parsing of already substituted .hresp content, one can read the file
-// into an `io.Reader` and use `parseExpectedResponses` directly.
-func parseExpectedResponseFile(filePath string) ([]*ExpectedResponse, error) {
+// into an `io.Reader` and use `ParseExpectedResponses` directly.
+func ParseExpectedResponseFile(filePath string) ([]*ExpectedResponse, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open expected response file %s: %w", filePath, err)
+		return nil, fmt.Errorf("opening expected response file %s: %w", filePath, err)
 	}
-	defer func() { _ = file.Close() }() // Correctly ignore error for defer file.Close()
-
-	return parseExpectedResponses(file, filePath) // filePath is used for error reporting within parseExpectedResponses
+	defer func() { _ = file.Close() }()
+	return ParseExpectedResponses(file, filePath)
 }
 
-// parseExpectedResponses parses expected HTTP response definitions from an io.Reader.
+// ParseExpectedResponses parses expected HTTP response definitions from an io.Reader.
 // It expects the content provided by the reader to be the raw .hresp format, typically after
-// any variable substitutions have already been performed (e.g., by `resolveAndSubstitute`).
+// any necessary variable substitutions have been applied by the caller if the .hresp content
+// itself contained variables (though .hresp files are not typically expected to have variables
+// that need substitution at this stage of parsing).
 //
-// The `filePath` argument is used for context in error messages only and does not imply that this
-// function reads from the file system directly. It processes content line by line, interpreting
-// status lines, headers, and body sections, separated by "###". Comments (#) and lines starting
-// with "@" (which should have been processed prior to calling this function if they were variable
-// definitions) are ignored.
+// The `filePath` argument is used for context in error messages.
 //
 // Returns a slice of `ExpectedResponse` structs or an error if parsing fails (e.g., due to
 // malformed status lines or headers).
-func parseExpectedResponses(reader io.Reader, filePath string) ([]*ExpectedResponse, error) {
+func ParseExpectedResponses(reader io.Reader, filePath string) ([]*ExpectedResponse, error) {
 	scanner := bufio.NewScanner(reader)
 	var expectedResponses []*ExpectedResponse
 
