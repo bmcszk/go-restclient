@@ -181,11 +181,11 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 			restClientReq.RawURLString,
 			c.programmaticVars,
 			restClientReq.ActiveVariables,
-			parsedFile.EnvironmentVariables, // Added for T3
-			parsedFile.GlobalVariables,      // Added for T3
+			parsedFile.EffectiveEnvironmentVariables, // Use the merged env vars
+			parsedFile.GlobalVariables,
 			requestScopedSystemVars,
 			osEnvGetter,
-			c.currentDotEnvVars,
+			nil, // .env vars are in EffectiveEnvironmentVariables
 		)
 		substitutedRawURL = c.substituteDynamicSystemVariables(substitutedRawURL, c.currentDotEnvVars)
 
@@ -211,11 +211,11 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 						val,
 						c.programmaticVars,
 						restClientReq.ActiveVariables,
-						parsedFile.EnvironmentVariables, // Added for T3
-						parsedFile.GlobalVariables,      // Added for T3
+						parsedFile.EffectiveEnvironmentVariables, // Use the merged env vars
+						parsedFile.GlobalVariables,
 						requestScopedSystemVars,
 						osEnvGetter,
-						c.currentDotEnvVars,
+						nil, // .env vars are in EffectiveEnvironmentVariables
 					)
 					newValues[j] = c.substituteDynamicSystemVariables(resolvedVal, c.currentDotEnvVars)
 					// "[DEBUG_HEADER_FINAL]", "key", key, "index", j, "finalValue", newValues[j]) // Added for debugging header values
@@ -231,15 +231,38 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 				restClientReq.RawBody,
 				c.programmaticVars,
 				restClientReq.ActiveVariables,
-				parsedFile.EnvironmentVariables, // Added for T3
-				parsedFile.GlobalVariables,      // Added for T3
+				parsedFile.EffectiveEnvironmentVariables, // Use the merged env vars
+				parsedFile.GlobalVariables,
 				requestScopedSystemVars,
 				osEnvGetter,
-				c.currentDotEnvVars,
+				nil, // .env vars are in EffectiveEnvironmentVariables
 			)
 			finalBody := c.substituteDynamicSystemVariables(resolvedBody, c.currentDotEnvVars)
 			// finalBody is now correctly substituted
-			restClientReq.RawBody = finalBody // Update RawBody with the substituted content
+			// Check if Content-Type is application/x-www-form-urlencoded and process body
+			contentType := restClientReq.Headers.Get("Content-Type")
+			if strings.HasPrefix(strings.ToLower(contentType), "application/x-www-form-urlencoded") {
+				if finalBody != "" { // Only process if finalBody is not empty
+					newData := make(url.Values)
+					pairs := strings.Split(finalBody, "&")
+					for _, pair := range pairs {
+						if pair == "" { // Skip empty pairs that can result from "&&" or leading/trailing "&"
+							continue
+						}
+						parts := strings.SplitN(pair, "=", 2)
+						key := parts[0]
+						var value string
+						if len(parts) > 1 {
+							value = parts[1]
+						}
+						newData.Add(key, value) // Add raw key and value; Encode will handle URL encoding
+					}
+					finalBody = newData.Encode()
+				}
+				// If finalBody was initially empty, it remains empty.
+			}
+
+			restClientReq.RawBody = finalBody // Update RawBody with the (potentially re-encoded) content
 			restClientReq.Body = strings.NewReader(finalBody)
 			restClientReq.GetBody = func() (io.ReadCloser, error) {
 				return io.NopCloser(strings.NewReader(finalBody)), nil
