@@ -496,7 +496,11 @@ func TestExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
 			if isUTC {
 				assert.Equal(t, time.UTC, parsedTime.Location(), "%s expected to be UTC", headerName)
 			} else {
-				assert.Equal(t, time.Local, parsedTime.Location(), "%s expected to be Local time", headerName)
+				// Get offset for time.Local
+				_, localOffset := now.In(time.Local).Zone()
+				// Get offset for parsedTime
+				_, parsedOffset := parsedTime.Zone()
+				assert.Equal(t, localOffset, parsedOffset, "%s expected to have local time offset, got %d, want %d", headerName, parsedOffset, localOffset)
 			}
 		}
 	}
