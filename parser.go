@@ -66,9 +66,21 @@ func loadEnvironmentFile(filePath string, selectedEnvName string) (map[string]st
 // A .env file in the same directory as `filePath` will also be loaded and used for resolving
 // `@variable` definitions if present.
 func parseRequestFile(filePath string, client *Client, importStack []string) (*ParsedFile, error) {
-	file, err := os.Open(filePath)
+	absFilePath, err := filepath.Abs(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open request file %s: %w", filePath, err)
+		return nil, fmt.Errorf("failed to get absolute path for %s: %w", filePath, err)
+	}
+
+	for _, importedPath := range importStack {
+		if importedPath == absFilePath {
+			return nil, fmt.Errorf("circular import detected: '%s' already in import stack %v", absFilePath, importStack)
+		}
+	}
+	newImportStack := append(importStack, absFilePath)
+
+	file, err := os.Open(absFilePath) // Use absolute path
+	if err != nil {
+		return nil, fmt.Errorf("failed to open request file %s: %w", absFilePath, err)
 	}
 	defer func() { _ = file.Close() }()
 
@@ -91,7 +103,8 @@ func parseRequestFile(filePath string, client *Client, importStack []string) (*P
 		requestScopedSystemVarsForFileParse = make(map[string]string)
 	}
 
-	parsedFile, err := parseRequests(file, filePath, client, requestScopedSystemVarsForFileParse, osEnvGetter, dotEnvVarsForParser, importStack)
+	// Pass absFilePath for context, and newImportStack for recursion tracking
+	parsedFile, err := parseRequests(file, absFilePath, client, requestScopedSystemVarsForFileParse, osEnvGetter, dotEnvVarsForParser, newImportStack)
 	if err != nil {
 		return nil, err // Error already wrapped by parseRequests or is a direct parsing error
 	}
@@ -253,7 +266,32 @@ func parseRequests(reader io.Reader, filePath string, client *Client,
 			if len(pathPart) > 1 && strings.HasPrefix(pathPart, "\"") && strings.HasSuffix(pathPart, "\"") {
 				importedFilePath := pathPart[1 : len(pathPart)-1]
 				slog.Debug("Found @import directive", "importingFile", filePath, "importedFileRelativePath", importedFilePath, "lineNumber", lineNumber)
-				// TODO: Resolve path, check for circular imports, recursively call parseRequestFile, merge variables.
+
+				absImportedFilePath := filepath.Clean(filepath.Join(filepath.Dir(filePath), importedFilePath))
+
+				slog.Debug("Attempting to import file", "absolutePath", absImportedFilePath, "importingFile", filePath)
+
+				importedData, err := parseRequestFile(absImportedFilePath, client, importStack) // parseRequestFile handles circular checks
+				if err != nil {
+					// Wrap error with context about the import operation
+					return nil, fmt.Errorf("line %d: error importing file '%s' (from '%s'): %w", lineNumber, importedFilePath, filePath, err)
+				}
+
+				if importedData != nil {
+					// Merge requests
+					parsedFile.Requests = append(parsedFile.Requests, importedData.Requests...)
+					slog.Debug("Merged requests from imported file", "importedFile", absImportedFilePath, "requestCount", len(importedData.Requests))
+
+					// Merge file variables: imported variables are added if not already defined in the current file (or by a previous import)
+					// Variables defined later in the current file will naturally override these.
+					for key, val := range importedData.FileVariables {
+						if _, exists := currentFileVariables[key]; !exists {
+							currentFileVariables[key] = val
+						}
+					}
+					slog.Debug("Merged file variables from imported file", "importedFile", absImportedFilePath, "variableCount", len(importedData.FileVariables))
+				}
+				continue // Skip processing this line further
 			} else {
 				slog.Warn("Malformed @import directive: path not correctly quoted", "lineContent", originalLine, "lineNumber", lineNumber, "filePath", filePath)
 			}
