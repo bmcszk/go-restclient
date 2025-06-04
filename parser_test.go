@@ -1,6 +1,7 @@
 package restclient
 
 import (
+	"io"
 	"strings"
 	"testing"
 
@@ -390,6 +391,154 @@ Response 2`,
 				} else if tt.expectedBody != nil {
 					require.NotNil(t, resp.Body)
 					assert.Equal(t, *tt.expectedBody, *resp.Body)
+				}
+			}
+		})
+	}
+}
+
+func TestParseRequestFile_Imports(t *testing.T) {
+	// Mock environment variable lookup function for tests
+	// envLookup := func(key string) (string, bool) { // This was part of parseRequests, not parseRequestFile directly
+	// 	return "", false
+	// }
+
+	tests := []struct {
+		name              string
+		filePath          string
+		expectedRequests  int
+		expectedVariables map[string]string // These are file-level variables after all parsing and merging
+		requestChecks     func(t *testing.T, testName string, requests []*Request, fileVariables map[string]string)
+		expectError       bool
+		errorContains     string
+	}{
+		{
+			name:             "SCENARIO-IMPORT-001: Simple import",
+			filePath:         "testdata/parser/import_tests/main_simple_import.http",
+			expectedRequests: 2,
+			expectedVariables: map[string]string{
+				"host":         "http://localhost:8080",
+				"imported_var": "imported_value",
+			},
+			requestChecks: func(t *testing.T, testName string, requests []*Request, fileVariables map[string]string) {
+				require.Len(t, requests, 2)
+				// Request from imported_file_1.http
+				assert.Equal(t, "GET", requests[0].Method)
+				assert.Equal(t, "{{host}}/imported_request_1", requests[0].RawURLString)
+				bodyReader, err := requests[0].GetBody()
+				require.NoError(t, err, "Failed to get body for request 0 in simple import test case: %s", testName)
+				require.NotNil(t, bodyReader, "Body reader should not be nil for request 0 in simple import test case: %s", testName)
+				defer bodyReader.Close()
+
+				bodyBytes, err := io.ReadAll(bodyReader)
+				require.NoError(t, err, "Failed to read body for request 0 in simple import test case: %s", testName)
+				bodyString := string(bodyBytes)
+				assert.Contains(t, bodyString, "\"key\": \"{{imported_var}}\"")
+
+				// Request from main_simple_import.http
+				assert.Equal(t, "GET", requests[1].Method)
+				assert.Equal(t, "{{host}}/main_request", requests[1].RawURLString)
+			},
+		},
+		{
+			name:             "SCENARIO-IMPORT-002: Nested import",
+			filePath:         "testdata/parser/import_tests/main_nested_import.http",
+			expectedRequests: 3,
+			expectedVariables: map[string]string{
+				"host":       "http://localhost:8080", // from imported_file_3_level_2.http
+				"level1_var": "level1_value",          // from imported_file_2_level_1.http
+				"level2_var": "level2_value",          // from imported_file_3_level_2.http
+			},
+			requestChecks: func(t *testing.T, testName string, requests []*Request, fileVariables map[string]string) {
+				require.Len(t, requests, 3)
+				// Requests from imported_file_3_level_2.http (innermost)
+				assert.Equal(t, "GET", requests[0].Method)
+				assert.Equal(t, "{{host}}/level2_request", requests[0].RawURLString)
+				bodyReader, err := requests[0].GetBody()
+				require.NoError(t, err, "Failed to get body for request 0 in nested import test case: %s", testName)
+				require.NotNil(t, bodyReader, "Body reader should not be nil for request 0 in nested import test case: %s", testName)
+				defer bodyReader.Close()
+
+				bodyBytes, err := io.ReadAll(bodyReader)
+				require.NoError(t, err, "Failed to read body for request 0 in nested import test case: %s", testName)
+				bodyString := string(bodyBytes)
+				assert.Contains(t, bodyString, "\"level1_key\": \"{{level1_var}}\"")
+				assert.Contains(t, bodyString, "\"level2_key\": \"{{level2_var}}\"")
+
+				// Request from imported_file_2_level_1.http
+				assert.Equal(t, "GET", requests[1].Method)
+				assert.Equal(t, "{{host}}/level1_request", requests[1].RawURLString)
+
+				// Request from main_nested_import.http (outermost)
+				assert.Equal(t, "GET", requests[2].Method)
+				assert.Equal(t, "{{host}}/main_nested_request", requests[2].RawURLString)
+			},
+		},
+		{
+			name:             "SCENARIO-IMPORT-003: Variable override",
+			filePath:         "testdata/parser/import_tests/main_variable_override.http",
+			expectedRequests: 1,
+			expectedVariables: map[string]string{
+				"host":          "http://main-override.com", // Overridden by main file
+				"var1":          "value1_from_imported",
+				"var2":          "value2_from_imported",
+				"var_from_main": "main_value", // Defined in main file
+			},
+			requestChecks: func(t *testing.T, testName string, requests []*Request, fileVariables map[string]string) {
+				require.Len(t, requests, 1)
+				assert.Equal(t, "GET", requests[0].Method)
+				assert.Equal(t, "{{host}}/override", requests[0].RawURLString)
+				assert.Equal(t, "{{var1}}", requests[0].Headers.Get("X-Var1"))
+				assert.Equal(t, "{{var2}}", requests[0].Headers.Get("X-Var2"))
+				assert.Equal(t, "{{var_from_main}}", requests[0].Headers.Get("X-Var-Main"))
+			},
+		},
+		{
+			name:          "SCENARIO-IMPORT-004: Circular import",
+			filePath:      "testdata/parser/import_tests/main_circular_import_a.http",
+			expectError:   true,
+			errorContains: "circular import detected",
+		},
+		{
+			name:        "SCENARIO-IMPORT-005: Import not found",
+			filePath:    "testdata/parser/import_tests/main_import_not_found.http",
+			expectError: true,
+			// error message for os.Open on a non-existent file typically includes "no such file or directory"
+			errorContains: "no such file or directory",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given: client can be nil as we are testing parsing, not execution.
+			// Initial importStack is empty for top-level calls.
+			parsedFile, err := parseRequestFile(tt.filePath, nil, make([]string, 0))
+
+			// Then: assert expected outcomes
+			if tt.expectError {
+				require.Error(t, err, "Expected an error for test case: %s", tt.name)
+				if tt.errorContains != "" {
+					assert.Contains(t, err.Error(), tt.errorContains, "Error message mismatch for test case: %s", tt.name)
+				}
+				// In case of error during parseRequestFile (like file not found, circular import), parsedFile should be nil.
+				assert.Nil(t, parsedFile, "parsedFile should be nil on error for test case: %s", tt.name)
+			} else {
+				require.NoError(t, err, "Did not expect an error for test case: %s", tt.name)
+				require.NotNil(t, parsedFile, "parsedFile should not be nil on no error for test case: %s", tt.name)
+
+				if parsedFile != nil { // Defensive check
+					assert.Len(t, parsedFile.Requests, tt.expectedRequests, "Number of parsed requests mismatch for test case: %s", tt.name)
+
+					// Check merged file-level variables
+					for key, expectedValue := range tt.expectedVariables {
+						actualValue, exists := parsedFile.FileVariables[key]
+						assert.True(t, exists, "Expected file variable '%s' not found in test case: %s", key, tt.name)
+						assert.Equal(t, expectedValue, actualValue, "Value for file variable '%s' mismatch in test case: %s", key, tt.name)
+					}
+
+					if tt.requestChecks != nil {
+						tt.requestChecks(t, tt.name, parsedFile.Requests, parsedFile.FileVariables)
+					}
 				}
 			}
 		})

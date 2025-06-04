@@ -1,0 +1,11 @@
+@level2_var = level2_value
+@host = http://localhost:8080
+
+### Request from imported_file_3_level_2
+GET {{host}}/level2_request
+Content-Type: application/json
+
+{
+    "level1_key": "{{level1_var}}",
+    "level2_key": "{{level2_var}}"
+}
