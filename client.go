@@ -150,7 +150,7 @@ func WithEnvironment(name string) ClientOption {
 //
 // Programmatic variables for substitution can be set on the Client using `WithVars()`.
 func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Response, error) {
-	parsedFile, err := parseRequestFile(requestFilePath, c)
+	parsedFile, err := parseRequestFile(requestFilePath, c, make([]string, 0)) // Pass initial empty import stack
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse request file %s: %w", requestFilePath, err)
 	}

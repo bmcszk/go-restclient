@@ -65,7 +65,7 @@ func loadEnvironmentFile(filePath string, selectedEnvName string) (map[string]st
 // The `filePath` is used for opening the file and for context in error messages.
 // A .env file in the same directory as `filePath` will also be loaded and used for resolving
 // `@variable` definitions if present.
-func parseRequestFile(filePath string, client *Client) (*ParsedFile, error) {
+func parseRequestFile(filePath string, client *Client, importStack []string) (*ParsedFile, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open request file %s: %w", filePath, err)
@@ -91,7 +91,7 @@ func parseRequestFile(filePath string, client *Client) (*ParsedFile, error) {
 		requestScopedSystemVarsForFileParse = make(map[string]string)
 	}
 
-	parsedFile, err := parseRequests(file, filePath, client, requestScopedSystemVarsForFileParse, osEnvGetter, dotEnvVarsForParser)
+	parsedFile, err := parseRequests(file, filePath, client, requestScopedSystemVarsForFileParse, osEnvGetter, dotEnvVarsForParser, importStack)
 	if err != nil {
 		return nil, err // Error already wrapped by parseRequests or is a direct parsing error
 	}
@@ -160,7 +160,8 @@ func parseRequestFile(filePath string, client *Client) (*ParsedFile, error) {
 func parseRequests(reader io.Reader, filePath string, client *Client,
 	requestScopedSystemVars map[string]string,
 	osEnvGetter func(string) (string, bool),
-	dotEnvVars map[string]string) (*ParsedFile, error) {
+	dotEnvVars map[string]string,
+	importStack []string) (*ParsedFile, error) {
 	scanner := bufio.NewScanner(reader)
 	parsedFile := &ParsedFile{
 		FilePath:      filePath,
@@ -227,7 +228,7 @@ func parseRequests(reader io.Reader, filePath string, client *Client,
 						// EnvironmentVars and GlobalVars are passed as nil here because they are not applicable
 						// during the initial parsing of @-variables. They apply during request execution.
 						resolvedVarValue = client.resolveVariablesInText(varValue, client.programmaticVars, nil, nil, nil, requestScopedSystemVars, osEnvGetter, dotEnvVars)
-						resolvedVarValue = client.substituteDynamicSystemVariables(resolvedVarValue)
+						resolvedVarValue = client.substituteDynamicSystemVariables(resolvedVarValue, dotEnvVars)
 					}
 					currentFileVariables[varName] = resolvedVarValue
 				} else {
@@ -238,6 +239,25 @@ func parseRequests(reader io.Reader, filePath string, client *Client,
 				return nil, fmt.Errorf("line %d: malformed in-place variable definition, missing '=' or name: %s", lineNumber, originalLine)
 			}
 			continue // Variable definition line, skip further processing
+		}
+
+		// @import directive
+		if strings.HasPrefix(trimmedLine, "// @import ") || strings.HasPrefix(trimmedLine, "# @import ") {
+			prefixLen := 0
+			if strings.HasPrefix(trimmedLine, "// @import ") {
+				prefixLen = len("// @import ")
+			} else {
+				prefixLen = len("# @import ")
+			}
+			pathPart := strings.TrimSpace(trimmedLine[prefixLen:])
+			if len(pathPart) > 1 && strings.HasPrefix(pathPart, "\"") && strings.HasSuffix(pathPart, "\"") {
+				importedFilePath := pathPart[1 : len(pathPart)-1]
+				slog.Debug("Found @import directive", "importingFile", filePath, "importedFileRelativePath", importedFilePath, "lineNumber", lineNumber)
+				// TODO: Resolve path, check for circular imports, recursively call parseRequestFile, merge variables.
+			} else {
+				slog.Warn("Malformed @import directive: path not correctly quoted", "lineContent", originalLine, "lineNumber", lineNumber, "filePath", filePath)
+			}
+			continue // Import directive line, skip further processing
 		}
 
 		// Comments (# or //)

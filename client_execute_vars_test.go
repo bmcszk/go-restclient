@@ -163,7 +163,7 @@ func TestSubstituteDynamicSystemVariables_EnvVars(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.setup(t) // Set/unset env vars for this test case
-			output := client.substituteDynamicSystemVariables(tc.input)
+			output := client.substituteDynamicSystemVariables(tc.input, client.currentDotEnvVars)
 			assert.Equal(t, tc.want, output)
 			// Note: Testing for slog.Warn would require log capture, which is out of scope here.
 			// We rely on the fact that if tc.wantErr is true, the output should be the original input.
@@ -1595,7 +1595,7 @@ GET {{hostname}}{{path_segment}}/123
 		assert.Equal(t, expectedPath, capturedPath, "Captured path by server mismatch")
 
 		// Verify ParsedFile.FileVariables
-		parsedFile, pErr := parseRequestFile(requestFilePath, client)
+		parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
 		require.NoError(t, pErr)
 		require.NotNil(t, parsedFile.FileVariables)
 		assert.Equal(t, server.URL, parsedFile.FileVariables["hostname"])
@@ -1641,7 +1641,7 @@ User-Agent: test-client
 		assert.Equal(t, "test-client", capturedHeaders.Get("User-Agent")) // Ensure other headers are preserved
 
 		// Verify ParsedFile.FileVariables
-		parsedFile, pErr := parseRequestFile(requestFilePath, client)
+		parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
 		require.NoError(t, pErr)
 		require.NotNil(t, parsedFile.FileVariables)
 		assert.Equal(t, "Bearer_secret_token_123", parsedFile.FileVariables["auth_token"])
@@ -1700,7 +1700,7 @@ Content-Type: application/json
 		assert.JSONEq(t, expectedBodyJSON, string(capturedBody), "Captured body by server mismatch")
 
 		// Verify ParsedFile.FileVariables
-		parsedFile, pErr := parseRequestFile(requestFilePath, client)
+		parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
 		require.NoError(t, pErr)
 		require.NotNil(t, parsedFile.FileVariables)
 		assert.Equal(t, "SuperWidget", parsedFile.FileVariables["product_name"])
@@ -1753,7 +1753,7 @@ GET {{items_endpoint}}?host_check={{my_host}}
 		assert.Equal(t, expectedPathAndQuery, capturedURL)
 
 		// Verify ParsedFile.FileVariables (should store raw definitions)
-		parsedFile, pErr := parseRequestFile(requestFilePath, client)
+		parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
 		require.NoError(t, pErr)
 		require.NotNil(t, parsedFile.FileVariables)
 		assert.Equal(t, hostFromServer, parsedFile.FileVariables["my_host"])
@@ -2182,5 +2182,47 @@ GET http://localhost/test
 		}
 	})
 
-	// All in-place variable scenarios covered.
+	t.Run("inplace_variable_defined_by_dotenv_system_variable", func(t *testing.T) {
+		// Given: a .env file and an HTTP file using {{$dotenv VAR_NAME}} for an in-place variable
+		tempDir := t.TempDir()
+		dotEnvContent := "DOTENV_VAR_FOR_SYSTEM_TEST=actual_dotenv_value"
+		dotEnvFilePath := filepath.Join(tempDir, ".env")
+		err := os.WriteFile(dotEnvFilePath, []byte(dotEnvContent), 0600)
+		require.NoError(t, err, "Failed to write .env file")
+
+		var capturedPath string
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedPath = r.URL.Path
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		serverURL, err := url.Parse(server.URL)
+		require.NoError(t, err)
+
+		httpFileContent := fmt.Sprintf(`
+@my_api_key = {{$dotenv DOTENV_VAR_FOR_SYSTEM_TEST}}
+
+### Test Request
+GET http://%s/{{my_api_key}}
+`, serverURL.Host)
+
+		requestFilePath := filepath.Join(tempDir, "test.http")
+		err = os.WriteFile(requestFilePath, []byte(httpFileContent), 0600)
+		require.NoError(t, err, "Failed to write .http file")
+
+		client, err := NewClient()
+		require.NoError(t, err)
+
+		// When: the HTTP file is executed
+		responses, execErr := client.ExecuteFile(context.Background(), requestFilePath)
+
+		// Then: the request should be successful and the variable substituted correctly
+		require.NoError(t, execErr, "ExecuteFile returned an unexpected error")
+		require.Len(t, responses, 1, "Expected one response")
+		require.Nil(t, responses[0].Error, "Response error should be nil")
+		assert.Equal(t, "/actual_dotenv_value", capturedPath, "Expected path to be substituted with .env value via {{$dotenv}}")
+	})
+
+	// TODO: Add test for @var = {{$randomInt MIN MAX}}
 }

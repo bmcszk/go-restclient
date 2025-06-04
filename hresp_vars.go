@@ -151,7 +151,7 @@ func resolveAndSubstitute(content string, fileVars map[string]string, client *Cl
 
 	// Final pass for dynamic system variables (e.g., {{$dotenv VAR}}) or any system vars exposed by fallbacks.
 	if client != nil {
-		resolvedContent = client.substituteDynamicSystemVariables(resolvedContent)
+		resolvedContent = client.substituteDynamicSystemVariables(resolvedContent, client.currentDotEnvVars)
 	}
 
 	return resolvedContent, nil
