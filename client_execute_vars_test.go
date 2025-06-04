@@ -1697,6 +1697,54 @@ GET %s{{my_path_from_env_ext}}/data_ext
 	assert.Equal(t, expectedPath, capturedURLPath, "The URL path should be correctly substituted with the OS environment variable via {{$env.VAR_NAME}} in-place var")
 }
 
+// TestExecuteFile_InPlaceVars_MalformedDefinitions tests the behavior of in-place variable
+// substitution when the variable definitions are malformed.
+func TestExecuteFile_InPlaceVars_MalformedDefinitions(t *testing.T) {
+	tests := []struct {
+		name            string
+		httpFileContent string
+		expectedError   string // Substring of the expected error message from ExecuteFile
+	}{
+		{
+			name: "name_only_no_equals_no_value_extracted", // Modified for isolation
+			httpFileContent: `
+@name_only_var_ext
+
+### Test Request
+GET http://localhost/test_ext
+`,
+			expectedError: "malformed in-place variable definition, missing '=' or name",
+		},
+		{
+			name: "no_name_equals_value_extracted", // Modified for isolation
+			httpFileContent: `
+@=value_only_val_ext
+
+### Test Request
+GET http://localhost/test_ext
+`,
+			expectedError: "variable name cannot be empty in definition",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Given: an .http file with a malformed in-place variable definition
+			requestFilePath := createTempHTTPFileFromString(t, tc.httpFileContent)
+			client, err := NewClient()
+			require.NoError(t, err)
+
+			// When: the .http file is executed
+			_, execErr := client.ExecuteFile(context.Background(), requestFilePath)
+
+			// Then: an error should occur indicating a parsing failure due to the malformed variable
+			require.Error(t, execErr, "ExecuteFile should return an error for malformed variable definition")
+			assert.Contains(t, execErr.Error(), "failed to parse request file", "Error message should indicate parsing failure")
+			assert.Contains(t, execErr.Error(), tc.expectedError, "Error message should contain specific malformed reason")
+		})
+	}
+}
+
 func TestExecuteFile_InPlaceVariables(t *testing.T) {
 	/*
 			t.Run("simple_variable_in_url", func(t *testing.T) {
@@ -2273,85 +2321,87 @@ func TestExecuteFile_InPlaceVariables(t *testing.T) {
 	*/
 
 	/*
-		t.Run("inplace_variable_defined_by_dot_env_os_variable", func(t *testing.T) {
-			// Given: an .http file with an in-place variable defined by an OS environment variable using {{$env.VAR_NAME}}
-			const testEnvVarName = "MY_CONFIG_PATH_TEST_DOT_ENV"
-			const testEnvVarValue = "/usr/local/appconfig_dotenv" // Using a value that starts with /
-			var capturedURLPath string
+			t.Run("inplace_variable_defined_by_dot_env_os_variable", func(t *testing.T) {
+				// Given: an .http file with an in-place variable defined by an OS environment variable using {{$env.VAR_NAME}}
+				const testEnvVarName = "MY_CONFIG_PATH_TEST_DOT_ENV"
+				const testEnvVarValue = "/usr/local/appconfig_dotenv" // Using a value that starts with /
+				var capturedURLPath string
 
-			t.Setenv(testEnvVarName, testEnvVarValue)
+				t.Setenv(testEnvVarName, testEnvVarValue)
 
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				capturedURLPath = r.URL.Path
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer server.Close()
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					capturedURLPath = r.URL.Path
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer server.Close()
 
-			fileContent := fmt.Sprintf(`
-	@my_path_from_env = {{$env.%s}}
+				fileContent := fmt.Sprintf(`
+		@my_path_from_env = {{$env.%s}}
 
-	### Test Request With OS Env Var ({{$env.VAR}}) In In-Place Var
-	GET %s{{my_path_from_env}}/data
-	`, testEnvVarName, server.URL)
+		### Test Request With OS Env Var ({{$env.VAR}}) In In-Place Var
+		GET %s{{my_path_from_env}}/data
+		`, testEnvVarName, server.URL)
 
-			requestFilePath := createTempHTTPFileFromString(t, fileContent)
+				requestFilePath := createTempHTTPFileFromString(t, fileContent)
 
-			client, err := NewClient()
-			require.NoError(t, err)
-
-			results, execErr := client.ExecuteFile(context.Background(), requestFilePath)
-
-			require.NoError(t, execErr, "ExecuteFile should not return an error")
-			require.Len(t, results, 1, "Should have one result")
-			require.Nil(t, results[0].Error, "Request execution error should be nil")
-
-			expectedPath := testEnvVarValue + "/data"
-			assert.Equal(t, expectedPath, capturedURLPath, "The URL path should be correctly substituted with the OS environment variable via {{$env.VAR_NAME}} in-place var")
-		})
-	*/
-
-	t.Run("inplace_variable_malformed_definitions", func(t *testing.T) {
-		tests := []struct {
-			name            string
-			httpFileContent string
-			expectedError   string // Substring of the expected error message from ExecuteFile
-		}{
-			{
-				name: "name_only_no_equals_no_value",
-				httpFileContent: `
-@name_only_var
-
-### Test Request
-GET http://localhost/test
-`,
-				expectedError: "malformed in-place variable definition, missing '=' or name",
-			},
-			{
-				name: "no_name_equals_value",
-				httpFileContent: `
-@=value_only_val
-
-### Test Request
-GET http://localhost/test
-`,
-				expectedError: "variable name cannot be empty in definition",
-			},
-		}
-
-		for _, tc := range tests {
-			t.Run(tc.name, func(t *testing.T) {
-				requestFilePath := createTempHTTPFileFromString(t, tc.httpFileContent)
 				client, err := NewClient()
 				require.NoError(t, err)
 
-				_, execErr := client.ExecuteFile(context.Background(), requestFilePath)
+				results, execErr := client.ExecuteFile(context.Background(), requestFilePath)
 
-				require.Error(t, execErr, "ExecuteFile should return an error for malformed variable definition")
-				assert.Contains(t, execErr.Error(), "failed to parse request file", "Error message should indicate parsing failure") // Updated general error check
-				assert.Contains(t, execErr.Error(), tc.expectedError, "Error message should contain specific malformed reason")
+				require.NoError(t, execErr, "ExecuteFile should not return an error")
+				require.Len(t, results, 1, "Should have one result")
+				require.Nil(t, results[0].Error, "Request execution error should be nil")
+
+				expectedPath := testEnvVarValue + "/data"
+				assert.Equal(t, expectedPath, capturedURLPath, "The URL path should be correctly substituted with the OS environment variable via {{$env.VAR_NAME}} in-place var")
 			})
-		}
-	})
+	*/
+
+	/*
+			t.Run("inplace_variable_malformed_definitions", func(t *testing.T) {
+				tests := []struct {
+					name            string
+					httpFileContent string
+					expectedError   string // Substring of the expected error message from ExecuteFile
+				}{
+					{
+						name: "name_only_no_equals_no_value",
+						httpFileContent: `
+		@name_only_var
+
+		### Test Request
+		GET http://localhost/test
+		`,
+						expectedError: "malformed in-place variable definition, missing '=' or name",
+					},
+					{
+						name: "no_name_equals_value",
+						httpFileContent: `
+		@=value_only_val
+
+		### Test Request
+		GET http://localhost/test
+		`,
+						expectedError: "variable name cannot be empty in definition",
+					},
+				}
+
+				for _, tc := range tests {
+					t.Run(tc.name, func(t *testing.T) {
+						requestFilePath := createTempHTTPFileFromString(t, tc.httpFileContent)
+						client, err := NewClient()
+						require.NoError(t, err)
+
+						_, execErr := client.ExecuteFile(context.Background(), requestFilePath)
+
+						require.Error(t, execErr, "ExecuteFile should return an error for malformed variable definition")
+						assert.Contains(t, execErr.Error(), "failed to parse request file", "Error message should indicate parsing failure") // Updated general error check
+						assert.Contains(t, execErr.Error(), tc.expectedError, "Error message should contain specific malformed reason")
+					})
+				}
+			})
+	*/
 
 	t.Run("inplace_variable_defined_by_dotenv_system_variable", func(t *testing.T) {
 		// Given: a .env file and an HTTP file using {{$dotenv VAR_NAME}} for an in-place variable
