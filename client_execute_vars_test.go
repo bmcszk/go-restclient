@@ -1657,6 +1657,46 @@ GET %s/some/path/uuidtest
 	assert.NotEmpty(t, capturedHeaderValue, "Captured UUID header should not be empty")
 }
 
+// TestExecuteFile_InPlaceVars_DefinedByDotEnvOsVar tests in-place variable substitution
+// where the variable is defined by an OS environment variable using {{$env.VAR_NAME}} syntax.
+func TestExecuteFile_InPlaceVars_DefinedByDotEnvOsVar(t *testing.T) {
+	// Given: an .http file with an in-place variable defined by an OS environment variable using {{$env.VAR_NAME}}
+	const testEnvVarName = "MY_CONFIG_PATH_DOT_ENV_EXTRACTED"       // Modified for isolation
+	const testEnvVarValue = "/usr/local/appconfig_dotenv_extracted" // Modified for isolation
+	var capturedURLPath string
+
+	t.Setenv(testEnvVarName, testEnvVarValue)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedURLPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	fileContent := fmt.Sprintf(`
+@my_path_from_env_ext = {{$env.%s}}
+
+### Test Request With OS Env Var ({{$env.VAR}}) In In-Place Var
+GET %s{{my_path_from_env_ext}}/data_ext
+`, testEnvVarName, server.URL)
+
+	requestFilePath := createTempHTTPFileFromString(t, fileContent)
+
+	client, err := NewClient()
+	require.NoError(t, err)
+
+	// When: the .http file is executed
+	results, execErr := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then: no error should occur and the URL path should be correctly substituted
+	require.NoError(t, execErr, "ExecuteFile should not return an error")
+	require.Len(t, results, 1, "Should have one result")
+	require.Nil(t, results[0].Error, "Request execution error should be nil")
+
+	expectedPath := testEnvVarValue + "/data_ext"
+	assert.Equal(t, expectedPath, capturedURLPath, "The URL path should be correctly substituted with the OS environment variable via {{$env.VAR_NAME}} in-place var")
+}
+
 func TestExecuteFile_InPlaceVariables(t *testing.T) {
 	/*
 			t.Run("simple_variable_in_url", func(t *testing.T) {
@@ -2193,80 +2233,82 @@ func TestExecuteFile_InPlaceVariables(t *testing.T) {
 	*/
 
 	/*
-		t.Run("inplace_variable_defined_by_uuid_system_variable", func(t *testing.T) {
-			// Given: an .http file with an in-place variable defined by the {{$uuid}} system variable
-			var capturedHeaderValue string
-			const headerKey = "X-Request-ID"
+			t.Run("inplace_variable_defined_by_uuid_system_variable", func(t *testing.T) {
+				// Given: an .http file with an in-place variable defined by the {{$uuid}} system variable
+				var capturedHeaderValue string
+				const headerKey = "X-Request-ID"
+
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					capturedHeaderValue = r.Header.Get(headerKey)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer server.Close()
+
+				fileContent := fmt.Sprintf(`
+		@my_request_uuid = {{$uuid}}
+
+		### Test Request With UUID In-Place Var in Header
+		GET %s/some/path
+		%s: {{my_request_uuid}}
+		`, server.URL, headerKey)
+
+				requestFilePath := createTempHTTPFileFromString(t, fileContent)
+
+				client, err := NewClient()
+				require.NoError(t, err)
+
+				// When: the .http file is executed
+				results, execErr := client.ExecuteFile(context.Background(), requestFilePath)
+
+				// Then: no error should occur and the header should contain a valid UUID
+				require.NoError(t, execErr, "ExecuteFile should not return an error")
+				require.Len(t, results, 1, "Should have one result")
+				require.Nil(t, results[0].Error, "Request execution error should be nil")
+
+				// Validate that the captured header value is a valid UUID
+				_, err = uuid.Parse(capturedHeaderValue)
+				assert.NoError(t, err, "Header value should be a valid UUID. Got: %s", capturedHeaderValue)
+				assert.NotEmpty(t, capturedHeaderValue, "Captured UUID header should not be empty")
+			})
+	*/
+
+	/*
+		t.Run("inplace_variable_defined_by_dot_env_os_variable", func(t *testing.T) {
+			// Given: an .http file with an in-place variable defined by an OS environment variable using {{$env.VAR_NAME}}
+			const testEnvVarName = "MY_CONFIG_PATH_TEST_DOT_ENV"
+			const testEnvVarValue = "/usr/local/appconfig_dotenv" // Using a value that starts with /
+			var capturedURLPath string
+
+			t.Setenv(testEnvVarName, testEnvVarValue)
 
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				capturedHeaderValue = r.Header.Get(headerKey)
+				capturedURLPath = r.URL.Path
 				w.WriteHeader(http.StatusOK)
 			}))
 			defer server.Close()
 
 			fileContent := fmt.Sprintf(`
-	@my_request_uuid = {{$uuid}}
+	@my_path_from_env = {{$env.%s}}
 
-	### Test Request With UUID In-Place Var in Header
-	GET %s/some/path
-	%s: {{my_request_uuid}}
-	`, server.URL, headerKey)
+	### Test Request With OS Env Var ({{$env.VAR}}) In In-Place Var
+	GET %s{{my_path_from_env}}/data
+	`, testEnvVarName, server.URL)
 
 			requestFilePath := createTempHTTPFileFromString(t, fileContent)
 
 			client, err := NewClient()
 			require.NoError(t, err)
 
-			// When: the .http file is executed
 			results, execErr := client.ExecuteFile(context.Background(), requestFilePath)
 
-			// Then: no error should occur and the header should contain a valid UUID
 			require.NoError(t, execErr, "ExecuteFile should not return an error")
 			require.Len(t, results, 1, "Should have one result")
 			require.Nil(t, results[0].Error, "Request execution error should be nil")
 
-			// Validate that the captured header value is a valid UUID
-			_, err = uuid.Parse(capturedHeaderValue)
-			assert.NoError(t, err, "Header value should be a valid UUID. Got: %s", capturedHeaderValue)
-			assert.NotEmpty(t, capturedHeaderValue, "Captured UUID header should not be empty")
+			expectedPath := testEnvVarValue + "/data"
+			assert.Equal(t, expectedPath, capturedURLPath, "The URL path should be correctly substituted with the OS environment variable via {{$env.VAR_NAME}} in-place var")
 		})
 	*/
-
-	t.Run("inplace_variable_defined_by_dot_env_os_variable", func(t *testing.T) {
-		// Given: an .http file with an in-place variable defined by an OS environment variable using {{$env.VAR_NAME}}
-		const testEnvVarName = "MY_CONFIG_PATH_TEST_DOT_ENV"
-		const testEnvVarValue = "/usr/local/appconfig_dotenv" // Using a value that starts with /
-		var capturedURLPath string
-
-		t.Setenv(testEnvVarName, testEnvVarValue)
-
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			capturedURLPath = r.URL.Path
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-
-		fileContent := fmt.Sprintf(`
-@my_path_from_env = {{$env.%s}}
-
-### Test Request With OS Env Var ({{$env.VAR}}) In In-Place Var
-GET %s{{my_path_from_env}}/data
-`, testEnvVarName, server.URL)
-
-		requestFilePath := createTempHTTPFileFromString(t, fileContent)
-
-		client, err := NewClient()
-		require.NoError(t, err)
-
-		results, execErr := client.ExecuteFile(context.Background(), requestFilePath)
-
-		require.NoError(t, execErr, "ExecuteFile should not return an error")
-		require.Len(t, results, 1, "Should have one result")
-		require.Nil(t, results[0].Error, "Request execution error should be nil")
-
-		expectedPath := testEnvVarValue + "/data"
-		assert.Equal(t, expectedPath, capturedURLPath, "The URL path should be correctly substituted with the OS environment variable via {{$env.VAR_NAME}} in-place var")
-	})
 
 	t.Run("inplace_variable_malformed_definitions", func(t *testing.T) {
 		tests := []struct {
