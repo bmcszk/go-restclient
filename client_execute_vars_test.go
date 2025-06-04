@@ -1579,6 +1579,44 @@ Content-Type: application/json
 	assert.JSONEq(t, expectedBody, string(capturedBody), "The request body should be correctly substituted with the in-place variable")
 }
 
+// TestExecuteFile_InPlaceVars_DefinedByAnotherInPlaceVar tests the scenario where an in-place variable
+// is defined by another in-place variable, and this composite variable is used in the request URL.
+func TestExecuteFile_InPlaceVars_DefinedByAnotherInPlaceVar(t *testing.T) {
+	// Given: an .http file with an in-place variable defined by another in-place variable
+	const basePathValue = "/api/v1/nested"   // Changed to avoid potential conflicts if run in parallel
+	const resourcePathValue = "items_nested" // Changed to avoid potential conflicts
+	var capturedURLPath string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedURLPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	fileContent := fmt.Sprintf(`
+@base_path = %s
+@resource = %s
+@full_url_segment = {{base_path}}/{{resource}}/123
+
+### Test Request With Nested In-Place Var in URL
+GET %s{{full_url_segment}}
+`, basePathValue, resourcePathValue, server.URL)
+
+	requestFilePath := createTempHTTPFileFromString(t, fileContent)
+
+	client, err := NewClient()
+	require.NoError(t, err)
+
+	// When: the .http file is executed
+	results, execErr := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then: no error should occur and the URL path should be correctly substituted
+	require.NoError(t, execErr, "ExecuteFile should not return an error")
+	require.Len(t, results, 1, "Should have one result")
+	require.Nil(t, results[0].Error, "Request execution error should be nil")
+	assert.Equal(t, "/api/v1/nested/items_nested/123", capturedURLPath, "The URL path should be correctly substituted with nested in-place variables")
+}
+
 func TestExecuteFile_InPlaceVariables(t *testing.T) {
 	/*
 			t.Run("simple_variable_in_url", func(t *testing.T) {
@@ -2033,32 +2071,70 @@ func TestExecuteFile_InPlaceVariables(t *testing.T) {
 	*/
 
 	/*
-		t.Run("inplace_variable_in_body", func(t *testing.T) {
-			// Given: an .http file with an in-place variable used in the request body
-			const userIdValue = "user-from-var-456"
-			const expectedBody = `{"id": "user-from-var-456", "status": "pending"}`
+			t.Run("inplace_variable_in_body", func(t *testing.T) {
+				// Given: an .http file with an in-place variable used in the request body
+				const userIdValue = "user-from-var-456"
+				const expectedBody = `{"id": "user-from-var-456", "status": "pending"}`
 
-			var capturedBody []byte
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				var err error
-				capturedBody, err = io.ReadAll(r.Body)
+				var capturedBody []byte
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					var err error
+					capturedBody, err = io.ReadAll(r.Body)
+					require.NoError(t, err)
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer server.Close()
+
+				fileContent := fmt.Sprintf(`
+		@my_user_id = %s
+
+		### Test Request With In-Place Var in Body
+		POST %s/submit
+		Content-Type: application/json
+
+		{
+		  "id": "{{my_user_id}}",
+		  "status": "pending"
+		}
+		`, userIdValue, server.URL)
+
+				requestFilePath := createTempHTTPFileFromString(t, fileContent)
+
+				client, err := NewClient()
 				require.NoError(t, err)
+
+				// When: the .http file is executed
+				results, execErr := client.ExecuteFile(context.Background(), requestFilePath)
+
+				// Then: no error should occur and the body should be correctly substituted
+				require.NoError(t, execErr, "ExecuteFile should not return an error")
+				require.Len(t, results, 1, "Should have one result")
+				require.Nil(t, results[0].Error, "Request execution error should be nil")
+				assert.JSONEq(t, expectedBody, string(capturedBody), "The request body should be correctly substituted with the in-place variable")
+			})
+	*/
+
+	/*
+		t.Run("inplace_variable_defined_by_another_inplace_variable", func(t *testing.T) {
+			// Given: an .http file with an in-place variable defined by another in-place variable
+			const basePathValue = "/api/v1"
+			const resourcePathValue = "items"
+			var capturedURLPath string
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				capturedURLPath = r.URL.Path
 				w.WriteHeader(http.StatusOK)
 			}))
 			defer server.Close()
 
 			fileContent := fmt.Sprintf(`
-	@my_user_id = %s
+	@base_path = %s
+	@resource = %s
+	@full_url_segment = {{base_path}}/{{resource}}/123
 
-	### Test Request With In-Place Var in Body
-	POST %s/submit
-	Content-Type: application/json
-
-	{
-	  "id": "{{my_user_id}}",
-	  "status": "pending"
-	}
-	`, userIdValue, server.URL)
+	### Test Request With Nested In-Place Var in URL
+	GET %s{{full_url_segment}}
+	`, basePathValue, resourcePathValue, server.URL)
 
 			requestFilePath := createTempHTTPFileFromString(t, fileContent)
 
@@ -2068,49 +2144,13 @@ func TestExecuteFile_InPlaceVariables(t *testing.T) {
 			// When: the .http file is executed
 			results, execErr := client.ExecuteFile(context.Background(), requestFilePath)
 
-			// Then: no error should occur and the body should be correctly substituted
+			// Then: no error should occur and the URL path should be correctly substituted
 			require.NoError(t, execErr, "ExecuteFile should not return an error")
 			require.Len(t, results, 1, "Should have one result")
 			require.Nil(t, results[0].Error, "Request execution error should be nil")
-			assert.JSONEq(t, expectedBody, string(capturedBody), "The request body should be correctly substituted with the in-place variable")
+			assert.Equal(t, "/api/v1/items/123", capturedURLPath, "The URL path should be correctly substituted with nested in-place variables")
 		})
 	*/
-
-	t.Run("inplace_variable_defined_by_another_inplace_variable", func(t *testing.T) {
-		// Given: an .http file with an in-place variable defined by another in-place variable
-		const basePathValue = "/api/v1"
-		const resourcePathValue = "items"
-		var capturedURLPath string
-
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			capturedURLPath = r.URL.Path
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-
-		fileContent := fmt.Sprintf(`
-@base_path = %s
-@resource = %s
-@full_url_segment = {{base_path}}/{{resource}}/123
-
-### Test Request With Nested In-Place Var in URL
-GET %s{{full_url_segment}}
-`, basePathValue, resourcePathValue, server.URL)
-
-		requestFilePath := createTempHTTPFileFromString(t, fileContent)
-
-		client, err := NewClient()
-		require.NoError(t, err)
-
-		// When: the .http file is executed
-		results, execErr := client.ExecuteFile(context.Background(), requestFilePath)
-
-		// Then: no error should occur and the URL path should be correctly substituted
-		require.NoError(t, execErr, "ExecuteFile should not return an error")
-		require.Len(t, results, 1, "Should have one result")
-		require.Nil(t, results[0].Error, "Request execution error should be nil")
-		assert.Equal(t, "/api/v1/items/123", capturedURLPath, "The URL path should be correctly substituted with nested in-place variables")
-	})
 
 	t.Run("inplace_variable_defined_by_uuid_system_variable", func(t *testing.T) {
 		// Given: an .http file with an in-place variable defined by the {{$uuid}} system variable
