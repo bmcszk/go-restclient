@@ -200,7 +200,12 @@ func parseRequests(reader io.Reader, filePath string, client *Client,
 			if currentRequest != nil && (currentRequest.Method != "" || currentRequest.RawURLString != "" || len(bodyLines) > 0) {
 				currentRequest.RawBody = strings.Join(bodyLines, "\n")
 				currentRequest.RawBody = strings.TrimRight(currentRequest.RawBody, " \t\r\n") // Trim trailing whitespace/newlines
-				currentRequest.Body = strings.NewReader(currentRequest.RawBody)
+				currentRequest.Body = strings.NewReader(currentRequest.RawBody)               // For single read if needed directly by parser consumers
+				// GetBody allows the body to be read multiple times, as required by http.Request
+				rawBodyCopy := currentRequest.RawBody // Capture rawBody for the closure
+				currentRequest.GetBody = func() (io.ReadCloser, error) {
+					return io.NopCloser(strings.NewReader(rawBodyCopy)), nil
+				}
 
 				// Ensure ActiveVariables is initialized and populated with current file-level variables
 				if currentRequest.ActiveVariables == nil { // Should usually be pre-initialized if request was created
@@ -468,7 +473,12 @@ func parseRequests(reader io.Reader, filePath string, client *Client,
 	if currentRequest != nil && (currentRequest.Method != "" || currentRequest.RawURLString != "" || len(bodyLines) > 0) {
 		currentRequest.RawBody = strings.Join(bodyLines, "\n")
 		currentRequest.RawBody = strings.TrimRight(currentRequest.RawBody, " \t\r\n") // Trim trailing whitespace/newlines
-		currentRequest.Body = strings.NewReader(currentRequest.RawBody)
+		currentRequest.Body = strings.NewReader(currentRequest.RawBody)               // For single read if needed directly by parser consumers
+		// GetBody allows the body to be read multiple times, as required by http.Request
+		rawBodyCopy := currentRequest.RawBody // Capture rawBody for the closure
+		currentRequest.GetBody = func() (io.ReadCloser, error) {
+			return io.NopCloser(strings.NewReader(rawBodyCopy)), nil
+		}
 
 		// Ensure ActiveVariables is initialized and populated with current file-level variables
 		if currentRequest.ActiveVariables == nil {
