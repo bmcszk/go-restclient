@@ -24,8 +24,9 @@ type Request struct {
 	URL          *url.URL // Parsed URL, potentially after variable substitution
 	HTTPVersion  string   // e.g., "HTTP/1.1"
 	Headers      http.Header
-	Body         io.Reader // For streaming body content after processing
-	RawBody      string    // Store the raw body string as read from the file, before variable substitution
+	Body         io.Reader                     // For streaming body content after processing
+	RawBody      string                        // Store the raw body string as read from the file, before variable substitution
+	GetBody      func() (io.ReadCloser, error) // For http.Request.GetBody compatibility
 
 	// ActiveVariables are variables resolved at the time of request execution,
 	// sourced from environment, global scope (from previous scripts), and pre-request scripts.

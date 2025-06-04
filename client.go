@@ -187,7 +187,7 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 			osEnvGetter,
 			c.currentDotEnvVars,
 		)
-		substitutedRawURL = c.substituteDynamicSystemVariables(substitutedRawURL)
+		substitutedRawURL = c.substituteDynamicSystemVariables(substitutedRawURL, c.currentDotEnvVars)
 
 		finalParsedURL, parseErr := url.Parse(substitutedRawURL)
 
@@ -217,7 +217,7 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 						osEnvGetter,
 						c.currentDotEnvVars,
 					)
-					newValues[j] = c.substituteDynamicSystemVariables(resolvedVal)
+					newValues[j] = c.substituteDynamicSystemVariables(resolvedVal, c.currentDotEnvVars)
 					// "[DEBUG_HEADER_FINAL]", "key", key, "index", j, "finalValue", newValues[j]) // Added for debugging header values
 				}
 				restClientReq.Headers[key] = newValues
@@ -237,9 +237,13 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 				osEnvGetter,
 				c.currentDotEnvVars,
 			)
-			restClientReq.RawBody = c.substituteDynamicSystemVariables(resolvedBody)
-			// "[DEBUG_FINAL_RAW_BODY]", "rawBody", restClientReq.RawBody) // New log statement
-			restClientReq.Body = strings.NewReader(restClientReq.RawBody)
+			finalBody := c.substituteDynamicSystemVariables(resolvedBody, c.currentDotEnvVars)
+			// finalBody is now correctly substituted
+			restClientReq.RawBody = finalBody // Update RawBody with the substituted content
+			restClientReq.Body = strings.NewReader(finalBody)
+			restClientReq.GetBody = func() (io.ReadCloser, error) {
+				return io.NopCloser(strings.NewReader(finalBody)), nil
+			}
 		}
 
 		resp, execErr := c.executeRequest(ctx, restClientReq)
@@ -299,7 +303,7 @@ func (c *Client) resolveVariablesInText(text string, clientProgrammaticVars map[
 
 			var varName string
 			var fallbackValue string
-			hasFallback := false
+			var hasFallback bool
 
 			if strings.Contains(directive, "|") {
 				parts := strings.SplitN(directive, "|", 2)
@@ -318,8 +322,6 @@ func (c *Client) resolveVariablesInText(text string, clientProgrammaticVars map[
 						return val
 					}
 				}
-				// If it's a $-prefixed varName not in requestScopedSystemVars,
-				// it could be a dynamic one (e.g. {{$dotenv NAME}}, {{$randomInt MIN MAX}})
 				// or an unknown one. These are left for substituteDynamicSystemVariables.
 				// So, we return the original 'match' here to preserve the placeholder for the next stage.
 				return match
@@ -406,7 +408,7 @@ func randomStringFromCharset(length int, charset string) string {
 // Other simple system variables like {{$uuid}} or {{$timestamp}}
 // should have been pre-resolved and substituted by resolveVariablesInText via the
 // requestScopedSystemVars map.
-func (c *Client) substituteDynamicSystemVariables(text string) string {
+func (c *Client) substituteDynamicSystemVariables(text string, activeDotEnvVars map[string]string) string {
 	// "[DEBUG_DYN_VARS_INPUT]", "inputText", text)
 	originalTextForLogging := text // Keep a copy for logging. Used if we add more complex types with logging.
 	_ = originalTextForLogging     // Avoid unused variable error if no logging exists below.
@@ -534,7 +536,7 @@ func (c *Client) substituteDynamicSystemVariables(text string) string {
 		parts := reDotEnv.FindStringSubmatch(match)
 		if len(parts) == 2 {
 			varName := parts[1]
-			if val, ok := c.currentDotEnvVars[varName]; ok {
+			if val, ok := activeDotEnvVars[varName]; ok {
 				return val
 			}
 			return "" // Variable not found in .env, return empty string
