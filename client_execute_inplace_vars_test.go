@@ -780,3 +780,20 @@ func TestExecuteFile_InPlace_VariableDefinedByDotEnvOsVariable(t *testing.T) {
 	assert.Equal(t, "{{$env.MY_CONFIG_PATH_TEST_DOT_ENV}}", parsedFile.FileVariables["my_path_from_env"], "Parsed file variable 'my_path_from_env' mismatch")
 	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["test_server_url"], "Parsed file variable 'test_server_url' (placeholder) mismatch")
 }
+
+func TestExecuteFile_InPlace_Malformed_NameOnlyNoEqualsNoValue(t *testing.T) {
+	// Given: an .http file with a malformed in-place variable (name only, no equals, no value)
+	requestFilePath := "testdata/execute_inplace_vars/malformed_name_only_no_equals_no_value/request.http"
+	expectedErrorSubstring := "malformed in-place variable definition, missing '=' or name"
+
+	client, err := NewClient()
+	require.NoError(t, err)
+
+	// When: the .http file is executed
+	_, execErr := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then: an error should occur indicating a parsing failure due to the malformed variable
+	require.Error(t, execErr, "ExecuteFile should return an error for malformed variable definition")
+	assert.Contains(t, execErr.Error(), "failed to parse request file", "Error message should indicate parsing failure")
+	assert.Contains(t, execErr.Error(), expectedErrorSubstring, "Error message should contain specific malformed reason")
+}
