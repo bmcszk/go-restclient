@@ -539,3 +539,61 @@ func TestExecuteFile_InPlace_VariableDefinedByOsEnvVariable(t *testing.T) {
 	require.NotNil(t, parsedFile.FileVariables)
 	assert.Equal(t, "{{$processEnv TEST_USER_HOME_INPLACE}}", parsedFile.FileVariables["my_home_dir"], "Parsed file variable 'my_home_dir' mismatch")
 }
+
+func TestExecuteFile_InPlace_VariableInAuthHeader(t *testing.T) {
+	// Given: an .http file with an in-place variable used in an X-Auth-Token header
+	const headerKey = "X-Auth-Token"
+	const headerValue = "secret-token-12345"
+
+	var capturedHeaders http.Header
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedHeaders = r.Header
+		w.WriteHeader(http.StatusOK) // Minimal response, as per expected.hresp
+	}))
+	defer server.Close()
+
+	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_in_auth_header/request.http"
+	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_in_auth_header/expected.hresp"
+
+	client, err := NewClient()
+	require.NoError(t, err)
+
+	// Set the mock server URL as a programmatic variable for {{test_server_url}} in request.http
+	client.SetProgrammaticVar("test_server_url", server.URL)
+
+	// When: the .http file is executed
+	responses, execErr := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then: no error should occur, response should be validated, and the header should be correctly substituted
+	require.NoError(t, execErr, "ExecuteFile should not return an error")
+	require.Len(t, responses, 1, "Expected 1 response")
+
+	resp := responses[0]
+	require.NoError(t, resp.Error, "Response error should be nil")
+
+	// Parse expected response from .hresp file
+	expectedRespHeaders, expectedBodyStr, pErr := parseHrespBody(expectedHrespPath)
+	require.NoError(t, pErr, "Failed to parse .hresp file: %s", expectedHrespPath)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "Status code mismatch")
+	// Assert headers from .hresp (should be none for the minimal .hresp)
+	for key, expectedVal := range expectedRespHeaders {
+		assert.Equal(t, expectedVal[0], resp.Headers.Get(key), fmt.Sprintf("Header %s mismatch", key))
+	}
+	// Assert body from .hresp (should be empty for the minimal .hresp)
+	if expectedBodyStr != "" {
+		assert.JSONEq(t, expectedBodyStr, string(resp.Body), "Response body mismatch")
+	} else {
+		assert.Empty(t, string(resp.Body), "Response body should be empty")
+	}
+
+	// Main assertion: check the captured header
+	assert.Equal(t, headerValue, capturedHeaders.Get(headerKey), "The X-Auth-Token header should be correctly substituted")
+
+	// Verify ParsedFile.FileVariables
+	parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
+	require.NoError(t, pErr)
+	require.NotNil(t, parsedFile.FileVariables)
+	assert.Equal(t, headerValue, parsedFile.FileVariables["my_token"], "Parsed file variable 'my_token' mismatch")
+	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["test_server_url"], "Parsed file variable 'test_server_url' (placeholder) mismatch")
+}
