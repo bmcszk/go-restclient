@@ -718,3 +718,65 @@ func TestExecuteFile_InPlace_VariableDefinedByAnotherInPlaceVariable(t *testing.
 	assert.Equal(t, "{{base_path}}/{{resource}}/123", parsedFile.FileVariables["full_url_segment"], "Parsed file variable 'full_url_segment' mismatch")
 	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["test_server_url"], "Parsed file variable 'test_server_url' (placeholder) mismatch")
 }
+
+func TestExecuteFile_InPlace_VariableDefinedByDotEnvOsVariable(t *testing.T) {
+	// Given: an .http file with an in-place variable defined by an OS environment variable using {{$env.VAR_NAME}}
+	const testEnvVarName = "MY_CONFIG_PATH_TEST_DOT_ENV"
+	const testEnvVarValue = "/usr/local/appconfig_dotenv"
+	var capturedURLPath string
+
+	// Set the OS environment variable that the .http file will reference via {{$env.MY_CONFIG_PATH_TEST_DOT_ENV}}
+	t.Setenv(testEnvVarName, testEnvVarValue)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedURLPath = r.URL.Path
+		w.WriteHeader(http.StatusOK) // Minimal response
+	}))
+	defer server.Close()
+
+	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_defined_by_dot_env_os_variable/request.http"
+	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_defined_by_dot_env_os_variable/expected.hresp"
+
+	client, err := NewClient()
+	require.NoError(t, err)
+
+	// Set the mock server URL as a programmatic variable for {{test_server_url}} in request.http
+	client.SetProgrammaticVar("test_server_url", server.URL)
+
+	// When: the .http file is executed
+	responses, execErr := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then: no error should occur, response should be validated, and the URL path should be correctly substituted
+	require.NoError(t, execErr, "ExecuteFile should not return an error")
+	require.Len(t, responses, 1, "Expected 1 response")
+
+	resp := responses[0]
+	require.NoError(t, resp.Error, "Response error should be nil")
+
+	// Parse expected response from .hresp file (minimal for this test)
+	expectedRespHeaders, expectedBodyStr, pErr := parseHrespBody(expectedHrespPath)
+	require.NoError(t, pErr, "Failed to parse .hresp file: %s", expectedHrespPath)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "Status code mismatch")
+	// Assert headers from .hresp (should be none for the minimal .hresp)
+	for key, expectedVal := range expectedRespHeaders {
+		assert.Equal(t, expectedVal[0], resp.Headers.Get(key), fmt.Sprintf("Header %s mismatch", key))
+	}
+	// Assert body from .hresp (should be empty for the minimal .hresp)
+	if expectedBodyStr != "" {
+		assert.JSONEq(t, expectedBodyStr, string(resp.Body), "Response body mismatch")
+	} else {
+		assert.Empty(t, string(resp.Body), "Response body should be empty")
+	}
+
+	// Main assertion: check the captured URL path
+	expectedPath := testEnvVarValue + "/data" // As per original test logic
+	assert.Equal(t, expectedPath, capturedURLPath, "The URL path should be correctly substituted with the OS environment variable via {{$env.VAR_NAME}} in-place var")
+
+	// Verify ParsedFile.FileVariables
+	parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
+	require.NoError(t, pErr)
+	require.NotNil(t, parsedFile.FileVariables)
+	assert.Equal(t, "{{$env.MY_CONFIG_PATH_TEST_DOT_ENV}}", parsedFile.FileVariables["my_path_from_env"], "Parsed file variable 'my_path_from_env' mismatch")
+	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["test_server_url"], "Parsed file variable 'test_server_url' (placeholder) mismatch")
+}
