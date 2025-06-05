@@ -1,0 +1,10 @@
+@name = "test_user"
+@email = "user@example.com"
+
+POST {{test_server_url}}/createuser
+Content-Type: application/json
+
+{
+    "username": "{{name}}",
+    "email_address": "{{email}}"
+}

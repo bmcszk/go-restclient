@@ -2,6 +2,7 @@ package restclient
 
 import (
 	"context"
+	crypto_rand "crypto/rand" // Added for crypto/rand.Read
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -13,9 +14,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
-
-	// "regexp" // Unused
-
 	"strings"
 	"time"
 
@@ -123,6 +121,16 @@ func WithEnvironment(name string) ClientOption {
 	}
 }
 
+// SetProgrammaticVar sets or updates a single programmatic variable for the client instance.
+// These variables can be used in .http and .hresp files and have the highest precedence.
+func (c *Client) SetProgrammaticVar(key string, value interface{}) error {
+	if c.programmaticVars == nil {
+		c.programmaticVars = make(map[string]interface{})
+	}
+	c.programmaticVars[key] = value
+	return nil
+}
+
 // ExecuteFile parses a request file (.http, .rest), executes all requests found, and returns their responses.
 // It returns an error if the file cannot be parsed or no requests are found.
 // Individual request execution errors are stored within each Response object.
@@ -177,52 +185,16 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 	for i, restClientReq := range parsedFile.Requests {
 		requestScopedSystemVars := c.generateRequestScopedSystemVariables()
 
-		substitutedRawURL := c.resolveVariablesInText(
-			restClientReq.RawURLString,
-			c.programmaticVars,
-			restClientReq.ActiveVariables,
-			parsedFile.EnvironmentVariables, // Added for T3
-			parsedFile.GlobalVariables,      // Added for T3
-			requestScopedSystemVars,
-			osEnvGetter,
-			c.currentDotEnvVars,
-		)
-		substitutedRawURL = c.substituteDynamicSystemVariables(substitutedRawURL, c.currentDotEnvVars)
-
-		finalParsedURL, parseErr := url.Parse(substitutedRawURL)
-
-		if parseErr != nil {
+		finalParsedURL, err := c.substituteRequestVariables(restClientReq, parsedFile, requestScopedSystemVars, osEnvGetter)
+		if err != nil {
 			resp := &Response{Request: restClientReq}
-			resp.Error = fmt.Errorf("failed to parse URL after variable substitution: %s (original: %s): %w", substitutedRawURL, restClientReq.RawURLString, parseErr)
-			wrappedErr := fmt.Errorf("request %d (%s %s) failed URL parsing: %w", i+1, restClientReq.Method, restClientReq.RawURLString, resp.Error)
+			resp.Error = err // Already wrapped in substituteRequestVariables
+			wrappedErr := fmt.Errorf("request %d (%s %s) failed variable substitution: %w", i+1, restClientReq.Method, restClientReq.RawURLString, resp.Error)
 			multiErr = multierror.Append(multiErr, wrappedErr)
 			responses[i] = resp
 			continue
 		}
 		restClientReq.URL = finalParsedURL
-
-		// "[DEBUG_EXECUTEFILE_HEADERS_AFTER_PARSE]", "filePath", requestFilePath, "reqName", restClientReq.Name, "initialHeaders", restClientReq.Headers)
-
-		if restClientReq.Headers != nil {
-			for key, values := range restClientReq.Headers {
-				newValues := make([]string, len(values))
-				for j, val := range values {
-					resolvedVal := c.resolveVariablesInText(
-						val,
-						c.programmaticVars,
-						restClientReq.ActiveVariables,
-						parsedFile.EnvironmentVariables, // Added for T3
-						parsedFile.GlobalVariables,      // Added for T3
-						requestScopedSystemVars,
-						osEnvGetter,
-						c.currentDotEnvVars,
-					)
-					newValues[j] = c.substituteDynamicSystemVariables(resolvedVal, c.currentDotEnvVars)
-					// "[DEBUG_HEADER_FINAL]", "key", key, "index", j, "finalValue", newValues[j]) // Added for debugging header values
-				}
-				restClientReq.Headers[key] = newValues
-			}
-		}
 
 		// "[DEBUG_EXECUTEFILE_HEADERS_BEFORE_EXECREQ]", "filePath", requestFilePath, "reqName", restClientReq.Name, "headers", restClientReq.Headers)
 
@@ -247,29 +219,19 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 		}
 
 		resp, execErr := c.executeRequest(ctx, restClientReq)
-		if execErr != nil {
-			if resp == nil {
-				resp = &Response{Request: restClientReq}
-			}
-			currentErr := resp.Error
-			if currentErr == nil {
-				resp.Error = execErr
-			} else {
-				resp.Error = fmt.Errorf("execution error: %w (prior error: %s)", execErr, currentErr)
-			}
-			urlForError := restClientReq.RawURLString
-			if restClientReq.URL != nil {
-				urlForError = restClientReq.URL.String()
-			}
-			wrappedExecErr := fmt.Errorf("request %d (%s %s) failed with critical error: %w", i+1, restClientReq.Method, urlForError, execErr)
-			multiErr = multierror.Append(multiErr, wrappedExecErr)
-		} else if resp != nil && resp.Error != nil {
-			urlForError := restClientReq.RawURLString
-			if restClientReq.URL != nil {
-				urlForError = restClientReq.URL.String()
-			}
-			wrappedRespErr := fmt.Errorf("request %d (%s %s) processing resulted in error: %w", i+1, restClientReq.Method, urlForError, resp.Error)
-			multiErr = multierror.Append(multiErr, wrappedRespErr)
+
+		urlForError := restClientReq.RawURLString
+		if restClientReq.URL != nil {
+			urlForError = restClientReq.URL.String()
+		}
+
+		if execErr != nil { // Critical error from executeRequest, resp from executeRequest is nil
+			resp = &Response{Request: restClientReq, Error: execErr} // Initialize resp and set its error
+			wrappedErr := fmt.Errorf("request %d (%s %s) failed with critical error: %w", i+1, restClientReq.Method, urlForError, execErr)
+			multiErr = multierror.Append(multiErr, wrappedErr)
+		} else if resp.Error != nil { // Non-critical error, execErr was nil, resp is non-nil from executeRequest
+			wrappedErr := fmt.Errorf("request %d (%s %s) processing resulted in error: %w", i+1, restClientReq.Method, urlForError, resp.Error)
+			multiErr = multierror.Append(multiErr, wrappedErr)
 		}
 		responses[i] = resp
 	}
@@ -403,6 +365,49 @@ func randomStringFromCharset(length int, charset string) string {
 	return string(b)
 }
 
+// substituteRequestVariables handles the substitution of variables in the request's URL and headers.
+// It returns the final parsed URL or an error if substitution/parsing fails.
+func (c *Client) substituteRequestVariables(rcRequest *Request, parsedFile *ParsedFile, requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool)) (*url.URL, error) {
+	substitutedRawURL := c.resolveVariablesInText(
+		rcRequest.RawURLString,
+		c.programmaticVars,
+		rcRequest.ActiveVariables,
+		parsedFile.EnvironmentVariables,
+		parsedFile.GlobalVariables,
+		requestScopedSystemVars,
+		osEnvGetter,
+		c.currentDotEnvVars,
+	)
+	substitutedRawURL = c.substituteDynamicSystemVariables(substitutedRawURL, c.currentDotEnvVars)
+
+	finalParsedURL, parseErr := url.Parse(substitutedRawURL)
+	if parseErr != nil {
+		return nil, fmt.Errorf("failed to parse URL after variable substitution: %s (original: %s): %w", substitutedRawURL, rcRequest.RawURLString, parseErr)
+	}
+	rcRequest.URL = finalParsedURL // Assign here as it's successfully parsed
+
+	if rcRequest.Headers != nil {
+		for key, values := range rcRequest.Headers {
+			newValues := make([]string, len(values))
+			for j, val := range values {
+				resolvedVal := c.resolveVariablesInText(
+					val,
+					c.programmaticVars,
+					rcRequest.ActiveVariables,
+					parsedFile.EnvironmentVariables,
+					parsedFile.GlobalVariables,
+					requestScopedSystemVars,
+					osEnvGetter,
+					c.currentDotEnvVars,
+				)
+				newValues[j] = c.substituteDynamicSystemVariables(resolvedVal, c.currentDotEnvVars)
+			}
+			rcRequest.Headers[key] = newValues
+		}
+	}
+	return finalParsedURL, nil
+}
+
 // substituteDynamicSystemVariables handles system variables that require argument parsing or dynamic evaluation at substitution time.
 // These are typically {{$processEnv VAR}}, {{$dotenv VAR}}, and {{$randomInt MIN MAX}}.
 // Other simple system variables like {{$uuid}} or {{$timestamp}}
@@ -413,105 +418,7 @@ func (c *Client) substituteDynamicSystemVariables(text string, activeDotEnvVars 
 	originalTextForLogging := text // Keep a copy for logging. Used if we add more complex types with logging.
 	_ = originalTextForLogging     // Avoid unused variable error if no logging exists below.
 
-	// Handle {{$randomInt min max}}
-	reRandomIntWithArgs := regexp.MustCompile(`{{\$randomInt\s+(-?\d+)\s+(-?\d+)}}`)
-	text = reRandomIntWithArgs.ReplaceAllStringFunc(text, func(match string) string {
-		parts := reRandomIntWithArgs.FindStringSubmatch(match)
-		if len(parts) == 3 {
-			min, errMin := strconv.Atoi(parts[1])
-			max, errMax := strconv.Atoi(parts[2])
-			if errMin == nil && errMax == nil && min <= max {
-				return strconv.Itoa(rand.Intn(max-min+1) + min)
-			}
-		}
-		return match // Return original match if parsing fails or min > max
-	})
-
-	// Handle {{$random.integer min max}}
-	reRandomDotInteger := regexp.MustCompile(`{{\$random\.integer\s+(-?\d+)\s+(-?\d+)}}`)
-	text = reRandomDotInteger.ReplaceAllStringFunc(text, func(match string) string {
-		parts := reRandomDotInteger.FindStringSubmatch(match)
-		if len(parts) == 3 {
-			min, errMin := strconv.Atoi(parts[1])
-			max, errMax := strconv.Atoi(parts[2])
-			if errMin == nil && errMax == nil && min <= max {
-				return strconv.Itoa(rand.Intn(max-min+1) + min)
-			}
-		}
-		slog.Warn("Failed to parse $random.integer, returning original match", "match", match)
-		return match
-	})
-
-	// Handle {{$random.float min max}}
-	reRandomDotFloat := regexp.MustCompile(`{{\$random\.float\s+(-?\d*\.?\d+)\s+(-?\d*\.?\d+)}}`)
-	text = reRandomDotFloat.ReplaceAllStringFunc(text, func(match string) string {
-		parts := reRandomDotFloat.FindStringSubmatch(match)
-		if len(parts) == 3 {
-			min, errMin := strconv.ParseFloat(parts[1], 64)
-			max, errMax := strconv.ParseFloat(parts[2], 64)
-			if errMin == nil && errMax == nil && min <= max {
-				return strconv.FormatFloat(min+rand.Float64()*(max-min), 'f', -1, 64)
-			}
-		}
-		slog.Warn("Failed to parse $random.float, returning original match", "match", match)
-		return match
-	})
-
-	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	const alphanumeric = letters + "0123456789_"
-	const hexChars = "0123456789abcdef"
-
-	// Handle {{$random.alphabetic length}}
-	reRandomDotAlphabetic := regexp.MustCompile(`{{\$random\.alphabetic\s+(\d+)}}`)
-	text = reRandomDotAlphabetic.ReplaceAllStringFunc(text, func(match string) string {
-		parts := reRandomDotAlphabetic.FindStringSubmatch(match)
-		if len(parts) == 2 {
-			length, err := strconv.Atoi(parts[1])
-			if err == nil && length >= 0 {
-				return randomStringFromCharset(length, letters)
-			}
-		}
-		slog.Warn("Failed to parse $random.alphabetic, returning original match", "match", match)
-		return match
-	})
-
-	// Handle {{$random.alphanumeric length}}
-	reRandomDotAlphanumeric := regexp.MustCompile(`{{\$random\.alphanumeric\s+(\d+)}}`)
-	text = reRandomDotAlphanumeric.ReplaceAllStringFunc(text, func(match string) string {
-		parts := reRandomDotAlphanumeric.FindStringSubmatch(match)
-		if len(parts) == 2 {
-			length, err := strconv.Atoi(parts[1])
-			if err == nil && length >= 0 {
-				return randomStringFromCharset(length, alphanumeric)
-			}
-		}
-		slog.Warn("Failed to parse $random.alphanumeric, returning original match", "match", match)
-		return match
-	})
-
-	// Handle {{$random.hexadecimal length}}
-	reRandomDotHexadecimal := regexp.MustCompile(`{{\$random\.hexadecimal\s+(\d+)}}`)
-	text = reRandomDotHexadecimal.ReplaceAllStringFunc(text, func(match string) string {
-		parts := reRandomDotHexadecimal.FindStringSubmatch(match)
-		if len(parts) == 2 {
-			length, err := strconv.Atoi(parts[1])
-			if err == nil && length >= 0 {
-				return randomStringFromCharset(length, hexChars)
-			}
-		}
-		slog.Warn("Failed to parse $random.hexadecimal, returning original match", "match", match)
-		return match
-	})
-
-	// Handle {{$random.email}}
-	reRandomDotEmail := regexp.MustCompile(`{{\$random\.email}}`)
-	text = reRandomDotEmail.ReplaceAllStringFunc(text, func(match string) string {
-		// Simple email pattern: user@domain.tld
-		user := randomStringFromCharset(rand.Intn(10)+5, alphanumeric) // 5-14 chars for user
-		domain := randomStringFromCharset(rand.Intn(5)+5, letters)     // 5-9 chars for domain
-		tld := randomStringFromCharset(rand.Intn(2)+2, letters)        // 2-3 chars for tld
-		return fmt.Sprintf("%s@%s.%s", user, domain, tld)
-	})
+	text = c.substituteRandomVariables(text)
 
 	// Handle {{$env.VAR_NAME}}
 	reSystemEnvVar := regexp.MustCompile(`{{\$env\.([A-Za-z_][A-Za-z0-9_]*?)}}`)
@@ -625,6 +532,159 @@ func (c *Client) substituteDynamicSystemVariables(text string, activeDotEnvVars 
 	return text
 }
 
+// substituteRandomVariables handles the substitution of $random.* variables.
+func (c *Client) substituteRandomVariables(text string) string {
+	// Substitute {{$randomInt}}, {{$randomInt MIN MAX}}
+	text = regexp.MustCompile(`\{\{\$randomInt(?:\s+(-?\d+)\s+(-?\d+))?\}\}`).ReplaceAllStringFunc(text, func(match string) string {
+		parts := regexp.MustCompile(`\{\{\$randomInt(?:\s+(-?\d+)\s+(-?\d+))?\}\}`).FindStringSubmatch(match)
+		min, max := 0, 100 // Default range
+		if len(parts) == 3 && parts[1] != "" && parts[2] != "" {
+			var errMin, errMax error
+			min, errMin = strconv.Atoi(parts[1])
+			max, errMax = strconv.Atoi(parts[2])
+			if errMin != nil || errMax != nil || min > max {
+				return match
+			}
+		}
+		return strconv.Itoa(rand.Intn(max-min+1) + min)
+	})
+
+	// Substitute {{$randomFloat}}, {{$randomFloat MIN MAX}}
+	text = regexp.MustCompile(`\{\{\$randomFloat(?:\s+(-?\d*\.?\d+)\s+(-?\d*\.?\d+))?\}\}`).ReplaceAllStringFunc(text, func(match string) string {
+		parts := regexp.MustCompile(`\{\{\$randomFloat(?:\s+(-?\d*\.?\d+)\s+(-?\d*\.?\d+))?\}\}`).FindStringSubmatch(match)
+		min, max := 0.0, 1.0 // Default range
+		if len(parts) == 3 && parts[1] != "" && parts[2] != "" {
+			var errMin, errMax error
+			min, errMin = strconv.ParseFloat(parts[1], 64)
+			max, errMax = strconv.ParseFloat(parts[2], 64)
+			if errMin != nil || errMax != nil || min > max {
+				return match
+			}
+		}
+		return fmt.Sprintf("%f", min+rand.Float64()*(max-min))
+	})
+
+	// Substitute {{$randomBoolean}}
+	text = strings.ReplaceAll(text, "{{$randomBoolean}}", strconv.FormatBool(rand.Intn(2) == 0))
+
+	// Substitute {{$randomHex}}
+	text = regexp.MustCompile(`\{\{\$randomHex(?:\s+(\d+))?\}\}`).ReplaceAllStringFunc(text, _substituteRandomHexFunc)
+
+	// Substitute {{$randomAlphaNumeric}}
+	text = regexp.MustCompile(`\{\{\$randomAlphaNumeric(?:\s+(\d+))?\}\}`).ReplaceAllStringFunc(text, _substituteRandomAlphaNumericFunc)
+
+	// Substitute {{$randomString}}
+	text = regexp.MustCompile(`\{\{\$randomString(?:\s+(\d+))?\}\}`).ReplaceAllStringFunc(text, _substituteRandomStringFunc)
+
+	// Substitute {{$randomEmail}}
+	text = strings.ReplaceAll(text, "{{$randomEmail}}",
+		fmt.Sprintf("%s@%s.com",
+			randomStringFromCharset(10, "abcdefghijklmnopqrstuvwxyz"),
+			randomStringFromCharset(7, "abcdefghijklmnopqrstuvwxyz")))
+
+	// Substitute {{$randomDomain}}
+	text = strings.ReplaceAll(text, "{{$randomDomain}}",
+		fmt.Sprintf("%s.com", randomStringFromCharset(10, "abcdefghijklmnopqrstuvwxyz")))
+
+	// Substitute {{$randomIPv4}}
+	text = strings.ReplaceAll(text, "{{$randomIPv4}}",
+		fmt.Sprintf("%d.%d.%d.%d", rand.Intn(256), rand.Intn(256), rand.Intn(256), rand.Intn(256)))
+
+	// Substitute {{$randomIPv6}}
+	text = strings.ReplaceAll(text, "{{$randomIPv6}}", func() string {
+		segments := make([]string, 8)
+		for i := 0; i < 8; i++ {
+			segments[i] = fmt.Sprintf("%x", rand.Intn(0x10000))
+		}
+		return strings.Join(segments, ":")
+	}())
+
+	// Substitute {{$randomMacAddress}}
+	text = strings.ReplaceAll(text, "{{$randomMacAddress}}", func() string {
+		segments := make([]string, 6)
+		for i := 0; i < 6; i++ {
+			segments[i] = fmt.Sprintf("%02x", rand.Intn(0x100))
+		}
+		return strings.Join(segments, ":")
+	}())
+
+	// Substitute {{$randomUUID}}
+	text = strings.ReplaceAll(text, "{{$randomUUID}}", uuid.New().String()) // Different from {{$uuid}} which is request-scoped
+
+	// Substitute {{$randomPassword}}
+	text = regexp.MustCompile(`\{\{\$randomPassword(?:\s+(\d+))?\}\}`).ReplaceAllStringFunc(text, _substituteRandomPasswordFunc)
+
+	// Substitute {{$randomColor}}
+	text = strings.ReplaceAll(text, "{{$randomColor}}",
+		fmt.Sprintf("#%02x%02x%02x", rand.Intn(256), rand.Intn(256), rand.Intn(256)))
+
+	// Substitute {{$randomWord}}
+	words := []string{"apple", "banana", "cherry", "date", "elderberry", "fig", "grape"}
+	text = strings.ReplaceAll(text, "{{$randomWord}}", words[rand.Intn(len(words))])
+
+	return text
+}
+
+func _substituteRandomHexFunc(match string) string {
+	parts := regexp.MustCompile(`\{\{\$randomHex(?:\s+(\d+))?\}\}`).FindStringSubmatch(match)
+	length := 16 // Default length
+	if len(parts) == 2 && parts[1] != "" {
+		var err error
+		length, err = strconv.Atoi(parts[1])
+		if err != nil || length <= 0 {
+			return match // Malformed length
+		}
+	}
+	b := make([]byte, length/2+length%2)
+	if _, err := crypto_rand.Read(b); err != nil { // Changed to crypto_rand.Read
+		return match // Error generating random bytes
+	}
+	hexStr := fmt.Sprintf("%x", b)
+	return hexStr[:length]
+}
+
+func _substituteRandomAlphaNumericFunc(match string) string {
+	parts := regexp.MustCompile(`\{\{\$randomAlphaNumeric(?:\s+(\d+))?\}\}`).FindStringSubmatch(match)
+	length := 16 // Default length
+	if len(parts) == 2 && parts[1] != "" {
+		var err error
+		length, err = strconv.Atoi(parts[1])
+		if err != nil || length <= 0 {
+			return match // Malformed length
+		}
+	}
+	return randomStringFromCharset(length, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+}
+
+func _substituteRandomStringFunc(match string) string {
+	parts := regexp.MustCompile(`\{\{\$randomString(?:\s+(\d+))?\}\}`).FindStringSubmatch(match)
+	length := 16 // Default length
+	if len(parts) == 2 && parts[1] != "" {
+		var err error
+		length, err = strconv.Atoi(parts[1])
+		if err != nil || length <= 0 {
+			return match // Malformed length
+		}
+	}
+	return randomStringFromCharset(length, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{};':\",./<>?")
+}
+
+func _substituteRandomPasswordFunc(match string) string {
+	parts := regexp.MustCompile(`\{\{\$randomPassword(?:\s+(\d+))?\}\}`).FindStringSubmatch(match)
+	length := 12 // Default length
+	if len(parts) == 2 && parts[1] != "" {
+		var err error
+		length, err = strconv.Atoi(parts[1])
+		if err != nil || length <= 0 {
+			return match // Malformed length
+		}
+	}
+	if length < 4 {
+		return randomStringFromCharset(length, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*")
+	}
+	return randomStringFromCharset(length, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{};':\",./<>?")
+}
+
 // generateRequestScopedSystemVariables creates a map of system variables that are generated once per request.
 // This ensures that if, for example, {{$uuid}} is used multiple times within the same request
 // (e.g., in the URL and a header), it resolves to the same value for that specific request.
@@ -643,6 +703,35 @@ func (c *Client) generateRequestScopedSystemVariables() map[string]string {
 	return vars
 }
 
+// _resolveRequestURL resolves the final request URL based on the client's BaseURL and the request's URL.
+// It returns the resolved URL or an error if the BaseURL is invalid or requestURL is nil.
+func (c *Client) _resolveRequestURL(baseURLStr string, requestURL *url.URL) (*url.URL, error) {
+	if requestURL == nil {
+		return nil, fmt.Errorf("request URL cannot be nil for resolution")
+	}
+
+	// If the request URL is already absolute, or if there's no BaseURL configured, use the request URL as is.
+	if requestURL.IsAbs() || baseURLStr == "" {
+		return requestURL, nil
+	}
+
+	base, err := url.Parse(baseURLStr)
+	if err != nil {
+		// This error is critical as it means the client's BaseURL is malformed.
+		return nil, fmt.Errorf("invalid BaseURL %s: %w", baseURLStr, err)
+	}
+
+	// Only resolve if the requestURL is truly relative (no scheme or host).
+	if requestURL.Scheme == "" && requestURL.Host == "" {
+		return base.ResolveReference(requestURL), nil
+	}
+
+	// If requestURL has a scheme or host but IsAbs() returned false (e.g. scheme-relative like "//other.com/path"),
+	// and BaseURL is present, it's generally safer to return requestURL as is to avoid unexpected merges.
+	// url.ResolveReference might behave differently depending on the base URL's scheme.
+	return requestURL, nil
+}
+
 // executeRequest sends a given Request and returns the Response.
 // Errors during execution (e.g. network, body read) are captured in Response.Error.
 // A non-nil error is returned by this function only for critical pre-execution failures (e.g. nil request, bad BaseURL).
@@ -657,18 +746,11 @@ func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Respo
 		Request: rcRequest, // Link the request early
 	}
 
-	urlToUse := rcRequest.URL
-	if !urlToUse.IsAbs() && c.BaseURL != "" {
-		base, err := url.Parse(c.BaseURL)
-		if err != nil {
-			return nil, fmt.Errorf("invalid BaseURL %s: %w", c.BaseURL, err)
-		}
-		if rcRequest.URL.Scheme == "" && rcRequest.URL.Host == "" {
-			if base.Path != "" && !strings.HasSuffix(base.Path, "/") && !strings.HasPrefix(rcRequest.URL.Path, "/") {
-				base.Path += "/"
-			}
-			urlToUse = base.ResolveReference(rcRequest.URL)
-		}
+	urlToUse, urlErr := c._resolveRequestURL(c.BaseURL, rcRequest.URL)
+	if urlErr != nil {
+		// An error from _resolveRequestURL implies a bad BaseURL or nil rcRequest.URL.
+		// Per original logic for bad BaseURL, return nil for *Response.
+		return nil, urlErr
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, rcRequest.Method, urlToUse.String(), rcRequest.Body)
@@ -715,60 +797,76 @@ func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Respo
 
 	if err != nil {
 		clientResponse.Error = fmt.Errorf("http request failed: %w", err)
-		// Attempt to get some info from httpResp even if err != nil (e.g. if it's a redirect error httpClient is configured not to follow)
-		if httpResp != nil {
-			clientResponse.Status = httpResp.Status
-			clientResponse.StatusCode = httpResp.StatusCode
-			clientResponse.Proto = httpResp.Proto
-			clientResponse.Headers = httpResp.Header
-			// Don't try to read body if there was an error from Do(), as httpResp.Body might be nil or invalid.
-			// But ensure it's closed if non-nil to prevent resource leaks.
-			defer func() { _ = httpResp.Body.Close() }()
+		if httpResp == nil {
+			return clientResponse, nil // Early return if httpResp is nil, error is already set
 		}
-		return clientResponse, nil // Return response with error populated
+
+		// At this point, httpResp is non-nil. Attempt to process its body and populate details.
+		var bodyBytes []byte
+		var readErr error
+		if httpResp.Body != nil {
+			defer func() { _ = httpResp.Body.Close() }() // Defer close if body exists
+			bodyBytes, readErr = io.ReadAll(httpResp.Body)
+		}
+		// If httpResp.Body was nil, bodyBytes and readErr remain nil.
+		// _populateResponseDetails is expected to handle this gracefully.
+		c._populateResponseDetails(clientResponse, httpResp, bodyBytes, readErr)
+		return clientResponse, nil // Return response with error and any populated details
 	}
+
+	// Success path: ensure body is closed after reading.
+	// httpResp and httpResp.Body are guaranteed non-nil here if err is nil.
 	defer func() { _ = httpResp.Body.Close() }()
 
-	// 4. Capture response details into clientResponse
-	clientResponse.Status = httpResp.Status
-	clientResponse.StatusCode = httpResp.StatusCode
-	clientResponse.Proto = httpResp.Proto
-	clientResponse.Headers = httpResp.Header
-	clientResponse.Size = httpResp.ContentLength
-
 	bodyBytes, readErr := io.ReadAll(httpResp.Body)
-	if readErr != nil {
-		clientResponse.Error = fmt.Errorf("failed to read response body: %w", readErr)
-		// BodyBytes will be nil or partial, BodyString will be empty or partial
-		// Still return clientResponse with the error
-	} else {
-		clientResponse.Body = bodyBytes
-		clientResponse.BodyString = string(bodyBytes)
-	}
-
-	// TODO: Populate TLS details if applicable
-	// (Requires inspecting httpResp.TLS which is *tls.ConnectionState)
-	if httpResp.TLS != nil {
-		clientResponse.IsTLS = true
-		// Basic TLS info, more can be added from httpResp.TLS
-		switch httpResp.TLS.Version {
-		case tls.VersionTLS10:
-			clientResponse.TLSVersion = "TLS 1.0"
-		case tls.VersionTLS11:
-			clientResponse.TLSVersion = "TLS 1.1"
-		case tls.VersionTLS12:
-			clientResponse.TLSVersion = "TLS 1.2"
-		case tls.VersionTLS13:
-			clientResponse.TLSVersion = "TLS 1.3"
-		default:
-			clientResponse.TLSVersion = "unknown"
-		}
-		clientResponse.TLSCipherSuite = tls.CipherSuiteName(httpResp.TLS.CipherSuite)
-	}
+	c._populateResponseDetails(clientResponse, httpResp, bodyBytes, readErr)
 
 	return clientResponse, nil
+}
+
+// _populateResponseDetails copies relevant information from an *http.Response and body to our *Response.
+func (c *Client) _populateResponseDetails(resp *Response, httpResp *http.Response, bodyBytes []byte, bodyReadErr error) {
+	if httpResp == nil {
+		return
+	}
+
+	resp.Status = httpResp.Status
+	resp.StatusCode = httpResp.StatusCode
+	resp.Proto = httpResp.Proto
+	resp.Headers = httpResp.Header
+	resp.Size = httpResp.ContentLength // This might be -1 if chunked, actual size is len(bodyBytes)
+
+	if bodyReadErr != nil {
+		readErrWrapped := fmt.Errorf("failed to read response body: %w", bodyReadErr)
+		resp.Error = multierror.Append(resp.Error, readErrWrapped).ErrorOrNil()
+	} else {
+		resp.Body = bodyBytes
+		resp.BodyString = string(bodyBytes)
+		if resp.Size == -1 || (resp.Size == 0 && len(bodyBytes) > 0) { // Update size if not set or if chunked and body was read
+			resp.Size = int64(len(bodyBytes))
+		}
+	}
+
+	if httpResp.TLS != nil {
+		resp.IsTLS = true
+		switch httpResp.TLS.Version {
+		case tls.VersionTLS10:
+			resp.TLSVersion = "TLS 1.0"
+		case tls.VersionTLS11:
+			resp.TLSVersion = "TLS 1.1"
+		case tls.VersionTLS12:
+			resp.TLSVersion = "TLS 1.2"
+		case tls.VersionTLS13:
+			resp.TLSVersion = "TLS 1.3"
+		default:
+			resp.TLSVersion = fmt.Sprintf("TLS unknown (0x%04x)", httpResp.TLS.Version)
+		}
+		resp.TLSCipherSuite = tls.CipherSuiteName(httpResp.TLS.CipherSuite)
+		// TODO: Add more TLS details like server name, peer certificates if needed
+	}
 }
 
 // TODO: Add other public methods as needed, e.g.:
 // - Execute(ctx context.Context, request *Request, options ...RequestOption) (*Response, error)
 // - A method to validate a single response if users construct ExpectedResponse manually.
+//

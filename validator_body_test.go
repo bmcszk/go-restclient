@@ -78,19 +78,35 @@ func TestValidateResponses_Body_ExactMatch(t *testing.T) {
 }
 
 // TestValidateResponses_BodyContains tests the BodyContains logic.
+// bodyValidationTestCase defines the structure for test cases used in body validation tests.
+type bodyValidationTestCase struct {
+	name             string
+	actualResponse   *Response
+	expectedFilePath string
+	expectedErrCount int
+	expectedErrTexts []string
+}
+
+// runBodyValidationTest is a helper function to execute a single body validation test case.
+func runBodyValidationTest(t *testing.T, client *Client, tt bodyValidationTestCase) {
+	t.Helper()
+	// When
+	err := client.ValidateResponses(tt.expectedFilePath, tt.actualResponse)
+
+	// Then
+	if tt.expectedErrCount == 0 {
+		assert.NoError(t, err)
+	} else {
+		assertMultierrorContains(t, err, tt.expectedErrCount, tt.expectedErrTexts)
+	}
+}
+
 // Since ParseExpectedResponseFile does not populate ExpectedResponse.BodyContains,
 // this test verifies that the BodyContains logic in ValidateResponses is benign
 // (doesn't cause errors) when the expected response comes from a file.
 func TestValidateResponses_BodyContains(t *testing.T) {
 	// Given: Test cases defined in 'tests' slice
-	tests := []struct {
-		name           string
-		actualResponse *Response
-		// expectedFileContent will be simple, as it cannot express BodyContains - Now expectedFilePath
-		expectedFilePath string // Was expectedFileContent
-		expectedErrCount int    // Should be 0 if actual matches file's explicit parts
-		expectedErrTexts []string
-	}{
+	tests := []bodyValidationTestCase{
 		{
 			name:           "BodyContains logic is not triggered by file (positive case)",
 			actualResponse: &Response{StatusCode: 200, Status: "200 OK", BodyString: "Hello World Wide Web"},
@@ -109,20 +125,12 @@ func TestValidateResponses_BodyContains(t *testing.T) {
 		},
 	}
 
+	client, _ := NewClient() // Initialize client once
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Given: actualResponse and expectedFilePath from the test case tt
-			client, _ := NewClient()
-
-			// When
-			err := client.ValidateResponses(tt.expectedFilePath, tt.actualResponse)
-
-			// Then
-			if tt.expectedErrCount == 0 {
-				assert.NoError(t, err)
-			} else {
-				assertMultierrorContains(t, err, tt.expectedErrCount, tt.expectedErrTexts)
-			}
+			runBodyValidationTest(t, client, tt)
 		})
 	}
 }
@@ -132,13 +140,7 @@ func TestValidateResponses_BodyContains(t *testing.T) {
 // when the expected response comes from a file, as the file cannot specify BodyNotContains.
 func TestValidateResponses_BodyNotContains(t *testing.T) {
 	// Given: Test cases defined in 'tests' slice
-	tests := []struct {
-		name             string
-		actualResponse   *Response
-		expectedFilePath string // Was expectedFileContent
-		expectedErrCount int
-		expectedErrTexts []string
-	}{
+	tests := []bodyValidationTestCase{
 		{
 			name:             "BodyNotContains logic is not triggered by file (positive case)",
 			actualResponse:   &Response{StatusCode: 200, Status: "200 OK", BodyString: "Hello World"},
@@ -153,20 +155,13 @@ func TestValidateResponses_BodyNotContains(t *testing.T) {
 			expectedErrTexts: []string{"body mismatch"},
 		},
 	}
+
+	client, _ := NewClient() // Initialize client once
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Given: actualResponse and expectedFilePath from the test case tt
-			client, _ := NewClient()
-
-			// When
-			err := client.ValidateResponses(tt.expectedFilePath, tt.actualResponse)
-
-			// Then
-			if tt.expectedErrCount == 0 {
-				assert.NoError(t, err)
-			} else {
-				assertMultierrorContains(t, err, tt.expectedErrCount, tt.expectedErrTexts)
-			}
+			runBodyValidationTest(t, client, tt)
 		})
 	}
 }

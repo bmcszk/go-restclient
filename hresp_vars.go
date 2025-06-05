@@ -25,19 +25,30 @@ func extractHrespDefines(hrespContent string) (map[string]string, string, error)
 		line := scanner.Text()
 		trimmedLine := strings.TrimSpace(line)
 
-		if strings.HasPrefix(trimmedLine, "@") {
-			parts := strings.SplitN(trimmedLine[1:], "=", 2)
-			if len(parts) == 2 {
-				varName := strings.TrimSpace(parts[0])
-				varValue := strings.TrimSpace(parts[1])
-				if varName != "" {
-					defines[varName] = varValue
-				}
-			}
-			// Do not add @define lines to processedLines
-		} else {
+		if !strings.HasPrefix(trimmedLine, "@") {
 			processedLines = append(processedLines, line)
+			continue
 		}
+
+		// Line starts with "@", try to parse as a define
+		parts := strings.SplitN(trimmedLine[1:], "=", 2)
+		if len(parts) != 2 {
+			// Malformed define (e.g., "@foo" without "="), or just an "@" symbol.
+			// Treat as a regular line if it should be kept, or skip if @-lines not part of content.
+			// Current logic implies @-prefixed lines that are not valid defines are simply dropped.
+			continue
+		}
+
+		varName := strings.TrimSpace(parts[0])
+		varValue := strings.TrimSpace(parts[1])
+
+		if varName == "" {
+			// Variable name cannot be empty.
+			continue
+		}
+
+		defines[varName] = varValue
+		// Valid @define lines are not added to processedLines
 	}
 
 	if err := scanner.Err(); err != nil {

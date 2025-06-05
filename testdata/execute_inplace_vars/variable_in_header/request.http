@@ -1,0 +1,5 @@
+@auth_token = Bearer_secret_token_123
+
+GET {{test_server_url}}/checkheaders
+Authorization: {{auth_token}}
+User-Agent: test-client
