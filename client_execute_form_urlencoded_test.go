@@ -30,11 +30,65 @@ func createTempHTTPFileFromStringForFormTest(t *testing.T, content string) strin
 	return filePath
 }
 
+// runFormUrlencodedSubTest executes a single sub-test for TestExecuteFile_XWwwFormUrlencoded.
+func runFormUrlencodedSubTest(t *testing.T, tc struct {
+	name                    string
+	httpFileContent         string
+	varsToSet               map[string]string
+	expectedRawBodyOnServer string
+	expectExecuteError      bool
+	requestAsserterFunc     func(t *testing.T, r *http.Request, expectedBody string)
+}) {
+	t.Helper()
+	var capturedRequestBody string
+	var capturedRequestContentType string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, err := io.ReadAll(r.Body)
+		require.NoError(t, err, "Failed to read request body on server")
+		capturedRequestBody = string(bodyBytes)
+		capturedRequestContentType = r.Header.Get("Content-Type")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	}))
+	defer server.Close()
+
+	hostVar := server.URL
+	finalHttpFileContent := strings.ReplaceAll(tc.httpFileContent, "{{host}}", hostVar)
+	// Substitute other vars if present in tc.varsToSet
+	for key, val := range tc.varsToSet {
+		placeholder := fmt.Sprintf("{{%s}}", key)
+		finalHttpFileContent = strings.ReplaceAll(finalHttpFileContent, placeholder, val)
+	}
+
+	requestFilePath := createTempHTTPFileFromStringForFormTest(t, finalHttpFileContent)
+
+	currentClient, clientErr := NewClient()
+	require.NoError(t, clientErr)
+
+	responses, execErr := currentClient.ExecuteFile(context.Background(), requestFilePath)
+
+	if tc.expectExecuteError {
+		require.Error(t, execErr)
+		return
+	}
+	require.NoError(t, execErr, "ExecuteFile should not return an error")
+	require.Len(t, responses, 1, "Should have one result")
+	require.Nil(t, responses[0].Error, "Request execution error should be nil")
+
+	assert.Equal(t, tc.expectedRawBodyOnServer, capturedRequestBody, "Captured request body does not match expected")
+
+	// Assert Content-Type if the original request specified it and it's form-urlencoded
+	if strings.Contains(tc.httpFileContent, "Content-Type: application/x-www-form-urlencoded") {
+		assert.Equal(t, "application/x-www-form-urlencoded", capturedRequestContentType, "Content-Type header mismatch for form-urlencoded")
+	} else if strings.Contains(tc.httpFileContent, "Content-Type: application/json") {
+		assert.Equal(t, "application/json", capturedRequestContentType, "Content-Type header mismatch for json")
+	}
+	// If no Content-Type was in httpFileContent, Go's client might set one by default or leave it empty, specific assertion might be needed if strict about its absence.
+}
+
 // TestExecuteFile_XWwwFormUrlencoded tests the handling of application/x-www-form-urlencoded request bodies.
 func TestExecuteFile_XWwwFormUrlencoded(t *testing.T) {
-	// client, err := NewClient() // Removed as it's unused; each test case creates its own client
-	// require.NoError(t, err, "NewClient should not return an error")
-
 	tests := []struct {
 		name                    string
 		httpFileContent         string
@@ -107,51 +161,7 @@ Content-Type: application/x-www-form-urlencoded
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			var capturedRequestBody string
-			var capturedRequestContentType string
-
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				bodyBytes, err := io.ReadAll(r.Body)
-				require.NoError(t, err, "Failed to read request body on server")
-				capturedRequestBody = string(bodyBytes)
-				capturedRequestContentType = r.Header.Get("Content-Type")
-				w.WriteHeader(http.StatusOK)
-				_, _ = w.Write([]byte("OK"))
-			}))
-			defer server.Close()
-
-			hostVar := server.URL
-			finalHttpFileContent := strings.ReplaceAll(tc.httpFileContent, "{{host}}", hostVar)
-			// Substitute other vars if present in tc.varsToSet
-			for key, val := range tc.varsToSet {
-				placeholder := fmt.Sprintf("{{%s}}", key)
-				finalHttpFileContent = strings.ReplaceAll(finalHttpFileContent, placeholder, val)
-			}
-
-			requestFilePath := createTempHTTPFileFromStringForFormTest(t, finalHttpFileContent)
-
-			currentClient, clientErr := NewClient()
-			require.NoError(t, clientErr)
-
-			responses, execErr := currentClient.ExecuteFile(context.Background(), requestFilePath)
-
-			if tc.expectExecuteError {
-				require.Error(t, execErr)
-				return
-			}
-			require.NoError(t, execErr, "ExecuteFile should not return an error")
-			require.Len(t, responses, 1, "Should have one result")
-			require.Nil(t, responses[0].Error, "Request execution error should be nil")
-
-			assert.Equal(t, tc.expectedRawBodyOnServer, capturedRequestBody, "Captured request body does not match expected")
-
-			// Assert Content-Type if the original request specified it and it's form-urlencoded
-			if strings.Contains(tc.httpFileContent, "Content-Type: application/x-www-form-urlencoded") {
-				assert.Equal(t, "application/x-www-form-urlencoded", capturedRequestContentType, "Content-Type header mismatch for form-urlencoded")
-			} else if strings.Contains(tc.httpFileContent, "Content-Type: application/json") {
-				assert.Equal(t, "application/json", capturedRequestContentType, "Content-Type header mismatch for json")
-			}
-			// If no Content-Type was in httpFileContent, Go's client might set one by default or leave it empty, specific assertion might be needed if strict about its absence.
+			runFormUrlencodedSubTest(t, tc)
 		})
 	}
 }
