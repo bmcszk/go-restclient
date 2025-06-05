@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -477,4 +478,64 @@ func TestExecuteFile_InPlace_VariableDefinedBySystemVariable(t *testing.T) {
 	require.NoError(t, pErr)
 	require.NotNil(t, parsedFile.FileVariables)
 	assert.Equal(t, "{{$uuid}}", parsedFile.FileVariables["my_request_id"], "Parsed file variable 'my_request_id' mismatch")
+}
+
+func TestExecuteFile_InPlace_VariableDefinedByOsEnvVariable(t *testing.T) {
+	// Given: an OS environment variable and an .http file with an in-place variable defined by it
+	const testEnvVarName = "TEST_USER_HOME_INPLACE"
+	const testEnvVarValue = "/testhome/userdir" // This value starts with a slash
+	t.Setenv(testEnvVarName, testEnvVarValue)
+
+	// Debug: Check if t.Setenv is working as expected in the test goroutine
+	val, ok := os.LookupEnv(testEnvVarName)
+	require.True(t, ok, "os.LookupEnv should find the var set by t.Setenv")
+	require.Equal(t, testEnvVarValue, val, "os.LookupEnv should return the correct value set by t.Setenv")
+
+	var capturedURLPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedURLPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_defined_by_os_env_variable/request.http"
+	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_defined_by_os_env_variable/expected.hresp"
+
+	client, err := NewClient()
+	require.NoError(t, err)
+
+	// Set the mock server URL as a programmatic variable for {{test_server_url}} in request.http
+	client.SetProgrammaticVar("test_server_url", server.URL)
+
+	// When: the .http file is executed
+	responses, execErr := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then: no error should occur and the path should contain the resolved OS env variable
+	require.NoError(t, execErr, "ExecuteFile should not return an error for in-place OS env var")
+	require.Len(t, responses, 1, "Should have one result for in-place OS env var")
+	resp := responses[0]
+	require.Nil(t, resp.Error, "Request execution error should be nil for in-place OS env var")
+
+	// Parse expected response from .hresp file
+	expectedHeaders, expectedBodyStr, pErr := parseHrespBody(expectedHrespPath)
+	require.NoError(t, pErr, "Failed to parse .hresp file: %s", expectedHrespPath)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "Status code mismatch")
+	for key, expectedValue := range expectedHeaders { // Should be empty for this .hresp
+		assert.Equal(t, expectedValue[0], resp.Headers.Get(key), fmt.Sprintf("Header %s mismatch", key))
+	}
+	if expectedBodyStr != "" { // Should be empty for this .hresp
+		assert.JSONEq(t, expectedBodyStr, string(resp.Body), "Response body mismatch")
+	} else {
+		assert.Empty(t, string(resp.Body), "Response body should be empty")
+	}
+
+	// capturedURLPath should be "/testhome/userdir/files"
+	assert.Equal(t, testEnvVarValue+"/files", capturedURLPath, "The URL path should be correctly substituted with the OS environment variable via in-place var")
+
+	// Verify ParsedFile.FileVariables
+	parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
+	require.NoError(t, pErr)
+	require.NotNil(t, parsedFile.FileVariables)
+	assert.Equal(t, "{{$processEnv TEST_USER_HOME_INPLACE}}", parsedFile.FileVariables["my_home_dir"], "Parsed file variable 'my_home_dir' mismatch")
 }
