@@ -1,0 +1,6 @@
+GET {{.ServerURL}}/path-{{$dotenv DOTENV_VAR_SHOULD_BE_EMPTY}}/data
+User-Agent: test-client
+
+{
+  "payload": "{{$dotenv DOTENV_VAR_ALSO_EMPTY}}"
+}
