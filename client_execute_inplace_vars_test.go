@@ -360,3 +360,61 @@ func TestExecuteFile_InPlace_VariableInCustomHeader(t *testing.T) {
 	assert.Equal(t, "secret-token", parsedFile.FileVariables["my_header_value"])
 	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["test_server_url"]) // Check placeholder
 }
+
+func TestExecuteFile_InPlace_VariableSubstitutionInBody(t *testing.T) {
+	// Given: an .http file with an in-place variable used in a JSON request body
+	var capturedBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var err error
+		capturedBody, err = io.ReadAll(r.Body)
+		require.NoError(t, err)
+		// The expected.hresp is minimal (200 OK), so the server doesn't need to send a specific body or Content-Type.
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	requestFilePath := "testdata/execute_inplace_vars/variable_substitution_in_body/request.http"
+	expectedHrespPath := "testdata/execute_inplace_vars/variable_substitution_in_body/expected.hresp"
+
+	client, err := NewClient()
+	require.NoError(t, err)
+
+	// Set the mock server URL as a programmatic variable for {{test_server_url}} in request.http
+	client.SetProgrammaticVar("test_server_url", server.URL)
+
+	// When: the .http file is executed
+	responses, execErr := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then: no error should occur, response should be validated, and the body should be substituted correctly
+	require.NoError(t, execErr, "ExecuteFile should not return an error")
+	require.Len(t, responses, 1, "Expected 1 response")
+
+	resp := responses[0]
+	require.NoError(t, resp.Error, "Response error should be nil")
+
+	// Parse expected response from .hresp file
+	expectedHeaders, expectedBodyStr, pErr := parseHrespBody(expectedHrespPath)
+	require.NoError(t, pErr, "Failed to parse .hresp file: %s", expectedHrespPath)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "Status code mismatch")
+	// Assert headers from .hresp (should be none for the minimal .hresp)
+	for key, expectedValue := range expectedHeaders {
+		assert.Equal(t, expectedValue[0], resp.Headers.Get(key), fmt.Sprintf("Header %s mismatch", key))
+	}
+	// Assert body from .hresp (should be empty for the minimal .hresp)
+	if expectedBodyStr != "" {
+		assert.JSONEq(t, expectedBodyStr, string(resp.Body), "Response body mismatch")
+	} else {
+		assert.Empty(t, string(resp.Body), "Response body should be empty")
+	}
+
+	// Assert the captured body by the server (this is the main assertion for this test)
+	assert.JSONEq(t, `{"id": "user123", "status": "active"}`, string(capturedBody), "The request body captured by the server should be correctly substituted")
+
+	// Verify ParsedFile.FileVariables
+	// This checks how the .http file itself was parsed.
+	parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
+	require.NoError(t, pErr)
+	require.NotNil(t, parsedFile.FileVariables)
+	assert.Equal(t, "user123", parsedFile.FileVariables["user_id"], "Parsed file variable 'user_id' mismatch")
+}
