@@ -1,6 +1,45 @@
 # Learnings Log
 
-Last Updated: 2025-05-29
+Last Updated: 2025-06-05
+
+## 2025-06-05: Handling `replace_file_content` Failures and File State Inconsistency
+
+**Mistake:** Multiple sequential `replace_file_content` calls to `client_execute_edgecases_test.go` failed repeatedly with 'target content not unique' errors or applied changes incorrectly, leading to syntax errors. This occurred because the AI's internal representation of the file became desynchronized from the actual file state after partial or failed edits.
+
+**Resolution & Lesson Learned:**
+1.  **Acknowledge Inconsistency:** Recognize that persistent `replace_file_content` failures indicate a mismatch between the expected and actual file content.
+2.  **Reset File:** Use `git checkout -- <file_path>` to revert the problematic file to its last known good state (HEAD).
+3.  **Re-Verify:** After resetting, use tools like `view_file_outline` or `view_line_range` to get a fresh, accurate understanding of the file's structure and content.
+4.  **Strategize Edit:** Based on the verified file state, formulate a clear editing strategy. This might involve:
+    *   A single, comprehensive `replace_file_content` call with multiple, precise chunks if the overall change is well-understood.
+    *   Breaking the task into smaller, verifiable `edit_file` (or `replace_file_content`) calls, ensuring each is applied correctly before proceeding.
+    *   Falling back to generating a patch file if direct edits remain problematic.
+5.  **Precise Targeting:** Ensure `TargetContent` in `replace_file_content` is an *exact* and *unique* match for the section to be replaced. Provide sufficient context if necessary to ensure uniqueness.
+
+This approach helps to re-establish a reliable baseline before attempting further modifications, reducing the likelihood of cascading errors.
+
+## 2025-06-05: Incorrect Assumption about `client_execute_vars_main_test.go`
+
+*   **Mistake:** Attempted to rename `client_execute_vars_main_test.go` to `client_execute_vars_test.go` after deleting the original `client_execute_vars_test.go`. The `mv` command failed because `client_execute_vars_main_test.go` did not exist.
+*   **Root Cause:** Assumed a temporary main test file (`client_execute_vars_main_test.go`) was created as part of the refactoring process to hold non-conflicting tests or the main test function. This assumption was incorrect; the refactoring involved extracting tests into new, separate files, and the original large file was simply deleted.
+*   **Resolution:** Acknowledged the mistake. The correct state is that `client_execute_vars_test.go` (the original large one) has been deleted, and the extracted test files are now the sole source of these tests. There is no `client_execute_vars_main_test.go` to rename.
+*   **Lesson Learned:** Always verify the existence of files before attempting operations like `mv` or `rm`. Do not rely on assumptions about file creation or naming conventions from previous, potentially complex refactoring steps without explicit confirmation or by listing directory contents.
+
+## 2025-06-04: File Length Limit Exceeded After Specific Function Refactor
+
+*   **Issue:** After successfully refactoring `TestExecuteFile_InPlaceVariables` in `client_execute_vars_test.go` to resolve a `funlen` linting error, `make check` revealed that the entire file (`client_execute_vars_test.go`) still exceeds the project's 1000-line limit (reported as 1798 lines by `view_file_outline` and causing a `revive: file-length-limit` error).
+*   **Context:** The primary task was to shorten a specific function. While that was successful, the overall file size remains a violation of project standards (`.windsurf/rules/project_standards.md`).
+*   **Lesson Learned:** When addressing specific linting issues like function length, it's important to also verify overall file compliance with project standards (e.g., total file length). Resolving one issue might not resolve others, and subsequent checks (`make check`) are crucial for identifying such broader compliance problems. The next step will be to refactor `client_execute_vars_test.go` by splitting it into smaller files.
+
+## 2025-06-04: File Corruption During `client_execute_vars_test.go` Refactoring
+
+*   **Mistake:** While refactoring `TestExecuteFile_InPlaceVariables` in `client_execute_vars_test.go` by extracting sub-tests into top-level functions using `replace_file_content`, a series of incorrect `TargetContent` specifications and tool misapplications led to file corruption and syntax errors (e.g., `expected '(', found TestExecuteFile_InPlaceVars_BodySubstitution`). The tool inserted new function code in the middle of an existing function, breaking the syntax.
+*   **Resolution (Planned):** 
+    1.  Reset `client_execute_vars_test.go` to its last committed state using `git checkout -- /home/blaze/work/go-restclient/client_execute_vars_test.go` to ensure a clean slate.
+    2.  Re-attempt the extraction of sub-tests one by one.
+    3.  After each `replace_file_content` operation, use `view_line_range` or `view_file_outline` to verify the changes were applied correctly and the file syntax remains valid before proceeding to the next sub-test.
+    4.  Ensure `TargetContent` for `replace_file_content` is meticulously accurate, potentially using `view_line_range` to get the exact current content if there's any doubt due to prior (even successful) edits.
+*   **Lesson Learned:** When performing complex, multi-step refactoring with `replace_file_content` (or `edit_file`), especially on large files, it's crucial to verify the state of the file after each modification. If corruption occurs, reset the file immediately to avoid compounding errors. Incremental verification is key to preventing larger issues and wasted effort. The `ai_tool_usage_code_editing.md` guideline for resetting files on corruption was correctly identified as the recovery path.
 
 ## 2025-05-27: Library Structure Refinement
 
@@ -34,3 +73,35 @@ Last Updated: 2025-05-29
 - **Resolution Attempted**: Direct `edit_file` calls, delete file then `edit_file` to recreate.
 - **Next Step**: Test `SCENARIO-LIB-022-004` has been commented out to allow other `$regexp` tests to pass and the feature to be largely completed. This specific scenario remains unresolved due to tool limitations with file content manipulation.
 - **Learning**: Confirms the severe limitations of `edit_file` with backslash-sensitive content. The discrepancy between `edit_file` success reports and `read_file` actual content for such cases suggests a deeper issue in the toolchain for these specific string patterns. Manual file correction by the user was bypassed per guidelines, leading to this test being temporarily disabled.
+
+## 2025-06-04: Repeated `replace_file_content` Failures and File State Desynchronization
+
+*   **Issue**: When attempting to add a new sub-test (`inplace_variable_defined_by_another_inplace_variable`) to `client_execute_vars_test.go`, an initial error was made by incorrectly constructing the `ReplacementContent` for the `replace_file_content` tool. This introduced a syntax error (an extraneous `})`). Subsequent attempts to fix this syntax error using `replace_file_content` failed. One attempt reported that the `TargetContent` (`\n\t})\n`) was not unique, indicating that the actual file content had diverged from my understanding, likely due to the previous partial or failed edits.
+*   **Impact**: This prevented the successful addition of the new test case and consumed several steps in unsuccessful correction attempts. The lint error `expected declaration, found ')'` (ID: `6d5132f7-0c89-4a11-bf87-f18357ce2891`) persisted.
+*   **Resolution Strategy**:
+    1.  Document this learning.
+    2.  Reset `client_execute_vars_test.go` to the last known good commit (`da44e62`) using `git checkout [commit-hash] -- [file-path]`. This ensures a clean state.
+    3.  Re-attempt the addition of the sub-test, carefully applying the lesson from memory `3c59b9f1-a1f9-4f6e-9cc5-573ff2e8e4d6` to avoid the initial `ReplacementContent` error.
+*   **Learning**: When `replace_file_content` fails repeatedly, especially with "target content not unique" or when diffs don't match expectations, it's a strong indicator that the agent's internal model of the file content is out of sync. Instead of further iterative `replace_file_content` calls which might worsen the situation or operate on incorrect assumptions, resetting the file to a known good state (e.g., last commit) is a more robust recovery strategy before re-attempting the intended modification. This aligns with the "Handling Problematic Large File Edits / Complex Refactors" guideline in `ai_tool_usage_code_editing.md`.
+
+
+## 2025-06-05: `replace_file_content` Misapplication and File Corruption during `client_execute_vars_test.go` Refactoring (Attempt 2)
+
+*   **Mistake:** During the continued refactoring of `TestExecuteFile_InPlaceVariables` in `client_execute_vars_test.go` (extracting the `variable_in_body` sub-test), the `replace_file_content` tool again misapplied the changes. It inserted the new function `TestExecuteFile_InPlaceVars_BodySubstitution` at an incorrect location, overwriting part of the previously extracted `TestExecuteFile_InPlaceVars_HeaderSubstitution` function. This resulted in file corruption and a syntax error: `expected '(', found TestExecuteFile_InPlaceVars_BodySubstitution ... at line 1176 col 6`.
+*   **Resolution (In Progress):**
+    1.  Document this recurring issue with `replace_file_content` for complex sequential edits.
+    2.  Instead of attempting further `replace_file_content` calls or resetting the file again (as the previous two extractions were successful before this corruption), switch to a more robust fallback strategy as per `ai_tool_usage_code_editing.md` (point 7) and Memory `ae3327f5-1ca8-4347-b15d-8ee8b140ebbd`.
+    3.  Provide the user with a single, consolidated block of Go code containing the correctly refactored functions (`TestExecuteFile_InPlaceVars_SimpleURL`, `TestExecuteFile_InPlaceVars_HeaderSubstitution`, the new `TestExecuteFile_InPlaceVars_BodySubstitution`, and the updated `TestExecuteFile_InPlaceVariables` with the remaining sub-tests) for manual replacement in `client_execute_vars_test.go`.
+*   **Lesson Learned:** The `replace_file_content` tool is unreliable for complex, sequential refactoring tasks that involve multiple insertions and deletions within the same large function or file section. Repeated failures and file corruption indicate that the tool cannot consistently manage the changing context. In such scenarios, proactively switching to providing complete, correct code blocks for manual application by the user is a more efficient and safer approach to avoid further corruption and ensure correctness, aligning with established fallback procedures.
+
+## 2025-06-04: Inconsistent Adherence to File Editing and Git Guidelines
+
+**Mistake:**
+During the implementation of multipart/form-data support (specifically when modifying `parser.go`), I struggled with the `replace_file_content` tool, leading to repeated errors, file corruption, and deviations from the user's preferred Git workflow (e.g., not proactively committing after successful changes and checks). This caused user frustration and required manual intervention.
+
+**Resolution and Lesson Learned:**
+1.  **Acknowledged Feedback:** User explicitly pointed out the inconsistencies.
+2.  **Corrective Memories Created:**
+    *   **Enhanced `replace_file_content` Usage Protocol (Memory ID: `ae3327f5-1ca8-4347-b15d-8ee8b140ebbd`):** Mandates re-reading file sections before using `replace_file_content` and defines clear fallback strategies (patch files, providing full code for manual replacement) if the tool fails, referencing `ai_tool_usage_code_editing.md`. This prioritizes correctness over repeated failed automated attempts.
+    *   **Proactive Git Commit/Push Post-Modification (Memory ID: `68552ccf-562b-40a8-8bcc-960468c163da`):** Reinforces the process of consulting the PRD task tracker for commit messages and automatically committing/pushing after successful modifications and checks, aligning with user preferences and project guidelines.
+3.  **Lesson:** Strict adherence to established operational guidelines and user-defined rules/memories is paramount. When tools prove problematic for complex edits, proactively switch to more robust fallback strategies (like providing full code for manual replacement or generating patches) instead of making repeated, potentially damaging, attempts with the same tool. Always prioritize file integrity and workflow consistency. The new memories will serve as stronger internal directives for future actions.

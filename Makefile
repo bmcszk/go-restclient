@@ -32,6 +32,10 @@ lint: ## Lint Go source files using golangci-lint
 	@echo "Linting..."
 	@golangci-lint run ./...
 
+lint-fix: ## Lint Go source files using golangci-lint and fix issues
+	@echo "Linting and fixing..."
+	@golangci-lint run --fix ./...
+
 check: build lint test-unit ## Run all pre-commit checks (build, lint, unit tests)
 	@echo "Checks completed."
 
@@ -39,7 +43,7 @@ test: test-unit ## Run all tests
 
 test-unit: ## Run unit tests
 	@echo "Running unit tests..."
-	@go test -cover ./...
+	@go test -v -cover ./...
 
 # Dependencies
 install-lint: ## Install golangci-lint

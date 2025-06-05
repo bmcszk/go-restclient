@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -27,11 +28,12 @@ import (
 // It holds configuration like the HTTP client, base URL, default headers,
 // and programmatic variables for substitution.
 type Client struct {
-	httpClient        *http.Client
-	BaseURL           string
-	DefaultHeaders    http.Header
-	currentDotEnvVars map[string]string
-	programmaticVars  map[string]interface{}
+	httpClient              *http.Client
+	BaseURL                 string
+	DefaultHeaders          http.Header
+	currentDotEnvVars       map[string]string
+	programmaticVars        map[string]interface{}
+	selectedEnvironmentName string // Added for T4
 }
 
 // NewClient creates a new instance of the REST client.
@@ -113,6 +115,14 @@ func WithVars(vars map[string]interface{}) ClientOption {
 	}
 }
 
+// WithEnvironment sets the name of the environment to be used from http-client.env.json.
+func WithEnvironment(name string) ClientOption {
+	return func(c *Client) error {
+		c.selectedEnvironmentName = name
+		return nil
+	}
+}
+
 // ExecuteFile parses a request file (.http, .rest), executes all requests found, and returns their responses.
 // It returns an error if the file cannot be parsed or no requests are found.
 // Individual request execution errors are stored within each Response object.
@@ -128,8 +138,11 @@ func WithVars(vars map[string]interface{}) ClientOption {
 //   - Re-generates request-scoped system variables (e.g., `{{$uuid}}`) *once per individual request* to ensure
 //     uniqueness if needed across multiple requests in the same file, but consistency within a single request.
 //   - For each part of the request (URL, headers, body):
-//     a. `resolveVariablesInText` is called: This handles general placeholder substitution with precedence:
-//     Client programmatic vars > file-scoped `@vars` > request-scoped system vars > OS env vars > .env vars > fallback.
+//     a. `resolveVariablesInText` is called. For {{variableName}} placeholders (where 'variableName' does not start with '$'),
+//     the precedence is: Client programmatic vars > file-scoped `@vars` (rcRequest.ActiveVariables) >
+//     Environment vars (parsedFile.EnvironmentVariables) > Global vars (parsedFile.GlobalVariables) >
+//     OS env vars > .env vars > fallback.
+//     System variables like {{$uuid}} are resolved from the request-scoped map if the placeholder is {{$systemVarName}}.
 //     It resolves simple system variables like `{{$uuid}}` from the request-scoped map.
 //     It leaves dynamic system variables (e.g., `{{$dotenv NAME}}`) untouched for the next step.
 //     b. `substituteDynamicSystemVariables` is called: This handles system variables requiring arguments
@@ -137,7 +150,7 @@ func WithVars(vars map[string]interface{}) ClientOption {
 //
 // Programmatic variables for substitution can be set on the Client using `WithVars()`.
 func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Response, error) {
-	parsedFile, err := parseRequestFile(requestFilePath, c)
+	parsedFile, err := parseRequestFile(requestFilePath, c, make([]string, 0)) // Pass initial empty import stack
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse request file %s: %w", requestFilePath, err)
 	}
@@ -168,13 +181,16 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 			restClientReq.RawURLString,
 			c.programmaticVars,
 			restClientReq.ActiveVariables,
+			parsedFile.EffectiveEnvironmentVariables, // Use the merged env vars
+			parsedFile.GlobalVariables,
 			requestScopedSystemVars,
 			osEnvGetter,
-			c.currentDotEnvVars,
+			nil, // .env vars are in EffectiveEnvironmentVariables
 		)
-		substitutedRawURL = c.substituteDynamicSystemVariables(substitutedRawURL)
+		substitutedRawURL = c.substituteDynamicSystemVariables(substitutedRawURL, c.currentDotEnvVars)
 
 		finalParsedURL, parseErr := url.Parse(substitutedRawURL)
+
 		if parseErr != nil {
 			resp := &Response{Request: restClientReq}
 			resp.Error = fmt.Errorf("failed to parse URL after variable substitution: %s (original: %s): %w", substitutedRawURL, restClientReq.RawURLString, parseErr)
@@ -185,6 +201,8 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 		}
 		restClientReq.URL = finalParsedURL
 
+		// "[DEBUG_EXECUTEFILE_HEADERS_AFTER_PARSE]", "filePath", requestFilePath, "reqName", restClientReq.Name, "initialHeaders", restClientReq.Headers)
+
 		if restClientReq.Headers != nil {
 			for key, values := range restClientReq.Headers {
 				newValues := make([]string, len(values))
@@ -193,27 +211,62 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 						val,
 						c.programmaticVars,
 						restClientReq.ActiveVariables,
+						parsedFile.EffectiveEnvironmentVariables, // Use the merged env vars
+						parsedFile.GlobalVariables,
 						requestScopedSystemVars,
 						osEnvGetter,
-						c.currentDotEnvVars,
+						nil, // .env vars are in EffectiveEnvironmentVariables
 					)
-					newValues[j] = c.substituteDynamicSystemVariables(resolvedVal)
+					newValues[j] = c.substituteDynamicSystemVariables(resolvedVal, c.currentDotEnvVars)
+					// "[DEBUG_HEADER_FINAL]", "key", key, "index", j, "finalValue", newValues[j]) // Added for debugging header values
 				}
 				restClientReq.Headers[key] = newValues
 			}
 		}
+
+		// "[DEBUG_EXECUTEFILE_HEADERS_BEFORE_EXECREQ]", "filePath", requestFilePath, "reqName", restClientReq.Name, "headers", restClientReq.Headers)
 
 		if restClientReq.RawBody != "" {
 			resolvedBody := c.resolveVariablesInText(
 				restClientReq.RawBody,
 				c.programmaticVars,
 				restClientReq.ActiveVariables,
+				parsedFile.EffectiveEnvironmentVariables, // Use the merged env vars
+				parsedFile.GlobalVariables,
 				requestScopedSystemVars,
 				osEnvGetter,
-				c.currentDotEnvVars,
+				nil, // .env vars are in EffectiveEnvironmentVariables
 			)
-			restClientReq.RawBody = c.substituteDynamicSystemVariables(resolvedBody)
-			restClientReq.Body = strings.NewReader(restClientReq.RawBody)
+			finalBody := c.substituteDynamicSystemVariables(resolvedBody, c.currentDotEnvVars)
+			// finalBody is now correctly substituted
+			// Check if Content-Type is application/x-www-form-urlencoded and process body
+			contentType := restClientReq.Headers.Get("Content-Type")
+			if strings.HasPrefix(strings.ToLower(contentType), "application/x-www-form-urlencoded") {
+				if finalBody != "" { // Only process if finalBody is not empty
+					newData := make(url.Values)
+					pairs := strings.Split(finalBody, "&")
+					for _, pair := range pairs {
+						if pair == "" { // Skip empty pairs that can result from "&&" or leading/trailing "&"
+							continue
+						}
+						parts := strings.SplitN(pair, "=", 2)
+						key := parts[0]
+						var value string
+						if len(parts) > 1 {
+							value = parts[1]
+						}
+						newData.Add(key, value) // Add raw key and value; Encode will handle URL encoding
+					}
+					finalBody = newData.Encode()
+				}
+				// If finalBody was initially empty, it remains empty.
+			}
+
+			restClientReq.RawBody = finalBody // Update RawBody with the (potentially re-encoded) content
+			restClientReq.Body = strings.NewReader(finalBody)
+			restClientReq.GetBody = func() (io.ReadCloser, error) {
+				return io.NopCloser(strings.NewReader(finalBody)), nil
+			}
 		}
 
 		resp, execErr := c.executeRequest(ctx, restClientReq)
@@ -249,84 +302,128 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 
 // resolveVariablesInText is the primary substitution engine for non-system variables and request-scoped system variables.
 // It iterates through placeholders like `{{varName | fallback}}` and resolves them based on a defined precedence.
-// Dynamic system variables (like {{$dotenv NAME}}) are left untouched by this function.
-// Precedence (highest to lowest):
+// Dynamic system variables (like {{$dotenv NAME}}) are left untouched by this function for substituteDynamicSystemVariables.
+//
+// Precedence for {{variableName}} placeholders (where 'variableName' does not start with '$'):
 // 1. Client programmatic variables (clientProgrammaticVars)
-// 2. Request file-defined variables (fileScopedVars, from @name=value)
-// 3. Request-scoped system variables (requestScopedSystemVars, e.g., a single UUID for the request)
-// 4. OS Environment variables
-// 5. Variables from .env file (dotEnvVars)
-// 6. Fallback value provided in the placeholder itself.
-func (c *Client) resolveVariablesInText(text string, clientProgrammaticVars map[string]interface{}, fileScopedVars map[string]string, requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool), dotEnvVars map[string]string) string {
-	re := regexp.MustCompile(`{{\s*(.*?)\s*}}`)
+// 2. Request file-defined variables (fileScopedVars, from @name=value, effectively rcRequest.ActiveVariables)
+// 3. Environment variables (environmentVars, from selected environment like http-client.env.json)
+// 4. Global variables (globalVars, from http-client.private.env.json or similar)
+// 5. OS Environment variables (via osEnvGetter)
+// 6. Variables from .env file (dotEnvVars)
+// 7. Fallback value provided in the placeholder itself.
+// System variables (e.g., {{$uuid}}, {{$timestamp}}) are handled if the placeholder is like {{$systemVarName}} (i.e. varName starts with '$').
+func (c *Client) resolveVariablesInText(text string, clientProgrammaticVars map[string]interface{}, fileScopedVars map[string]string, environmentVars map[string]string, globalVars map[string]string, requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool), dotEnvVars map[string]string) string {
+	const maxIterations = 10 // Safety break for circular dependencies
+	currentText := text
 
-	return re.ReplaceAllStringFunc(text, func(match string) string {
-		directive := strings.TrimSpace(match[2 : len(match)-2])
+	for i := 0; i < maxIterations; i++ {
+		previousText := currentText
+		re := regexp.MustCompile(`{{\s*(.*?)\s*}}`)
 
-		var varName string
-		var fallbackValue string
-		hasFallback := false
+		currentText = re.ReplaceAllStringFunc(previousText, func(match string) string {
+			directive := strings.TrimSpace(match[2 : len(match)-2])
 
-		if strings.Contains(directive, "|") {
-			parts := strings.SplitN(directive, "|", 2)
-			varName = strings.TrimSpace(parts[0])
-			fallbackValue = strings.TrimSpace(parts[1])
-			hasFallback = true
-		} else {
-			varName = directive
-		}
+			var varName string
+			var fallbackValue string
+			var hasFallback bool
 
-		// 1. Request-scoped System Variables (if varName starts with $)
-		// These are simple, pre-generated variables like $uuid, $timestamp, $randomInt (no-args).
-		if strings.HasPrefix(varName, "$") {
-			if requestScopedSystemVars != nil {
-				if val, ok := requestScopedSystemVars[varName]; ok {
+			if strings.Contains(directive, "|") {
+				parts := strings.SplitN(directive, "|", 2)
+				varName = strings.TrimSpace(parts[0])
+				fallbackValue = strings.TrimSpace(parts[1])
+				hasFallback = true
+			} else {
+				varName = directive
+			}
+
+			// 1. Request-scoped System Variables (if varName starts with $)
+			// These are simple, pre-generated variables like $uuid, $timestamp, $randomInt (no-args).
+			if strings.HasPrefix(varName, "$") {
+				if requestScopedSystemVars != nil {
+					if val, ok := requestScopedSystemVars[varName]; ok {
+						return val
+					}
+				}
+				// or an unknown one. These are left for substituteDynamicSystemVariables.
+				// So, we return the original 'match' here to preserve the placeholder for the next stage.
+				return match
+			}
+
+			// 2. Client Programmatic Variables (map[string]interface{})
+			if clientProgrammaticVars != nil {
+				if val, ok := clientProgrammaticVars[varName]; ok {
+					return fmt.Sprintf("%v", val)
+				}
+			}
+
+			// 3. File-scoped Variables (map[string]string, from @name=value or rcRequest.ActiveVariables)
+			if fileScopedVars != nil {
+				if val, ok := fileScopedVars[varName]; ok {
 					return val
 				}
 			}
-			// If it's a $-prefixed varName not in requestScopedSystemVars,
-			// it could be a dynamic one (e.g. {{$dotenv NAME}}, {{$randomInt MIN MAX}})
-			// or an unknown one. These are left for substituteDynamicSystemVariables.
-			// So, we return the original 'match' here to preserve the placeholder for the next stage.
-			return match
-		}
 
-		// 2. Client Programmatic Variables (map[string]interface{})
-		if clientProgrammaticVars != nil {
-			if val, ok := clientProgrammaticVars[varName]; ok {
-				return fmt.Sprintf("%v", val)
+			// 4. Environment Variables (from http-client.env.json or selected environment)
+			if environmentVars != nil {
+				if val, ok := environmentVars[varName]; ok {
+					return val
+				}
 			}
-		}
 
-		// 3. File-scoped Variables (map[string]string, from @name=value)
-		if fileScopedVars != nil {
-			if val, ok := fileScopedVars[varName]; ok {
-				return val
+			// 5. Global Variables (from http-client.private.env.json or similar)
+			if globalVars != nil {
+				if val, ok := globalVars[varName]; ok {
+					return val
+				}
 			}
-		}
 
-		// 4. OS Environment Variables
-		if osEnvGetter != nil {
-			if envVal, ok := osEnvGetter(varName); ok {
-				return envVal
+			// 6. OS Environment Variables
+			if osEnvGetter != nil {
+				if envVal, ok := osEnvGetter(varName); ok {
+					return envVal
+				}
 			}
-		}
 
-		// 5. .env file variables
-		if dotEnvVars != nil {
-			if val, ok := dotEnvVars[varName]; ok {
-				return val
+			// 7. .env file variables
+			if dotEnvVars != nil {
+				if val, ok := dotEnvVars[varName]; ok {
+					return val
+				}
+				// If not in dotEnvVars, continue to fallback or return match
 			}
-		}
 
-		// 6. Fallback Value
-		// Must be checked AFTER all other potential sources for varName.
-		if hasFallback {
-			return fallbackValue
-		}
+			// 8. Fallback Value
+			// Must be checked AFTER all other potential sources for varName.
+			if hasFallback {
+				return fallbackValue
+			}
 
-		return match // Return original placeholder if not found and no fallback
-	})
+			return match // Return original placeholder if not found and no fallback
+		}) // End of ReplaceAllStringFunc
+
+		if currentText == previousText {
+			break // No more substitutions made in this pass
+		}
+		// If we are on the last iteration and still making changes, it might be a circular dependency.
+		// The currentText will be returned as is, potentially with unresolved variables.
+	} // End of for loop
+	return currentText
+} // End of function resolveVariablesInText
+
+// randomStringFromCharset generates a random string of a given length using characters from the provided charset.
+// randomStringFromCharset generates a random string of a given length using characters from the provided charset.
+func randomStringFromCharset(length int, charset string) string {
+	if length <= 0 || len(charset) == 0 { // Added len(charset) == 0 check
+		return ""
+	}
+	source := rand.NewSource(time.Now().UnixNano())
+	rng := rand.New(source)
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[rng.Intn(len(charset))]
+	}
+	return string(b)
 }
 
 // substituteDynamicSystemVariables handles system variables that require argument parsing or dynamic evaluation at substitution time.
@@ -334,7 +431,8 @@ func (c *Client) resolveVariablesInText(text string, clientProgrammaticVars map[
 // Other simple system variables like {{$uuid}} or {{$timestamp}}
 // should have been pre-resolved and substituted by resolveVariablesInText via the
 // requestScopedSystemVars map.
-func (c *Client) substituteDynamicSystemVariables(text string) string {
+func (c *Client) substituteDynamicSystemVariables(text string, activeDotEnvVars map[string]string) string {
+	// "[DEBUG_DYN_VARS_INPUT]", "inputText", text)
 	originalTextForLogging := text // Keep a copy for logging. Used if we add more complex types with logging.
 	_ = originalTextForLogging     // Avoid unused variable error if no logging exists below.
 
@@ -352,6 +450,105 @@ func (c *Client) substituteDynamicSystemVariables(text string) string {
 		return match // Return original match if parsing fails or min > max
 	})
 
+	// Handle {{$random.integer min max}}
+	reRandomDotInteger := regexp.MustCompile(`{{\$random\.integer\s+(-?\d+)\s+(-?\d+)}}`)
+	text = reRandomDotInteger.ReplaceAllStringFunc(text, func(match string) string {
+		parts := reRandomDotInteger.FindStringSubmatch(match)
+		if len(parts) == 3 {
+			min, errMin := strconv.Atoi(parts[1])
+			max, errMax := strconv.Atoi(parts[2])
+			if errMin == nil && errMax == nil && min <= max {
+				return strconv.Itoa(rand.Intn(max-min+1) + min)
+			}
+		}
+		slog.Warn("Failed to parse $random.integer, returning original match", "match", match)
+		return match
+	})
+
+	// Handle {{$random.float min max}}
+	reRandomDotFloat := regexp.MustCompile(`{{\$random\.float\s+(-?\d*\.?\d+)\s+(-?\d*\.?\d+)}}`)
+	text = reRandomDotFloat.ReplaceAllStringFunc(text, func(match string) string {
+		parts := reRandomDotFloat.FindStringSubmatch(match)
+		if len(parts) == 3 {
+			min, errMin := strconv.ParseFloat(parts[1], 64)
+			max, errMax := strconv.ParseFloat(parts[2], 64)
+			if errMin == nil && errMax == nil && min <= max {
+				return strconv.FormatFloat(min+rand.Float64()*(max-min), 'f', -1, 64)
+			}
+		}
+		slog.Warn("Failed to parse $random.float, returning original match", "match", match)
+		return match
+	})
+
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	const alphanumeric = letters + "0123456789_"
+	const hexChars = "0123456789abcdef"
+
+	// Handle {{$random.alphabetic length}}
+	reRandomDotAlphabetic := regexp.MustCompile(`{{\$random\.alphabetic\s+(\d+)}}`)
+	text = reRandomDotAlphabetic.ReplaceAllStringFunc(text, func(match string) string {
+		parts := reRandomDotAlphabetic.FindStringSubmatch(match)
+		if len(parts) == 2 {
+			length, err := strconv.Atoi(parts[1])
+			if err == nil && length >= 0 {
+				return randomStringFromCharset(length, letters)
+			}
+		}
+		slog.Warn("Failed to parse $random.alphabetic, returning original match", "match", match)
+		return match
+	})
+
+	// Handle {{$random.alphanumeric length}}
+	reRandomDotAlphanumeric := regexp.MustCompile(`{{\$random\.alphanumeric\s+(\d+)}}`)
+	text = reRandomDotAlphanumeric.ReplaceAllStringFunc(text, func(match string) string {
+		parts := reRandomDotAlphanumeric.FindStringSubmatch(match)
+		if len(parts) == 2 {
+			length, err := strconv.Atoi(parts[1])
+			if err == nil && length >= 0 {
+				return randomStringFromCharset(length, alphanumeric)
+			}
+		}
+		slog.Warn("Failed to parse $random.alphanumeric, returning original match", "match", match)
+		return match
+	})
+
+	// Handle {{$random.hexadecimal length}}
+	reRandomDotHexadecimal := regexp.MustCompile(`{{\$random\.hexadecimal\s+(\d+)}}`)
+	text = reRandomDotHexadecimal.ReplaceAllStringFunc(text, func(match string) string {
+		parts := reRandomDotHexadecimal.FindStringSubmatch(match)
+		if len(parts) == 2 {
+			length, err := strconv.Atoi(parts[1])
+			if err == nil && length >= 0 {
+				return randomStringFromCharset(length, hexChars)
+			}
+		}
+		slog.Warn("Failed to parse $random.hexadecimal, returning original match", "match", match)
+		return match
+	})
+
+	// Handle {{$random.email}}
+	reRandomDotEmail := regexp.MustCompile(`{{\$random\.email}}`)
+	text = reRandomDotEmail.ReplaceAllStringFunc(text, func(match string) string {
+		// Simple email pattern: user@domain.tld
+		user := randomStringFromCharset(rand.Intn(10)+5, alphanumeric) // 5-14 chars for user
+		domain := randomStringFromCharset(rand.Intn(5)+5, letters)     // 5-9 chars for domain
+		tld := randomStringFromCharset(rand.Intn(2)+2, letters)        // 2-3 chars for tld
+		return fmt.Sprintf("%s@%s.%s", user, domain, tld)
+	})
+
+	// Handle {{$env.VAR_NAME}}
+	reSystemEnvVar := regexp.MustCompile(`{{\$env\.([A-Za-z_][A-Za-z0-9_]*?)}}`)
+	text = reSystemEnvVar.ReplaceAllStringFunc(text, func(match string) string {
+		parts := reSystemEnvVar.FindStringSubmatch(match)
+		if len(parts) == 2 {
+			varName := parts[1]
+			// os.Getenv returns empty string if var is not set, which is desired.
+			return os.Getenv(varName)
+		}
+		slog.Warn("Failed to parse $env.VAR_NAME, returning original match", "match", match)
+		return match
+	})
+
 	// NOTE: {{$guid}}, {{$uuid}}, {{$timestamp}}, {{$randomInt (no-args)}}
 	// are EXCLUDED here as they are now handled by generateRequestScopedSystemVariables
 	// and substituted in resolveVariablesInText.
@@ -362,7 +559,7 @@ func (c *Client) substituteDynamicSystemVariables(text string) string {
 		parts := reDotEnv.FindStringSubmatch(match)
 		if len(parts) == 2 {
 			varName := parts[1]
-			if val, ok := c.currentDotEnvVars[varName]; ok {
+			if val, ok := activeDotEnvVars[varName]; ok {
 				return val
 			}
 			return "" // Variable not found in .env, return empty string
@@ -379,44 +576,74 @@ func (c *Client) substituteDynamicSystemVariables(text string) string {
 			if val, ok := os.LookupEnv(varName); ok {
 				return val
 			}
-			return "" // Variable not found in process env, return empty string
+			return match // Variable not found in process env, return original placeholder (PRD)
 		}
 		return match // Should not happen
 	})
 
-	// REQ-LIB-029 & REQ-LIB-030: Datetime variables
-	// These were more complex and might have their own regex. For now, assume they were separate calls
-	// or integrated carefully. This part needs to match the *actual* original logic for datetime.
-	// For this focused fix, I am restoring the structure from a typical simple system variable handler.
-	// IF THE ORIGINAL HAD COMPLEX REGEX FOR DATETIME HERE, THIS IS A SIMPLIFICATION.
-	// Example of how datetime *might* have been (if simple ReplaceAll, which is unlikely given its complexity):
-	// text = strings.ReplaceAll(text, "{{$datetime ...}}", evaluateDatetime(...))
-	// text = strings.ReplaceAll(text, "{{$localDatetime ...}}", evaluateLocalDatetime(...))
+	// REQ-LIB-029 & REQ-LIB-030: Datetime variables ($datetime, $localDatetime)
+	reDateTimeRelated := regexp.MustCompile(`{{\$(datetime|localDatetime)((?:\s*(?:"[^"]*"|[^"\s}]+))*)\s*}}`)
+	text = reDateTimeRelated.ReplaceAllStringFunc(text, func(match string) string {
+		captures := reDateTimeRelated.FindStringSubmatch(match)
+		if len(captures) < 3 { // Should have full match, type, and args part
+			slog.Warn("Could not parse datetime/localDatetime variable, captures unexpected", "match", match, "capturesCount", len(captures))
+			return match // Safety return
+		}
+		varType := captures[1] // "datetime" or "localDatetime"
+		argsStr := strings.TrimSpace(captures[2])
 
-	// IMPORTANT: The original datetime substitution logic needs to be preserved.
-	// The following are placeholders if the original logic was more complex than simple ReplaceAll.
-	// If the original used `reDateTime.ReplaceAllStringFunc` and `reLocalDateTime.ReplaceAllStringFunc`,
-	// those blocks should be here.
-	// For now, assuming a simplified structure for this edit's focus.
+		var formatStr string
+		// var offsetStr string // TODO: Implement offset parsing in a subsequent step
 
-	// Placeholder for original $datetime logic (MUST BE VERIFIED/RESTORED FROM ORIGINAL)
-	// For example, if it used a regex like reDateTime:
-	/*
-		reDateTime := regexp.MustCompile(`\{\{\$datetime\s+...complex regex...\}\}`)
-		text = reDateTime.ReplaceAllStringFunc(text, func(match string) string {
-			// ... original $datetime evaluation ...
-			return "evaluated_datetime"
-		})
-	*/
+		// Regex to parse arguments: captures quoted strings or unquoted non-space sequences
+		argPartsRegex := regexp.MustCompile(`(?:\"([^\"]*)\"|([^\"\\s}]+))`)
+		parsedArgsMatches := argPartsRegex.FindAllStringSubmatch(argsStr, -1)
 
-	// Placeholder for original $localDatetime logic (MUST BE VERIFIED/RESTORED FROM ORIGINAL)
-	/*
-		reLocalDateTime := regexp.MustCompile(`\{\{\$localDatetime\s+...complex regex...\}\}`)
-		text = reLocalDateTime.ReplaceAllStringFunc(text, func(match string) string {
-			// ... original $localDatetime evaluation ...
-			return "evaluated_local_datetime"
-		})
-	*/
+		parsedArgs := []string{}
+		for _, m := range parsedArgsMatches {
+			if m[1] != "" { // Quoted argument
+				parsedArgs = append(parsedArgs, m[1])
+			} else if m[2] != "" { // Unquoted argument
+				parsedArgs = append(parsedArgs, m[2])
+			}
+		}
+
+		if len(parsedArgs) > 0 {
+			formatStr = parsedArgs[0]
+		} else {
+			// Default format if none provided, as per common expectations (e.g., ISO8601)
+			formatStr = "iso8601"
+		}
+		// "[DEBUG_DATETIME] Determined formatStr", "varType", varType, "argsStr", argsStr, "parsedFormatStr", formatStr, "originalMatch", match)
+		// if len(parsedArgs) > 1 {
+		// offsetStr = parsedArgs[1] // TODO: Implement offset parsing
+		// }
+
+		var now time.Time
+		if varType == "datetime" {
+			now = time.Now().UTC()
+		} else { // localDatetime
+			now = time.Now() // System's local time zone
+		}
+
+		// TODO: Implement offset application using offsetStr and 'now' in a subsequent step
+
+		var resultStr string
+		switch strings.ToLower(formatStr) {
+		case "rfc1123":
+			resultStr = now.Format(time.RFC1123)
+		case "iso8601":
+			resultStr = now.Format(time.RFC3339)
+		case "timestamp":
+			resultStr = strconv.FormatInt(now.Unix(), 10)
+		default:
+			// TODO: Implement custom Java format string translation to Go layout in a subsequent step
+			// slog.Warn("Unsupported or custom datetime format, returning original match for now", "format", formatStr, "variableType", varType, "originalMatch", match)
+			return match
+		}
+
+		return resultStr
+	})
 
 	return text
 }
@@ -427,9 +654,11 @@ func (c *Client) substituteDynamicSystemVariables(text string) string {
 func (c *Client) generateRequestScopedSystemVariables() map[string]string {
 	vars := make(map[string]string)
 	vars["$uuid"] = uuid.NewString()
-	vars["$guid"] = vars["$uuid"] // Alias $guid to $uuid for consistency
+	vars["$guid"] = vars["$uuid"]        // Alias $guid to $uuid
+	vars["$random.uuid"] = vars["$uuid"] // Add $random.uuid as alias
 	vars["$timestamp"] = strconv.FormatInt(time.Now().UTC().Unix(), 10)
-	vars["$randomInt"] = strconv.Itoa(rand.Intn(101)) // 0-100 inclusive
+	vars["$isoTimestamp"] = time.Now().UTC().Format(time.RFC3339) // Add $isoTimestamp
+	vars["$randomInt"] = strconv.Itoa(rand.Intn(1001))            // 0-1000 inclusive as per PRD
 	// Add other simple, no-argument system variables here if any
 
 	// For logging/debugging purposes, to see what was generated once per request
@@ -477,15 +706,31 @@ func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Respo
 		}
 	}
 	for key, values := range rcRequest.Headers {
-		httpReq.Header.Del(key)
+		// "[DEBUG_HEADER_LOOP_ITERATION]", "original_key", key, "canonicalKey", textproto.CanonicalMIMEHeaderKey(key), "values_from_rcRequest", values)
+		// "[DEBUG_HEADER_STATE_BEFORE_DEL]", "canonicalKey", canonicalKey, "slice_in_httpReq", httpReq.Header[canonicalKey])
+
+		httpReq.Header.Del(key) // Uses canonicalKey internally
+		// "[DEBUG_HEADER_STATE_AFTER_DEL]", "canonicalKey", textproto.CanonicalMIMEHeaderKey(key), "slice_in_httpReq", httpReq.Header[textproto.CanonicalMIMEHeaderKey(key)])
+
 		for _, value := range values {
-			httpReq.Header.Add(key, value)
+			httpReq.Header.Add(key, value) // Uses canonicalKey internally
+			// "[DEBUG_HEADER_STATE_AFTER_ADD]", "canonicalKey", canonicalKey, "slice_in_httpReq", httpReq.Header[canonicalKey], "value_idx", i)
 		}
+		// "[DEBUG_HEADER_STATE_AFTER_ALL_ADDS_FOR_KEY]", "canonicalKey", canonicalKey, "slice_in_httpReq", httpReq.Header[canonicalKey])
 	}
+
+	// "[DEBUG_SPECIFIC_HEADER_AFTER_LOOP]",
+	// 	"key_original", "X-Datetime-RFC1123",
+	// 	"value_get", httpReq.Header.Get("X-Datetime-RFC1123"),
+	// 	"key_canonical", "X-Datetime-Rfc1123",
+	// 	"value_slice_direct", httpReq.Header["X-Datetime-Rfc1123"],
+	// )
+
 	if httpReq.Header.Get("Host") == "" && httpReq.URL.Host != "" {
 		httpReq.Host = httpReq.URL.Host
 	}
 
+	// "[DEBUG_HTTPREQ_FINAL_HEADERS]", "headers", httpReq.Header) // Added for debugging
 	startTime := time.Now()
 	httpResp, err := c.httpClient.Do(httpReq)
 	duration := time.Since(startTime)

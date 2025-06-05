@@ -1,0 +1,7 @@
+### Test {{$isoTimestamp}}
+GET [[.ServerURL]]/isotimestamp
+X-Timestamp-Header: {{$isoTimestamp}}
+
+{
+  "requestTime": "{{$isoTimestamp}}"
+}

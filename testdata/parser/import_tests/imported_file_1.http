@@ -1,0 +1,10 @@
+@imported_var = imported_value
+@host = http://localhost:8080
+
+### Request from imported_file_1
+GET {{host}}/imported_request_1
+Content-Type: application/json
+
+{
+    "key": "{{imported_var}}"
+}

@@ -1,0 +1,4 @@
+// @import "imported_file_2_level_1.http"
+
+### Request from main_nested_import
+GET {{host}}/main_nested_request

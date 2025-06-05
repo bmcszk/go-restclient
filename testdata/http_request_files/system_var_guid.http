@@ -1,8 +1,10 @@
+### Test {{$guid}} and {{$random.uuid}}
 GET [[.ServerURL]]/users/{{$guid}}
 User-Agent: test-client
 X-Request-ID: {{$guid}}
 
 {
   "transactionId": "{{$guid}}",
-  "correlationId": "{{$guid}}"
-} 
+  "correlationId": "{{$guid}}",
+  "randomUuidAlias": "{{$random.uuid}}"
+}

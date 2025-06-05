@@ -1,0 +1,4 @@
+// @import "imported_file_1.http"
+
+### Request from main file
+GET {{host}}/main_request

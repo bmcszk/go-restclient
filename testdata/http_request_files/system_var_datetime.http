@@ -1,10 +1,31 @@
-GET [[.ServerURL]]/datetime/{{$datetime rfc1123}}
+### Test Datetime Variables
+GET [[.ServerURL]]/datetime
 Content-Type: application/json
-X-Datetime-RFC1123: {{$datetime rfc1123}}
-X-Datetime-ISO8601: {{$datetime iso8601}}
-X-Datetime-Custom: {{$datetime "2006-01-02T15:04:05Z07:00"}}
+
+# UTC Datetime ($datetime)
+X-Datetime-RFC1123: {{$datetime "rfc1123"}}
+X-Datetime-ISO8601: {{$datetime "iso8601"}}
+X-Datetime-Timestamp: {{$datetime "timestamp"}}
+X-Datetime-Default: {{$datetime}}
+
+# Local Datetime ($localDatetime)
+X-LocalDatetime-RFC1123: {{$localDatetime "rfc1123"}}
+X-LocalDatetime-ISO8601: {{$localDatetime "iso8601"}}
+X-LocalDatetime-Timestamp: {{$localDatetime "timestamp"}}
+X-LocalDatetime-Default: {{$localDatetime}}
+
+# Invalid/Unsupported Format
+X-Datetime-Invalid: {{$datetime "invalidFormat"}}
 
 {
-  "datetime_custom_body": "{{$datetime "Jan_2_2006_15:04:05"}}",
-  "datetime_iso_body": "{{$datetime iso8601}}"
-} 
+  "description": "Testing various datetime system variables",
+  "utc_rfc1123": "{{$datetime "rfc1123"}}",
+  "utc_iso8601": "{{$datetime "iso8601"}}",
+  "utc_timestamp": "{{$datetime "timestamp"}}",
+  "utc_default_iso": "{{$datetime}}",
+  "local_rfc1123": "{{$localDatetime "rfc1123"}}",
+  "local_iso8601": "{{$localDatetime "iso8601"}}",
+  "local_timestamp": "{{$localDatetime "timestamp"}}",
+  "local_default_iso": "{{$localDatetime}}",
+  "invalid_format_test": "{{$datetime \"invalidFormat\"}}"
+}

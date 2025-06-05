@@ -1,0 +1,8 @@
+GET {{.ServerURL}}/path-{{$dotenv DOTENV_VAR1}}/data
+Content-Type: application/json
+X-Dotenv-Value: {{$dotenv DOTENV_VAR2}}
+
+{
+  "payload": "{{$dotenv DOTENV_VAR1}}",
+  "missing_payload": "{{$dotenv MISSING_DOTENV_VAR}}"
+}
