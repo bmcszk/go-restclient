@@ -1,0 +1,7 @@
+@base_path = /api/v1
+@resource = items
+@full_url_segment = {{base_path}}/{{resource}}/123
+@test_server_url = {{test_server_url}}
+
+### Test Request With Nested In-Place Var in URL
+GET {{test_server_url}}{{full_url_segment}}
