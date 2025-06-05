@@ -814,3 +814,42 @@ func TestExecuteFile_InPlace_Malformed_NoNameEqualsValue(t *testing.T) {
 	assert.Contains(t, execErr.Error(), "failed to parse request file", "Error message should indicate parsing failure")
 	assert.Contains(t, execErr.Error(), expectedErrorSubstring, "Error message should contain specific malformed reason")
 }
+
+func TestExecuteFile_InPlace_VariableDefinedByDotEnvSystemVariable(t *testing.T) {
+	// Given: an .http file using {{$dotenv VAR_NAME}} for an in-place variable,
+	// and a .env file defining VAR_NAME in the same directory as the .http file.
+	const requestFilePath = "testdata/execute_inplace_vars/inplace_variable_defined_by_dotenv_system_variable/request.http"
+	// The .env file is: testdata/execute_inplace_vars/inplace_variable_defined_by_dotenv_system_variable/.env
+	// with DOTENV_VAR_FOR_SYSTEM_TEST=actual_dotenv_value
+
+	const expectedSubstitutedValue = "actual_dotenv_value"
+	var capturedURLPath string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedURLPath = r.URL.Path
+		w.WriteHeader(http.StatusOK) // Minimal response for the server
+	}))
+	defer server.Close()
+
+	client, err := NewClient(WithVars(map[string]interface{}{
+		"test_server_url": server.URL,
+	}))
+	require.NoError(t, err)
+
+	// When: the HTTP file is executed
+	responses, execErr := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then: the request should be successful and the variable substituted correctly
+	require.NoError(t, execErr, "ExecuteFile returned an unexpected error")
+	require.Len(t, responses, 1, "Expected one response")
+	require.Nil(t, responses[0].Error, "Response error should be nil")
+	assert.Equal(t, http.StatusOK, responses[0].StatusCode, "Expected HTTP 200 OK")
+	assert.Equal(t, "/"+expectedSubstitutedValue, capturedURLPath, "Expected path to be substituted with .env value via {{$dotenv}}")
+
+	// Verify ParsedFile.FileVariables to confirm parser behavior with {{$dotenv}}
+	parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
+	require.NoError(t, pErr)
+	require.NotNil(t, parsedFile.FileVariables)
+	assert.Equal(t, "{{$dotenv DOTENV_VAR_FOR_SYSTEM_TEST}}", parsedFile.FileVariables["my_api_key"], "Parsed file variable 'my_api_key' (placeholder) mismatch")
+	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["test_server_url"], "Parsed file variable 'test_server_url' (placeholder) mismatch")
+}
