@@ -797,3 +797,20 @@ func TestExecuteFile_InPlace_Malformed_NameOnlyNoEqualsNoValue(t *testing.T) {
 	assert.Contains(t, execErr.Error(), "failed to parse request file", "Error message should indicate parsing failure")
 	assert.Contains(t, execErr.Error(), expectedErrorSubstring, "Error message should contain specific malformed reason")
 }
+
+func TestExecuteFile_InPlace_Malformed_NoNameEqualsValue(t *testing.T) {
+	// Given: an .http file with a malformed in-place variable (no name, equals, value)
+	requestFilePath := "testdata/execute_inplace_vars/malformed_no_name_equals_value/request.http"
+	expectedErrorSubstring := "variable name cannot be empty in definition"
+
+	client, err := NewClient()
+	require.NoError(t, err)
+
+	// When: the .http file is executed
+	_, execErr := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then: an error should occur indicating a parsing failure due to the malformed variable
+	require.Error(t, execErr, "ExecuteFile should return an error for malformed variable definition")
+	assert.Contains(t, execErr.Error(), "failed to parse request file", "Error message should indicate parsing failure")
+	assert.Contains(t, execErr.Error(), expectedErrorSubstring, "Error message should contain specific malformed reason")
+}
