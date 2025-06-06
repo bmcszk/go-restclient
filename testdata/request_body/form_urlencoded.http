@@ -1,0 +1,17 @@
+### Basic Form Data Test
+POST https://example.com/api/login
+Content-Type: application/x-www-form-urlencoded
+
+username=testuser&password=testpass123
+
+### Form Data with Multiple Fields Test
+POST https://example.com/api/subscribe
+Content-Type: application/x-www-form-urlencoded
+
+email=user@example.com&name=Test+User&interests=sports&interests=technology&subscribe=true
+
+### Form Data with Special Characters
+POST https://example.com/api/search
+Content-Type: application/x-www-form-urlencoded
+
+query=test%20search&filter=date%3E2023-01-01&sort=relevance

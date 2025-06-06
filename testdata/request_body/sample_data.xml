@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root>
+  <item id="1">
+    <name>Item One</name>
+    <description>This is the first item</description>
+  </item>
+  <item id="2">
+    <name>Item Two</name>
+    <description>This is the second item</description>
+  </item>
+</root>
