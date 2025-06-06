@@ -1,6 +1,10 @@
 # Go REST Client Library (`go-restclient`)
 
-Last Updated: 2025-05-29
+**IMPORTANT:** This library is heavily inspired by:
+- [JetBrains HTTP Client](https://www.jetbrains.com/help/idea/http-client-in-product-code-editor.html)
+- [REST Client Extension for VS Code](https://marketplace.visualstudio.com/items?itemName=humao.rest-client)
+
+Last Updated: 2025-06-06
 
 ## Overview
 
