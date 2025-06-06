@@ -1,85 +1,124 @@
 **Version:** 1.0
-**Date:** 2025-06-03
+**Date:** 2025-06-06
 **Status:** Draft
 
-# Product Requirements Document: JetBrains HTTP Client Compatibility
+# Product Requirements Document: HTTP Client Syntax Compatibility
 
 ## 1. Introduction
 
-This document outlines the requirements for enhancing `go-restclient` to achieve compatibility with core features of the JetBrains HTTP client, as described in their official documentation. The goal is to allow users to leverage `.http` files written for the JetBrains environment with `go-restclient`.
+This document outlines the requirements for enhancing `go-restclient` to achieve comprehensive compatibility with the HTTP request syntax documented in `docs/http_syntax.md`. This document consolidates both JetBrains HTTP Client and VS Code REST Client syntax. The goal is to allow users to leverage `.http` files with this common syntax in the `go-restclient` library.
 
 ## 2. Goals
 
-*   Parse and execute HTTP requests defined in `.http` files that conform to the JetBrains HTTP client syntax.
-*   Support multiple requests within a single file.
-*   Implement variable substitution using `{{variable_name}}` syntax.
-*   Support environment-specific configurations via an environment file.
-
-*   Allow importing requests from other `.http` files.
-*   Handle common request body content types.
+* Parse and execute HTTP requests defined in `.http` files that conform to the common HTTP client syntax.
+* Support all placeholders, variables, and dynamic expressions documented in `docs/http_syntax.md`.
+* Implement environment management via environment files.
+* Support all documented request components (headers, authentication, body types, etc.).
+* Provide response handling and validation capabilities.
+* Maintain backward compatibility with existing `go-restclient` features.
 
 ## 3. Target Audience
 
-*   Developers using `go-restclient` who also use or want to use the JetBrains HTTP client format for defining HTTP requests.
-*   Users looking for a CLI tool that can run JetBrains-style `.http` files.
+* Developers using `go-restclient` who also use JetBrains HTTP client or VS Code REST client tools.
+* Users looking for a CLI tool that can run `.http` files with the common syntax.
+* Go developers needing to integrate HTTP request files into their applications.
 
 ## 4. Key Features & Requirements
 
-### 4.1. File Format and Parsing
+### 4.1 Request Structure Basics
 
-*   **FR1.1:** Support for `.http` and `.rest` file extensions.
-*   **FR1.2:** Parse multiple requests within a single file, delimited by `###`.
-*   **FR1.3:** Support comments using `#` and `//`.
-*   **FR1.4:** Support request naming:
-    *   Via comment above the request: `### My Request Name`
-    *   Via directive: `// @name MyRequestName` or `# @name MyRequestName`
-*   **FR1.5:** Parse request method, URL, HTTP version, headers, and body.
+* **FR1.1:** Support `.http` and `.rest` file extensions.
+* **FR1.2:** Support parsing multiple requests within a single file, delimited by `###`.
+* **FR1.3:** Support request naming via `### Request Name` syntax or `# @name requestName` directive.
+* **FR1.4:** Support comments using `#` and `//`.
+* **FR1.5:** Support all major HTTP methods (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS).
+* **FR1.6:** Support request line format: `[METHOD] [URL] [HTTP_VERSION]` (HTTP version optional).
+* **FR1.7:** Parse headers as `[Header-Name]: [Header-Value]`.
+* **FR1.8:** Handle standard body formats after headers separated by blank line.
 
-### 4.2. Variables and Environments
+### 4.2 Environment Variables and Placeholders
 
-*   **FR2.1:** Support variable substitution in URL, headers, and body using `{{variable_name}}` syntax.
-*   **FR2.2:** Load environment variables from a `http-client.env.json` file located in the same directory as the `.http` file or a project root.
-    *   The file should contain a JSON object where keys are environment names and values are objects of key-value pairs.
-    *   Example: `{"dev": {"host": "localhost:3000"}, "prod": {"host": "api.example.com"}}`
-*   **FR2.3:** Allow specifying an active environment for a run (e.g., via CLI flag).
-*   **FR2.4:** Support for dynamic variables (e.g., `{{$uuid}}`, `{{$timestamp}}`, `{{$randomInt}}`) and system environment variables (e.g., `{{$env.MY_VAR}}`).
-*   **FR2.5:** Support in-place variables defined within the `.http` file using `@name = value` syntax.
+* **FR2.1:** Support variable substitution in URL, headers, and body using `{{variable_name}}` syntax.
+* **FR2.2:** Load environment variables from `http-client.env.json` and `http-client.private.env.json`.
+* **FR2.3:** Support in-place variables defined with `@name = value` syntax.
+* **FR2.4:** Support special `$shared` environment that applies across all environments.
 
-### 4.3. Request Imports
+### 4.3 Dynamic System Variables
 
-*   **FR3.1:** Support importing requests or shared components from other `.http` files.
-*   **FR3.2:** Assumed import syntax (pending confirmation): `// @import "path/to/another.http"` or `# @import "path/to/another.http"`. The imported file's requests should be usable.
+* **FR3.1:** Support common placeholders available in both clients:
+  * `{{$uuid}}` / `{{$guid}}` - Generate UUID v4
+  * `{{$timestamp}}` - Current Unix timestamp
+  * `{{$datetime format}}` - UTC datetime with format 
+  * `{{$localDatetime format}}` - Local datetime with format
+  * `{{$randomInt}}` - Random integer (0-1000)
+  * `{{$randomInt min max}}` - Random integer in range
 
-### 4.5. Request Body Handling
+* **FR3.2:** Support JetBrains-specific placeholders:
+  * `{{$random.integer(min, max)}}` - Random integer in range
+  * `{{$random.float(min, max)}}` - Random float in range
+  * `{{$random.alphabetic(length)}}` - Random alphabetic string 
+  * `{{$random.alphanumeric(length)}}` - Random alphanumeric string
+  * `{{$random.hexadecimal(length)}}` - Random hexadecimal string
+  * `{{$random.email}}` - Random email
+  
+* **FR3.3:** Support system environment access:
+  * `{{$env.VAR_NAME}}` - System environment variable (JetBrains)
+  * `{{$processEnv VAR_NAME}}` - System environment variable (VS Code)
+  * `{{$dotenv VAR_NAME}}` - Value from `.env` file (VS Code)
 
-*   **FR5.1:** Support `application/json` bodies.
-*   **FR5.2:** Support `text/plain` and other raw text bodies.
-*   **FR5.3:** Support `application/x-www-form-urlencoded` bodies, including correct encoding of special characters.
-*   **FR5.4:** Support `multipart/form-data` bodies.
+### 4.4 Request Bodies
 
-### 4.6. Execution
+* **FR4.1:** Support `application/json` bodies.
+* **FR4.2:** Support `application/x-www-form-urlencoded` bodies with proper encoding.
+* **FR4.3:** Support `multipart/form-data` bodies including file uploads.
+* **FR4.4:** Support `text/plain` and other raw text bodies.
+* **FR4.5:** Support GraphQL request format.
 
-*   **FR6.1:** Allow execution of a specific named request from a file.
-*   **FR6.2:** Allow execution of all requests in a file sequentially.
-*   **FR6.3:** Environment variables and in-place variables should persist and be available across all requests executed in a single run within their defined scope.
+### 4.5 Authentication
+
+* **FR5.1:** Support Basic Authentication (`Authorization: Basic`) and URL-based (`user:password@domain`).
+* **FR5.2:** Support Bearer token authentication (`Authorization: Bearer`).
+* **FR5.3:** Support OAuth authentication flow using request references.
+
+### 4.6 Request Settings
+
+* **FR6.1:** Support request-specific options via `@name`, `@no-redirect`, `@no-cookie-jar` directives.
+* **FR6.2:** Support request timeout setting via `@timeout` directive.
+
+### 4.7 Response Handling and Validation
+
+* **FR7.1:** Support defining expected responses for testing.
+* **FR7.2:** Support response references for chained requests (`{{requestName.response.body.field}}`).
+* **FR7.3:** Support response validation placeholders:
+  * `{{$any}}` - Matches any sequence
+  * `{{$regexp 'pattern'}}` - Regex pattern matching
+  * `{{$anyGuid}}` - UUID string matching
+  * `{{$anyTimestamp}}` - Unix timestamp matching
+  * `{{$anyDatetime 'format'}}` - Datetime matching
+
+### 4.8 Request Imports
+
+* **FR8.1:** Support importing requests from other `.http` files.
+* **FR8.2:** Support correct variable scoping and overriding in imports.
+* **FR8.3:** Detect and prevent circular imports.
+
+### 4.9 Cookies and Redirect Handling
+
+* **FR9.1:** Support automatic cookie management between requests in the same file.
+* **FR9.2:** Support redirect following with option to disable (`@no-redirect`).
 
 ## 5. Non-Functional Requirements
 
-*   **NFR1:** Performance: Script execution and request processing should be reasonably performant.
-*   **NFR2:** Error Handling: Clear and informative error messages for syntax errors in `.http` files, script execution errors, and failed assertions.
-*   **NFR3:** Usability: CLI interface should be intuitive for selecting files, named requests, and environments.
+* **NFR1:** Performance - Script execution and request processing should be reasonably performant.
+* **NFR2:** Error Handling - Clear and informative error messages for syntax errors and failed assertions.
+* **NFR3:** Usability - CLI interface should be intuitive for selecting files, named requests, and environments.
+* **NFR4:** Compatibility - Maintain backward compatibility with existing `go-restclient` features.
 
-## 6. Out of Scope (Version 1.0)
+## 6. Out of Scope
 
-*   gRPC, WebSocket, GraphQL protocols.
-*   Advanced SSL/TLS client certificate configuration.
-*   Proxy configuration via `.http` file syntax.
-*   UI-specific integrations of the JetBrains client (e.g., run configurations UI, direct browser opening).
-*   JavaScript-based pre-request and post-request scripting (including `client.global.set`, `client.test`, `client.assert`, `request.variables.set`, etc.).
-*   Response history persistence related to script-based `client.global` variables.
-*   Automatic conversion from/to cURL or Postman collections.
-
-## 7. Open Questions / Assumptions to Verify
-
-*   **OQ1:** Confirm the exact syntax for request imports (`// @import` is an assumption).
-*   **OQ2:** Detailed structure of `http-client.env.json` if it supports more than simple key-value pairs per environment (e.g., nested structures). For now, simple key-value is assumed.
+* Pre-request and post-request scripting.
+* Request history management.
+* UI-specific integrations of the JetBrains or VS Code clients.
+* cURL import/export functionality.
+* VS Code-specific Azure AD token placeholders.
+* JetBrains Faker library variables (beyond the core random generators).
