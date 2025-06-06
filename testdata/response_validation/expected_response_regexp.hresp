@@ -1,0 +1,8 @@
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "id": "{{$regexp '[A-Z0-9]+'}}",
+  "email": "{{$regexp '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$'}}",
+  "phone": "{{$regexp '\\d{3}-\\d{3}-\\d{4}'}}"
+}

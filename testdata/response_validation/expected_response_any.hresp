@@ -1,0 +1,10 @@
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "id": "12345",
+  "description": "{{$any}}",
+  "created": "2025-06-06",
+  "prefix_match": "hello{{$any}}",
+  "pattern": "{{$any}}world"
+}
