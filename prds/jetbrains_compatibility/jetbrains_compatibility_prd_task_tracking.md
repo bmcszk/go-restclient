@@ -7,7 +7,7 @@
 | T5      | **Testing:** Create unit tests for request body handling                | Done | T1           | Test FR4.1-4.5 using external .http files                                                          |
 | T6      | **Testing:** Create unit tests for authentication methods               | Done | T1           | Test FR5.1-5.3 using external .http files                                                          |
 | T7      | **Testing:** Create unit tests for request settings directives          | Done | T1           | Test FR6.1-6.2 using external .http files                                                          |
-| T8      | **Testing:** Create unit tests for response handling & validation       | In Progress   | T1           | Test FR7.1-7.3 using external .http files                                                          |
+| T8      | **Testing:** Create unit tests for response handling & validation       | Done   | T1           | Test FR7.1-7.3 using external .http files                                                          |
 | T9      | **Testing:** Create unit tests for request imports                      | Todo   | T1           | Test FR8.1-8.3 using external .http files                                                          |
 | T10     | **Testing:** Create unit tests for cookies & redirect handling          | Todo   | T1           | Test FR9.1-9.2 using external .http files                                                          |
 | T11     | **Implementation:** Update parser for complete request structure support | Todo   | T2           | Implement missing features for FR1.1-1.8 based on test findings                                    |
