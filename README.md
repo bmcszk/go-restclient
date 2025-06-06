@@ -4,6 +4,8 @@
 - [JetBrains HTTP Client](https://www.jetbrains.com/help/idea/http-client-in-product-code-editor.html)
 - [REST Client Extension for VS Code](https://marketplace.visualstudio.com/items?itemName=humao.rest-client)
 
+For comprehensive HTTP syntax reference, see [HTTP Syntax Documentation](docs/http_syntax.md).
+
 Last Updated: 2025-06-06
 
 ## Overview
