@@ -1,0 +1,11 @@
+### OAuth Get Token
+# @name getToken
+POST https://oauth.example.com/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&client_id=my-client&client_secret=my-secret
+
+### Use OAuth Token from previous request
+# @name useToken
+GET https://api.example.com/secured
+Authorization: Bearer {{getToken.response.body.access_token}}
