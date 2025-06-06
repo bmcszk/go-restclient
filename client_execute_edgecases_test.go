@@ -6,7 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
+	"path/filepath" // Added
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,6 +33,76 @@ func TestExecuteFile_InvalidMethodInFile(t *testing.T) {
 	assert.Error(t, resp1.Error, "Expected an error for invalid method/scheme")
 	assert.Contains(t, resp1.Error.Error(), "unsupported protocol scheme", "Error message should indicate unsupported protocol scheme")
 	assert.Contains(t, resp1.Error.Error(), "Invalidmethod", "Error message should contain the problematic method string as used")
+}
+
+// executeFileTestCase defines a test case for TestExecuteFile_IgnoreEmptyBlocks_Client
+type executeFileTestCase struct {
+	name                           string
+	requestFileBasePath            string // Relative path to the base .http file in testdata
+	needsServerURLCount            int    // How many times server.URL needs to be Sprintf'd (0, 1, or 2)
+	expectedResponses              int
+	expectedError                  bool
+	expectedErrorMessageSubstrings []string
+	responseValidators             []func(t *testing.T, resp *Response)
+}
+
+func assertSuccessfulExecutionAndValidateResponses(t *testing.T, tcName string, execErr error, actualResponses []*Response, expectedResponseCount int, responseValidators []func(t *testing.T, resp *Response)) {
+	t.Helper()
+	assert.NoError(t, execErr, "Did not expect an error for test: %s", tcName)
+	require.Len(t, actualResponses, expectedResponseCount, "Number of responses mismatch for test: %s", tcName)
+	if len(responseValidators) != expectedResponseCount {
+		t.Fatalf("Mismatch between expected responses (%d) and number of validators (%d) for test: %s", expectedResponseCount, len(responseValidators), tcName)
+	}
+	for i, validator := range responseValidators {
+		if i < len(actualResponses) {
+			validator(t, actualResponses[i])
+		} else {
+			t.Errorf("Validator index %d out of bounds for responses (len %d) in test: %s", i, len(actualResponses), tcName)
+		}
+	}
+}
+
+func runExecuteFileSubtest(t *testing.T, client *Client, serverURL string, tc executeFileTestCase) {
+	t.Helper() // Mark as test helper
+
+	// Read the base content from the testdata file
+	baseContent, err := os.ReadFile(tc.requestFileBasePath)
+	require.NoError(t, err, "Failed to read base request file %s for test: %s", tc.requestFileBasePath, tc.name)
+
+	// Prepare the actual request content by injecting the server URL if needed
+	var requestFileContent string
+	switch tc.needsServerURLCount {
+	case 0:
+		requestFileContent = string(baseContent)
+	case 1:
+		requestFileContent = fmt.Sprintf(string(baseContent), serverURL)
+	case 2:
+		requestFileContent = fmt.Sprintf(string(baseContent), serverURL, serverURL)
+	default:
+		t.Fatalf("Invalid needsServerURLCount %d for test: %s", tc.needsServerURLCount, tc.name)
+	}
+
+	// Create a temporary file to write the processed request content
+	tempFile, err := os.CreateTemp(t.TempDir(), filepath.Base(tc.requestFileBasePath)+".*.http") // Use filepath.Base
+	require.NoError(t, err, "Failed to create temp file for test: %s", tc.name)
+	// TempDir will handle cleanup of tempFile.
+
+	_, err = tempFile.WriteString(requestFileContent)
+	require.NoError(t, err, "Failed to write to temp file for test: %s", tc.name)
+	require.NoError(t, tempFile.Close(), "Failed to close temp file for test: %s", tc.name)
+
+	// When
+	responses, execErr := client.ExecuteFile(context.Background(), tempFile.Name())
+
+	// Then
+	if tc.expectedError {
+		assert.Error(t, execErr, "Expected an error for test: %s", tc.name)
+		for _, sub := range tc.expectedErrorMessageSubstrings {
+			assert.Contains(t, execErr.Error(), sub, "Error message for test '%s' should contain '%s'", tc.name, sub)
+		}
+	} else {
+		assertSuccessfulExecutionAndValidateResponses(t, tc.name, execErr, responses, tc.expectedResponses, tc.responseValidators)
+	}
 }
 
 func TestExecuteFile_IgnoreEmptyBlocks_Client(t *testing.T) {
@@ -65,23 +135,15 @@ func TestExecuteFile_IgnoreEmptyBlocks_Client(t *testing.T) {
 	defer server.Close()
 	client, _ := NewClient()
 
-	tests := []struct {
-		name               string
-		requestFileContent string
-		expectedResponses  int
-		expectedError      bool
-		responseValidators []func(t *testing.T, resp *Response)
-	}{
-		{
-			name: "SCENARIO-LIB-028-004: Valid request, then separator, then only comments",
-			requestFileContent: fmt.Sprintf(`
-GET %s/first
+	testDataDir := "testdata/execute_file_ignore_empty_blocks"
 
-###
-# This block is empty
-`, server.URL),
-			expectedResponses: 1,
-			expectedError:     false,
+	tests := []executeFileTestCase{
+		{
+			name:                "SCENARIO-LIB-028-004: Valid request, then separator, then only comments",
+			requestFileBasePath: filepath.Join(testDataDir, "scenario_004_template.http"),
+			needsServerURLCount: 1,
+			expectedResponses:   1,
+			expectedError:       false,
 			responseValidators: []func(t *testing.T, resp *Response){
 				func(t *testing.T, resp *Response) {
 					assert.NoError(t, resp.Error)
@@ -91,14 +153,11 @@ GET %s/first
 			},
 		},
 		{
-			name: "SCENARIO-LIB-028-005: Only comments, then separator, then valid request",
-			requestFileContent: fmt.Sprintf(`
-# This block is empty
-###
-GET %s/second
-`, server.URL),
-			expectedResponses: 1,
-			expectedError:     false,
+			name:                "SCENARIO-LIB-028-005: Only comments, then separator, then valid request",
+			requestFileBasePath: filepath.Join(testDataDir, "scenario_005_template.http"),
+			needsServerURLCount: 1,
+			expectedResponses:   1,
+			expectedError:       false,
 			responseValidators: []func(t *testing.T, resp *Response){
 				func(t *testing.T, resp *Response) {
 					assert.NoError(t, resp.Error)
@@ -108,23 +167,11 @@ GET %s/second
 			},
 		},
 		{
-			name: "SCENARIO-LIB-028-006: Valid request, separator with comments, then another valid request",
-			requestFileContent: fmt.Sprintf(`
-GET %s/req1
-
-### Comment for empty block
-# More comments
-
-###
-POST %s/req2
-Content-Type: application/json
-
-{
-  "key": "value"
-}
-`, server.URL, server.URL),
-			expectedResponses: 2,
-			expectedError:     false,
+			name:                "SCENARIO-LIB-028-006: Valid request, separator with comments, then another valid request",
+			requestFileBasePath: filepath.Join(testDataDir, "scenario_006_template.http"),
+			needsServerURLCount: 2,
+			expectedResponses:   2,
+			expectedError:       false,
 			responseValidators: []func(t *testing.T, resp *Response){
 				func(t *testing.T, resp *Response) { // For GET /req1
 					assert.NoError(t, resp.Error)
@@ -139,45 +186,20 @@ Content-Type: application/json
 			},
 		},
 		{
-			name: "File with only variable definitions - ExecuteFile",
-			requestFileContent: `
-@host=localhost
-@port=8080
-`,
-			expectedResponses: 0,
-			expectedError:     true,
+			name:                           "File with only variable definitions - ExecuteFile",
+			requestFileBasePath:            filepath.Join(testDataDir, "only_vars.http"),
+			needsServerURLCount:            0,
+			expectedResponses:              0,
+			expectedError:                  true,
+			expectedErrorMessageSubstrings: []string{"no requests found in file"},
+			responseValidators:             []func(t *testing.T, resp *Response){},
 		},
 	}
 
 	for _, tt := range tests {
+		tt := tt // Capture range variable
 		t.Run(tt.name, func(t *testing.T) {
-			// Given specific setup for this subtest
-			tempFile, err := os.CreateTemp(t.TempDir(), "test_*.http")
-			require.NoError(t, err)
-			defer os.Remove(tempFile.Name())
-
-			_, err = tempFile.WriteString(tt.requestFileContent)
-			require.NoError(t, err)
-			require.NoError(t, tempFile.Close())
-
-			// When
-			responses, execErr := client.ExecuteFile(context.Background(), tempFile.Name())
-
-			// Then
-			if tt.expectedError {
-				assert.Error(t, execErr)
-				if strings.Contains(tt.name, "variable definitions") {
-					assert.Contains(t, execErr.Error(), "no requests found in file")
-				}
-			} else {
-				assert.NoError(t, execErr)
-				require.Len(t, responses, tt.expectedResponses, "Number of responses mismatch")
-				for i, validator := range tt.responseValidators {
-					if i < len(responses) {
-						validator(t, responses[i])
-					}
-				}
-			}
+			runExecuteFileSubtest(t, client, server.URL, tt)
 		})
 	}
 }

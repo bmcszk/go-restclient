@@ -1,0 +1,10 @@
+### Test Request with Env Vars
+# @name testWithEnv
+POST {{host}}/resource/{{user_id}}
+Content-Type: application/json
+X-Env-Var: {{token}}
+
+{
+  "message": "Hello from {{user_id}}",
+  "common": "{{common_var}}"
+}

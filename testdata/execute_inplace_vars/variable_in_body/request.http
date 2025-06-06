@@ -1,0 +1,12 @@
+@product_name = SuperWidget
+@product_id = SW1000
+@product_price = 49.99
+
+POST {{test_server_url}}/products
+Content-Type: application/json
+
+{
+  "id": "{{product_id}}",
+  "name": "{{product_name}}",
+  "price": {{product_price}}
+}

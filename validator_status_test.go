@@ -10,6 +10,31 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func assertValidationErrors(t *testing.T, actualErr error, expectedErrCount int, currentExpectedErrTexts []string, fallbackSingleErrText string) {
+	t.Helper()
+	require.Error(t, actualErr)
+	merr, ok := actualErr.(*multierror.Error)
+	require.True(t, ok, "Expected a multierror.Error, got %T", actualErr)
+	assert.Len(t, merr.Errors, expectedErrCount)
+
+	// Check specific error texts if provided for the adjusted expectation
+	if len(currentExpectedErrTexts) > 0 {
+		for _, expectedText := range currentExpectedErrTexts {
+			found := false
+			for _, e := range merr.Errors {
+				if strings.Contains(e.Error(), expectedText) {
+					found = true
+					break
+				}
+			}
+			assert.True(t, found, "Expected error text '%s' not found in %v", expectedText, merr.Errors)
+		}
+	} else if fallbackSingleErrText != "" && expectedErrCount == 1 {
+		// Original single error check, if no multi-texts were specified and we expect exactly one error
+		assert.ErrorContains(t, merr.Errors[0], fallbackSingleErrText)
+	}
+}
+
 func TestValidateResponses_StatusString(t *testing.T) {
 	// Given: Test cases defined in 'tests' slice
 	tests := []struct {
@@ -168,25 +193,7 @@ func TestValidateResponses_StatusCode(t *testing.T) {
 			if currentExpectedErrCount == 0 {
 				assert.NoError(t, err)
 			} else {
-				require.Error(t, err)
-				merr, ok := err.(*multierror.Error)
-				require.True(t, ok, "Expected a multierror.Error")
-				assert.Len(t, merr.Errors, currentExpectedErrCount)
-				// Check specific error texts if provided for the adjusted expectation
-				if len(currentExpectedErrTexts) > 0 {
-					for _, expectedText := range currentExpectedErrTexts {
-						found := false
-						for _, e := range merr.Errors {
-							if strings.Contains(e.Error(), expectedText) {
-								found = true
-								break
-							}
-						}
-						assert.True(t, found, "Expected error text '%s' not found in %v", expectedText, merr.Errors)
-					}
-				} else if tt.expectedErrText != "" && currentExpectedErrCount == 1 { // Original single error check
-					assert.ErrorContains(t, merr.Errors[0], tt.expectedErrText)
-				}
+				assertValidationErrors(t, err, currentExpectedErrCount, currentExpectedErrTexts, tt.expectedErrText)
 			}
 		})
 	}

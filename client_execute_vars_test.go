@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptest"
+	"net/http/httptest" // Added for refactoring TestExecuteFile_WithHttpClientEnvJson
 	"net/url"
 	"os"
 	"path/filepath"
@@ -658,311 +658,155 @@ func TestExecuteFile_VariableFunctionConsistency(t *testing.T) {
 	assert.Equal(t, capturedHeaderRandomInt, finalBodyJSON["randomInt"].(string))
 }
 
+// interceptedRequestData holds data captured by the mock server for assertions.
+type interceptedRequestData struct {
+	Path   string
+	Host   string
+	Header string
+	Body   string
+}
+
+// httpClientEnvTestCase defines a test case for TestExecuteFile_WithHttpClientEnvJson.
+type httpClientEnvTestCase struct {
+	name                     string
+	envFileTemplatePath      string // Path to http-client.env.json template
+	privateEnvFilePath       string // Path to http-client.private.env.json (optional)
+	requestFilePath          string // Path to .http request file
+	selectedEnv              string // Environment to select in NewClient
+	expectExecuteFileError   bool
+	executeFileErrorContains string
+	expectResponseError      bool
+	responseErrorContains    string
+	responseAssertions       func(t *testing.T, resp *Response, interceptedReq *interceptedRequestData, serverURL string)
+}
+
+// runHttpClientEnvSubtest executes a single sub-test for TestExecuteFile_WithHttpClientEnvJson.
+func runHttpClientEnvSubtest(t *testing.T, tc httpClientEnvTestCase) {
+	t.Helper()
+
+	// Given
+	var interceptedReq interceptedRequestData
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		interceptedReq.Path = r.URL.Path
+		interceptedReq.Host = r.Host
+		bodyBytes, _ := io.ReadAll(r.Body)
+		interceptedReq.Body = string(bodyBytes)
+		interceptedReq.Header = r.Header.Get("X-Custom-Header")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, "ok")
+	}))
+	defer mockServer.Close()
+
+	tempDir := t.TempDir()
+
+	if tc.envFileTemplatePath != "" {
+		envContentBytes, err := os.ReadFile(tc.envFileTemplatePath)
+		require.NoError(t, err)
+		envContent := strings.ReplaceAll(string(envContentBytes), "{{SERVER_URL}}", mockServer.URL)
+		err = os.WriteFile(filepath.Join(tempDir, "http-client.env.json"), []byte(envContent), 0600)
+		require.NoError(t, err)
+	}
+
+	if tc.privateEnvFilePath != "" {
+		privateEnvContentBytes, err := os.ReadFile(tc.privateEnvFilePath)
+		require.NoError(t, err)
+		err = os.WriteFile(filepath.Join(tempDir, "http-client.private.env.json"), privateEnvContentBytes, 0600)
+		require.NoError(t, err)
+	}
+
+	requestFileContentBytes, err := os.ReadFile(tc.requestFilePath)
+	require.NoError(t, err)
+	httpFilePath := filepath.Join(tempDir, "request.http")
+	err = os.WriteFile(httpFilePath, requestFileContentBytes, 0600)
+	require.NoError(t, err)
+
+	var client *Client
+	if tc.selectedEnv != "" {
+		client, err = NewClient(WithEnvironment(tc.selectedEnv))
+	} else {
+		client, err = NewClient()
+	}
+	require.NoError(t, err)
+
+	// When
+	responses, execErr := client.ExecuteFile(context.Background(), httpFilePath)
+
+	// Then
+	if tc.expectExecuteFileError {
+		require.Error(t, execErr)
+		if tc.executeFileErrorContains != "" {
+			assert.Contains(t, execErr.Error(), tc.executeFileErrorContains)
+		}
+	} else {
+		require.NoError(t, execErr)
+	}
+
+	require.Len(t, responses, 1, "Expected 1 response")
+	resp := responses[0]
+	require.NotNil(t, resp)
+
+	if tc.expectResponseError {
+		assert.Error(t, resp.Error)
+		if tc.responseErrorContains != "" {
+			assert.Contains(t, resp.Error.Error(), tc.responseErrorContains)
+		}
+	} else {
+		assert.NoError(t, resp.Error)
+	}
+
+	if tc.responseAssertions != nil {
+		tc.responseAssertions(t, resp, &interceptedReq, mockServer.URL)
+	}
+}
+
 // TestExecuteFile_WithHttpClientEnvJson tests variable substitution from http-client.env.json (Task T4)
 func TestExecuteFile_WithHttpClientEnvJson(t *testing.T) {
-	// SCENARIO-LIB-018-001: Env selected, http-client.env.json exists, env exists in file
-	t.Run("env selected, file exists, env exists in file", func(t *testing.T) {
-		// Given
-		var interceptedRequest struct {
-			Path   string
-			Host   string
-			Header string
-			Body   string
-			Method string
-		}
-
-		server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
-			interceptedRequest.Path = r.URL.Path
-			interceptedRequest.Host = r.Host
-			bodyBytes, _ := io.ReadAll(r.Body)
-			interceptedRequest.Body = string(bodyBytes)
-			interceptedRequest.Header = r.Header.Get("X-Env-Var")
-			interceptedRequest.Method = r.Method
-			w.WriteHeader(http.StatusOK)
-			_, _ = fmt.Fprint(w, "ok")
-		})
-		defer server.Close()
-
-		// Create a temporary directory for test files
-		tempDir := t.TempDir()
-
-		// Create http-client.env.json
-		envContent := `{
-			"dev": {
-				"host": "` + server.URL + `",
-				"token": "dev-token",
-				"user_id": "dev-user",
-				"common_var": "env_common_dev"
+	tests := []httpClientEnvTestCase{
+		{
+			name:                     "SCENARIO-LIB-018-004: no env selected, file exists",
+			envFileTemplatePath:      "testdata/execute_file_httpclientenv/no_env_selected_env_template.json",
+			requestFilePath:          "testdata/execute_file_httpclientenv/no_env_selected_request.http",
+			selectedEnv:              "",
+			expectExecuteFileError:   true,
+			executeFileErrorContains: "unsupported protocol scheme \"\"",
+			expectResponseError:      true,
+			responseErrorContains:    "unsupported protocol scheme \"\"",
+			responseAssertions: func(t *testing.T, resp *Response, interceptedReq *interceptedRequestData, serverURL string) {
+				assert.True(t, strings.Contains(resp.Request.RawURLString, "{{host}}"), "RawURLString should still contain {{host}}")
 			},
-			"prod": {
-				"host": "https://prod.example.com",
-				"token": "prod-token",
-				"user_id": "prod-user",
-				"common_var": "env_common_prod"
-			}
-		}`
-		envFilePath := filepath.Join(tempDir, "http-client.env.json")
-		err := os.WriteFile(envFilePath, []byte(envContent), 0600)
-		require.NoError(t, err)
+		},
+		{
+			name:                   "SCENARIO-LIB-018-005: private env overrides public env",
+			envFileTemplatePath:    "testdata/execute_file_httpclientenv/private_overrides_public_env_template.json",
+			privateEnvFilePath:     "testdata/execute_file_httpclientenv/private_overrides_private_env.json",
+			requestFilePath:        "testdata/execute_file_httpclientenv/private_overrides_request.http",
+			selectedEnv:            "dev",
+			expectExecuteFileError: false,
+			expectResponseError:    false,
+			responseAssertions: func(t *testing.T, resp *Response, interceptedReq *interceptedRequestData, serverURL string) {
+				assert.Equal(t, http.StatusOK, resp.StatusCode)
+				parsedServerURL, pErr := url.Parse(serverURL)
+				require.NoError(t, pErr)
+				assert.Equal(t, parsedServerURL.Host, interceptedReq.Host)
+				assert.Equal(t, "/test", interceptedReq.Path)
+				assert.Equal(t, "private_override_value", interceptedReq.Header)
 
-		// Create request file
-		requestFileContent := `
-### Test Request with Env Vars
-# @name testWithEnv
-POST {{host}}/resource/{{user_id}}
-Content-Type: application/json
-X-Env-Var: {{token}}
+				expectedBody := `{
+				  "public": "public_value",
+				  "private_only": "private_specific_value"
+				}`
+				assert.JSONEq(t, expectedBody, interceptedReq.Body)
+			},
+		},
+	}
 
-{
-  "message": "Hello from {{user_id}}",
-  "common": "{{common_var}}"
-}
-`
-		httpFilePath := filepath.Join(tempDir, "test_env_vars.http")
-		err = os.WriteFile(httpFilePath, []byte(requestFileContent), 0600)
-		require.NoError(t, err)
-
-		client, err := NewClient(WithEnvironment("dev"))
-		require.NoError(t, err)
-
-		// When
-		responses, err := client.ExecuteFile(context.Background(), httpFilePath)
-
-		// Then
-		require.NoError(t, err, "ExecuteFile should not return an error")
-		require.Len(t, responses, 1, "Expected 1 response")
-
-		resp := responses[0]
-		assert.NoError(t, resp.Error)
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-		assert.Equal(t, http.MethodPost, interceptedRequest.Method)
-		parsedServerURL, pErr := url.Parse(server.URL)
-		require.NoError(t, pErr)
-		assert.Equal(t, parsedServerURL.Host, interceptedRequest.Host)
-		assert.Equal(t, "/resource/dev-user", interceptedRequest.Path)
-		assert.Equal(t, "dev-token", interceptedRequest.Header)
-		expectedBody := `{
-  "message": "Hello from dev-user",
-  "common": "env_common_dev"
-}`
-		assert.JSONEq(t, expectedBody, interceptedRequest.Body)
-		assert.Equal(t, "dev", client.selectedEnvironmentName) // Verify client has the env name
-		// EnvironmentVariables are used internally; their effect is checked by the substituted values above.
-	})
-
-	// SCENARIO-LIB-018-002: Env selected, http-client.env.json exists, but env NOT in file
-	t.Run("env selected, file exists, env NOT in file", func(t *testing.T) {
-		// Given
-		serverURL := "http://localhost:12345" // A dummy URL, server won't actually be hit with {{host}}
-		server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
-			// This handler might not be reached if {{host}} isn't resolved by any mechanism
-			// and the HTTP client fails before sending.
-			w.WriteHeader(http.StatusOK)
+	for _, tc := range tests {
+		tc := tc // capture range variable
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel() // Mark subtests as parallelizable
+			runHttpClientEnvSubtest(t, tc)
 		})
-		defer server.Close()
-
-		tempDir := t.TempDir()
-		envContent := `{
-			"dev": {
-				"host": "` + serverURL /* Use the dummy serverURL here for consistency */ + `",
-				"token": "dev-token"
-			}
-		}`
-		envFilePath := filepath.Join(tempDir, "http-client.env.json")
-		err := os.WriteFile(envFilePath, []byte(envContent), 0600)
-		require.NoError(t, err)
-
-		requestFileContent := `GET {{host}}/path`
-		httpFilePath := filepath.Join(tempDir, "test_env_vars_missing_env.http")
-		err = os.WriteFile(httpFilePath, []byte(requestFileContent), 0600)
-		require.NoError(t, err)
-
-		client, err := NewClient(WithEnvironment("staging"))
-		require.NoError(t, err)
-
-		// When
-		responses, err := client.ExecuteFile(context.Background(), httpFilePath)
-
-		// Then
-		require.Error(t, err)                                               // ExecuteFile itself should return an error if a request fails this way
-		assert.Contains(t, err.Error(), "unsupported protocol scheme \"\"") // Check the error from ExecuteFile
-		require.Len(t, responses, 1)
-		resp := responses[0]
-		require.NotNil(t, resp)
-		assert.Error(t, resp.Error) // Expect an error because {{host}} is not resolved, leading to bad URL
-		assert.Contains(t, resp.Error.Error(), "unsupported protocol scheme \"\"")
-
-		// Check that {{host}} was not replaced because 'staging' env was not found
-		// The RawURLString should still contain the placeholder as it was in the file.
-		assert.True(t, strings.Contains(resp.Request.RawURLString, "{{host}}"), "RawURLString should still contain {{host}}")
-		assert.Equal(t, "staging", client.selectedEnvironmentName)
-		// EnvironmentVariables map on ParsedFile would be nil internally, effect is placeholder {{host}} remains.
-	})
-
-	// SCENARIO-LIB-018-003: Env selected, but http-client.env.json does NOT exist
-	t.Run("env selected, file does NOT exist", func(t *testing.T) {
-		// Given
-		server := startMockServer(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
-		defer server.Close()
-
-		tempDir := t.TempDir()
-		// http-client.env.json is NOT created in tempDir
-
-		requestFileContent := `GET {{host}}/path`
-		httpFilePath := filepath.Join(tempDir, "test_env_vars_no_env_file.http")
-		err := os.WriteFile(httpFilePath, []byte(requestFileContent), 0600)
-		require.NoError(t, err)
-
-		client, err := NewClient(WithEnvironment("dev"))
-		require.NoError(t, err)
-
-		// When
-		responses, err := client.ExecuteFile(context.Background(), httpFilePath)
-
-		// Then
-		require.Error(t, err)                                               // ExecuteFile itself should return an error if a request fails this way
-		assert.Contains(t, err.Error(), "unsupported protocol scheme \"\"") // Check the error from ExecuteFile
-		require.Len(t, responses, 1)
-		resp := responses[0]
-		require.NotNil(t, resp)
-		assert.Error(t, resp.Error) // Expect an error because {{host}} is not resolved, leading to bad URL
-		assert.Contains(t, resp.Error.Error(), "unsupported protocol scheme \"\"")
-		assert.True(t, strings.Contains(resp.Request.RawURLString, "{{host}}"), "RawURLString should still contain {{host}}")
-		assert.Equal(t, "dev", client.selectedEnvironmentName)
-		// EnvironmentVariables map on ParsedFile would be nil internally, effect is placeholder {{host}} remains.
-	})
-
-	// SCENARIO-LIB-018-004: No env selected, http-client.env.json exists
-	t.Run("no env selected, file exists", func(t *testing.T) {
-		// Given
-		serverURL := "http://localhost:54321"
-		server := startMockServer(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
-		defer server.Close()
-
-		tempDir := t.TempDir()
-		envContent := `{
-			"dev": {
-				"host": "` + serverURL + `",
-				"token": "dev-token"
-			}
-		}`
-		envFilePath := filepath.Join(tempDir, "http-client.env.json")
-		err := os.WriteFile(envFilePath, []byte(envContent), 0600)
-		require.NoError(t, err)
-
-		requestFileContent := `GET {{host}}/path`
-		httpFilePath := filepath.Join(tempDir, "test_no_env_selected.http")
-		err = os.WriteFile(httpFilePath, []byte(requestFileContent), 0600)
-		require.NoError(t, err)
-
-		client, err := NewClient() // No WithEnvironment option
-		require.NoError(t, err)
-
-		// When
-		responses, err := client.ExecuteFile(context.Background(), httpFilePath)
-
-		// Then
-		require.Error(t, err)                                               // ExecuteFile itself should return an error if a request fails this way
-		assert.Contains(t, err.Error(), "unsupported protocol scheme \"\"") // Check the error from ExecuteFile
-		require.Len(t, responses, 1)
-		resp := responses[0]
-		require.NotNil(t, resp)
-		assert.Error(t, resp.Error) // Expect an error because {{host}} is not resolved, leading to bad URL
-		assert.Contains(t, resp.Error.Error(), "unsupported protocol scheme \"\"")
-		assert.True(t, strings.Contains(resp.Request.RawURLString, "{{host}}"), "RawURLString should still contain {{host}}")
-		assert.Empty(t, client.selectedEnvironmentName, "selectedEnvironmentName should be empty")
-		// EnvironmentVariables map on ParsedFile would be nil internally, effect is placeholder {{host}} remains.
-	})
-
-	// SCENARIO-LIB-018-005: Private env file overrides public env file
-	t.Run("private env overrides public env", func(t *testing.T) {
-		// Given
-		var interceptedRequest struct {
-			Path   string
-			Host   string
-			Header string
-			Body   string
-		}
-
-		server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
-			interceptedRequest.Path = r.URL.Path
-			interceptedRequest.Host = r.Host
-			bodyBytes, _ := io.ReadAll(r.Body)
-			interceptedRequest.Body = string(bodyBytes)
-			interceptedRequest.Header = r.Header.Get("X-Custom-Header")
-			w.WriteHeader(http.StatusOK)
-			_, _ = fmt.Fprint(w, "ok")
-		})
-		defer server.Close()
-
-		tempDir := t.TempDir()
-
-		// Create http-client.env.json (public)
-		publicEnvContent := `{
-			"dev": {
-				"host": "` + server.URL + `",
-				"public_var": "public_value",
-				"override_var": "public_override"
-			}
-		}`
-		publicEnvFilePath := filepath.Join(tempDir, "http-client.env.json")
-		err := os.WriteFile(publicEnvFilePath, []byte(publicEnvContent), 0600)
-		require.NoError(t, err)
-
-		// Create http-client.private.env.json (private)
-		privateEnvContent := `{
-			"dev": {
-				"override_var": "private_override_value",
-				"private_var": "private_specific_value"
-			}
-		}`
-		privateEnvFilePath := filepath.Join(tempDir, "http-client.private.env.json")
-		err = os.WriteFile(privateEnvFilePath, []byte(privateEnvContent), 0600)
-		require.NoError(t, err)
-
-		requestFileContent := `
-### Test Private Env Override
-GET {{host}}/test
-Content-Type: application/json
-X-Custom-Header: {{override_var}}
-
-{
-  "public": "{{public_var}}",
-  "private_only": "{{private_var}}"
-}
-`
-		httpFilePath := filepath.Join(tempDir, "test_private_override.http")
-		err = os.WriteFile(httpFilePath, []byte(requestFileContent), 0600)
-		require.NoError(t, err)
-
-		client, err := NewClient(WithEnvironment("dev"))
-		require.NoError(t, err)
-
-		// When
-		responses, err := client.ExecuteFile(context.Background(), httpFilePath)
-
-		// Then
-		require.NoError(t, err, "ExecuteFile should not return an error")
-		require.Len(t, responses, 1, "Expected 1 response")
-
-		resp := responses[0]
-		assert.NoError(t, resp.Error)
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-		parsedServerURL, pErr := url.Parse(server.URL)
-		require.NoError(t, pErr)
-		assert.Equal(t, parsedServerURL.Host, interceptedRequest.Host) // host from public.env
-		assert.Equal(t, "/test", interceptedRequest.Path)
-		assert.Equal(t, "private_override_value", interceptedRequest.Header) // override_var from private.env
-
-		expectedBody := `{
-  "public": "public_value",
-  "private_only": "private_specific_value"
-}`
-		assert.JSONEq(t, expectedBody, interceptedRequest.Body)
-		assert.Equal(t, "dev", client.selectedEnvironmentName)
-	})
+	}
 }
 
 func TestExecuteFile_WithExtendedRandomSystemVariables(t *testing.T) {
@@ -1054,731 +898,4 @@ func TestExecuteFile_WithExtendedRandomSystemVariables(t *testing.T) {
 	domainParts := strings.Split(parts[1], ".")
 	require.GreaterOrEqual(t, len(domainParts), 2, "randEmail domain should have at least one .")
 	assert.Regexp(t, `^[a-zA-Z0-9_]+@[a-zA-Z]+\.[a-zA-Z]{2,3}$`, randEmailValue, "randEmail format is incorrect")
-}
-
-// createTempHTTPFileFromString creates a temporary .http file with the given content.
-// It returns the path to the file and registers a cleanup function to remove the temp directory.
-func createTempHTTPFileFromString(t *testing.T, content string) string {
-	t.Helper()
-	tempDir, err := os.MkdirTemp("", "test-http-inplace-")
-	require.NoError(t, err)
-	t.Cleanup(func() { os.RemoveAll(tempDir) })
-
-	filePath := filepath.Join(tempDir, "test.http")
-	err = os.WriteFile(filePath, []byte(content), 0644)
-	require.NoError(t, err)
-	return filePath
-}
-
-func TestExecuteFile_InPlaceVariables(t *testing.T) {
-	t.Run("simple_variable_in_url", func(t *testing.T) {
-		// Given
-		var capturedPath string
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			capturedPath = r.URL.Path
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"status":"ok"}`))
-		}))
-		defer server.Close()
-
-		httpFileContent := fmt.Sprintf(`
-@hostname = %s
-@path_segment = /api/v1/items
-
-GET {{hostname}}{{path_segment}}/123
-`, server.URL)
-
-		requestFilePath := createTempHTTPFileFromString(t, httpFileContent)
-
-		client, err := NewClient()
-		require.NoError(t, err)
-
-		// When
-		responses, err := client.ExecuteFile(context.Background(), requestFilePath)
-
-		// Then
-		require.NoError(t, err, "ExecuteFile should not return an error")
-		require.Len(t, responses, 1, "Expected 1 response")
-
-		resp := responses[0]
-		assert.NoError(t, resp.Error, "Response error should be nil")
-		assert.Equal(t, http.StatusOK, resp.StatusCode, "Status code mismatch")
-
-		// Verify the server received the request with the substituted URL
-		expectedPath := "/api/v1/items/123"
-		assert.Equal(t, expectedPath, capturedPath, "Captured path by server mismatch")
-
-		// Verify ParsedFile.FileVariables
-		parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
-		require.NoError(t, pErr)
-		require.NotNil(t, parsedFile.FileVariables)
-		assert.Equal(t, server.URL, parsedFile.FileVariables["hostname"])
-		assert.Equal(t, "/api/v1/items", parsedFile.FileVariables["path_segment"])
-	})
-
-	t.Run("variable_in_header", func(t *testing.T) {
-		// Given
-		var capturedHeaders http.Header
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			capturedHeaders = r.Header
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"status":"ok"}`))
-		}))
-		defer server.Close()
-
-		httpFileContent := fmt.Sprintf(`
-@auth_token = Bearer_secret_token_123
-
-GET %s/checkheaders
-Authorization: {{auth_token}}
-User-Agent: test-client
-`, server.URL)
-
-		requestFilePath := createTempHTTPFileFromString(t, httpFileContent)
-
-		client, err := NewClient()
-		require.NoError(t, err)
-
-		// When
-		responses, err := client.ExecuteFile(context.Background(), requestFilePath)
-
-		// Then
-		require.NoError(t, err, "ExecuteFile should not return an error")
-		require.Len(t, responses, 1, "Expected 1 response")
-
-		resp := responses[0]
-		assert.NoError(t, resp.Error, "Response error should be nil")
-		assert.Equal(t, http.StatusOK, resp.StatusCode, "Status code mismatch")
-
-		// Verify the server received the request with the substituted header
-		assert.Equal(t, "Bearer_secret_token_123", capturedHeaders.Get("Authorization"))
-		assert.Equal(t, "test-client", capturedHeaders.Get("User-Agent")) // Ensure other headers are preserved
-
-		// Verify ParsedFile.FileVariables
-		parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
-		require.NoError(t, pErr)
-		require.NotNil(t, parsedFile.FileVariables)
-		assert.Equal(t, "Bearer_secret_token_123", parsedFile.FileVariables["auth_token"])
-	})
-
-	t.Run("variable_in_body", func(t *testing.T) {
-		// Given
-		var capturedBody []byte
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			var err error
-			capturedBody, err = io.ReadAll(r.Body)
-			require.NoError(t, err)
-			defer r.Body.Close()
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"status":"created"}`))
-		}))
-		defer server.Close()
-
-		httpFileContent := fmt.Sprintf(`
-@product_name = SuperWidget
-@product_id = SW1000
-@product_price = 49.99
-
-POST %s/products
-Content-Type: application/json
-
-{
-  "id": "{{product_id}}",
-  "name": "{{product_name}}",
-  "price": {{product_price}}
-}
-`, server.URL)
-
-		requestFilePath := createTempHTTPFileFromString(t, httpFileContent)
-
-		client, err := NewClient()
-		require.NoError(t, err)
-
-		// When
-		responses, err := client.ExecuteFile(context.Background(), requestFilePath)
-
-		// Then
-		require.NoError(t, err, "ExecuteFile should not return an error")
-		require.Len(t, responses, 1, "Expected 1 response")
-
-		resp := responses[0]
-		assert.NoError(t, resp.Error, "Response error should be nil")
-		assert.Equal(t, http.StatusOK, resp.StatusCode, "Status code mismatch")
-
-		// Verify the server received the request with the substituted body
-		expectedBodyJSON := `{
-  "id": "SW1000",
-  "name": "SuperWidget",
-  "price": 49.99
-}`
-		assert.JSONEq(t, expectedBodyJSON, string(capturedBody), "Captured body by server mismatch")
-
-		// Verify ParsedFile.FileVariables
-		parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
-		require.NoError(t, pErr)
-		require.NotNil(t, parsedFile.FileVariables)
-		assert.Equal(t, "SuperWidget", parsedFile.FileVariables["product_name"])
-		assert.Equal(t, "SW1000", parsedFile.FileVariables["product_id"])
-		assert.Equal(t, "49.99", parsedFile.FileVariables["product_price"])
-	})
-
-	t.Run("variable_defined_by_another_variable", func(t *testing.T) {
-		// Given
-		var capturedURL string
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			capturedURL = r.URL.String() // Captures path and query
-			// Serve response based on expected.hresp
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"status":"ok"}`))
-		}))
-		defer server.Close()
-
-		requestFilePath := "testdata/execute_inplace_vars/variable_defined_by_another_variable/request.http"
-		expectedHrespPath := "testdata/execute_inplace_vars/variable_defined_by_another_variable/expected.hresp"
-
-		client, err := NewClient()
-		require.NoError(t, err)
-
-		// Set the mock server URL as a programmatic variable
-		client.SetProgrammaticVar("test_server_url", server.URL)
-
-		// When
-		responses, execErr := client.ExecuteFile(context.Background(), requestFilePath)
-
-		// Then
-		require.NoError(t, execErr, "ExecuteFile should not return an error")
-		require.Len(t, responses, 1, "Expected 1 response")
-
-		resp := responses[0]
-		require.NoError(t, resp.Error, "Response error should be nil")
-
-		// Parse expected response from .hresp file
-		expectedHeaders, expectedBodyStr, pErr := parseHrespBody(expectedHrespPath)
-		require.NoError(t, pErr, "Failed to parse .hresp file: %s", expectedHrespPath)
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode, "Status code mismatch")
-		assert.Equal(t, expectedHeaders.Get("Content-Type"), resp.Headers.Get("Content-Type"), "Content-Type mismatch")
-
-		if expectedBodyStr != "" {
-			assert.JSONEq(t, expectedBodyStr, string(resp.Body), "Response body mismatch")
-		} else {
-			assert.Empty(t, string(resp.Body), "Response body should be empty")
-		}
-
-		// Verify the server received the request at the correctly resolved URL
-		// The request.http is: GET {{full_url}}?check_base={{base_url}}&check_path={{path}}
-		// {{test_server_url}} is programmatically set to server.URL
-		// {{base_url}} becomes {{test_server_url}} -> server.URL
-		// {{path}} becomes /api/v2/items
-		// {{full_url}} becomes {{base_url}}{{path}} -> server.URL/api/v2/items
-		// So, capturedURL should be /api/v2/items?check_base=server.URL&check_path=/api/v2/items
-		expectedPathAndQuery := fmt.Sprintf("/api/v2/items?check_base=%s&check_path=/api/v2/items", server.URL)
-		assert.Equal(t, expectedPathAndQuery, capturedURL, "Captured URL by server mismatch")
-
-		// Verify ParsedFile.FileVariables (should store raw definitions from the .http file)
-		parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
-		require.NoError(t, pErr)
-		require.NotNil(t, parsedFile.FileVariables)
-		assert.Equal(t, "http://placeholder.com", parsedFile.FileVariables["test_server_url"], "File variable test_server_url mismatch")
-		assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["base_url"], "File variable base_url mismatch")
-		assert.Equal(t, "/api/v2/items", parsedFile.FileVariables["path"], "File variable path mismatch")
-		assert.Equal(t, "{{base_url}}{{path}}", parsedFile.FileVariables["full_url"], "File variable full_url mismatch")
-	})
-
-	t.Run("variable_precedence_over_environment", func(t *testing.T) {
-		// Given: an .http file with an in-place variable and an environment variable with the same name
-		var capturedURLPath string
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			capturedURLPath = r.URL.Path // We only care about the path part
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-
-		// The in-place @host should point to the mock server's URL
-		fileContent := fmt.Sprintf(`
-@host = %s
-
-### Test Request
-GET {{host}}/expected_path
-`, server.URL)
-
-		requestFilePath := createTempHTTPFileFromString(t, fileContent)
-		tempDir := filepath.Dir(requestFilePath)
-
-		// Create a temporary environment file for this test
-		envName := "testPrecedenceEnv"
-		envFileName := fmt.Sprintf("http-client.env.%s.json", envName)
-		envFilePath := filepath.Join(tempDir, envFileName)
-		envData := map[string]string{
-			"host": "http://env.example.com/should_not_be_used", // This should be overridden by the in-place variable
-		}
-		envJSON, err := json.Marshal(envData)
-		require.NoError(t, err, "Failed to marshal env data to JSON")
-		err = os.WriteFile(envFilePath, envJSON, 0644)
-		require.NoError(t, err, "Failed to write temp env file")
-		defer os.Remove(envFilePath) // Clean up the temp env file
-
-		client, err := NewClient(WithEnvironment(envName))
-		require.NoError(t, err)
-
-		// When: the .http file is executed, it should load the environment from the temp file
-		_, execErr := client.ExecuteFile(context.Background(), requestFilePath)
-
-		// Then: no error should occur and the in-place variable should take precedence
-		require.NoError(t, execErr, "ExecuteFile should not return an error")
-		assert.Equal(t, "/expected_path", capturedURLPath, "The request path should match, indicating in-place var was used")
-	})
-
-	t.Run("variable_substitution_in_header", func(t *testing.T) {
-		// Given: an .http file with an in-place variable used in a header
-		var capturedHeaderValue string
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			capturedHeaderValue = r.Header.Get("X-Custom-Header")
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-
-		fileContent := fmt.Sprintf(`
-@my_header_value = secret-token
-
-### Test Request With Header Var
-GET %s/somepath
-X-Custom-Header: {{my_header_value}}
-`, server.URL)
-
-		requestFilePath := createTempHTTPFileFromString(t, fileContent)
-
-		client, err := NewClient()
-		require.NoError(t, err)
-
-		// When: the .http file is executed
-		_, execErr := client.ExecuteFile(context.Background(), requestFilePath)
-
-		// Then: no error should occur and the header should be substituted correctly
-		require.NoError(t, execErr, "ExecuteFile should not return an error")
-		assert.Equal(t, "secret-token", capturedHeaderValue, "The X-Custom-Header should be correctly substituted")
-	})
-
-	t.Run("variable_substitution_in_body", func(t *testing.T) {
-		// Given: an .http file with an in-place variable used in a JSON request body
-		var capturedBody []byte
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			var err error
-			capturedBody, err = io.ReadAll(r.Body)
-			require.NoError(t, err)
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-
-		fileContent := fmt.Sprintf(`
-@user_id = user123
-
-### Test Request With Body Var
-POST %s/users
-Content-Type: application/json
-
-{
-  "id": "{{user_id}}",
-  "status": "active"
-}
-`, server.URL)
-
-		requestFilePath := createTempHTTPFileFromString(t, fileContent)
-
-		client, err := NewClient()
-		require.NoError(t, err)
-
-		// When: the .http file is executed
-		_, execErr := client.ExecuteFile(context.Background(), requestFilePath)
-
-		// Then: no error should occur and the body should be substituted correctly
-		require.NoError(t, execErr, "ExecuteFile should not return an error")
-		assert.JSONEq(t, `{"id": "user123", "status": "active"}`, string(capturedBody), "The request body should be correctly substituted")
-	})
-
-	t.Run("inplace_variable_defined_by_system_variable", func(t *testing.T) {
-		// Given: an .http file with an in-place variable defined by a system variable {{$uuid}}
-		var capturedURLPath string
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			capturedURLPath = r.URL.Path
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-
-		fileContent := fmt.Sprintf(`
-@my_request_id = {{$uuid}}
-
-### Test Request With System Var In In-Place Var
-GET %s/{{my_request_id}}/resource
-`, server.URL)
-
-		requestFilePath := createTempHTTPFileFromString(t, fileContent)
-
-		client, err := NewClient()
-		require.NoError(t, err)
-
-		// When: the .http file is executed
-		_, execErr := client.ExecuteFile(context.Background(), requestFilePath)
-
-		// Then: no error should occur and the path should contain a resolved UUID
-		require.NoError(t, execErr, "ExecuteFile should not return an error")
-		require.NotEmpty(t, capturedURLPath, "Captured URL path should not be empty")
-
-		pathSegments := strings.Split(strings.Trim(capturedURLPath, "/"), "/")
-		require.Len(t, pathSegments, 2, "URL path should have two segments")
-		assert.Len(t, pathSegments[0], 36, "The first path segment (resolved UUID) should be 36 characters long")
-		assert.Equal(t, "resource", pathSegments[1], "The second path segment should be 'resource'")
-		assert.NotEqual(t, "{{$uuid}}", pathSegments[0], "The UUID part should not be the literal system variable")
-		assert.NotEqual(t, "{{my_request_id}}", pathSegments[0], "The UUID part should not be the literal in-place variable")
-	})
-
-	t.Run("inplace_variable_defined_by_os_env_variable", func(t *testing.T) {
-		// Given: an OS environment variable and an .http file with an in-place variable defined by it
-		const testEnvVarName = "TEST_USER_HOME_INPLACE"
-		const testEnvVarValue = "/testhome/userdir" // This value starts with a slash
-		t.Setenv(testEnvVarName, testEnvVarValue)
-
-		// Debug: Check if t.Setenv is working as expected in the test goroutine
-		val, ok := os.LookupEnv(testEnvVarName)
-		require.True(t, ok, "os.LookupEnv should find the var set by t.Setenv")
-		require.Equal(t, testEnvVarValue, val, "os.LookupEnv should return the correct value set by t.Setenv")
-
-		var capturedURLPath string
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			capturedURLPath = r.URL.Path
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-
-		// server.URL does not have a trailing slash. {{my_home_dir}} will resolve to testEnvVarValue, which starts with a slash.
-		// So, %s{{my_home_dir}} ensures no double slash.
-		fileContent := fmt.Sprintf(`
-@my_home_dir = {{$processEnv %s}}
-
-### Test Request With OS Env Var In In-Place Var
-GET %s{{my_home_dir}}/files
-`, testEnvVarName, server.URL)
-
-		requestFilePath := createTempHTTPFileFromString(t, fileContent)
-
-		client, err := NewClient()
-		require.NoError(t, err)
-
-		// When: the .http file is executed
-		results, execErr := client.ExecuteFile(context.Background(), requestFilePath)
-
-		// Then: no error should occur and the path should contain the resolved OS env variable
-		require.NoError(t, execErr, "ExecuteFile should not return an error for in-place OS env var")
-		require.Len(t, results, 1, "Should have one result for in-place OS env var")
-		require.Nil(t, results[0].Error, "Request execution error should be nil for in-place OS env var")
-		// capturedURLPath should be "/testhome/userdir/files"
-		assert.Equal(t, testEnvVarValue+"/files", capturedURLPath, "The URL path should be correctly substituted with the OS environment variable via in-place var")
-	})
-
-	t.Run("inplace_variable_in_header", func(t *testing.T) {
-		// Given: an .http file with an in-place variable used in a header
-		const headerKey = "X-Auth-Token"
-		const headerValue = "secret-token-12345"
-
-		var capturedHeaders http.Header
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			capturedHeaders = r.Header
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-
-		fileContent := fmt.Sprintf(`
-@my_token = %s
-
-### Test Request With In-Place Var in Header
-GET %s/some/path
-%s: {{my_token}}
-`, headerValue, server.URL, headerKey)
-
-		requestFilePath := createTempHTTPFileFromString(t, fileContent)
-
-		client, err := NewClient()
-		require.NoError(t, err)
-
-		// When: the .http file is executed
-		results, execErr := client.ExecuteFile(context.Background(), requestFilePath)
-
-		// Then: no error should occur and the header should be correctly substituted
-		require.NoError(t, execErr, "ExecuteFile should not return an error")
-		require.Len(t, results, 1, "Should have one result")
-		require.Nil(t, results[0].Error, "Request execution error should be nil")
-		assert.Equal(t, headerValue, capturedHeaders.Get(headerKey), "The header should be correctly substituted with the in-place variable")
-	})
-
-	t.Run("inplace_variable_in_body", func(t *testing.T) {
-		// Given: an .http file with an in-place variable used in the request body
-		const userIdValue = "user-from-var-456"
-		const expectedBody = `{"id": "user-from-var-456", "status": "pending"}`
-
-		var capturedBody []byte
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			var err error
-			capturedBody, err = io.ReadAll(r.Body)
-			require.NoError(t, err)
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-
-		fileContent := fmt.Sprintf(`
-@my_user_id = %s
-
-### Test Request With In-Place Var in Body
-POST %s/submit
-Content-Type: application/json
-
-{
-  "id": "{{my_user_id}}",
-  "status": "pending"
-}
-`, userIdValue, server.URL)
-
-		requestFilePath := createTempHTTPFileFromString(t, fileContent)
-
-		client, err := NewClient()
-		require.NoError(t, err)
-
-		// When: the .http file is executed
-		results, execErr := client.ExecuteFile(context.Background(), requestFilePath)
-
-		// Then: no error should occur and the body should be correctly substituted
-		require.NoError(t, execErr, "ExecuteFile should not return an error")
-		require.Len(t, results, 1, "Should have one result")
-		require.Nil(t, results[0].Error, "Request execution error should be nil")
-		assert.JSONEq(t, expectedBody, string(capturedBody), "The request body should be correctly substituted with the in-place variable")
-	})
-
-	t.Run("inplace_variable_defined_by_another_inplace_variable", func(t *testing.T) {
-		// Given: an .http file with an in-place variable defined by another in-place variable
-		const basePathValue = "/api/v1"
-		const resourcePathValue = "items"
-		var capturedURLPath string
-
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			capturedURLPath = r.URL.Path
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-
-		fileContent := fmt.Sprintf(`
-@base_path = %s
-@resource = %s
-@full_url_segment = {{base_path}}/{{resource}}/123
-
-### Test Request With Nested In-Place Var in URL
-GET %s{{full_url_segment}}
-`, basePathValue, resourcePathValue, server.URL)
-
-		requestFilePath := createTempHTTPFileFromString(t, fileContent)
-
-		client, err := NewClient()
-		require.NoError(t, err)
-
-		// When: the .http file is executed
-		results, execErr := client.ExecuteFile(context.Background(), requestFilePath)
-
-		// Then: no error should occur and the URL path should be correctly substituted
-		require.NoError(t, execErr, "ExecuteFile should not return an error")
-		require.Len(t, results, 1, "Should have one result")
-		require.Nil(t, results[0].Error, "Request execution error should be nil")
-		assert.Equal(t, "/api/v1/items/123", capturedURLPath, "The URL path should be correctly substituted with nested in-place variables")
-	})
-
-	t.Run("inplace_variable_defined_by_uuid_system_variable", func(t *testing.T) {
-		// Given: an .http file with an in-place variable defined by the {{$uuid}} system variable
-		var capturedHeaderValue string
-		const headerKey = "X-Request-ID"
-
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			capturedHeaderValue = r.Header.Get(headerKey)
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-
-		fileContent := fmt.Sprintf(`
-@my_request_uuid = {{$uuid}}
-
-### Test Request With UUID In-Place Var in Header
-GET %s/some/path
-%s: {{my_request_uuid}}
-`, server.URL, headerKey)
-
-		requestFilePath := createTempHTTPFileFromString(t, fileContent)
-
-		client, err := NewClient()
-		require.NoError(t, err)
-
-		// When: the .http file is executed
-		results, execErr := client.ExecuteFile(context.Background(), requestFilePath)
-
-		// Then: no error should occur and the header should contain a valid UUID
-		require.NoError(t, execErr, "ExecuteFile should not return an error")
-		require.Len(t, results, 1, "Should have one result")
-		require.Nil(t, results[0].Error, "Request execution error should be nil")
-
-		// Validate that the captured header value is a valid UUID
-		_, err = uuid.Parse(capturedHeaderValue)
-		assert.NoError(t, err, "Header value should be a valid UUID. Got: %s", capturedHeaderValue)
-		assert.NotEmpty(t, capturedHeaderValue, "Captured UUID header should not be empty")
-	})
-
-	t.Run("inplace_variable_defined_by_dot_env_os_variable", func(t *testing.T) {
-		// Given: an .http file with an in-place variable defined by an OS environment variable using {{$env.VAR_NAME}}
-		const testEnvVarName = "MY_CONFIG_PATH_TEST_DOT_ENV"
-		const testEnvVarValue = "/usr/local/appconfig_dotenv" // Using a value that starts with /
-		var capturedURLPath string
-
-		t.Setenv(testEnvVarName, testEnvVarValue)
-
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			capturedURLPath = r.URL.Path
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-
-		fileContent := fmt.Sprintf(`
-@my_path_from_env = {{$env.%s}}
-
-### Test Request With OS Env Var ({{$env.VAR}}) In In-Place Var
-GET %s{{my_path_from_env}}/data
-`, testEnvVarName, server.URL)
-
-		requestFilePath := createTempHTTPFileFromString(t, fileContent)
-
-		client, err := NewClient()
-		require.NoError(t, err)
-
-		results, execErr := client.ExecuteFile(context.Background(), requestFilePath)
-
-		require.NoError(t, execErr, "ExecuteFile should not return an error")
-		require.Len(t, results, 1, "Should have one result")
-		require.Nil(t, results[0].Error, "Request execution error should be nil")
-
-		expectedPath := testEnvVarValue + "/data"
-		assert.Equal(t, expectedPath, capturedURLPath, "The URL path should be correctly substituted with the OS environment variable via {{$env.VAR_NAME}} in-place var")
-	})
-
-	t.Run("inplace_variable_malformed_definitions", func(t *testing.T) {
-		tests := []struct {
-			name            string
-			httpFileContent string
-			expectedError   string // Substring of the expected error message from ExecuteFile
-		}{
-			{
-				name: "name_only_no_equals_no_value",
-				httpFileContent: `
-@name_only_var
-
-### Test Request
-GET http://localhost/test
-`,
-				expectedError: "malformed in-place variable definition, missing '=' or name",
-			},
-			{
-				name: "no_name_equals_value",
-				httpFileContent: `
-@=value_only_val
-
-### Test Request
-GET http://localhost/test
-`,
-				expectedError: "variable name cannot be empty in definition",
-			},
-		}
-
-		for _, tc := range tests {
-			t.Run(tc.name, func(t *testing.T) {
-				requestFilePath := createTempHTTPFileFromString(t, tc.httpFileContent)
-				client, err := NewClient()
-				require.NoError(t, err)
-
-				_, execErr := client.ExecuteFile(context.Background(), requestFilePath)
-
-				require.Error(t, execErr, "ExecuteFile should return an error for malformed variable definition")
-				assert.Contains(t, execErr.Error(), "failed to parse request file", "Error message should indicate parsing failure") // Updated general error check
-				assert.Contains(t, execErr.Error(), tc.expectedError, "Error message should contain specific malformed reason")
-			})
-		}
-	})
-
-	t.Run("inplace_variable_defined_by_dotenv_system_variable", func(t *testing.T) {
-		// Given: a .env file and an HTTP file using {{$dotenv VAR_NAME}} for an in-place variable
-		tempDir := t.TempDir()
-		dotEnvContent := "DOTENV_VAR_FOR_SYSTEM_TEST=actual_dotenv_value"
-		dotEnvFilePath := filepath.Join(tempDir, ".env")
-		err := os.WriteFile(dotEnvFilePath, []byte(dotEnvContent), 0600)
-		require.NoError(t, err, "Failed to write .env file")
-
-		var capturedPath string
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			capturedPath = r.URL.Path
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-
-		serverURL, err := url.Parse(server.URL)
-		require.NoError(t, err)
-
-		httpFileContent := fmt.Sprintf(`
-@my_api_key = {{$dotenv DOTENV_VAR_FOR_SYSTEM_TEST}}
-
-### Test Request
-GET http://%s/{{my_api_key}}
-`, serverURL.Host)
-
-		requestFilePath := filepath.Join(tempDir, "test.http")
-		err = os.WriteFile(requestFilePath, []byte(httpFileContent), 0600)
-		require.NoError(t, err, "Failed to write .http file")
-
-		client, err := NewClient()
-		require.NoError(t, err)
-
-		// When: the HTTP file is executed
-		responses, execErr := client.ExecuteFile(context.Background(), requestFilePath)
-
-		// Then: the request should be successful and the variable substituted correctly
-		require.NoError(t, execErr, "ExecuteFile returned an unexpected error")
-		require.Len(t, responses, 1, "Expected one response")
-		require.Nil(t, responses[0].Error, "Response error should be nil")
-		assert.Equal(t, "/actual_dotenv_value", capturedPath, "Expected path to be substituted with .env value via {{$dotenv}}")
-	})
-
-	// TODO: Add test for @var = {{$randomInt MIN MAX}}
-}
-
-// parseHrespBody reads an .hresp file and parses its content to separate
-// headers and body. It returns the parsed headers as http.Header and the body as a string.
-// The .hresp format expects headers first, then a blank line, then the body.
-func parseHrespBody(filePath string) (http.Header, string, error) {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to read .hresp file %s: %w", filePath, err)
-	}
-
-	parts := strings.SplitN(string(content), "\n\n", 2)
-	headers := make(http.Header)
-	bodyStr := ""
-
-	headerLines := strings.Split(strings.TrimSpace(parts[0]), "\n")
-	for _, line := range headerLines {
-		if strings.TrimSpace(line) == "" || !strings.Contains(line, ":") {
-			// Skip empty lines or lines not containing a colon (likely the HTTP version line or status)
-			continue
-		}
-		headerParts := strings.SplitN(line, ":", 2)
-		if len(headerParts) == 2 {
-			headers.Add(strings.TrimSpace(headerParts[0]), strings.TrimSpace(headerParts[1]))
-		}
-	}
-
-	if len(parts) == 2 {
-		bodyStr = strings.TrimSpace(parts[1])
-	}
-
-	return headers, bodyStr, nil
 }

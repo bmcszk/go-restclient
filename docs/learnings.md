@@ -2,6 +2,22 @@
 
 Last Updated: 2025-06-05
 
+## 2025-06-05: `view_line_range` Tool - Output Truncation and Pagination
+
+*   **Mistake**: Assumed `view_line_range` would return the entire file content if `EndLine` was set to a very large number (e.g., 2000 for a ~200 line file). The tool silently truncates the output if `EndLine` is more than 200 lines away from `StartLine`, without returning an error. This led to an incomplete understanding of the file's actual content and length.
+*   **Resolution**: To view a file larger than 200 lines, or to ensure the full content of any file is retrieved, multiple paginated calls to `view_line_range` are necessary. Each call must respect the 200-line window (e.g., lines 0-199, then 200-399, and so on, until no more content is returned).
+*   **Lesson Learned**: Be aware that `view_line_range` silently truncates output beyond its 200-line window per call. For full file retrieval, implement pagination by making sequential calls with adjusted `StartLine` and `EndLine` parameters until the entire file is read. This is crucial for operations like full-file replacement where the exact current content is required.
+
+## 2025-06-05: `replace_file_content` Tool - `TargetContent` Uniqueness
+
+*   **Mistake**: Attempted to use `replace_file_content` to append a new Go test function to `client_execute_env_json_test.go`. The `TargetContent` provided was the closing brace `}` of the preceding function. This failed because the string `}` was not unique in the file, leading to the error: "chunk 130: target content was not unique."
+*   **Resolution**: When `TargetContent` is not unique, `replace_file_content` will fail. To resolve this when appending content:
+    1.  View the full file content (e.g., using `view_line_range`) to confirm the actual end of the file or to find a truly unique anchor near the end.
+    2.  If appending, a more robust `TargetContent` would be the *entire last line* of the existing file (if it's unique and simple, like a closing brace `}`) or a sufficiently unique multi-line segment at the end. The `ReplacementContent` would then be that `TargetContent` followed by the new content.
+    3.  Alternatively, if the goal is simply to append and no clear unique anchor exists, it might be safer to read the entire file, append the new content as a string, and use `replace_file_content` to replace the *entire file content* with the modified string. However, this is less ideal for large files.
+    4.  For this specific case, the chosen approach was to use the closing brace of the last function as `TargetContent`, and the `ReplacementContent` included that closing brace, followed by newlines and the new function. This ensures the new function is appended correctly after the last existing function.
+*   **Lesson Learned**: Always ensure `TargetContent` for `replace_file_content` is unique within the target file. If it's not, the operation will fail. For appending, carefully select an anchor or consider alternative strategies if a simple unique anchor isn't available.
+
 ## 2025-06-05: Handling `replace_file_content` Failures and File State Inconsistency
 
 **Mistake:** Multiple sequential `replace_file_content` calls to `client_execute_edgecases_test.go` failed repeatedly with 'target content not unique' errors or applied changes incorrectly, leading to syntax errors. This occurred because the AI's internal representation of the file became desynchronized from the actual file state after partial or failed edits.
@@ -112,3 +128,20 @@ During the implementation of multipart/form-data support (specifically when modi
 *   **Mistake:** During refactoring of `client_execute_vars_test.go`, the `replace_file_content` tool (Tool ID `8dea55aa-a883-4a7a-a3ce-bea98e440bd6`, Step 198) misapplied changes. The `TargetContent` for refactoring the `variable_defined_by_another_variable` sub-test was incorrectly matched, leading to deletion of the original sub-test and incorrect modification of the subsequent `variable_precedence_over_environment` sub-test. This resulted in compilation errors (e.g., 'no new variables on left side of :=', 'undefined variable').
 *   **Resolution:** Advised USER to manually revert the affected file `/home/blaze/work/go-restclient/client_execute_vars_test.go` to its state before the erroneous tool call. Future attempts will require more precise `TargetContent` or breaking down complex edits further.
 *   **Lesson Learned:** This highlights a limitation where `replace_file_content` can struggle with repetitive structures or if `TargetContent` isn't sufficiently unique, especially if the surrounding context is too similar between the intended target and other parts of the file. When such corruption occurs, reverting the file and re-attempting with greater precision or a different strategy (e.g., providing a full code block for manual replacement if the tool proves consistently unreliable for the specific complex edit) is necessary.
+
+## 2025-06-05: Git File Restoration and Tracking Status
+
+*   **Mistake**: Attempted to restore `client_execute_env_json_test.go` using `git checkout -- <file>` and `git checkout HEAD -- <file>` after a faulty patch application. These commands failed with "pathspec did not match any file(s) known to git".
+*   **Root Cause**: The `git apply` command, when the target file is not found or if applied with certain options/conditions, might create a new, *untracked* file instead of modifying an existing tracked one. Subsequent `git ls-files <file>` confirmed the file was not tracked in `HEAD`. Thus, `git checkout` could not find a version in the index or HEAD to restore from.
+*   **Resolution**:
+    1.  Removed the untracked file using `rm <file>`.
+    2.  Since `git checkout HEAD -- <file>` still failed (as the file wasn't in HEAD's manifest), the file had to be recreated from a known good version (e.g., previous `view_line_range` output or by pulling from remote if no local clean copy was available).
+    3.  Proceeded with applying a corrected patch to the recreated file.
+*   **Lesson Learned**: If `git checkout -- <file>` or `git checkout HEAD -- <file>` fails with "pathspec ... did not match", verify the file's tracking status using `git ls-files <file>`. If it's untracked or not listed, `git checkout` cannot restore it from the index/HEAD. The recovery then involves removing the untracked version and recreating the file from a known good source before attempting further operations. Also, be mindful that `git apply` might lead to untracked files under certain conditions.
+
+## 2025-06-05: `replace_file_content` Tool - Ensuring `TargetContent` Uniqueness with Context
+
+*   **Mistake**: When refactoring `TestParseRequestFile_Imports` in `parser_test.go`, the `replace_file_content` tool repeatedly failed to change `tests := []struct {` to `tests := []parseRequestFileImportsTestCase{`. The error was "target content was not unique" because `\ttests := []struct {` appeared multiple times in the file. Initial attempts to fix this by just targeting the line itself failed.
+*   **Resolution**: To make the `TargetContent` unique, more surrounding context was provided. Instead of just `\ttests := []struct {`, the `TargetContent` was changed to include the preceding commented-out lines and the line itself, like `\t// }\n\n\ttests := []struct {\n\t\tname              string`. This provided enough uniqueness for the tool to correctly identify and modify the intended line.
+*   **Lesson Learned**: If `replace_file_content` reports that `TargetContent` is not unique, simply re-trying with the exact same `TargetContent` will also fail. It's crucial to inspect the file (e.g., using `view_line_range`) to understand why the target is not unique and then provide additional, unique surrounding lines as part of the `TargetContent` to disambiguate the intended edit location. This ensures the tool can accurately apply the change.
+

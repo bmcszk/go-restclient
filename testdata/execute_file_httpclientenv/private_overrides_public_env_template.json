@@ -1,0 +1,7 @@
+{
+	"dev": {
+		"host": "{{SERVER_URL}}",
+		"public_var": "public_value",
+		"override_var": "public_override"
+	}
+}

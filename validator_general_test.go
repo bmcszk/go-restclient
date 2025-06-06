@@ -11,6 +11,41 @@ import (
 	// No strings needed
 )
 
+type validateResponsesWithSampleFileTestCase struct {
+	name               string
+	actualModifier     func(actual *Response)
+	expectedFileSource string
+	expectedErrCount   int
+	expectedErrTexts   []string
+}
+
+func runValidateResponsesWithSampleFileSubtest(t *testing.T, tc validateResponsesWithSampleFileTestCase, baseActual *Response) {
+	// Given: A modified actual response based on baseActual and tc.actualModifier
+	actualTest := &Response{
+		StatusCode: baseActual.StatusCode,
+		Status:     baseActual.Status,
+		Headers:    make(http.Header),
+		BodyString: baseActual.BodyString,
+	}
+	for k, v := range baseActual.Headers { // Deep copy headers
+		actualTest.Headers[k] = append([]string{}, v...)
+	}
+	tc.actualModifier(actualTest)
+
+	currentExpectedFilePath := tc.expectedFileSource
+	client, _ := NewClient()
+
+	// When
+	err := client.ValidateResponses(currentExpectedFilePath, actualTest)
+
+	// Then
+	if tc.expectedErrCount == 0 {
+		assert.NoError(t, err)
+	} else {
+		assertMultierrorContains(t, err, tc.expectedErrCount, tc.expectedErrTexts)
+	}
+}
+
 func TestValidateResponses_WithSampleFile(t *testing.T) {
 	// Given: Setup with a sample response file and base actual response
 	sampleFilePath := "testdata/http_response_files/sample1.http" // Use the actual file
@@ -30,14 +65,7 @@ func TestValidateResponses_WithSampleFile(t *testing.T) {
 		baseActual.Headers[k] = append([]string{}, v...)
 	}
 
-	tests := []struct {
-		name                      string
-		actualModifier            func(actual *Response)
-		expectedFileSource        string
-		expectedFileContentString string // No longer used by the logic, but kept for structure if needed later
-		expectedErrCount          int
-		expectedErrTexts          []string
-	}{
+	tests := []validateResponsesWithSampleFileTestCase{
 		{
 			name:               "perfect match with sample1.http",
 			actualModifier:     func(actual *Response) {},
@@ -119,30 +147,7 @@ func TestValidateResponses_WithSampleFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Given: A modified actual response based on baseActual and tt.actualModifier
-			actualTest := &Response{
-				StatusCode: baseActual.StatusCode,
-				Status:     baseActual.Status,
-				Headers:    make(http.Header),
-				BodyString: baseActual.BodyString,
-			}
-			for k, v := range baseActual.Headers {
-				actualTest.Headers[k] = append([]string{}, v...)
-			}
-			tt.actualModifier(actualTest)
-
-			currentExpectedFilePath := tt.expectedFileSource
-			client, _ := NewClient()
-
-			// When
-			err := client.ValidateResponses(currentExpectedFilePath, actualTest)
-
-			// Then
-			if tt.expectedErrCount == 0 {
-				assert.NoError(t, err)
-			} else {
-				assertMultierrorContains(t, err, tt.expectedErrCount, tt.expectedErrTexts)
-			}
+			runValidateResponsesWithSampleFileSubtest(t, tt, baseActual)
 		})
 	}
 }

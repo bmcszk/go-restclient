@@ -147,18 +147,110 @@ func (c *Client) ValidateResponses(responseFilePath string, actualResponses ...*
 
 // compareBodies compares the expected body string with the actual body string,
 // supporting placeholders like {{$regexp pattern}}, {{$anyGuid}}, {{$anyTimestamp}}, and {{$anyDatetime format}}.
+// placeholderInfo holds details about a supported placeholder type.
+type placeholderInfo struct {
+	name         string         // e.g., "regexp", "anyGuid"
+	finder       *regexp.Regexp // Regex to find the placeholder itself, e.g., "{{$anyGuid}}" or "{{$regexp ...}}"
+	pattern      string         // Regex pattern to insert for this placeholder, e.g., guidRegexPattern (if no arg)
+	hasArgument  bool           // True if the placeholder takes an argument (e.g., {{$regexp `pattern`}} or {{$anyDatetime "format"}})
+	isArgPattern bool           // True if the argument itself is the regex pattern to use (e.g., for {{$regexp `pattern`}})
+	// For placeholders like {{$anyDatetime "format"}}, specific logic is needed to derive the pattern from the argument.
+}
+
+// buildRegexFromExpectedBody constructs a complete regular expression string
+// from an expected body string containing placeholders.
+func buildRegexFromExpectedBody(normalizedExpectedBody string) (string, error) {
+	var finalRegexPattern strings.Builder
+	finalRegexPattern.WriteString("^")
+
+	remainingExpectedBody := normalizedExpectedBody
+
+	// Define all known placeholders
+	placeholders := []placeholderInfo{
+		{name: "regexp", finder: regexpPlaceholderFinder, hasArgument: true, isArgPattern: true},
+		{name: "anyGuid", finder: anyGuidPlaceholderFinder, pattern: guidRegexPattern},
+		{name: "anyTimestamp", finder: anyTimestampPlaceholderFinder, pattern: timestampRegexPattern},
+		{name: "anyDatetimeWithArg", finder: anyDatetimePlaceholderFinder, hasArgument: true},        // Special handling for arg
+		{name: "anyDatetimeNoArg", finder: anyDatetimeNoArgFinder, pattern: nonMatchingRegexPattern}, // {{$anyDatetime}} with no arg is invalid
+		{name: "any", finder: anyPlaceholderFinder, pattern: anyRegexPattern},
+	}
+
+	for len(remainingExpectedBody) > 0 {
+		earliestMatchIndices := []int(nil)
+		var bestPlaceholder placeholderInfo
+		currentMatchPos := len(remainingExpectedBody) + 1 // Initialize with a value greater than any possible index
+
+		// Find the earliest occurrence of any known placeholder
+		for _, ph := range placeholders {
+			matchIndices := ph.finder.FindStringSubmatchIndex(remainingExpectedBody)
+			if matchIndices != nil && matchIndices[0] < currentMatchPos {
+				currentMatchPos = matchIndices[0]
+				earliestMatchIndices = matchIndices
+				bestPlaceholder = ph
+			}
+		}
+
+		if earliestMatchIndices == nil { // No more placeholders found
+			finalRegexPattern.WriteString(regexp.QuoteMeta(remainingExpectedBody))
+			break
+		}
+
+		// Append the literal part before the placeholder
+		literalPart := remainingExpectedBody[:earliestMatchIndices[0]]
+		finalRegexPattern.WriteString(regexp.QuoteMeta(literalPart))
+
+		// Append the regex for the placeholder
+		finalRegexPattern.WriteString("(") // Group each placeholder's pattern
+
+		placeholderArg := ""
+		// Ensure group for argument exists and placeholder expects an argument
+		if bestPlaceholder.hasArgument && len(earliestMatchIndices) >= 4 && earliestMatchIndices[2] != -1 && earliestMatchIndices[3] != -1 {
+			placeholderArg = remainingExpectedBody[earliestMatchIndices[2]:earliestMatchIndices[3]]
+		}
+
+		switch bestPlaceholder.name {
+		case "regexp":
+			userPattern := placeholderArg
+			// Strip backticks if present
+			if len(userPattern) >= 2 && userPattern[0] == '`' && userPattern[len(userPattern)-1] == '`' {
+				userPattern = userPattern[1 : len(userPattern)-1]
+			}
+			finalRegexPattern.WriteString(userPattern)
+		case "anyDatetimeWithArg":
+			formatArg := strings.TrimSpace(placeholderArg)
+			selectedPattern := nonMatchingRegexPattern // Default to non-matching if format is unknown/invalid
+			if formatArg == "rfc1123" {
+				selectedPattern = rfc1123RegexPattern
+			} else if formatArg == "iso8601" {
+				selectedPattern = iso8601RegexPattern
+			} else if len(formatArg) >= 2 && formatArg[0] == '"' && formatArg[len(formatArg)-1] == '"' {
+				customLayout := formatArg[1 : len(formatArg)-1]
+				if customLayout != "" {
+					selectedPattern = genericDatetimeRegexPattern
+				}
+			}
+			finalRegexPattern.WriteString(selectedPattern)
+		default: // For anyGuid, anyTimestamp, anyDatetimeNoArg, any
+			finalRegexPattern.WriteString(bestPlaceholder.pattern)
+		}
+
+		finalRegexPattern.WriteString(")")
+		remainingExpectedBody = remainingExpectedBody[earliestMatchIndices[1]:]
+	}
+
+	finalRegexPattern.WriteString("$")
+	return finalRegexPattern.String(), nil
+}
+
+// compareBodies compares the expected body string with the actual body string,
+// supporting placeholders like {{$regexp pattern}}, {{$anyGuid}}, {{$anyTimestamp}}, and {{$anyDatetime format}}.
 func compareBodies(responseFilePath string, responseIndex int, expectedBody, actualBody string) error {
 	normalizedExpectedBody := strings.TrimSpace(strings.ReplaceAll(expectedBody, "\\r\\n", "\\n"))
 	normalizedActualBody := strings.TrimSpace(strings.ReplaceAll(actualBody, "\\r\\n", "\\n"))
 
-	// Check if any placeholders are present. If not, do a simple string comparison.
-	hasRegexpPlaceholder := strings.Contains(normalizedExpectedBody, "{{$regexp")
-	hasAnyGuidPlaceholder := strings.Contains(normalizedExpectedBody, "{{$anyGuid}}")
-	hasAnyTimestampPlaceholder := strings.Contains(normalizedExpectedBody, "{{$anyTimestamp}}")
-	hasAnyDatetimePlaceholder := strings.Contains(normalizedExpectedBody, "{{$anyDatetime") // Checks for start of {{$anyDatetime...}}
-	hasAnyPlaceholder := strings.Contains(normalizedExpectedBody, "{{$any}}")
-
-	if !hasRegexpPlaceholder && !hasAnyGuidPlaceholder && !hasAnyTimestampPlaceholder && !hasAnyDatetimePlaceholder && !hasAnyPlaceholder {
+	// Quick check for placeholders to determine if the fast path (direct string comparison) can be taken.
+	// The robust placeholder handling is done by buildRegexFromExpectedBody.
+	if !strings.Contains(normalizedExpectedBody, "{{$") {
 		if normalizedActualBody != normalizedExpectedBody {
 			diff := difflib.UnifiedDiff{
 				A:        difflib.SplitLines(normalizedExpectedBody),
@@ -174,118 +266,16 @@ func compareBodies(responseFilePath string, responseIndex int, expectedBody, act
 	}
 
 	// Placeholder-based comparison
-	var finalRegexPattern strings.Builder
-	finalRegexPattern.WriteString("^")
-
-	remainingExpectedBody := normalizedExpectedBody
-
-	for len(remainingExpectedBody) > 0 {
-		// Find the earliest occurrence of any known placeholder
-		regexpMatchIndices := regexpPlaceholderFinder.FindStringSubmatchIndex(remainingExpectedBody)
-		anyGuidMatchIndices := anyGuidPlaceholderFinder.FindStringSubmatchIndex(remainingExpectedBody)
-		anyTimestampMatchIndices := anyTimestampPlaceholderFinder.FindStringSubmatchIndex(remainingExpectedBody)
-		anyDatetimeMatchIndices := anyDatetimePlaceholderFinder.FindStringSubmatchIndex(remainingExpectedBody)
-		anyDatetimeNoArgMatchIndices := anyDatetimeNoArgFinder.FindStringSubmatchIndex(remainingExpectedBody)
-		anyMatchIndices := anyPlaceholderFinder.FindStringSubmatchIndex(remainingExpectedBody)
-
-		// Determine which placeholder is next (if any)
-		var earliestMatchIndices []int
-		var placeholderType string
-		var placeholderArg string
-
-		currentMatchPos := len(remainingExpectedBody) + 1
-
-		if regexpMatchIndices != nil && regexpMatchIndices[0] < currentMatchPos {
-			currentMatchPos = regexpMatchIndices[0]
-			earliestMatchIndices = regexpMatchIndices
-			placeholderType = "regexp"
-		}
-		if anyGuidMatchIndices != nil && anyGuidMatchIndices[0] < currentMatchPos {
-			currentMatchPos = anyGuidMatchIndices[0]
-			earliestMatchIndices = anyGuidMatchIndices
-			placeholderType = "anyGuid"
-		}
-		if anyTimestampMatchIndices != nil && anyTimestampMatchIndices[0] < currentMatchPos {
-			currentMatchPos = anyTimestampMatchIndices[0]
-			earliestMatchIndices = anyTimestampMatchIndices
-			placeholderType = "anyTimestamp"
-		}
-		if anyDatetimeMatchIndices != nil && anyDatetimeMatchIndices[0] < currentMatchPos { // With arg
-			currentMatchPos = anyDatetimeMatchIndices[0]
-			earliestMatchIndices = anyDatetimeMatchIndices
-			placeholderType = "anyDatetimeWithArg"
-		}
-		if anyDatetimeNoArgMatchIndices != nil && anyDatetimeNoArgMatchIndices[0] < currentMatchPos { // No arg
-			earliestMatchIndices = anyDatetimeNoArgMatchIndices
-			placeholderType = "anyDatetimeNoArg"
-		}
-		if anyMatchIndices != nil && anyMatchIndices[0] < currentMatchPos {
-			earliestMatchIndices = anyMatchIndices
-			placeholderType = "any"
-		}
-
-		if earliestMatchIndices == nil { // No more placeholders found
-			finalRegexPattern.WriteString(regexp.QuoteMeta(remainingExpectedBody))
-			break
-		}
-
-		literalPart := remainingExpectedBody[:earliestMatchIndices[0]]
-		finalRegexPattern.WriteString(regexp.QuoteMeta(literalPart))
-
-		switch placeholderType {
-		case "regexp":
-			placeholderArg = remainingExpectedBody[earliestMatchIndices[2]:earliestMatchIndices[3]]
-			userPattern := placeholderArg
-			if len(userPattern) >= 2 && userPattern[0] == '`' && userPattern[len(userPattern)-1] == '`' {
-				userPattern = userPattern[1 : len(userPattern)-1]
-			}
-			finalRegexPattern.WriteString("(")
-			finalRegexPattern.WriteString(userPattern)
-			finalRegexPattern.WriteString(")")
-		case "anyGuid":
-			finalRegexPattern.WriteString("(")
-			finalRegexPattern.WriteString(guidRegexPattern)
-			finalRegexPattern.WriteString(")")
-		case "anyTimestamp":
-			finalRegexPattern.WriteString("(")
-			finalRegexPattern.WriteString(timestampRegexPattern)
-			finalRegexPattern.WriteString(")")
-		case "anyDatetimeWithArg":
-			placeholderArg = remainingExpectedBody[earliestMatchIndices[2]:earliestMatchIndices[3]]
-			formatArg := strings.TrimSpace(placeholderArg)
-			selectedPattern := nonMatchingRegexPattern // Default
-
-			if formatArg == "rfc1123" {
-				selectedPattern = rfc1123RegexPattern
-			} else if formatArg == "iso8601" {
-				selectedPattern = iso8601RegexPattern
-			} else if len(formatArg) >= 2 && formatArg[0] == '"' && formatArg[len(formatArg)-1] == '"' {
-				customLayout := formatArg[1 : len(formatArg)-1]
-				if customLayout != "" {
-					selectedPattern = genericDatetimeRegexPattern
-				}
-			}
-			finalRegexPattern.WriteString("(")
-			finalRegexPattern.WriteString(selectedPattern)
-			finalRegexPattern.WriteString(")")
-		case "anyDatetimeNoArg":
-			finalRegexPattern.WriteString("(")
-			finalRegexPattern.WriteString(nonMatchingRegexPattern)
-			finalRegexPattern.WriteString(")")
-		case "any":
-			finalRegexPattern.WriteString("(")
-			finalRegexPattern.WriteString(anyRegexPattern)
-			finalRegexPattern.WriteString(")")
-		}
-
-		remainingExpectedBody = remainingExpectedBody[earliestMatchIndices[1]:]
+	regexPatternString, err := buildRegexFromExpectedBody(normalizedExpectedBody)
+	if err != nil {
+		// This case should ideally not be reached if buildRegexFromExpectedBody is robust.
+		// If buildRegexFromExpectedBody is enhanced to return errors (e.g., for invalid placeholder syntax), they'd be caught here.
+		return fmt.Errorf("validation for response #%d ('%s'): error building regex from expected body: %w", responseIndex, responseFilePath, err)
 	}
 
-	finalRegexPattern.WriteString("$")
-
-	compiledRegex, err := regexp.Compile(finalRegexPattern.String())
+	compiledRegex, err := regexp.Compile(regexPatternString)
 	if err != nil {
-		return fmt.Errorf("validation for response #%d ('%s'): failed to compile master regex from expected body: %w. Pattern: %s", responseIndex, responseFilePath, err, finalRegexPattern.String())
+		return fmt.Errorf("validation for response #%d ('%s'): failed to compile master regex from expected body: %w. Pattern: %s", responseIndex, responseFilePath, err, regexPatternString)
 	}
 
 	if !compiledRegex.MatchString(normalizedActualBody) {
@@ -297,7 +287,7 @@ func compareBodies(responseFilePath string, responseIndex int, expectedBody, act
 			Context:  3,
 		}
 		diffText, _ := difflib.GetUnifiedDiffString(diff)
-		return fmt.Errorf("validation for response #%d ('%s'): body mismatch (regexp/placeholder evaluation failed):\\n%s\\nCompiled Regex: %s", responseIndex, responseFilePath, diffText, finalRegexPattern.String())
+		return fmt.Errorf("validation for response #%d ('%s'): body mismatch (regexp/placeholder evaluation failed):\\n%s\\nCompiled Regex: %s", responseIndex, responseFilePath, diffText, regexPatternString)
 	}
 
 	return nil

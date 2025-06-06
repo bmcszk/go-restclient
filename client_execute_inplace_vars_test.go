@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -136,7 +137,8 @@ func TestExecuteFile_InPlace_VariableInHeader(t *testing.T) {
 	require.NoError(t, pErr)
 	require.NotNil(t, parsedFile.FileVariables)
 	assert.Equal(t, "Bearer_secret_token_123", parsedFile.FileVariables["auth_token"])
-	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["test_server_url"]) // Check placeholder
+	// Programmatic variables are resolved during parsing and don't remain as placeholders
+	assert.Equal(t, server.URL, parsedFile.FileVariables["test_server_url"])
 }
 
 func TestExecuteFile_InPlace_VariableInBody(t *testing.T) {
@@ -201,8 +203,9 @@ func TestExecuteFile_InPlace_VariableInBody(t *testing.T) {
 	require.NotNil(t, parsedFile.FileVariables)
 	assert.Equal(t, "SuperWidget", parsedFile.FileVariables["product_name"])
 	assert.Equal(t, "SW1000", parsedFile.FileVariables["product_id"])
-	assert.Equal(t, "49.99", parsedFile.FileVariables["product_price"])                 // Variables are stored as strings
-	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["test_server_url"]) // Check placeholder
+	assert.Equal(t, "49.99", parsedFile.FileVariables["product_price"]) // Variables are stored as strings
+	// Programmatic variables are resolved during parsing and stored with their actual values
+	assert.Equal(t, server.URL, parsedFile.FileVariables["test_server_url"])
 }
 
 func TestExecuteFile_InPlace_VariableDefinedByAnotherVariable(t *testing.T) {
@@ -212,7 +215,8 @@ func TestExecuteFile_InPlace_VariableDefinedByAnotherVariable(t *testing.T) {
 		capturedURL = r.URL.String() // Captures path and query
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
+		// Return response matching expected.hresp
+		_, _ = w.Write([]byte(`{"id":"123", "status":"ok"}`))
 	}))
 	defer server.Close()
 
@@ -246,22 +250,26 @@ func TestExecuteFile_InPlace_VariableDefinedByAnotherVariable(t *testing.T) {
 		assert.Empty(t, string(resp.Body), "Response body should be empty")
 	}
 
-	expectedPathAndQuery := fmt.Sprintf("/api/v2/items?check_base=%s&check_path=/api/v2/items", server.URL)
+	// The actual request URL in the file is simply GET {{full_url}}
+	// where full_url resolves to {{base_url}}{{path}}/123 which is {{test_server_url}}/users/123
+	expectedPathAndQuery := "/users/123"
 	assert.Equal(t, expectedPathAndQuery, capturedURL, "Captured URL by server mismatch")
 
-	// Verify ParsedFile.FileVariables (should store raw definitions from the .http file)
-	// request.http is:
+	// Verify ParsedFile.FileVariables - should store defined variables from the .http file
+	// with programmatic variables fully resolved
+	// From request.http:
 	// @base_url = {{test_server_url}}
-	// @path = /api/v2/items
-	// @full_url = {{base_url}}{{path}}
-	// GET {{full_url}}?check_base={{base_url}}&check_path={{path}}
+	// @path = /users
+	// @full_url = {{base_url}}{{path}}/123
 	parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
 	require.NoError(t, pErr)
 	require.NotNil(t, parsedFile.FileVariables)
-	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["base_url"])
-	assert.Equal(t, "/api/v2/items", parsedFile.FileVariables["path"])
-	assert.Equal(t, "{{base_url}}{{path}}", parsedFile.FileVariables["full_url"])
-	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["test_server_url"]) // Check placeholder
+	// base_url references the programmatic variable test_server_url, so it should be resolved
+	assert.Equal(t, server.URL, parsedFile.FileVariables["base_url"])
+	assert.Equal(t, "/users", parsedFile.FileVariables["path"])
+	assert.Equal(t, fmt.Sprintf("%s/users/123", server.URL), parsedFile.FileVariables["full_url"])
+	// Programmatic variables are resolved during parsing
+	assert.Equal(t, server.URL, parsedFile.FileVariables["test_server_url"]) // Resolved programmatic var
 }
 
 func TestExecuteFile_InPlace_VariablePrecedenceOverEnvironment(t *testing.T) {
@@ -852,4 +860,52 @@ func TestExecuteFile_InPlace_VariableDefinedByDotEnvSystemVariable(t *testing.T)
 	require.NotNil(t, parsedFile.FileVariables)
 	assert.Equal(t, "{{$dotenv DOTENV_VAR_FOR_SYSTEM_TEST}}", parsedFile.FileVariables["my_api_key"], "Parsed file variable 'my_api_key' (placeholder) mismatch")
 	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["test_server_url"], "Parsed file variable 'test_server_url' (placeholder) mismatch")
+}
+
+func TestExecuteFile_InPlace_VariableDefinedByRandomInt(t *testing.T) {
+	// Given: an .http file using {{$randomInt MIN MAX}} for an in-place variable
+	const requestFilePath = "testdata/execute_inplace_vars/inplace_variable_defined_by_random_int/request.http"
+	const minPort = 8000
+	const maxPort = 8080
+
+	var capturedURLPath string
+	var capturedHeaderValue string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedURLPath = r.URL.Path
+		capturedHeaderValue = r.Header.Get("X-Random-Port")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(WithVars(map[string]interface{}{
+		"test_server_url": server.URL,
+	}))
+	require.NoError(t, err)
+
+	// When: the HTTP file is executed
+	responses, execErr := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then: the request should be successful and the variable substituted with a random int in range
+	require.NoError(t, execErr, "ExecuteFile returned an unexpected error")
+	require.Len(t, responses, 1, "Expected one response")
+	require.Nil(t, responses[0].Error, "Response error should be nil")
+	assert.Equal(t, http.StatusOK, responses[0].StatusCode, "Expected HTTP 200 OK")
+
+	// Extract port from path: /port/{{my_random_port}}
+	pathParts := strings.Split(strings.Trim(capturedURLPath, "/"), "/")
+	require.Len(t, pathParts, 2, "URL path should be in format /port/NUMBER")
+	require.Equal(t, "port", pathParts[0], "First part of path should be 'port'")
+
+	portFromPathStr := pathParts[1]
+	portFromPath, err := strconv.Atoi(portFromPathStr)
+	require.NoError(t, err, "Port from path should be a valid integer. Got: %s", portFromPathStr)
+
+	portFromHeader, err := strconv.Atoi(capturedHeaderValue)
+	require.NoError(t, err, "Port from X-Random-Port header should be a valid integer. Got: %s", capturedHeaderValue)
+
+	assert.Equal(t, portFromPath, portFromHeader, "Port from path and header should match")
+
+	assert.GreaterOrEqual(t, portFromPath, minPort, "Port should be >= %d. Got: %d", minPort, portFromPath)
+	assert.LessOrEqual(t, portFromPath, maxPort, "Port should be <= %d. Got: %d", maxPort, portFromPath)
 }

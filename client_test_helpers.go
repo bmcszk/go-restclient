@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"text/template"
 
@@ -61,4 +62,36 @@ func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 // ptr is a helper function to get a pointer to a string.
 func ptr(s string) *string {
 	return &s
+}
+
+// parseHrespBody reads an .hresp file and parses its content to separate
+// headers and body. It returns the parsed headers as http.Header and the body as a string.
+// The .hresp format expects headers first, then a blank line, then the body.
+func parseHrespBody(filePath string) (http.Header, string, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read .hresp file %s: %w", filePath, err)
+	}
+
+	parts := strings.SplitN(string(content), "\n\n", 2)
+	headers := make(http.Header)
+	bodyStr := ""
+
+	headerLines := strings.Split(strings.TrimSpace(parts[0]), "\n")
+	for _, line := range headerLines {
+		if strings.TrimSpace(line) == "" || !strings.Contains(line, ":") {
+			// Skip empty lines or lines not containing a colon (likely the HTTP version line or status)
+			continue
+		}
+		headerParts := strings.SplitN(line, ":", 2)
+		if len(headerParts) == 2 {
+			headers.Add(strings.TrimSpace(headerParts[0]), strings.TrimSpace(headerParts[1]))
+		}
+	}
+
+	if len(parts) == 2 {
+		bodyStr = strings.TrimSpace(parts[1])
+	}
+
+	return headers, bodyStr, nil
 }

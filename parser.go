@@ -20,6 +20,48 @@ const (
 	commentPrefix    = "#"
 )
 
+// requestParserState holds the state during the parsing of a request file.
+type requestParserState struct {
+	scanner                 *bufio.Scanner
+	filePath                string
+	client                  *Client
+	requestScopedSystemVars map[string]string
+	osEnvGetter             func(string) (string, bool)
+	dotEnvVars              map[string]string
+	importStack             []string
+
+	parsedFile                *ParsedFile
+	currentRequest            *Request
+	bodyLines                 []string
+	parsingBody               bool
+	lineNumber                int
+	currentFileVariables      map[string]string // Variables accumulated at the file scope
+	justSawEmptyLineSeparator bool              // Flag to indicate the previous line was an empty separator
+}
+
+// finalizeRequest populates the RawBody, Body, GetBody, and ActiveVariables fields of a request.
+func finalizeRequest(req *Request, bodyLines []string, fileVars map[string]string) {
+	if req == nil {
+		return
+	}
+	req.RawBody = strings.Join(bodyLines, "\n")
+	req.RawBody = strings.TrimRight(req.RawBody, " \t\r\n") // Trim trailing whitespace/newlines
+	req.Body = strings.NewReader(req.RawBody)               // For single read if needed directly by parser consumers
+	// GetBody allows the body to be read multiple times, as required by http.Request
+	rawBodyCopy := req.RawBody // Capture rawBody for the closure
+	req.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(strings.NewReader(rawBodyCopy)), nil
+	}
+
+	// Ensure ActiveVariables is initialized and populated with current file-level variables
+	if req.ActiveVariables == nil {
+		req.ActiveVariables = make(map[string]string)
+	}
+	for k, v := range fileVars {
+		req.ActiveVariables[k] = v
+	}
+}
+
 // loadEnvironmentFile attempts to load a specific environment's variables from a JSON file.
 // It returns the variables map or nil if the environment/file is not found or on error.
 func loadEnvironmentFile(filePath string, selectedEnvName string) (map[string]string, error) {
@@ -104,412 +146,510 @@ func parseRequestFile(filePath string, client *Client, importStack []string) (*P
 	}
 
 	// Pass absFilePath for context, and newImportStack for recursion tracking
-	parsedFile, err := parseRequests(file, absFilePath, client, requestScopedSystemVarsForFileParse, osEnvGetter, dotEnvVarsForParser, newImportStack)
+	parsedFile, err := ParseRequests(file, absFilePath, client, requestScopedSystemVarsForFileParse, osEnvGetter, dotEnvVarsForParser, newImportStack)
 	if err != nil {
 		return nil, err // Error already wrapped by parseRequests or is a direct parsing error
 	}
 
 	// Load http-client.env.json for environment-specific variables (Task T4)
-	if client != nil && client.selectedEnvironmentName != "" && parsedFile != nil {
-		mergedEnvVars := make(map[string]string)
-		fileDir := filepath.Dir(filePath)
+	loadEnvironmentSpecificVariables(filePath, client, parsedFile) // Pass original filePath
 
-		// Load public environment file: http-client.env.json
-		publicEnvFilePath := filepath.Join(fileDir, "http-client.env.json")
-		publicEnvVars, err := loadEnvironmentFile(publicEnvFilePath, client.selectedEnvironmentName)
-		if err != nil {
-			// Log the error but continue, as the private file might still provide vars
-			slog.Warn("Error loading public environment file", "file", publicEnvFilePath, "error", err)
+	// Ensure programmatic variables are included in the file variables
+	if client != nil && client.programmaticVars != nil {
+		for key, val := range client.programmaticVars {
+			// Convert value to string representation
+			strVal := fmt.Sprintf("%v", val)
+			parsedFile.FileVariables[key] = strVal
 		}
-		for k, v := range publicEnvVars {
-			mergedEnvVars[k] = v
-		}
-
-		// Load private environment file: http-client.private.env.json
-		privateEnvFilePath := filepath.Join(fileDir, "http-client.private.env.json")
-		privateEnvVars, err := loadEnvironmentFile(privateEnvFilePath, client.selectedEnvironmentName)
-		if err != nil {
-			slog.Warn("Error loading private environment file", "file", privateEnvFilePath, "error", err)
-		}
-		for k, v := range privateEnvVars { // Override with private vars
-			mergedEnvVars[k] = v
-		}
-
-		if len(mergedEnvVars) > 0 {
-			parsedFile.EnvironmentVariables = mergedEnvVars
-		} else {
-			// This case can happen if neither file exists, or selected env is not in them, or files are empty/invalid.
-			// Ensure EnvironmentVariables is not nil if no vars were loaded, to maintain consistency with how it might be accessed.
-			// However, if it was already initialized (e.g. to an empty map by default in ParsedFile struct), this might not be strictly necessary.
-			// For safety, let's ensure it's an empty map if nothing was merged.
-			if parsedFile.EnvironmentVariables == nil {
-				parsedFile.EnvironmentVariables = make(map[string]string)
-			}
-			slog.Debug("No environment variables loaded for selected environment", "environment", client.selectedEnvironmentName, "public_file", publicEnvFilePath, "private_file", privateEnvFilePath)
+	}
+	
+	// Second pass - resolve variables that reference other variables
+	// This ensures that references like {{test_server_url}} in base_url get fully resolved
+	for key, val := range parsedFile.FileVariables {
+		// Only try to resolve if the value contains a variable reference
+		if strings.Contains(val, "{{" ) && strings.Contains(val, "}}") {
+			resolvedVal := resolveVariablesInValue(val, parsedFile.FileVariables)
+			parsedFile.FileVariables[key] = resolvedVal
 		}
 	}
 
 	return parsedFile, nil
 }
 
+// resolveVariablesInValue resolves variables within a string value using
+// the provided file variables map
+func resolveVariablesInValue(value string, variables map[string]string) string {
+	// Use the same variable substitution logic that's used elsewhere in the codebase
+	result := value
+	for varName, varValue := range variables {
+		placeholder := "{{" + varName + "}}"
+		result = strings.ReplaceAll(result, placeholder, varValue)
+	}
+	return result
+}
+
+// loadEnvironmentSpecificVariables loads environment-specific variables from
+// http-client.env.json and http-client.private.env.json based on the client's
+// selected environment. It updates parsedFile.EnvironmentVariables.
+// originalFilePath is the path originally passed to parseRequestFile, used for resolving .env.json files.
+func loadEnvironmentSpecificVariables(originalFilePath string, client *Client, parsedFile *ParsedFile) {
+	if client == nil || client.selectedEnvironmentName == "" || parsedFile == nil {
+		return // Nothing to do if client, environment, or parsedFile is not set
+	}
+
+	mergedEnvVars := make(map[string]string)
+	// Use the originalFilePath to determine the directory for http-client.env.json files,
+	// consistent with original logic.
+	fileDir := filepath.Dir(originalFilePath)
+
+	// Load public environment file: http-client.env.json
+	publicEnvFilePath := filepath.Join(fileDir, "http-client.env.json")
+	publicEnvVars, err := loadEnvironmentFile(publicEnvFilePath, client.selectedEnvironmentName)
+	if err != nil {
+		slog.Warn("Error loading public environment file", "file", publicEnvFilePath, "environment", client.selectedEnvironmentName, "error", err)
+	}
+	for k, v := range publicEnvVars {
+		mergedEnvVars[k] = v
+	}
+
+	// Load private environment file: http-client.private.env.json
+	privateEnvFilePath := filepath.Join(fileDir, "http-client.private.env.json")
+	privateEnvVars, err := loadEnvironmentFile(privateEnvFilePath, client.selectedEnvironmentName)
+	if err != nil {
+		slog.Warn("Error loading private environment file", "file", privateEnvFilePath, "environment", client.selectedEnvironmentName, "error", err)
+	}
+	for k, v := range privateEnvVars { // Override with private vars
+		mergedEnvVars[k] = v
+	}
+
+	if len(mergedEnvVars) > 0 {
+		parsedFile.EnvironmentVariables = mergedEnvVars
+	} else {
+		if parsedFile.EnvironmentVariables == nil { // Ensure it's initialized
+			parsedFile.EnvironmentVariables = make(map[string]string)
+		}
+		slog.Debug("No environment variables loaded for selected environment", "environment", client.selectedEnvironmentName, "public_file", publicEnvFilePath, "private_file", privateEnvFilePath)
+	}
+}
+
 // reqScopedSystemVarsForParser is generated once per file parsing pass for resolving @-vars consistently.
 // var reqScopedSystemVarsForParser map[string]string // REMOVED GLOBAL
 
-// parseRequests performs the core parsing logic for an HTTP request file (e.g., .http, .rest).
-// It takes an io.Reader for the content, the original filePath for context, a client instance,
-// pre-generated requestScopedSystemVars for resolving @-variables, an osEnvGetter, and dotEnvVars.
-//
-// Inside this function:
-//   - It scans the input line by line.
-//   - It identifies request separators (`###`), comments (`#`), and variable definitions (`@name = value`).
-//   - When an `@variable = value` is encountered, its `value` is immediately resolved using the provided
-//     `client` (for its programmatic variables), `requestScopedSystemVars`, `osEnvGetter`, and `dotEnvVars`.
-//     The resolved value is stored in `currentFileVariables`.
-//   - For each request parsed, a copy of `currentFileVariables` is assigned to `request.ActiveVariables`.
-//     These active variables are later used by `client.ExecuteFile` when resolving placeholders in the
-//     request URL, headers, and body.
-//
-// Returns a `ParsedFile` struct containing all parsed requests or an error if issues occur.
-func parseRequests(reader io.Reader, filePath string, client *Client,
+const (
+	lineTypeSeparator = iota
+	lineTypeVariableDefinition
+	lineTypeImportDirective
+	lineTypeComment
+	lineTypeContent // For request lines, headers, or body
+)
+
+func determineLineType(trimmedLine string) int {
+	if strings.HasPrefix(trimmedLine, requestSeparator) {
+		return lineTypeSeparator
+	}
+	if strings.HasPrefix(trimmedLine, "@") {
+		return lineTypeVariableDefinition
+	}
+	if strings.HasPrefix(trimmedLine, "// @import ") || strings.HasPrefix(trimmedLine, "# @import ") {
+		return lineTypeImportDirective
+	}
+	// Check for general comments after specific comment-like directives (e.g. @import)
+	if strings.HasPrefix(trimmedLine, commentPrefix) || strings.HasPrefix(trimmedLine, "//") {
+		return lineTypeComment
+	}
+	return lineTypeContent
+}
+
+// ParseRequests performs the core parsing logic for an HTTP request file.
+func ParseRequests(reader io.Reader, filePath string, client *Client,
 	requestScopedSystemVars map[string]string,
 	osEnvGetter func(string) (string, bool),
 	dotEnvVars map[string]string,
 	importStack []string) (*ParsedFile, error) {
-	scanner := bufio.NewScanner(reader)
-	parsedFile := &ParsedFile{
-		FilePath:      filePath,
-		Requests:      []*Request{},
-		FileVariables: make(map[string]string), // Initialize FileVariables
+
+	pState := &requestParserState{
+		scanner:                 bufio.NewScanner(reader),
+		filePath:                filePath,
+		client:                  client,
+		requestScopedSystemVars: requestScopedSystemVars,
+		osEnvGetter:             osEnvGetter,
+		dotEnvVars:              dotEnvVars,
+		importStack:             importStack,
+		parsedFile: &ParsedFile{
+			FilePath:      filePath,
+			Requests:      []*Request{},
+			FileVariables: make(map[string]string),
+		},
+		currentFileVariables: make(map[string]string),
+		bodyLines:            []string{},
 	}
-	currentFileVariables := make(map[string]string) // Variables accumulated in the file scope
-	justSawEmptyLineSeparator := false              // Flag to indicate the previous line was an empty separator
 
-	var currentRequest *Request
-	var bodyLines []string
-	parsingBody := false
-	lineNumber := 0
-
-	for scanner.Scan() {
-		lineNumber++
-		originalLine := scanner.Text()
+	for pState.scanner.Scan() {
+		pState.lineNumber++
+		originalLine := pState.scanner.Text()
 		trimmedLine := strings.TrimSpace(originalLine)
 
-		// Request Separator (###)
-		if strings.HasPrefix(trimmedLine, requestSeparator) {
-			// Finalize the previous request, if any and if it's substantial
-			if currentRequest != nil && (currentRequest.Method != "" || currentRequest.RawURLString != "" || len(bodyLines) > 0) {
-				currentRequest.RawBody = strings.Join(bodyLines, "\n")
-				currentRequest.RawBody = strings.TrimRight(currentRequest.RawBody, " \t\r\n") // Trim trailing whitespace/newlines
-				currentRequest.Body = strings.NewReader(currentRequest.RawBody)               // For single read if needed directly by parser consumers
-				// GetBody allows the body to be read multiple times, as required by http.Request
-				rawBodyCopy := currentRequest.RawBody // Capture rawBody for the closure
-				currentRequest.GetBody = func() (io.ReadCloser, error) {
-					return io.NopCloser(strings.NewReader(rawBodyCopy)), nil
-				}
+		lineType := determineLineType(trimmedLine)
 
-				// Ensure ActiveVariables is initialized and populated with current file-level variables
-				if currentRequest.ActiveVariables == nil { // Should usually be pre-initialized if request was created
-					currentRequest.ActiveVariables = make(map[string]string)
-				}
-				for k, v := range currentFileVariables {
-					currentRequest.ActiveVariables[k] = v
-				}
-				parsedFile.Requests = append(parsedFile.Requests, currentRequest)
+		switch lineType {
+		case lineTypeSeparator:
+			pState.handleRequestSeparator(trimmedLine)
+		case lineTypeVariableDefinition:
+			if err := pState.handleVariableDefinition(trimmedLine, originalLine); err != nil {
+				return nil, err
 			}
-
-			// Start a new request
-			bodyLines = []string{}
-			parsingBody = false
-			justSawEmptyLineSeparator = false // Reset flag when a new request block starts
-			requestName := strings.TrimSpace(trimmedLine[len(requestSeparator):])
-			currentRequest = &Request{
-				Name:            requestName,
-				Headers:         make(http.Header),
-				FilePath:        filePath,
-				LineNumber:      lineNumber,              // Line number where ### was found
-				ActiveVariables: make(map[string]string), // Initialize, will be populated before adding to parsedFile.Requests or here if needed immediately
+		case lineTypeImportDirective:
+			if err := pState.handleImportDirective(trimmedLine, originalLine); err != nil {
+				return nil, err
 			}
-			continue
-		}
-
-		// Variable Definitions (@name = value)
-		if strings.HasPrefix(trimmedLine, "@") {
-			parts := strings.SplitN(trimmedLine[1:], "=", 2)
-			if len(parts) == 2 {
-				varName := strings.TrimSpace(parts[0])
-				varValue := strings.TrimSpace(parts[1])
-				if varName != "" {
-					// Resolve varValue immediately
-					resolvedVarValue := varValue
-					if client != nil {
-						// For resolving @-vars, file-scoped vars (currentFileVariables) are not used as a source for themselves.
-						// EnvironmentVars and GlobalVars are passed as nil here because they are not applicable
-						// during the initial parsing of @-variables. They apply during request execution.
-						resolvedVarValue = client.resolveVariablesInText(varValue, client.programmaticVars, nil, nil, nil, requestScopedSystemVars, osEnvGetter, dotEnvVars)
-						resolvedVarValue = client.substituteDynamicSystemVariables(resolvedVarValue, dotEnvVars)
-					}
-					currentFileVariables[varName] = resolvedVarValue
-				} else {
-					return nil, fmt.Errorf("line %d: variable name cannot be empty in definition: %s", lineNumber, originalLine)
-				}
+		case lineTypeComment:
+			if err := pState.handleComment(trimmedLine, originalLine); err != nil {
+				return nil, err
+			}
+		case lineTypeContent:
+			pState.ensureCurrentRequest()
+			if pState.parsingBody {
+				pState.handleLineWhenParsingBody(originalLine)
 			} else {
-				// This means no '=' was found, or it was the first character after '@'
-				return nil, fmt.Errorf("line %d: malformed in-place variable definition, missing '=' or name: %s", lineNumber, originalLine)
-			}
-			continue // Variable definition line, skip further processing
-		}
-
-		// @import directive
-		if strings.HasPrefix(trimmedLine, "// @import ") || strings.HasPrefix(trimmedLine, "# @import ") {
-			prefixLen := 0
-			if strings.HasPrefix(trimmedLine, "// @import ") {
-				prefixLen = len("// @import ")
-			} else {
-				prefixLen = len("# @import ")
-			}
-			pathPart := strings.TrimSpace(trimmedLine[prefixLen:])
-			if len(pathPart) > 1 && strings.HasPrefix(pathPart, "\"") && strings.HasSuffix(pathPart, "\"") {
-				importedFilePath := pathPart[1 : len(pathPart)-1]
-				slog.Debug("Found @import directive", "importingFile", filePath, "importedFileRelativePath", importedFilePath, "lineNumber", lineNumber)
-
-				absImportedFilePath := filepath.Clean(filepath.Join(filepath.Dir(filePath), importedFilePath))
-
-				slog.Debug("Attempting to import file", "absolutePath", absImportedFilePath, "importingFile", filePath)
-
-				importedData, err := parseRequestFile(absImportedFilePath, client, importStack) // parseRequestFile handles circular checks
-				if err != nil {
-					// Wrap error with context about the import operation
-					return nil, fmt.Errorf("line %d: error importing file '%s' (from '%s'): %w", lineNumber, importedFilePath, filePath, err)
-				}
-
-				if importedData != nil {
-					// Merge requests
-					parsedFile.Requests = append(parsedFile.Requests, importedData.Requests...)
-					slog.Debug("Merged requests from imported file", "importedFile", absImportedFilePath, "requestCount", len(importedData.Requests))
-
-					// Merge file variables: imported variables are added if not already defined in the current file (or by a previous import)
-					// Variables defined later in the current file will naturally override these.
-					for key, val := range importedData.FileVariables {
-						if _, exists := currentFileVariables[key]; !exists {
-							currentFileVariables[key] = val
-						}
-					}
-					slog.Debug("Merged file variables from imported file", "importedFile", absImportedFilePath, "variableCount", len(importedData.FileVariables))
-				}
-				continue // Skip processing this line further
-			} else {
-				slog.Warn("Malformed @import directive: path not correctly quoted", "lineContent", originalLine, "lineNumber", lineNumber, "filePath", filePath)
-			}
-			continue // Import directive line, skip further processing
-		}
-
-		// Comments (# or //)
-		isHashComment := strings.HasPrefix(trimmedLine, commentPrefix) // commentPrefix is "#"
-		isSlashComment := strings.HasPrefix(trimmedLine, "//")
-
-		if isHashComment || isSlashComment {
-			var commentContent string
-			if isHashComment {
-				commentContent = strings.TrimSpace(trimmedLine[len(commentPrefix):])
-			} else { // isSlashComment
-				commentContent = strings.TrimSpace(trimmedLine[len("//"):])
-			}
-
-			if strings.HasPrefix(commentContent, "@name ") {
-				requestNameFromComment := strings.TrimSpace(commentContent[len("@name "):])
-				if requestNameFromComment != "" {
-					if currentRequest == nil {
-						// This @name appears before any other request content (like METHOD URL or ### separator for the current block).
-						// Initialize a request placeholder. LineNumber points to this @name comment.
-						// If a METHOD URL line follows, it will populate this currentRequest.
-						currentRequest = &Request{
-							Name:            requestNameFromComment,
-							Headers:         make(http.Header),
-							FilePath:        filePath,
-							LineNumber:      lineNumber, // Line number of the @name comment itself
-							ActiveVariables: make(map[string]string),
-						}
-					} else {
-						// @name applies to the current request, potentially overriding a name set by ###
-						// or setting the name if it's the first request in a file (implicitly defined).
-						currentRequest.Name = requestNameFromComment
-					}
+				if err := pState.processContentLineWhenNotParsingBody(originalLine, trimmedLine); err != nil {
+					return nil, err
 				}
 			}
-			// A comment line is not an empty separator, so reset the flag.
-			justSawEmptyLineSeparator = false
-			continue
-		}
-
-		// If none of the above, then it's part of the request (method/URL, header, or body line)
-		processedLine := trimmedLine
-
-		if currentRequest == nil { // This is the first request in the file or after initial comments/vars
-			currentRequest = &Request{
-				Headers:         make(http.Header),
-				FilePath:        filePath,
-				LineNumber:      lineNumber,              // Line number of the first significant line of this request
-				ActiveVariables: make(map[string]string), // Initialize, will be populated before adding
-			}
-			// Name for the first request (if not starting with ###) will be empty by default.
-			// It can be set by `// @name RequestName` (handled in Task T2).
-		}
-
-		// "[DEBUG_PARSER_LINE_STATE]",
-		// 	"lineNumber", lineNumber,
-		// 	"trimmedLine", trimmedLine,
-		// 	"processedLine", processedLine,
-		// 	"currentRequestMethod", currentRequest.Method,
-		// 	"parsingBody", parsingBody,
-		// 	"numHeaders", len(currentRequest.Headers),
-		// 	"filePath", filePath,
-		// )
-
-		// Handle empty lines explicitly first
-		if processedLine == "" {
-			if currentRequest.Method != "" && !parsingBody {
-				// This empty line *could* be the separator before the body,
-				// or just an empty line between headers, or between request-line and first header.
-				// "[DEBUG_PARSER_ENCOUNTERED_EMPTY_LINE_POTENTIAL_SEPARATOR]", "lineNumber", lineNumber)
-				justSawEmptyLineSeparator = true // Set flag: next non-empty line should be body
-			} else if parsingBody {
-				// Empty line while already parsing body, append to body
-				bodyLines = append(bodyLines, originalLine) // Append original line to preserve formatting
-			}
-			// In all cases of an empty line, we continue to the next line.
-			continue
-		}
-
-		// If we reach here, processedLine is NOT empty.
-
-		// If the *previous* line was an empty line acting as a potential separator,
-		// then this current non-empty line MUST be the start of the body.
-		if justSawEmptyLineSeparator {
-			// "[DEBUG_PARSER_IMMEDIATE_BODY_TRANSITION_DUE_TO_FLAG]", "lineNumber", lineNumber, "processedLine", processedLine)
-			parsingBody = true
-			bodyLines = append(bodyLines, originalLine) // Add this line to body as it's the first body line
-			justSawEmptyLineSeparator = false           // Reset the flag as it has served its purpose
-			continue                                    // Move to the next line, now in body parsing mode
-		}
-
-		if parsingBody {
-			bodyLines = append(bodyLines, originalLine) // Add original line to preserve whitespace
-		} else {
-			// Not parsing body, and line is not empty. Must be a request line or a header.
-			if currentRequest.Method == "" { // Expecting a request line
-				parts := strings.SplitN(processedLine, " ", 2)
-				if len(parts) >= 2 { // Need at least METHOD and URL
-					method := strings.ToUpper(strings.TrimSpace(parts[0]))
-					urlAndVersionStr := strings.TrimSpace(parts[1])
-					finalizeAfterThisLine := false
-
-					// Handle same-line ### comments for request line
-					if sepIndex := strings.Index(urlAndVersionStr, requestSeparator); sepIndex != -1 {
-						urlAndVersionStr = strings.TrimSpace(urlAndVersionStr[:sepIndex])
-						finalizeAfterThisLine = true
-					}
-
-					var urlStr string
-					var httpVersion string
-
-					lastSpaceIdx := strings.LastIndex(urlAndVersionStr, " ")
-					if lastSpaceIdx != -1 {
-						potentialVersion := strings.TrimSpace(urlAndVersionStr[lastSpaceIdx+1:])
-						if strings.HasPrefix(strings.ToUpper(potentialVersion), "HTTP/") {
-							httpVersion = potentialVersion
-							urlStr = strings.TrimSpace(urlAndVersionStr[:lastSpaceIdx])
-						} else {
-							urlStr = urlAndVersionStr
-						}
-					} else {
-						urlStr = urlAndVersionStr
-					}
-
-					currentRequest.Method = method
-					currentRequest.RawURLString = urlStr
-					currentRequest.HTTPVersion = httpVersion
-					// Best-effort initial parse. This URL might contain variables.
-					parsedURL, _ := url.Parse(urlStr)
-					currentRequest.URL = parsedURL
-
-					if finalizeAfterThisLine {
-						// Request complete due to same-line ### separator comment
-						currentRequest.RawBody = strings.Join(bodyLines, "\n") // Should be empty here
-						currentRequest.RawBody = strings.TrimRight(currentRequest.RawBody, " \t\n")
-						currentRequest.Body = strings.NewReader(currentRequest.RawBody)
-						currentRequest.ActiveVariables = make(map[string]string)
-						for k, v := range currentFileVariables {
-							currentRequest.ActiveVariables[k] = v
-						}
-						parsedFile.Requests = append(parsedFile.Requests, currentRequest)
-
-						bodyLines = []string{}
-						parsingBody = false
-						// Prepare for the next line to be a new request
-						currentRequest = &Request{Headers: make(http.Header), FilePath: filePath} // LineNumber will be set at the start of the next relevant line processing
-						continue
-					}
-				}
-			} else { // Parsing headers
-				// "[DEBUG_PARSER_HEADER_INPUT]", "lineNumber", lineNumber, "processedLine", processedLine)
-				// "[DEBUG_CONTAINS_COLON_CHECK]", "lineNumber", lineNumber, "processedLine", processedLine, "containsColon", strings.Contains(processedLine, ":"))
-				parts := strings.SplitN(processedLine, ":", 2)
-				if len(parts) == 2 {
-					key := strings.TrimSpace(parts[0])
-					value := strings.TrimSpace(parts[1])
-					currentRequest.Headers.Add(key, value) // Add to current request's headers
-				} else {
-					// This line is not a valid header (no colon, or malformed).
-					// Assume this is the start of the body.
-					// "[DEBUG_PARSER_NOT_HEADER_SWITCH_TO_BODY]", "lineNumber", lineNumber, "processedLine", processedLine, "partsLen", len(parts))
-					parsingBody = true
-					bodyLines = append(bodyLines, originalLine) // Add this line to body as it's the first body line
-				}
-			}
+		default:
+			// Should not happen with current line types
+			return nil, fmt.Errorf("line %d: unknown line type for line: %s", pState.lineNumber, originalLine)
 		}
 	}
 
-	// After the loop, add the last pending request, if any and if it's substantial
-	if currentRequest != nil && (currentRequest.Method != "" || currentRequest.RawURLString != "" || len(bodyLines) > 0) {
-		currentRequest.RawBody = strings.Join(bodyLines, "\n")
-		currentRequest.RawBody = strings.TrimRight(currentRequest.RawBody, " \t\r\n") // Trim trailing whitespace/newlines
-		currentRequest.Body = strings.NewReader(currentRequest.RawBody)               // For single read if needed directly by parser consumers
-		// GetBody allows the body to be read multiple times, as required by http.Request
-		rawBodyCopy := currentRequest.RawBody // Capture rawBody for the closure
-		currentRequest.GetBody = func() (io.ReadCloser, error) {
-			return io.NopCloser(strings.NewReader(rawBodyCopy)), nil
-		}
-
-		// Ensure ActiveVariables is initialized and populated with current file-level variables
-		if currentRequest.ActiveVariables == nil {
-			currentRequest.ActiveVariables = make(map[string]string)
-		}
-		for k, v := range currentFileVariables {
-			currentRequest.ActiveVariables[k] = v
-		}
-		parsedFile.Requests = append(parsedFile.Requests, currentRequest)
+	// After the loop, add the last pending request
+	if pState.currentRequest != nil && (pState.currentRequest.Method != "" || pState.currentRequest.RawURLString != "" || len(pState.bodyLines) > 0) {
+		finalizeRequest(pState.currentRequest, pState.bodyLines, pState.currentFileVariables)
+		pState.parsedFile.Requests = append(pState.parsedFile.Requests, pState.currentRequest)
 	}
 
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading request file %s: %w", filePath, err)
+	if err := pState.scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading request file %s: %w", pState.filePath, err)
 	}
 
 	// Assign accumulated file-level variables to the ParsedFile struct
-	// Ensure FileVariables is initialized (it should be by the struct instantiation)
-	if parsedFile.FileVariables == nil {
-		parsedFile.FileVariables = make(map[string]string)
-	}
-	for k, v := range currentFileVariables {
-		parsedFile.FileVariables[k] = v
+	for k, v := range pState.currentFileVariables {
+		pState.parsedFile.FileVariables[k] = v
 	}
 
-	// REQ-LIB-028: Ignore any block between separators that doesn't have a request.
-	// This implies that if a file results in zero valid requests after parsing (e.g., it only contained
-	// comments, separators, or variable definitions but no actual request data), returning an empty
-	// list of requests is acceptable and not an error, unless the file path itself was an issue (handled by os.Open).
-	// So, we no longer error out if parsedFile.Requests is empty, allowing for files that correctly parse to zero requests.
+	return pState.parsedFile, nil
+}
 
-	return parsedFile, nil
+func (p *requestParserState) ensureCurrentRequest() {
+	if p.currentRequest == nil {
+		p.currentRequest = &Request{
+			Headers:         make(http.Header),
+			FilePath:        p.filePath,
+			LineNumber:      p.lineNumber, // Line number of the first significant line of this request
+			ActiveVariables: make(map[string]string),
+		}
+	}
+}
+
+func (p *requestParserState) handleRequestSeparator(trimmedLine string) {
+	if p.currentRequest != nil && (p.currentRequest.Method != "" || p.currentRequest.RawURLString != "" || len(p.bodyLines) > 0) {
+		finalizeRequest(p.currentRequest, p.bodyLines, p.currentFileVariables)
+		p.parsedFile.Requests = append(p.parsedFile.Requests, p.currentRequest)
+	}
+	p.bodyLines = []string{}
+	p.parsingBody = false
+	p.justSawEmptyLineSeparator = false
+	requestName := strings.TrimSpace(trimmedLine[len(requestSeparator):])
+	p.currentRequest = &Request{
+		Name:            requestName,
+		Headers:         make(http.Header),
+		FilePath:        p.filePath,
+		LineNumber:      p.lineNumber,
+		ActiveVariables: make(map[string]string),
+	}
+}
+
+func (p *requestParserState) handleVariableDefinition(trimmedLine, originalLine string) error {
+	parts := strings.SplitN(trimmedLine[1:], "=", 2) // remove leading '@'
+	if len(parts) != 2 {
+		return fmt.Errorf("line %d: malformed in-place variable definition, missing '=' or name: %s", p.lineNumber, originalLine)
+	}
+
+	varName := strings.TrimSpace(parts[0])
+	varValue := strings.TrimSpace(parts[1])
+
+	if varName == "" {
+		return fmt.Errorf("line %d: variable name cannot be empty in definition: %s", p.lineNumber, originalLine)
+	}
+
+	// Call the new helper to resolve and set the variable
+	return p.resolveAndSetFileVariable(varName, varValue)
+}
+
+// resolveAndSetFileVariable resolves the given variable value against various sources
+// (programmatic, system, OS, .env) and then substitutes dynamic system variables.
+// Finally, it stores the resolved variable in the current file's variables.
+func (p *requestParserState) resolveAndSetFileVariable(varName, varValue string) error {
+	resolvedValue := varValue // Start with the literal value
+
+	if p.client != nil {
+		// Step 1: Resolve simple system variables like {{$uuid}}, {{$timestamp}}
+		// These are substituted from the pre-generated requestScopedSystemVars map.
+		// We pass nil for other variable sources to prevent premature resolution of {{client_var}}, etc.
+		if p.requestScopedSystemVars != nil { // Ensure map exists
+			resolvedValue = p.client.resolveVariablesInText(
+				resolvedValue,
+				nil,                       // programmaticVars
+				nil,                       // requestSpecificVars
+				nil,                       // responseVars
+				nil,                       // envFileVars (these are distinct from dotEnvVars used by $dotenv)
+				p.requestScopedSystemVars, // systemVars (for $uuid, $timestamp)
+				nil,                       // osEnvGetter (used by $env, handled by substituteDynamicSystemVariables)
+				nil,                       // dotEnvVars (used by $dotenv, handled by substituteDynamicSystemVariables)
+				&ResolveOptions{FallbackToOriginal: true},
+			)
+		}
+
+		// Step 2: Resolve complex dynamic system variables like {{$processEnv VAR}}, {{$datetime "format"}}
+		// This function also handles {{$randomInt}}, {{$env.VAR_NAME}}, {{$dotenv VAR_NAME}}
+		// It expects its input `resolvedValue` to have simple system vars already processed.
+		// It uses activeDotEnvVars for {{$dotenv VAR_NAME}}
+		resolvedValue = p.client.substituteDynamicSystemVariables(resolvedValue, p.dotEnvVars)
+	}
+
+	p.currentFileVariables[varName] = resolvedValue
+	return nil
+}
+
+func (p *requestParserState) handleImportDirective(trimmedLine, originalLine string) error {
+	prefixLen := 0
+	if strings.HasPrefix(trimmedLine, "// @import ") {
+		prefixLen = len("// @import ")
+	} else {
+		prefixLen = len("# @import ")
+	}
+	pathPart := strings.TrimSpace(trimmedLine[prefixLen:])
+
+	importedFilePath, wasQuoted := p.unquoteImportPath(pathPart)
+	if !wasQuoted {
+		slog.Warn("Malformed @import directive: path not correctly quoted", "lineContent", originalLine, "lineNumber", p.lineNumber, "filePath", p.filePath)
+		return nil // Or return an error if strict quoting is required
+	}
+
+	slog.Debug("Found @import directive", "importingFile", p.filePath, "importedFileRelativePath", importedFilePath, "lineNumber", p.lineNumber)
+	absImportedFilePath := filepath.Clean(filepath.Join(filepath.Dir(p.filePath), importedFilePath))
+	slog.Debug("Attempting to import file", "absolutePath", absImportedFilePath, "importingFile", p.filePath)
+
+	importedData, err := parseRequestFile(absImportedFilePath, p.client, p.importStack)
+	if err != nil {
+		return fmt.Errorf("line %d: error importing file '%s' (from '%s'): %w", p.lineNumber, importedFilePath, p.filePath, err)
+	}
+	if importedData != nil {
+		p.parsedFile.Requests = append(p.parsedFile.Requests, importedData.Requests...)
+		slog.Debug("Merged requests from imported file", "importedFile", absImportedFilePath, "requestCount", len(importedData.Requests))
+		for key, val := range importedData.FileVariables {
+			if _, exists := p.currentFileVariables[key]; !exists {
+				p.currentFileVariables[key] = val
+			}
+		}
+		slog.Debug("Merged file variables from imported file", "importedFile", absImportedFilePath, "variableCount", len(importedData.FileVariables))
+	}
+	return nil
+}
+
+// unquoteImportPath checks if the given pathPart is enclosed in double quotes.
+// If so, it removes the quotes and returns the inner path and true.
+// Otherwise, it returns the original pathPart and false.
+func (p *requestParserState) unquoteImportPath(pathPart string) (string, bool) {
+	if len(pathPart) > 1 && strings.HasPrefix(pathPart, "\"") && strings.HasSuffix(pathPart, "\"") {
+		return pathPart[1 : len(pathPart)-1], true
+	}
+	return pathPart, false
+}
+
+func (p *requestParserState) handleComment(trimmedLine, originalLine string) error {
+	// This function is now called only after determineLineType has identified the line as a comment.
+	// We still need to correctly extract the content part of the comment.
+	var commentContent string
+	if strings.HasPrefix(trimmedLine, commentPrefix) { // '#' comment
+		commentContent = strings.TrimSpace(trimmedLine[len(commentPrefix):])
+	} else if strings.HasPrefix(trimmedLine, "//") { // '//' comment
+		// Ensure it's not an import directive like "// @import" which is handled by lineTypeImportDirective
+		// This check might be redundant if determineLineType is perfect, but good for safety.
+		if !strings.HasPrefix(trimmedLine, "// @import") {
+			commentContent = strings.TrimSpace(trimmedLine[len("//"):])
+		}
+	} else {
+		// Should not happen if determineLineType is correct
+		return fmt.Errorf("line %d: handleComment called with non-comment line: %s", p.lineNumber, originalLine)
+	}
+
+	p.processCommentContent(commentContent)
+
+	p.justSawEmptyLineSeparator = false // Comments reset the empty line separator state
+	return nil
+}
+
+// processCommentContent checks if the comment content contains a @name directive
+// and updates the current request's name if found.
+func (p *requestParserState) processCommentContent(commentContent string) {
+	if strings.HasPrefix(commentContent, "@name ") {
+		requestNameFromComment := strings.TrimSpace(commentContent[len("@name "):])
+		if requestNameFromComment != "" {
+			p.ensureCurrentRequest()
+			p.currentRequest.Name = requestNameFromComment
+		}
+	}
+}
+
+func (p *requestParserState) handleEmptyLineWhenNotParsingBody() {
+	// If a method has been defined (i.e., we are past the request line),
+	// this empty line acts as the separator before the body.
+	if p.currentRequest.Method != "" {
+		p.justSawEmptyLineSeparator = true
+	}
+	// If no method yet, it's an ignored empty line (e.g., between directives or before the first request).
+}
+
+// handleLineWhenParsingBody appends the given line to the current request's body.
+// It's called when p.parsingBody is true.
+func (p *requestParserState) handleLineWhenParsingBody(originalLine string) {
+	p.bodyLines = append(p.bodyLines, originalLine)
+}
+
+// processContentLineWhenNotParsingBody handles a content line when not already parsing the body.
+func (p *requestParserState) processContentLineWhenNotParsingBody(originalLine, trimmedLine string) error {
+	// This function is called when p.parsingBody is false.
+	// The p.ensureCurrentRequest() has already been called by the caller (processContentLine).
+
+	if trimmedLine == "" {
+		// Empty line, and we are NOT parsing body.
+		p.handleEmptyLineWhenNotParsingBody() // This helper sets justSawEmptyLineSeparator
+		return nil
+	}
+
+	// Not parsingBody, and line is NOT empty.
+	// Check if this non-empty line starts the body because the previous line was a separator.
+	if p.justSawEmptyLineSeparator {
+		p.parsingBody = true                // Start parsing body
+		p.justSawEmptyLineSeparator = false // Consume the separator state
+		// Since we are now parsing the body, use the dedicated helper for adding to body.
+		p.handleLineWhenParsingBody(originalLine)
+		return nil
+	}
+
+	// Not parsingBody, line is not empty, and previous was not a separator.
+	// This means it's a request line (METHOD URL HTTP/Version) or a header.
+	return p.processNewLineWhenNotParsingBody(trimmedLine, originalLine)
+}
+
+// handleRequestLineParsing attempts to parse the current line as a request line (METHOD URL HTTP/Version).
+// It returns true if the request was finalized (e.g., by a same-line separator), and an error if parsing fails.
+func (p *requestParserState) handleRequestLineParsing(trimmedLine, originalLine string) (bool, error) {
+	finalized, err := p.parseRequestLineDetails(trimmedLine, originalLine)
+	if err != nil {
+		// This path is not currently hit as parseRequestLineDetails doesn't return errors,
+		// but kept for robustness if error handling is added there.
+		return false, err // Propagate error
+	}
+	return finalized, nil
+}
+
+// processNewLineWhenNotParsingBody handles a non-empty line when not currently parsing the request body.
+// It determines if the line is a request line or a header.
+func (p *requestParserState) processNewLineWhenNotParsingBody(trimmedLine, originalLine string) error {
+	if p.currentRequest.Method == "" { // Expecting a request line
+		finalized, err := p.handleRequestLineParsing(trimmedLine, originalLine)
+		if err != nil {
+			return err
+		}
+		if finalized {
+			// Request was finalized (e.g. due to same-line ###), processing for this line is done.
+			return nil
+		}
+	} else { // Parsing headers
+		p.parseHeaderOrStartBody(trimmedLine, originalLine)
+	}
+	return nil
+}
+
+// parseRequestLineDetails attempts to parse the given trimmedLine as a request line (METHOD URL HTTP/Version).
+// It updates p.currentRequest with the parsed details.
+// If the request line includes a same-line request separator (###), it finalizes the current request
+// and prepares for a new one.
+// It returns true if the request was finalized due to a same-line separator, otherwise false.
+// originalLine is used for logging/error context.
+func (p *requestParserState) parseRequestLineDetails(trimmedLine, originalLine string) (finalizedDueToSeparator bool, err error) {
+	parts := strings.SplitN(trimmedLine, " ", 2)
+	if len(parts) < 2 {
+		// Malformed request line (not enough parts), treat as start of body.
+		slog.Warn("Malformed request line (expected METHOD URL), not treating as request or body", "line", trimmedLine, "filePath", p.filePath, "lineNumber", p.lineNumber)
+		// Do not treat as body start; let it be skipped. The currentRequest will remain empty
+		// and will not be added by finalize handlers due to existing guards.
+		return false, nil // Not a valid request line, not finalized
+	}
+
+	method := strings.ToUpper(strings.TrimSpace(parts[0]))
+	urlAndVersionStr := strings.TrimSpace(parts[1])
+	finalizeAfterThisLine := false
+
+	if sepIndex := strings.Index(urlAndVersionStr, requestSeparator); sepIndex != -1 {
+		urlAndVersionStr = strings.TrimSpace(urlAndVersionStr[:sepIndex])
+		finalizeAfterThisLine = true
+	}
+
+	urlStr, httpVersion := p.extractURLAndVersion(urlAndVersionStr)
+
+	p.currentRequest.Method = method
+	p.currentRequest.RawURLString = urlStr
+	p.currentRequest.HTTPVersion = httpVersion
+	parsedURL, _ := url.Parse(urlStr) // Error ignored as per original logic, URL might have vars
+	p.currentRequest.URL = parsedURL
+
+	if finalizeAfterThisLine {
+		finalizeRequest(p.currentRequest, p.bodyLines, p.currentFileVariables) // p.bodyLines should be empty here
+		p.parsedFile.Requests = append(p.parsedFile.Requests, p.currentRequest)
+		p.bodyLines = []string{}                                                      // Reset for the new implicit request
+		p.parsingBody = false                                                         // Reset for the new implicit request
+		p.currentRequest = &Request{Headers: make(http.Header), FilePath: p.filePath} // Prepare for next request
+		return true, nil
+	}
+	return false, nil // Request line parsed, but not finalized by separator
+}
+
+// extractURLAndVersion splits a string like "/path HTTP/1.1" or "/path" into URL and HTTP version.
+func (p *requestParserState) extractURLAndVersion(urlAndVersionStr string) (urlStr, httpVersion string) {
+	lastSpaceIdx := strings.LastIndex(urlAndVersionStr, " ")
+	if lastSpaceIdx != -1 {
+		potentialVersion := strings.TrimSpace(urlAndVersionStr[lastSpaceIdx+1:])
+		if strings.HasPrefix(strings.ToUpper(potentialVersion), "HTTP/") {
+			return strings.TrimSpace(urlAndVersionStr[:lastSpaceIdx]), potentialVersion
+		}
+	}
+	return urlAndVersionStr, "" // No valid HTTP version found, assume entire string is URL
+}
+
+// parseHeaderOrStartBody attempts to parse the given trimmedLine as an HTTP header.
+// If it's a valid header, it's added to p.currentRequest.Headers.
+// If not, it's treated as the start of the request body.
+// originalLine is used for appending to body to preserve whitespace.
+func (p *requestParserState) parseHeaderOrStartBody(trimmedLine, originalLine string) {
+	parts := strings.SplitN(trimmedLine, ":", 2)
+	if len(parts) == 2 {
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if key != "" { // Basic validation: header key should not be empty
+			p.currentRequest.Headers.Add(key, value)
+		} else {
+			// Empty header key, treat as body line
+			slog.Debug("Empty header key, treating as body line", "line", trimmedLine, "filePath", p.filePath, "lineNumber", p.lineNumber)
+			p.parsingBody = true
+			p.bodyLines = append(p.bodyLines, originalLine)
+		}
+	} else {
+		// Not a valid header (no colon, or malformed), assume this is the start of the body.
+		p.parsingBody = true
+		p.bodyLines = append(p.bodyLines, originalLine)
+	}
 }
 
 // ParseExpectedResponseFile reads a file and parses it into a slice of ExpectedResponse definitions.
@@ -527,6 +667,53 @@ func parseExpectedResponseFile(filePath string) ([]*ExpectedResponse, error) {
 	defer func() { _ = file.Close() }() // Correctly ignore error for defer file.Close()
 
 	return parseExpectedResponses(file, filePath) // filePath is used for error reporting within parseExpectedResponses
+}
+
+// parseExpectedStatusLine parses a line as an HTTP status line (HTTP_VERSION STATUS_CODE [STATUS_TEXT]).
+// It updates the provided ExpectedResponse with the parsed status code and status string.
+func parseExpectedStatusLine(line string, lineNumber int, resp *ExpectedResponse) error {
+	parts := strings.Fields(line)
+	if len(parts) < 2 { // Must have at least HTTP_VERSION STATUS_CODE [STATUS_TEXT]
+		return fmt.Errorf("line %d: invalid status line: '%s'. Expected HTTP_VERSION STATUS_CODE [STATUS_TEXT]", lineNumber, line)
+	}
+	// parts[0] is HTTP Version, parts[1] is StatusCode, rest is StatusText
+	statusCodeInt, err := parseInt(parts[1])
+	if err != nil {
+		return fmt.Errorf("line %d: invalid status code '%s': %w", lineNumber, parts[1], err)
+	}
+	resp.StatusCode = &statusCodeInt
+
+	var finalStatusString string
+	if len(parts) > 2 {
+		finalStatusString = strings.Join(parts[1:], " ") // e.g. "200 OK"
+	} else {
+		finalStatusString = parts[1] // Just code, e.g. "200"
+	}
+	resp.Status = &finalStatusString // Store the combined status code and text or just code
+	return nil
+}
+
+// parseExpectedHeaderLine parses a line as an HTTP header (Key: Value).
+// It updates the provided ExpectedResponse by adding the parsed header.
+func parseExpectedHeaderLine(line string, lineNumber int, resp *ExpectedResponse) error {
+	parts := strings.SplitN(line, ":", 2)
+	if len(parts) != 2 {
+		return fmt.Errorf("line %d: invalid header line: '%s'. Expected 'Key: Value'", lineNumber, line)
+	}
+	key := strings.TrimSpace(parts[0])
+	value := strings.TrimSpace(parts[1])
+	resp.Headers.Add(key, value)
+	return nil
+}
+
+// processExpectedStatusOrHeaderLine determines if a line is an expected status or header and parses it accordingly.
+func processExpectedStatusOrHeaderLine(line string, lineNumber int, resp *ExpectedResponse) error {
+	if (resp.Status == nil || *resp.Status == "") && resp.StatusCode == nil {
+		// Expecting a status line
+		return parseExpectedStatusLine(line, lineNumber, resp)
+	}
+	// Expecting a header line
+	return parseExpectedHeaderLine(line, lineNumber, resp)
 }
 
 // parseExpectedResponses parses expected HTTP response definitions from an io.Reader.
@@ -595,34 +782,10 @@ func parseExpectedResponses(reader io.Reader, filePath string) ([]*ExpectedRespo
 		if parsingBody {
 			bodyLines = append(bodyLines, originalLine)
 		} else {
-			// Parsing status line or headers
-			if (currentExpectedResponse.Status == nil || *currentExpectedResponse.Status == "") && currentExpectedResponse.StatusCode == nil { // First non-comment, non-empty line is the status line
-				parts := strings.Fields(processedLine)
-				if len(parts) < 2 { // Must have at least HTTP_VERSION STATUS_CODE [STATUS_TEXT]
-					return nil, fmt.Errorf("line %d: invalid status line: '%s'. Expected HTTP_VERSION STATUS_CODE [STATUS_TEXT]", lineNumber, processedLine)
-				}
-				// parts[0] is HTTP Version, parts[1] is StatusCode, rest is StatusText
-				statusCodeInt, err := parseInt(parts[1])
-				if err != nil {
-					return nil, fmt.Errorf("line %d: invalid status code '%s': %w", lineNumber, parts[1], err)
-				}
-				currentExpectedResponse.StatusCode = &statusCodeInt
-
-				var finalStatusString string
-				if len(parts) > 2 {
-					finalStatusString = strings.Join(parts[1:], " ") // e.g. "200 OK"
-				} else {
-					finalStatusString = parts[1] // Just code, e.g. "200"
-				}
-				currentExpectedResponse.Status = &finalStatusString // Store the combined status code and text or just code
-			} else { // Parsing headers
-				parts := strings.SplitN(processedLine, ":", 2)
-				if len(parts) != 2 {
-					return nil, fmt.Errorf("line %d: invalid header line: '%s'. Expected 'Key: Value'", lineNumber, processedLine)
-				}
-				key := strings.TrimSpace(parts[0])
-				value := strings.TrimSpace(parts[1])
-				currentExpectedResponse.Headers.Add(key, value)
+			// Not parsingBody, line is not empty, not separator, not comment.
+			// Must be a status line or a header.
+			if err := processExpectedStatusOrHeaderLine(processedLine, lineNumber, currentExpectedResponse); err != nil {
+				return nil, err
 			}
 		}
 	}
