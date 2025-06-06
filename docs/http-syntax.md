@@ -24,6 +24,88 @@ This document consolidates the HTTP request syntax from both JetBrains HTTP Clie
 | Authentication Helpers | ✅ | ✅ | ✅ |
 | Request History | ✅ | ✅ | ❌ |
 
+## Placeholders Reference
+
+This section provides a comprehensive reference for all placeholders supported by both JetBrains HTTP Client and VS Code REST Client, as well as those unique to each client.
+
+### Common Placeholders
+
+| Placeholder | Description | Example | Supported By |
+|-------------|-------------|---------|-------------|
+| `{{$uuid}}` / `{{$guid}}` | Generates UUID v4 | `123e4567-e89b-12d3-a456-426614174000` | Both |
+| `{{$timestamp}}` | Current Unix timestamp (seconds) | `1654321098` | Both |
+| `{{$datetime format}}` | UTC datetime with specified format | `2025-06-06T11:06:52Z` | Both |
+| `{{$localDatetime format}}` | Local datetime with specified format | `2025-06-06 13:06:52` | Both |
+| `{{$randomInt}}` | Random integer (0-1000 by default) | `123` | Both |
+
+### Environment Access Placeholders
+
+| Placeholder | Description | Example | Supported By |
+|-------------|-------------|---------|-------------|
+| `{{$env.VAR_NAME}}` | System environment variable | `api-key-123` | JetBrains |
+| `{{$processEnv VAR_NAME}}` | System environment variable | `api-key-123` | VS Code |
+| `{{$processEnv %VAR_NAME}}` | Indirect environment lookup | Value from another env var | VS Code |
+| `{{$dotenv VAR_NAME}}` | Value from .env file | `secret-123` | VS Code |
+
+### JetBrains-Specific Placeholders
+
+| Placeholder | Description | Example |
+|-------------|-------------|--------|
+| `{{$isoTimestamp}}` | ISO-8601 format timestamp (UTC) | `2025-06-06T11:06:52Z` |
+| `{{$random.integer(min, max)}}` | Random integer in range | `42` |
+| `{{$random.float(min, max)}}` | Random float in range | `42.5` |
+| `{{$random.alphabetic(length)}}` | Random alphabetic string | `ABcDef` |
+| `{{$random.alphanumeric(length)}}` | Random alphanumeric string | `A1b2C3` |
+| `{{$random.hexadecimal(length)}}` | Random hexadecimal string | `1a2b3c` |
+| `{{$random.email}}` | Random email | `user@example.com` |
+
+#### JetBrains Faker Library Variables
+
+JetBrains HTTP Client supports the following classes from the Java Faker library:
+
+```
+$random.address          $random.educator         $random.number
+$random.beer             $random.finance          $random.phoneNumber
+$random.bool             $random.hacker           $random.shakespeare
+$random.business         $random.idNumber         $random.superhero
+$random.ChuckNorris.fact $random.internet         $random.team
+$random.code             $random.lorem            $random.university
+$random.color            $random.name
+$random.commerce         $random.company
+$random.crypto
+```
+
+Examples:
+```
+{{$random.name.firstName}} - Random first name
+{{$random.address.city}} - Random city name
+{{$random.finance.creditCard}} - Random credit card number
+```
+
+### VS Code-Specific Placeholders
+
+| Placeholder | Description | Example |
+|-------------|-------------|--------|
+| `{{$aadToken [options]}}` | Azure Active Directory token | OAuth token |
+| `{{$aadV2Token [options]}}` | Azure AD v2 token | OAuth token |
+
+#### Azure AD Token Options (VS Code)
+
+`{{$aadToken [new] [public|cn|de|us|ppe] [<domain|tenantId>] [aud:<domain|tenantId>]}}`
+
+- `new`: Optional. Force re-authentication.
+- `public|cn|de|us|ppe`: Optional. Specify top-level domain.
+- `<domain|tenantId>`: Optional. Domain or tenant ID.
+- `aud:<domain|tenantId>`: Optional. Target Azure AD audience.
+
+`{{$aadV2Token [new] [appOnly] [scopes:<scope[,]>] [tenantid:<domain|tenantId>] [clientid:<clientId>]}}`
+
+- `new`: Optional. Force re-authentication.
+- `appOnly`: Optional. Use client credentials flow.
+- `scopes:<scope[,]>`: Optional. Comma-delimited scopes.
+- `tenantId:<domain|tenantId>`: Optional. Domain or tenant ID.
+- `clientId:<clientId>`: Optional. Application registration ID.
+
 ## Dynamic Variables Comparison
 
 | Variable | JetBrains HTTP Client | VS Code REST Client | go-restclient Support |
