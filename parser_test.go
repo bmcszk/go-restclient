@@ -2,7 +2,6 @@ package restclient
 
 import (
 	"bufio"
-	"io"
 	"os"
 	"strings"
 	"testing"
@@ -33,7 +32,7 @@ func runParseRequestsIgnoreEmptyBlocksSubtest(t *testing.T, tc parseRequestsIgno
 	// When: parsing the request file
 	// Using nil for client, empty importStack, empty initialFileVariables, dummy envLookup, empty globalVariables, and nil initialRequests
 	// as these are not relevant for testing parseRequests in isolation for ignoring empty blocks.
-	parsedFile, err := ParseRequests(reader, "test.http", nil, make(map[string]string), func(string) (string, bool) { return "", false }, make(map[string]string), nil)
+	parsedFile, err := parseRequests(reader, "test.http", nil, make(map[string]string), func(string) (string, bool) { return "", false }, make(map[string]string), nil)
 
 	// Then: assert expected outcomes
 	if tc.expectedError {
@@ -175,9 +174,10 @@ POST https://example.com/api/item2
 		t.Run(tt.name, func(t *testing.T) {
 			// Given: test case setup (input string tt.fileContent)
 			reader := strings.NewReader(tt.fileContent)
+			bufReader := bufio.NewReader(reader)
 
 			// When: parsing the request file
-			parsedFile, err := ParseRequests(reader, "test.http", nil, make(map[string]string), func(string) (string, bool) { return "", false }, make(map[string]string), nil)
+			parsedFile, err := parseRequests(bufReader, "test.http", nil, make(map[string]string), func(string) (string, bool) { return "", false }, make(map[string]string), nil)
 
 			// Then: assert expected outcomes
 			require.NoError(t, err)
@@ -388,96 +388,15 @@ func assertErrorExpectedInParseRequestFile(t *testing.T, err error, parsedFile *
 	assert.Nil(t, parsedFile, "parsedFile should be nil on error for test case: %s", testName)
 }
 
-func assertNoErrorExpectedInParseRequestFile(t *testing.T, err error, parsedFile *ParsedFile, testName string, expectedRequests int, expectedVariables map[string]string, requestChecks func(t *testing.T, testName string, requests []*Request, fileVars map[string]string)) {
-	t.Helper()
-	require.NoError(t, err, "Did not expect an error for test case: %s", testName)
-	require.NotNil(t, parsedFile, "parsedFile should not be nil on no error for test case: %s", testName)
-
-	if parsedFile != nil { // Defensive check, though NotNil was already asserted
-		assert.Len(t, parsedFile.Requests, expectedRequests, "Number of parsed requests mismatch for test case: %s", testName)
-
-		// Check merged file-level variables
-		for key, expectedValue := range expectedVariables {
-			actualValue, exists := parsedFile.FileVariables[key]
-			assert.True(t, exists, "Expected file variable '%s' not found in test case: %s", key, testName)
-			assert.Equal(t, expectedValue, actualValue, "Value for file variable '%s' mismatch in test case: %s", key, testName)
-		}
-
-		if requestChecks != nil {
-			requestChecks(t, testName, parsedFile.Requests, parsedFile.FileVariables)
-		}
-	}
-}
+// assertNoErrorExpectedInParseRequestFile has been removed as it's no longer used
+// since all import test cases now expect errors
 
 // Definition for the test case structure for TestParseRequestFile_Imports
 type parseRequestFileImportsTestCase struct {
-	name              string
-	filePath          string
-	expectedRequests  int
-	expectedVariables map[string]string
-	requestChecks     func(t *testing.T, testName string, requests []*Request, fileVariables map[string]string)
-	expectError       bool
-	errorContains     string
-}
-
-// Helper to check requests for SCENARIO-IMPORT-001: Simple import
-func checkSimpleImportRequests(t *testing.T, testName string, requests []*Request, fileVariables map[string]string) {
-	t.Helper()
-	require.Len(t, requests, 2)
-	// Request from imported_file_1.http
-	assert.Equal(t, "GET", requests[0].Method)
-	assert.Equal(t, "{{host}}/imported_request_1", requests[0].RawURLString)
-	bodyReader, err := requests[0].GetBody()
-	require.NoError(t, err, "Failed to get body for request 0 in simple import test case: %s", testName)
-	require.NotNil(t, bodyReader, "Body reader should not be nil for request 0 in simple import test case: %s", testName)
-	defer bodyReader.Close()
-
-	bodyBytes, err := io.ReadAll(bodyReader)
-	require.NoError(t, err, "Failed to read body for request 0 in simple import test case: %s", testName)
-	bodyString := string(bodyBytes)
-	assert.Contains(t, bodyString, "\"key\": \"{{imported_var}}\"")
-
-	// Request from main_simple_import.http
-	assert.Equal(t, "GET", requests[1].Method)
-	assert.Equal(t, "{{host}}/main_request", requests[1].RawURLString)
-}
-
-// Helper to check requests for SCENARIO-IMPORT-002: Nested import
-func checkNestedImportRequests(t *testing.T, testName string, requests []*Request, fileVariables map[string]string) {
-	t.Helper()
-	require.Len(t, requests, 3)
-	// Requests from imported_file_3_level_2.http (innermost)
-	assert.Equal(t, "GET", requests[0].Method)
-	assert.Equal(t, "{{host}}/level2_request", requests[0].RawURLString)
-	bodyReader, err := requests[0].GetBody()
-	require.NoError(t, err, "Failed to get body for request 0 in nested import test case: %s", testName)
-	require.NotNil(t, bodyReader, "Body reader should not be nil for request 0 in nested import test case: %s", testName)
-	defer bodyReader.Close()
-
-	bodyBytes, err := io.ReadAll(bodyReader)
-	require.NoError(t, err, "Failed to read body for request 0 in nested import test case: %s", testName)
-	bodyString := string(bodyBytes)
-	assert.Contains(t, bodyString, "\"level1_key\": \"{{level1_var}}\"")
-	assert.Contains(t, bodyString, "\"level2_key\": \"{{level2_var}}\"")
-
-	// Request from imported_file_2_level_1.http
-	assert.Equal(t, "GET", requests[1].Method)
-	assert.Equal(t, "{{host}}/level1_request", requests[1].RawURLString)
-
-	// Request from main_nested_import.http (outermost)
-	assert.Equal(t, "GET", requests[2].Method)
-	assert.Equal(t, "{{host}}/main_nested_request", requests[2].RawURLString)
-}
-
-// Helper to check requests for SCENARIO-IMPORT-003: Variable override
-func checkVariableOverrideRequests(t *testing.T, testName string, requests []*Request, fileVariables map[string]string) {
-	t.Helper()
-	require.Len(t, requests, 1)
-	assert.Equal(t, "GET", requests[0].Method)
-	assert.Equal(t, "{{host}}/override", requests[0].RawURLString)
-	assert.Equal(t, "{{var1}}", requests[0].Headers.Get("X-Var1"))
-	assert.Equal(t, "{{var2}}", requests[0].Headers.Get("X-Var2"))
-	assert.Equal(t, "{{var_from_main}}", requests[0].Headers.Get("X-Var-Main"))
+	name          string
+	filePath      string
+	expectError   bool
+	errorContains string
 }
 
 // Helper subtest runner for TestParseRequestFile_Imports
@@ -487,67 +406,44 @@ func runParseRequestFileImportsSubtest(t *testing.T, tc parseRequestFileImportsT
 	// Initial importStack is empty for top-level calls.
 	parsedFile, err := parseRequestFile(tc.filePath, nil, make([]string, 0))
 
-	// Then: assert expected outcomes
-	if tc.expectError {
-		assertErrorExpectedInParseRequestFile(t, err, parsedFile, tc.name, tc.errorContains)
-	} else {
-		assertNoErrorExpectedInParseRequestFile(t, err, parsedFile, tc.name, tc.expectedRequests, tc.expectedVariables, tc.requestChecks)
-	}
+	// Then: assert expected outcomes - all cases now expect errors since imports are not supported
+	assertErrorExpectedInParseRequestFile(t, err, parsedFile, tc.name, tc.errorContains)
 }
 
 func TestParseRequestFile_Imports(t *testing.T) {
-	// Mock environment variable lookup function for tests
-	// envLookup := func(key string) (string, bool) { // This was part of parseRequests, not parseRequestFile directly
-	// 	return "", false
-	// }
+	// All import directives are now unsupported since they're not documented in http_syntax.md
+	// All tests should expect an error indicating imports are not supported
 
 	tests := []parseRequestFileImportsTestCase{
-
 		{
-			name:             "SCENARIO-IMPORT-001: Simple import",
-			filePath:         "testdata/parser/import_tests/main_simple_import.http",
-			expectedRequests: 2,
-			expectedVariables: map[string]string{
-				"host":         "http://localhost:8080",
-				"imported_var": "imported_value",
-			},
-			requestChecks: checkSimpleImportRequests,
+			name:          "SCENARIO-IMPORT-001: Simple import - unsupported",
+			filePath:      "testdata/parser/import_tests/main_simple_import.http",
+			expectError:   true,
+			errorContains: "@import directive is not supported",
 		},
 		{
-			name:             "SCENARIO-IMPORT-002: Nested import",
-			filePath:         "testdata/parser/import_tests/main_nested_import.http",
-			expectedRequests: 3,
-			expectedVariables: map[string]string{
-				"host":       "http://localhost:8080", // from imported_file_3_level_2.http
-				"level1_var": "level1_value",          // from imported_file_2_level_1.http
-				"level2_var": "level2_value",          // from imported_file_3_level_2.http
-			},
-			requestChecks: checkNestedImportRequests,
+			name:          "SCENARIO-IMPORT-002: Nested import - unsupported",
+			filePath:      "testdata/parser/import_tests/main_nested_import.http",
+			expectError:   true,
+			errorContains: "@import directive is not supported",
 		},
 		{
-			name:             "SCENARIO-IMPORT-003: Variable override",
-			filePath:         "testdata/parser/import_tests/main_variable_override.http",
-			expectedRequests: 1,
-			expectedVariables: map[string]string{
-				"host":          "http://main-override.com", // Overridden by main file
-				"var1":          "value1_from_imported",
-				"var2":          "value2_from_imported",
-				"var_from_main": "main_value", // Defined in main file
-			},
-			requestChecks: checkVariableOverrideRequests,
+			name:          "SCENARIO-IMPORT-003: Variable override - unsupported",
+			filePath:      "testdata/parser/import_tests/main_variable_override.http",
+			expectError:   true,
+			errorContains: "@import directive is not supported",
 		},
 		{
-			name:          "SCENARIO-IMPORT-004: Circular import",
+			name:          "SCENARIO-IMPORT-004: Circular import - unsupported",
 			filePath:      "testdata/parser/import_tests/main_circular_import_a.http",
 			expectError:   true,
-			errorContains: "circular import detected",
+			errorContains: "@import directive is not supported",
 		},
 		{
-			name:        "SCENARIO-IMPORT-005: Import not found",
-			filePath:    "testdata/parser/import_tests/main_import_not_found.http",
-			expectError: true,
-			// error message for os.Open on a non-existent file typically includes "no such file or directory"
-			errorContains: "no such file or directory",
+			name:          "SCENARIO-IMPORT-005: Import not found - unsupported",
+			filePath:      "testdata/parser/import_tests/main_import_not_found.http",
+			expectError:   true,
+			errorContains: "@import directive is not supported",
 		},
 	}
 
