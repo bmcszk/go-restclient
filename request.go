@@ -42,6 +42,14 @@ type Request struct {
 	FilePath string
 	// LineNumber is the starting line number of this request definition in the source file.
 	LineNumber int
+
+	// Request Settings Directives (JetBrains compatibility)
+	// NoRedirect indicates that this request should not follow redirects (from @no-redirect directive)
+	NoRedirect bool
+	// NoCookieJar indicates that this request should not use the cookie jar (from @no-cookie-jar directive)
+	NoCookieJar bool
+	// Timeout specifies a custom timeout in milliseconds for this request (from @timeout directive)
+	Timeout int
 }
 
 // ParsedFile represents all content parsed from a single .rest or .http file.

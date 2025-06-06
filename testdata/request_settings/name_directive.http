@@ -1,0 +1,5 @@
+# @name getUsers
+GET https://api.example.com/users
+
+### This request uses the comment naming convention
+GET https://api.example.com/products

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -489,16 +490,58 @@ func (p *requestParserState) handleComment(trimmedLine, originalLine string) err
 	return nil
 }
 
-// processCommentContent checks if the comment content contains a @name directive
-// and updates the current request's name if found.
+// processCommentContent checks for comment directives (@name, @no-redirect, @no-cookie-jar, @timeout, etc.)
+// and updates the current request's settings accordingly.
 func (p *requestParserState) processCommentContent(commentContent string) {
+	// Handle @name directive
 	if strings.HasPrefix(commentContent, "@name ") {
 		requestNameFromComment := strings.TrimSpace(commentContent[len("@name "):])
 		if requestNameFromComment != "" {
 			p.ensureCurrentRequest()
 			p.currentRequest.Name = requestNameFromComment
 		}
+		return
 	}
+
+	// Handle @no-redirect directive
+	if strings.TrimSpace(commentContent) == "@no-redirect" {
+		p.ensureCurrentRequest()
+		p.currentRequest.NoRedirect = true
+		return
+	}
+
+	// Handle @no-cookie-jar directive
+	if strings.TrimSpace(commentContent) == "@no-cookie-jar" {
+		p.ensureCurrentRequest()
+		p.currentRequest.NoCookieJar = true
+		return
+	}
+
+	// Handle @timeout directive with milliseconds value
+	if strings.HasPrefix(commentContent, "@timeout ") {
+		p.processTimeoutDirective(commentContent)
+		return
+	}
+}
+
+// processTimeoutDirective handles the @timeout directive with milliseconds value
+func (p *requestParserState) processTimeoutDirective(commentContent string) {
+	timeoutStr := strings.TrimSpace(commentContent[len("@timeout "):])
+	if timeoutStr == "" {
+		return
+	}
+
+	p.ensureCurrentRequest()
+	timeoutMs, err := strconv.Atoi(timeoutStr)
+	if err != nil || timeoutMs <= 0 {
+		slog.Warn("Invalid timeout value in @timeout directive",
+			"value", timeoutStr,
+			"lineNumber", p.lineNumber,
+			"filePath", p.filePath)
+		return
+	}
+
+	p.currentRequest.Timeout = timeoutMs
 }
 
 func (p *requestParserState) handleEmptyLineWhenNotParsingBody() {
