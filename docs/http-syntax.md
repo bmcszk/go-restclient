@@ -370,6 +370,19 @@ Content-Type: application/json
 }
 ```
 
+### File as Request Body
+
+To read the request body from a file, type the `<` symbol followed by the path to the file:
+
+```
+POST https://example.com/api/users
+Content-Type: application/json
+
+< ./path/to/payload.json
+```
+
+This works for any content type (JSON, XML, binary data, etc.). The file content is read as-is and sent as the request body.
+
 ### Form Data
 
 ```
