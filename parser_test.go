@@ -393,10 +393,8 @@ func assertErrorExpectedInParseRequestFile(t *testing.T, err error, parsedFile *
 
 // Definition for the test case structure for TestParseRequestFile_Imports
 type parseRequestFileImportsTestCase struct {
-	name          string
-	filePath      string
-	expectError   bool
-	errorContains string
+	name     string
+	filePath string
 }
 
 // Helper subtest runner for TestParseRequestFile_Imports
@@ -406,44 +404,34 @@ func runParseRequestFileImportsSubtest(t *testing.T, tc parseRequestFileImportsT
 	// Initial importStack is empty for top-level calls.
 	parsedFile, err := parseRequestFile(tc.filePath, nil, make([]string, 0))
 
-	// Then: assert expected outcomes - all cases now expect errors since imports are not supported
-	assertErrorExpectedInParseRequestFile(t, err, parsedFile, tc.name, tc.errorContains)
+	// Then: @import directives are now silently ignored, so we expect no errors
+	assert.NoError(t, err, "No error should occur when parsing file with @import directives (they're silently ignored)")
+	assert.NotNil(t, parsedFile, "Parsed file should not be nil")
 }
 
 func TestParseRequestFile_Imports(t *testing.T) {
-	// All import directives are now unsupported since they're not documented in http_syntax.md
-	// All tests should expect an error indicating imports are not supported
+	// All import directives are now silently ignored since they're not documented in http_syntax.md
 
 	tests := []parseRequestFileImportsTestCase{
 		{
-			name:          "SCENARIO-IMPORT-001: Simple import - unsupported",
-			filePath:      "testdata/parser/import_tests/main_simple_import.http",
-			expectError:   true,
-			errorContains: "@import directive is not supported",
+			name:     "SCENARIO-IMPORT-001: Simple import - ignored",
+			filePath: "testdata/parser/import_tests/main_simple_import.http",
 		},
 		{
-			name:          "SCENARIO-IMPORT-002: Nested import - unsupported",
-			filePath:      "testdata/parser/import_tests/main_nested_import.http",
-			expectError:   true,
-			errorContains: "@import directive is not supported",
+			name:     "SCENARIO-IMPORT-002: Nested import - ignored",
+			filePath: "testdata/parser/import_tests/main_nested_import.http",
 		},
 		{
-			name:          "SCENARIO-IMPORT-003: Variable override - unsupported",
-			filePath:      "testdata/parser/import_tests/main_variable_override.http",
-			expectError:   true,
-			errorContains: "@import directive is not supported",
+			name:     "SCENARIO-IMPORT-003: Variable override - ignored",
+			filePath: "testdata/parser/import_tests/main_variable_override.http",
 		},
 		{
-			name:          "SCENARIO-IMPORT-004: Circular import - unsupported",
-			filePath:      "testdata/parser/import_tests/main_circular_import_a.http",
-			expectError:   true,
-			errorContains: "@import directive is not supported",
+			name:     "SCENARIO-IMPORT-004: Circular import - ignored",
+			filePath: "testdata/parser/import_tests/main_circular_import_a.http",
 		},
 		{
-			name:          "SCENARIO-IMPORT-005: Import not found - unsupported",
-			filePath:      "testdata/parser/import_tests/main_import_not_found.http",
-			expectError:   true,
-			errorContains: "@import directive is not supported",
+			name:     "SCENARIO-IMPORT-005: Import not found - ignored",
+			filePath: "testdata/parser/import_tests/main_import_not_found.http",
 		},
 	}
 

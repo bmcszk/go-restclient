@@ -573,10 +573,10 @@ func (p *requestParserState) handleVariableDefinition(trimmedLine string) error 
 	return nil
 }
 
-// handleImportDirective - see implementation in parser_imports.go
+// handleImportDirective silently ignores @import directives as they are not supported in http_syntax.md.
 func (p *requestParserState) handleImportDirective(trimmedLine string) error {
-	// Implementation moved to parser_imports.go
-	return handleImportDirectiveImpl(p, trimmedLine)
+	// Silently ignore @import directives - they are not documented in http_syntax.md
+	return nil
 }
 
 // finalizeCurrentRequest adds the current request to the parsed file's requests list
