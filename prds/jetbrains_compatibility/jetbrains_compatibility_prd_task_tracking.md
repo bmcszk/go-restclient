@@ -1,19 +1,40 @@
 | Task ID | Description                                                                 | Status | Dependencies | Notes                                                                                                |
 |---------|-----------------------------------------------------------------------------|--------|--------------|------------------------------------------------------------------------------------------------------|
-| T1      | **Parser:** Enhance parser to support multiple requests (`###` separator)     | Completed |              | Parse name from separator line. Logic in `parser.go` updated.                                |
-| T2      | **Parser:** Add support for request naming (`### Name` and `// @name Name`) | Completed | T1           | Parser now handles `// @name` and `# @name` comments, overriding `### Name` if present. Logic in `parser.go` updated. |
-| T3      | **Variables:** Implement {{variable_name}} substitution mechanism         | Completed |              | Updated `resolveVariablesInText` and `ExecuteFile` in `client.go` to support new variable scopes (environment, global) and precedence. Called from `parser.go` updated. Ensured request body correctly reflects substitutions during HTTP client execution by updating `Request.GetBody`. |
-| T4      | **Environments:** Implement `http-client.env.json` loading                  | Completed | T3           | Parse JSON, allow environment selection (e.g., CLI flag), integrate with variable substitution. Also support `http-client.private.env.json` for sensitive data. |
-| TNEW1   | **Variables:** Implement dynamic variables (e.g., {{$uuid}}, {{$timestamp}}) | Done        | T3           | Random string, integer, float, email variables implemented/fixed. UUID, GUID, Timestamp handled by generateRequestScopedSystemVariables. |
-| TNEW2   | **Variables:** Implement system environment variables (e.g., `{{$env.MY_VAR}}`) | Done      | T3           | Implemented `{{$env.VAR_NAME}}` substitution in `substituteDynamicSystemVariables`. Added unit tests. `os.Getenv()` used for retrieval. Empty string if not set. |
-| TNEW3   | **Variables:** Implement in-place variables (`@name = value`)                 | Done   | T3           | Variables defined within the `.http` file itself. OS env var substitution in these variables fixed (commit adf4de8). |
-| T9      | **Imports:** Implement request import feature (`// @import "file.http"`)    | ToDo   | T1           | Define how imported requests are made available. Syntax needs final confirmation.                    |
-| T10     | **Body:** Ensure robust `application/x-www-form-urlencoded` support         | ToDo   |              | Correctly encode special characters.                                                                 |
-| T11     | **Body:** Ensure robust `multipart/form-data` support                       | ToDo   |              | Handle file uploads and mixed data parts.                                                            |
-| T12     | **Execution:** CLI logic for running specific named requests                | ToDo   | T2           |                                                                                                      |
-| T13     | **Execution:** CLI logic for running all requests in a file sequentially    | ToDo   | T1           | Ensure environment and in-place variables persist correctly between requests in a run.             |
-| T14     | **Refactor:** Update `Request` struct and related types as needed           | Completed |              | Accommodate new fields for scripts, environment context, etc. Structs `Script`, `Request`, `ParsedFile` updated. |
-| T15     | **Docs:** Update `README.md` with new features and usage instructions       | ToDo   | All others   |                                                                                                      |
-| T16     | **Testing:** Add unit tests for new parsing logic                           | ToDo   | T1, T2, T9   |                                                                                                      |
-| T17     | **Testing:** Add unit/integration tests for variable substitution & environments | ToDo   | T3, T4, TNEW1, TNEW2, TNEW3 | Cover all variable types (environment, dynamic, system, in-place).                                  |
-| T19     | **Testing:** Add integration tests for request execution flows              | ToDo   | T12, T13     |                                                                                                      |
+| T1      | **Parser:** Coverage analysis and test mapping to requirements           | Done   |              | Completed analysis in test_coverage_mapping.md identifying gaps between existing tests and http_syntax.md requirements |
+| T2      | **Testing:** Create unit tests for request structure basics             | Done   | T1           | Created comprehensive tests for request structure basics (FR1.1-1.8) using external .http files     |
+| T3      | **Testing:** Create unit tests for environment variables & placeholders  | Done   | T1           | Created comprehensive tests for environment variables, variable definitions and scoping using external .http files |
+| T4      | **Testing:** Create unit tests for dynamic system variables             | Todo   | T1           | Test FR3.1-3.3 using external .http files                                                          |
+| T5      | **Testing:** Create unit tests for request body handling                | Todo   | T1           | Test FR4.1-4.5 using external .http files                                                          |
+| T6      | **Testing:** Create unit tests for authentication methods               | Todo   | T1           | Test FR5.1-5.3 using external .http files                                                          |
+| T7      | **Testing:** Create unit tests for request settings directives          | Todo   | T1           | Test FR6.1-6.2 using external .http files                                                          |
+| T8      | **Testing:** Create unit tests for response handling & validation       | Todo   | T1           | Test FR7.1-7.3 using external .http files                                                          |
+| T9      | **Testing:** Create unit tests for request imports                      | Todo   | T1           | Test FR8.1-8.3 using external .http files                                                          |
+| T10     | **Testing:** Create unit tests for cookies & redirect handling          | Todo   | T1           | Test FR9.1-9.2 using external .http files                                                          |
+| T11     | **Implementation:** Update parser for complete request structure support | Todo   | T2           | Implement missing features for FR1.1-1.8 based on test findings                                    |
+| T12     | **Implementation:** Enhance environment variables & placeholders        | Todo   | T3           | Implement missing features for FR2.1-2.4 based on test findings                                    |
+| T13     | **Implementation:** Complete dynamic system variables support           | Todo   | T4           | Implement missing features for FR3.1-3.3 based on test findings                                    |
+| T14     | **Implementation:** Robust request body handling for all content types  | Todo   | T5           | Implement missing features for FR4.1-4.5 based on test findings                                    |
+| T15     | **Implementation:** Authentication methods support                      | Todo   | T6           | Implement missing features for FR5.1-5.3 based on test findings                                    |
+| T16     | **Implementation:** Request settings directives                         | Todo   | T7           | Implement missing features for FR6.1-6.2 based on test findings                                    |
+| T17     | **Implementation:** Response validation & handling                      | Todo   | T8           | Implement missing features for FR7.1-7.3 based on test findings                                    |
+| T18     | **Implementation:** Advanced request imports capabilities               | Todo   | T9           | Implement missing features for FR8.1-8.3 based on test findings                                    |
+| T19     | **Implementation:** Cookies & redirect handling                         | Todo   | T10          | Implement missing features for FR9.1-9.2 based on test findings                                    |
+| T20     | **Refactor:** Remove redundant tests to follow single positive/negative pattern | Todo | T1       | Ensure at most one positive and one negative test per requirement                                  |
+| T21     | **Documentation:** Update README.md with new features                   | Todo   | T11-T19      | Document all new features and syntax support                                                       |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

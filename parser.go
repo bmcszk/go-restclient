@@ -162,12 +162,12 @@ func parseRequestFile(filePath string, client *Client, importStack []string) (*P
 			parsedFile.FileVariables[key] = strVal
 		}
 	}
-	
+
 	// Second pass - resolve variables that reference other variables
 	// This ensures that references like {{test_server_url}} in base_url get fully resolved
 	for key, val := range parsedFile.FileVariables {
 		// Only try to resolve if the value contains a variable reference
-		if strings.Contains(val, "{{" ) && strings.Contains(val, "}}") {
+		if strings.Contains(val, "{{") && strings.Contains(val, "}}") {
 			resolvedVal := resolveVariablesInValue(val, parsedFile.FileVariables)
 			parsedFile.FileVariables[key] = resolvedVal
 		}
