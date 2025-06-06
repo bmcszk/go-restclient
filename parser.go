@@ -333,7 +333,8 @@ func determineLineType(trimmedLine string) lineType {
 		return lineTypeVariableDefinition
 	}
 
-	if strings.HasPrefix(trimmedLine, "import") {
+	// Check for @import directive (can be at beginning of line or in a comment)
+	if strings.Contains(trimmedLine, "@import") {
 		return lineTypeImportDirective
 	}
 
@@ -572,60 +573,10 @@ func (p *requestParserState) handleVariableDefinition(trimmedLine string) error 
 	return nil
 }
 
-// handleImportDirective processes a @import directive and includes the referenced file.
-// FR1.5: Support for @import directives to include other files
+// handleImportDirective - see implementation in parser_imports.go
 func (p *requestParserState) handleImportDirective(trimmedLine string) error {
-	importParts := strings.SplitN(trimmedLine, " ", 2)
-	if len(importParts) != 2 {
-		return fmt.Errorf("malformed import directive: %s", trimmedLine)
-	}
-
-	importPath := strings.Trim(strings.TrimSpace(importParts[1]), "\"'")
-
-	// Resolve the import path relative to the current file
-	importFullPath := importPath
-	if !filepath.IsAbs(importPath) {
-		importFullPath = filepath.Join(filepath.Dir(p.filePath), importPath)
-	}
-
-	// Check if the file exists before trying to import it
-	if _, err := os.Stat(importFullPath); err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("import file not found: %s: %w", importFullPath, err)
-		}
-		return fmt.Errorf("error accessing import file %s: %w", importFullPath, err)
-	}
-
-	// Parse the imported file (will handle circular import detection)
-	importedFile, err := parseRequestFile(importFullPath, p.client, p.importStack)
-	if err != nil {
-		return fmt.Errorf("failed to import file %s: %w", importPath, err)
-	}
-
-	// Store current file variables to preserve them
-	currentFileVariables := make(map[string]string)
-	for k, v := range p.parsedFile.FileVariables {
-		currentFileVariables[k] = v
-	}
-
-	// Copy imported variables to current file's variables
-	for k, v := range importedFile.FileVariables {
-		// Only set the variable if it doesn't already exist in the current file
-		// This ensures that the importing file's variables take precedence
-		if _, exists := currentFileVariables[k]; !exists {
-			p.parsedFile.FileVariables[k] = v
-		}
-	}
-
-	// Restore current file variables to ensure they take precedence
-	for k, v := range currentFileVariables {
-		p.parsedFile.FileVariables[k] = v
-	}
-
-	// Copy imported requests to current file's requests
-	p.parsedFile.Requests = append(p.parsedFile.Requests, importedFile.Requests...)
-
-	return nil
+	// Implementation moved to parser_imports.go
+	return handleImportDirectiveImpl(p, trimmedLine)
 }
 
 // finalizeCurrentRequest adds the current request to the parsed file's requests list
