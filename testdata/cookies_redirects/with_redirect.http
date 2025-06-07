@@ -1,2 +1,2 @@
 ### Follow Redirect Request
-GET http://127.0.0.1:37809/redirect
+GET {{scheme}}://{{host}}:{{port}}/redirect

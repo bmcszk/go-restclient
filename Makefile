@@ -40,6 +40,7 @@ test: test-unit ## Run all tests
 test-unit: ## Run unit tests
 	@echo "Running unit tests..."
 	@gotestsum --junitfile unit-tests.xml ./...
+	@echo "Check unit-tests.xml for results."
 
 # Dependencies
 install-lint: ## Install golangci-lint

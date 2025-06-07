@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url" // Added import
 	"os"
 	"testing"
 
@@ -48,23 +49,32 @@ func TestCookieJarHandling(t *testing.T) {
 	// Create required test directories
 	require.NoError(t, createTestDirectories("testdata/cookies_redirects"))
 
-	// Create HTTP request files
-	withCookieJarContent := "### Set Cookie Request\nGET " + testServer.URL + "/set-cookie\n\n" +
-		"### Check Cookie Request\nGET " + testServer.URL + "/check-cookie\n"
+	// Create HTTP request files with variables
+	withCookieJarContent := "### Set Cookie Request\nGET {{scheme}}://{{host}}:{{port}}/set-cookie\n\n" +
+		"### Check Cookie Request\nGET {{scheme}}://{{host}}:{{port}}/check-cookie\n"
 	require.NoError(t, writeTestFile(withCookieJarFilePath, withCookieJarContent))
 
-	withoutCookieJarContent := "### Set Cookie Request\nGET " + testServer.URL + "/set-cookie\n\n" +
-		"### Check Cookie Request\n// @no-cookie-jar\nGET " + testServer.URL + "/check-cookie\n"
+	withoutCookieJarContent := "### Set Cookie Request\nGET {{scheme}}://{{host}}:{{port}}/set-cookie\n\n" +
+		"### Check Cookie Request\n// @no-cookie-jar\nGET {{scheme}}://{{host}}:{{port}}/check-cookie\n"
 	require.NoError(t, writeTestFile(withoutCookieJarFilePath, withoutCookieJarContent))
+
+	// Parse testServer.URL to get scheme, host, and port
+	parsedURL, err := url.Parse(testServer.URL)
+	require.NoError(t, err, "Failed to parse testServer.URL")
+	serverVars := map[string]interface{}{
+		"scheme": parsedURL.Scheme,
+		"host":   parsedURL.Hostname(),
+		"port":   parsedURL.Port(),
+	}
 
 	// When/Then: Test with cookie jar (default)
 	cookieCheck = false
 
-	// Create a client with a cookie jar
+	// Create a client with a cookie jar and server variables
 	jar, err := cookiejar.New(nil)
 	require.NoError(t, err, "Should create cookie jar without error")
 
-	client, err := NewClient()
+	client, err := NewClient(WithVars(serverVars))
 	require.NoError(t, err, "Should create client without error")
 	client.httpClient.Jar = jar
 
@@ -79,12 +89,13 @@ func TestCookieJarHandling(t *testing.T) {
 	// When/Then: Test without cookie jar (@no-cookie-jar directive)
 	cookieCheck = false
 
-	// Create a client without a cookie jar for the @no-cookie-jar test
-	noJarClient, err := NewClient()
+	// Create a client without a cookie jar for the @no-cookie-jar test, but with server variables
+	noJarClient, err := NewClient(WithVars(serverVars))
 	require.NoError(t, err, "Should create client without error")
 	// Intentionally NOT setting a cookie jar
 
-	// Parse the file but execute requests manually to control cookie jar usage
+	// Parse the file. serverVars are now in noJarClient.programmaticVars.
+	// The third argument to parseRequestFile is for file-level variables, not client-programmatic ones.
 	parsedFile, err := parseRequestFile(withoutCookieJarFilePath, noJarClient, nil)
 	require.NoError(t, err, "Should parse request file without error")
 	require.Len(t, parsedFile.Requests, 2, "Should have parsed two requests")
@@ -92,15 +103,15 @@ func TestCookieJarHandling(t *testing.T) {
 	// For first request (setting cookie), use a client with jar
 	firstRequest := parsedFile.Requests[0]
 
-	// Create a new client with jar for first request
-	jarclient, err := NewClient()
+	// Create a new client with jar for first request, and with server variables
+	jarClient, err := NewClient(WithVars(serverVars)) // Renamed to jarClient for clarity
 	require.NoError(t, err, "Should create client without error")
 	jar, err = cookiejar.New(nil)
 	require.NoError(t, err, "Should create cookie jar without error")
-	jarclient.httpClient.Jar = jar
+	jarClient.httpClient.Jar = jar
 
 	// Execute first request (sets cookie)
-	_, err = jarclient.executeRequest(context.Background(), firstRequest)
+	_, err = jarClient.executeRequest(context.Background(), firstRequest)
 	require.NoError(t, err, "Should execute first request without error")
 
 	// For second request (with @no-cookie-jar directive), use client without jar
@@ -142,16 +153,25 @@ func TestRedirectHandling(t *testing.T) {
 	// Create required test directories if not already done
 	require.NoError(t, createTestDirectories("testdata/cookies_redirects"))
 
-	// Create HTTP request files
-	withRedirectContent := "### Follow Redirect Request\nGET " + testServer.URL + "/redirect\n"
+	// Create HTTP request files with variables
+	withRedirectContent := "### Follow Redirect Request\nGET {{scheme}}://{{host}}:{{port}}/redirect\n"
 	require.NoError(t, writeTestFile(withRedirectFilePath, withRedirectContent))
 
-	withoutRedirectContent := "### No Redirect Request\n// @no-redirect\nGET " + testServer.URL + "/redirect\n"
+	withoutRedirectContent := "### No Redirect Request\n// @no-redirect\nGET {{scheme}}://{{host}}:{{port}}/redirect\n"
 	require.NoError(t, writeTestFile(withoutRedirectFilePath, withoutRedirectContent))
 
+	// Parse testServer.URL to get scheme, host, and port
+	parsedURL, err := url.Parse(testServer.URL)
+	require.NoError(t, err, "Failed to parse testServer.URL")
+	serverVars := map[string]interface{}{
+		"scheme": parsedURL.Scheme,
+		"host":   parsedURL.Hostname(),
+		"port":   parsedURL.Port(),
+	}
+
 	// When/Then: Test with redirect following (default)
-	// Create a fresh client for redirect tests
-	client, err := NewClient()
+	// Create a fresh client for redirect tests, with server variables
+	client, err := NewClient(WithVars(serverVars))
 	require.NoError(t, err, "Should create client without error")
 
 	// Execute file with default redirect behavior
@@ -167,8 +187,8 @@ func TestRedirectHandling(t *testing.T) {
 	// When/Then: Test without redirect following (@no-redirect directive)
 
 	// For the @no-redirect test, create a client with a custom CheckRedirect function
-	// that prevents following redirects
-	client, err = NewClient()
+	// that prevents following redirects, and with server variables
+	client, err = NewClient(WithVars(serverVars))
 	require.NoError(t, err, "Should create client without error")
 
 	// Override the client's CheckRedirect function to capture the redirect status

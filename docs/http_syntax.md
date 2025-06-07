@@ -155,6 +155,17 @@ For GET requests, you can use a short form that omits the method:
 https://example.com/api/users
 ```
 
+#### Query Parameters on Multiple Lines (VS Code REST Client)
+
+For requests with several query parameters, you can spread them across multiple lines for better readability. The lines immediately following the Request Line that start with `?` or `&` will be parsed as query parameters:
+
+```http
+GET https://example.com/comments
+    ?page=2
+    &pageSize=10
+    &filter=active
+```
+
 ### Request Headers
 
 Headers follow the request line with `Name: Value` format:
@@ -237,7 +248,7 @@ Authorization: Bearer {{login.response.body.token}}
 
 ## Comments
 
-Use `#` for single-line comments:
+Comments (line starts with `#` or `//`) support
 
 ```
 # This is a comment
@@ -372,9 +383,9 @@ Content-Type: application/json
 
 ### File as Request Body
 
-To read the request body from a file, type the `<` symbol followed by the path to the file:
+To read the request body from a file, type the `<` symbol followed by the path to the file. The path can be absolute or relative to the current HTTP file or workspace root.
 
-```
+```http
 POST https://example.com/api/users
 Content-Type: application/json
 
@@ -383,13 +394,48 @@ Content-Type: application/json
 
 This works for any content type (JSON, XML, binary data, etc.). The file content is read as-is and sent as the request body.
 
+#### Variable Substitution in External File (VS Code REST Client)
+
+If you need to use variables within the external file, prefix the path with `<@`. VS Code REST Client will process variables in the referenced file. By default, UTF-8 encoding is assumed.
+
+```http
+POST https://example.com/api/submit
+Content-Type: application/json
+
+<@ ./path/to/payload_with_vars.json
+```
+
+#### Specifying Encoding for External File (VS Code REST Client)
+
+To override the default UTF-8 encoding for the external file, specify the encoding after `<@` and before the file path:
+
+```http
+POST https://example.com/api/submit
+Content-Type: text/plain
+
+<@latin1 ./path/to/file_with_latin1.txt
+```
+
 ### Form Data
 
-```
+```http
 POST https://example.com/api/users
 Content-Type: application/x-www-form-urlencoded
 
 name=User&email=user@example.com
+```
+
+#### Form Data on Multiple Lines (VS Code REST Client)
+
+For `application/x-www-form-urlencoded` content, you can divide the request body into multiple lines. Each key-value pair should occupy a single line, with subsequent lines starting with `&`:
+
+```http
+POST https://api.example.com/login
+Content-Type: application/x-www-form-urlencoded
+
+username=foo
+&password=bar
+&remember_me=true
 ```
 
 ### Multipart Form Data

@@ -1,5 +1,5 @@
 ### Set Cookie Request
-GET http://127.0.0.1:34151/set-cookie
+GET {{scheme}}://{{host}}:{{port}}/set-cookie
 
 ### Check Cookie Request
-GET http://127.0.0.1:34151/check-cookie
+GET {{scheme}}://{{host}}:{{port}}/check-cookie
