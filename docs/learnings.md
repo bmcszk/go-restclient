@@ -139,9 +139,42 @@ During the implementation of multipart/form-data support (specifically when modi
     3.  Proceeded with applying a corrected patch to the recreated file.
 *   **Lesson Learned**: If `git checkout -- <file>` or `git checkout HEAD -- <file>` fails with "pathspec ... did not match", verify the file's tracking status using `git ls-files <file>`. If it's untracked or not listed, `git checkout` cannot restore it from the index/HEAD. The recovery then involves removing the untracked version and recreating the file from a known good source before attempting further operations. Also, be mindful that `git apply` might lead to untracked files under certain conditions.
 
+## 2025-06-07: `replace_file_content` Tool - `TargetContent` Specificity and Uniqueness
+
+*   **Mistake**: When attempting to restore a function definition (`processTimeoutDirective` in `parser.go`) that was accidentally removed/commented out by a previous `replace_file_content` call, initial attempts to fix it failed. The `TargetContent` used (`\tp.ensureCurrentRequest()`) was not unique in the file, leading to a tool error: "target content was not unique."
+*   **Resolution**: The `TargetContent` was made more specific by including the preceding line, which was the closing brace of the previous function (`}\n\tp.ensureCurrentRequest()`). This provided sufficient context for the tool to uniquely identify the target location and apply the fix correctly.
+*   **Lesson Learned**: When `replace_file_content` fails due to non-unique `TargetContent`, simply re-trying with the same target will also fail. It's essential to view the file content to understand why the target is not unique and then provide more surrounding, unique context as part of `TargetContent`. If a previous `replace_file_content` call corrupted the file (e.g., by removing a function signature), the `TargetContent` for the fix must accurately reflect the *current* (corrupted) state of the file at the precise point of insertion/modification.
+
 ## 2025-06-05: `replace_file_content` Tool - Ensuring `TargetContent` Uniqueness with Context
 
 *   **Mistake**: When refactoring `TestParseRequestFile_Imports` in `parser_test.go`, the `replace_file_content` tool repeatedly failed to change `tests := []struct {` to `tests := []parseRequestFileImportsTestCase{`. The error was "target content was not unique" because `\ttests := []struct {` appeared multiple times in the file. Initial attempts to fix this by just targeting the line itself failed.
 *   **Resolution**: To make the `TargetContent` unique, more surrounding context was provided. Instead of just `\ttests := []struct {`, the `TargetContent` was changed to include the preceding commented-out lines and the line itself, like `\t// }\n\n\ttests := []struct {\n\t\tname              string`. This provided enough uniqueness for the tool to correctly identify and modify the intended line.
 *   **Lesson Learned**: If `replace_file_content` reports that `TargetContent` is not unique, simply re-trying with the exact same `TargetContent` will also fail. It's crucial to inspect the file (e.g., using `view_line_range`) to understand why the target is not unique and then provide additional, unique surrounding lines as part of the `TargetContent` to disambiguate the intended edit location. This ensures the tool can accurately apply the change.
 
+
+## 2025-06-07: `replace_file_content` Tool - Catastrophic Deletion and Recovery
+
+*   **Mistake**: While attempting to add diagnostic logging to `parser.go` (Step ID 593), the `replace_file_content` tool was used with multiple `ReplacementChunks`. Due to inaccuracies in the `TargetContent` provided for these chunks (likely caused by a desynchronized understanding of the file state after previous, potentially problematic edits), the tool incorrectly applied the changes. Instead of inserting new log lines, it resulted in the deletion of large, essential sections of code from `parser.go`, including function definitions like `parseRequests`, `processFileLine`, `determineLineType`, and others.
+*   **Resolution**:
+    1.  The massive, incorrect modification to `parser.go` was identified by observing the diff output provided by the tool itself.
+    2.  The corrupted `parser.go` file was immediately reverted to its last committed state using the command `git checkout -- /home/blaze/work/go-restclient/parser.go`. This restored the file to a known good state.
+    3.  This incident was documented in `docs/learnings.md` to highlight the potential for severe file corruption if `replace_file_content` is used with inaccurate `TargetContent`, especially with multiple chunks.
+    4.  The subsequent step will be to re-attempt the addition of diagnostic logs, but with extreme care, ensuring `TargetContent` for each chunk is verified against the now-restored, known-good version of `parser.go`.
+*   **Lesson Learned**: The `replace_file_content` tool, especially when used with multiple chunks, can cause catastrophic file damage if the `TargetContent` for any chunk is incorrect or ambiguous. It's crucial to:
+    *   Always verify the `TargetContent` against the *exact current state* of the file, especially if prior edits (even by other tools or manual changes) might have altered it. Use `view_line_range` or `view_file_outline` liberally.
+    *   When multiple chunks are needed, consider if breaking them into separate, sequential `replace_file_content` calls (each verified) might be safer, despite being more verbose.
+    *   Pay close attention to the diff output provided by the tool after an edit. If it shows unexpected deletions or large-scale changes, assume the file is corrupted and revert immediately using version control.
+    *   Maintain a robust `git commit` discipline to ensure easy rollbacks to known good states.
+
+
+
+## 2025-06-07: `replace_file_content` Misapplication Leading to Large Deletions (Parser Logging Attempt)
+
+*   **Incident Date:** 2025-06-07
+*   **Tool:** `replace_file_content`
+*   **File Affected:** `parser.go`
+*   **Step/Tool ID:** Step 859 / Tool ID `12724d6d-5e43-4af0-80bc-3dd0b24cdc22`
+*   **Problem:** When attempting to add specific `slog.Debug` lines around a call to `p.parseRequestLineDetails(line)` within the `handleRequestLine` function in `parser.go`, the `replace_file_content` tool with two `ReplacementChunks` severely misapplied the changes. Instead of targeted insertions/modifications, it deleted large, unrelated portions of the `finalizeCurrentRequest` function and other surrounding code.
+*   **Cause:** Likely due to imprecise `TargetContent` in one or both chunks, or the tool's diffing mechanism incorrectly interpreting the context for the replacements, especially given the structural similarity of Go code blocks. The file state might have been desynchronized from previous edits.
+*   **Resolution (Achieved & Planned):** `parser.go` was reverted to its previous state (HEAD Step 874). The edit to add logs will be re-attempted. This reinforces the need for extreme caution and precise targeting with `replace_file_content`, especially for multi-chunk edits.
+*   **Lesson Learned:** `replace_file_content` can be highly destructive if `TargetContent` is not perfectly accurate or if the surrounding context is ambiguous to the tool. For surgical insertions or modifications within existing code, especially if previous attempts with `replace_file_content` have failed, breaking down the change into extremely small, single, verifiable automated calls is necessary. Always verify the diff produced by the tool carefully. If significant unexpected changes occur, revert the file immediately.

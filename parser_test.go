@@ -2,6 +2,7 @@ package restclient
 
 import (
 	"bufio"
+	"log/slog"
 	"os"
 	"strings"
 	"testing"
@@ -9,6 +10,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMain(m *testing.M) {
+	h := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})
+	slog.SetDefault(slog.New(h))
+	os.Exit(m.Run())
+}
 
 type parseRequestsIgnoreEmptyBlocksTestCase struct {
 	name           string
@@ -379,14 +388,7 @@ Response 2`,
 	}
 }
 
-func assertErrorExpectedInParseRequestFile(t *testing.T, err error, parsedFile *ParsedFile, testName string, errorContains string) {
-	t.Helper()
-	require.Error(t, err, "Expected an error for test case: %s", testName)
-	if errorContains != "" {
-		assert.Contains(t, err.Error(), errorContains, "Error message mismatch for test case: %s", testName)
-	}
-	assert.Nil(t, parsedFile, "parsedFile should be nil on error for test case: %s", testName)
-}
+// assertErrorExpectedInParseRequestFile has been removed as it's no longer used
 
 // assertNoErrorExpectedInParseRequestFile has been removed as it's no longer used
 // since all import test cases now expect errors

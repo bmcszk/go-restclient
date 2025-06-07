@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 // Script represents a JavaScript script, either inline or from an external file.
@@ -48,8 +49,8 @@ type Request struct {
 	NoRedirect bool
 	// NoCookieJar indicates that this request should not use the cookie jar (from @no-cookie-jar directive)
 	NoCookieJar bool
-	// Timeout specifies a custom timeout in milliseconds for this request (from @timeout directive)
-	Timeout int
+	// Timeout specifies a custom timeout for this request (from @timeout directive)
+	Timeout time.Duration
 }
 
 // ParsedFile represents all content parsed from a single .rest or .http file.

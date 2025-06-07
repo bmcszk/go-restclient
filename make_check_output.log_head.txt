@@ -1,0 +1,57 @@
+time=2025-06-07T16:39:02.222+02:00 level=DEBUG msg="ensureCurrentRequest: Called" currentRequestPtr_before=0x0 lineNumber=3
+time=2025-06-07T16:39:02.222+02:00 level=DEBUG msg="handleRequestLine (sep): After ensureCurrentRequest (new Request struct created)" line=3 currentReqIsNil=false currentReqPtr=0xc000450480 currentReqLine=3 currentReqName=""
+time=2025-06-07T16:39:02.222+02:00 level=DEBUG msg="handleRequestLine (sep): After applying name from separator line (if any)" line=3 currentReqName="Comment for empty block"
+time=2025-06-07T16:39:02.222+02:00 level=DEBUG msg="ensureCurrentRequest: Called" currentRequestPtr_before=0xc000450480 lineNumber=4
+time=2025-06-07T16:39:02.222+02:00 level=DEBUG msg="ensureCurrentRequest: Called" currentRequestPtr_before=0xc000450480 lineNumber=6
+time=2025-06-07T16:39:02.222+02:00 level=DEBUG msg="handleRequestLine (sep): Before finalize" line=6 currentReqIsNil=false currentReqPtr=0xc000450480 currentReqLine=3 currentReqName="Comment for empty block"
+time=2025-06-07T16:39:02.222+02:00 level=DEBUG msg="finalizeCurrentRequest: Checking condition to add request" requestPtr=0xc000450480 method="" name="Comment for empty block" bodyLinesLen=0 lineNumber=6
+time=2025-06-07T16:39:02.222+02:00 level=DEBUG msg="finalizeCurrentRequest: Request added" requestPtr=0xc000450480 finalizedName="Comment for empty block" finalizedMethod="" finalizedRawURL="" numRequests=2
+time=2025-06-07T16:39:02.222+02:00 level=DEBUG msg="handleRequestLine (sep): After finalizeCurrentRequest (p.currentRequest should be nil)" line=6 currentReqIsNil=true currentReqPtr=nil
+time=2025-06-07T16:39:02.223+02:00 level=DEBUG msg="ensureCurrentRequest: Called" currentRequestPtr_before=0x0 lineNumber=6
+time=2025-06-07T16:39:02.223+02:00 level=DEBUG msg="handleRequestLine (sep): After ensureCurrentRequest (new Request struct created)" line=6 currentReqIsNil=false currentReqPtr=0xc000450540 currentReqLine=6 currentReqName=""
+time=2025-06-07T16:39:02.223+02:00 level=DEBUG msg="handleRequestLine (sep): After applying name from separator line (if any)" line=6 currentReqName=""
+time=2025-06-07T16:39:02.223+02:00 level=DEBUG msg="ensureCurrentRequest: Called" currentRequestPtr_before=0xc000450540 lineNumber=7
+time=2025-06-07T16:39:02.223+02:00 level=DEBUG msg="parseRequestLineDetails: Set RawURLString" requestPtr=0xc000450540 rawURL=http://127.0.0.1:34407/req2 method=POST lineNumber=7
+time=2025-06-07T16:39:02.223+02:00 level=DEBUG msg="ensureCurrentRequest: Called" currentRequestPtr_before=0xc000450540 lineNumber=8
+time=2025-06-07T16:39:02.223+02:00 level=DEBUG msg="ensureCurrentRequest: Called" currentRequestPtr_before=0xc000450540 lineNumber=10
+time=2025-06-07T16:39:02.223+02:00 level=DEBUG msg="ensureCurrentRequest: Called" currentRequestPtr_before=0xc000450540 lineNumber=11
+time=2025-06-07T16:39:02.223+02:00 level=DEBUG msg="ensureCurrentRequest: Called" currentRequestPtr_before=0xc000450540 lineNumber=12
+time=2025-06-07T16:39:02.223+02:00 level=DEBUG msg="finalizeCurrentRequest: Checking condition to add request" requestPtr=0xc000450540 method=POST name="" bodyLinesLen=3 lineNumber=12
+time=2025-06-07T16:39:02.223+02:00 level=DEBUG msg="finalizeCurrentRequest: Request added" requestPtr=0xc000450540 finalizedName="" finalizedMethod=POST finalizedRawURL=http://127.0.0.1:34407/req2 numRequests=3
+time=2025-06-07T16:39:02.223+02:00 level=DEBUG msg="ExecuteFile: parseRequestFile completed successfully" numRequests=3 requestFilePath=/tmp/TestExecuteFile_IgnoreEmptyBlocks_ClientSCENARIO-LIB-028-006_Valid_request,_separator_with_comments,_then_another_valid_request1202436428/001/scenario_006_template.http.4155728744.http
+time=2025-06-07T16:39:02.223+02:00 level=DEBUG msg="executeRequest: Before _resolveRequestURL" baseURL="" rcRequestURLPath=/req1 rcRequestURLScheme=http rcRequestURLHost=127.0.0.1:34407 rcRequestURLOpaque=""
+time=2025-06-07T16:39:02.223+02:00 level=DEBUG msg="_resolveRequestURL: Entered function" baseURL=""
+time=2025-06-07T16:39:02.223+02:00 level=WARN msg="ExecuteFile: restClientReq.URL is nil before variable substitution" method="" rawURL="" requestName="Comment for empty block"
+time=2025-06-07T16:39:02.223+02:00 level=ERROR msg="Failed to substitute variables for URL/Headers" request="Comment for empty block" error="URL is empty after variable substitution (original: )"
+time=2025-06-07T16:39:02.223+02:00 level=DEBUG msg="executeRequest: Before _resolveRequestURL" baseURL="" rcRequestURLPath=/req2 rcRequestURLScheme=http rcRequestURLHost=127.0.0.1:34407 rcRequestURLOpaque=""
+time=2025-06-07T16:39:02.223+02:00 level=DEBUG msg="_resolveRequestURL: Entered function" baseURL=""
+    client_execute_edgecases_test.go:202: 
+        	Error Trace:	/home/blaze/work/go-restclient/client_execute_edgecases_test.go:51
+        	            			/home/blaze/work/go-restclient/client_execute_edgecases_test.go:104
+        	            			/home/blaze/work/go-restclient/client_execute_edgecases_test.go:202
+        	Error:      	Received unexpected error:
+        	            	1 error occurred:
+        	            		* error substituting URL/Header variables for request Comment for empty block (index 1): URL is empty after variable substitution (original: )
+        	            	
+        	Test:       	TestExecuteFile_IgnoreEmptyBlocks_Client/SCENARIO-LIB-028-006:_Valid_request,_separator_with_comments,_then_another_valid_request
+        	Messages:   	Did not expect an error for test: SCENARIO-LIB-028-006: Valid request, separator with comments, then another valid request
+    client_execute_edgecases_test.go:202: 
+        	Error Trace:	/home/blaze/work/go-restclient/client_execute_edgecases_test.go:52
+        	            			/home/blaze/work/go-restclient/client_execute_edgecases_test.go:104
+        	            			/home/blaze/work/go-restclient/client_execute_edgecases_test.go:202
+        	Error:      	"[0xc00014c4d0 0xc0004580b0 0xc000458210]" should have 2 item(s), but has 3
+        	Test:       	TestExecuteFile_IgnoreEmptyBlocks_Client/SCENARIO-LIB-028-006:_Valid_request,_separator_with_comments,_then_another_valid_request
+        	Messages:   	Number of responses mismatch for test: SCENARIO-LIB-028-006: Valid request, separator with comments, then another valid request
+=== RUN   TestExecuteFile_IgnoreEmptyBlocks_Client/File_with_only_variable_definitions_-_ExecuteFile
+time=2025-06-07T16:39:02.224+02:00 level=DEBUG msg="ExecuteFile: Entered function" requestFilePath=/tmp/TestExecuteFile_IgnoreEmptyBlocks_ClientFile_with_only_variable_definitions_-_ExecuteFile231391397/001/only_vars.http.1004368995.http
+--- FAIL: TestExecuteFile_IgnoreEmptyBlocks_Client (0.00s)
+    --- PASS: TestExecuteFile_IgnoreEmptyBlocks_Client/SCENARIO-LIB-028-004:_Valid_request,_then_separator,_then_only_comments (0.00s)
+    --- PASS: TestExecuteFile_IgnoreEmptyBlocks_Client/SCENARIO-LIB-028-005:_Only_comments,_then_separator,_then_valid_request (0.00s)
+    --- FAIL: TestExecuteFile_IgnoreEmptyBlocks_Client/SCENARIO-LIB-028-006:_Valid_request,_separator_with_comments,_then_another_valid_request (0.00s)
+    --- PASS: TestExecuteFile_IgnoreEmptyBlocks_Client/File_with_only_variable_definitions_-_ExecuteFile (0.00s)
+=== RUN   TestExecuteFile_InPlace_SimpleVariableInURL
+time=2025-06-07T16:39:02.224+02:00 level=DEBUG msg="ExecuteFile: Entered function" requestFilePath=testdata/execute_inplace_vars/simple_variable_in_url/request.http
+time=2025-06-07T16:39:02.224+02:00 level=DEBUG msg="ensureCurrentRequest: Called" currentRequestPtr_before=0x0 lineNumber=4
+time=2025-06-07T16:39:02.224+02:00 level=DEBUG msg="finalizeCurrentRequest: Checking condition to add request" requestPtr=0xc000450600 method="" name="" bodyLinesLen=1 lineNumber=4
+time=2025-06-07T16:39:02.224+02:00 level=DEBUG msg="finalizeCurrentRequest: Request added" requestPtr=0xc000450600 finalizedName="" finalizedMethod="" finalizedRawURL="" numRequests=1
+time=2025-06-07T16:39:02.224+02:00 level=DEBUG msg="ExecuteFile: parseRequestFile completed successfully" numRequests=1 requestFilePath=testdata/execute_inplace_vars/simple_variable_in_url/request.http

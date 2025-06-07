@@ -2,6 +2,7 @@ package restclient
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -105,13 +106,13 @@ func TestTimeoutDirective(t *testing.T) {
 
 	// First request should have default timeout (0 or implementation defined)
 	firstReq := parsedFile.Requests[0]
-	assert.Equal(t, 0, firstReq.Timeout, "First request should have default timeout")
+	assert.Equal(t, time.Duration(0), firstReq.Timeout, "First request should have default timeout")
 	assert.Equal(t, "GET", firstReq.Method, "Request method mismatch")
 	assert.Equal(t, "https://api.example.com/standard", firstReq.URL.String(), "Request URL mismatch")
 
 	// Second request should have custom timeout from @timeout directive
 	secondReq := parsedFile.Requests[1]
-	assert.Equal(t, 5000, secondReq.Timeout, "Second request should have timeout set to 5000ms via @timeout directive")
+	assert.Equal(t, 5000*time.Millisecond, secondReq.Timeout, "Second request should have timeout set to 5000ms via @timeout directive")
 	assert.Equal(t, "GET", secondReq.Method, "Request method mismatch")
 	assert.Equal(t, "https://api.example.com/slow-endpoint", secondReq.URL.String(), "Request URL mismatch")
 }

@@ -163,7 +163,7 @@ func TestSubstituteDynamicSystemVariables_EnvVars(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.setup(t) // Set/unset env vars for this test case
-			output := client.substituteDynamicSystemVariables(tc.input, client.currentDotEnvVars)
+			output := substituteDynamicSystemVariables(tc.input, client.currentDotEnvVars, client.programmaticVars)
 			assert.Equal(t, tc.want, output)
 			// Note: Testing for slog.Warn would require log capture, which is out of scope here.
 			// We rely on the fact that if tc.wantErr is true, the output should be the original input.

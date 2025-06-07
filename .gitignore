@@ -27,9 +27,14 @@ Thumbs.db
 # Log files
 *.log
 
+# Test reports
+unit-tests.xml
+
 # Coverage reports
 coverage.out
 coverage.html 
+
+# Cursor
 /.cursor.bak.*/
 /.cursorignore.bak.*/
 /.cursor/rules/go_guideline.mdc
@@ -42,6 +47,8 @@ coverage.html
 /.cursor/rules/testing_guidelines.mdc
 /.cursorignore
 /.cursor/rules/*.bak.*/
+
+# Windsurf
 /.windsurf.back/
 /.windsurf/rules/go_guideline.md
 /.windsurf/rules/go_project_setup_guideline.md
