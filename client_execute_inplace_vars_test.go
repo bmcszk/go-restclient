@@ -74,8 +74,8 @@ func TestExecuteFile_InPlace_SimpleVariableInURL(t *testing.T) {
 	parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
 	require.NoError(t, pErr)
 	require.NotNil(t, parsedFile.FileVariables)
-	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["hostname"], "Parsed file variable 'hostname' mismatch")
-	assert.Equal(t, "/api/v1/items", parsedFile.FileVariables["path_segment"], "Parsed file variable 'path_segment' mismatch")
+	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["@hostname"], "Parsed file variable '@hostname' mismatch")
+	assert.Equal(t, "/api/v1/items", parsedFile.FileVariables["@path_segment"], "Parsed file variable '@path_segment' mismatch")
 }
 
 func TestExecuteFile_InPlace_VariableInHeader(t *testing.T) {
@@ -136,9 +136,9 @@ func TestExecuteFile_InPlace_VariableInHeader(t *testing.T) {
 	parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
 	require.NoError(t, pErr)
 	require.NotNil(t, parsedFile.FileVariables)
-	assert.Equal(t, "Bearer_secret_token_123", parsedFile.FileVariables["auth_token"])
-	// Programmatic variables are resolved during parsing and don't remain as placeholders
-	assert.Equal(t, server.URL, parsedFile.FileVariables["test_server_url"])
+	assert.Equal(t, "Bearer_secret_token_123", parsedFile.FileVariables["@auth_token"], "Parsed file variable '@auth_token' should be its raw value")
+	// Programmatic variables are NOT stored in ParsedFile.FileVariables if not file-scoped (i.e. no '@' prefix in .http file)
+	assert.Equal(t, "", parsedFile.FileVariables["test_server_url"], "'test_server_url' should not be in ParsedFile.FileVariables as it is not file-scoped")
 }
 
 func TestExecuteFile_InPlace_VariableInBody(t *testing.T) {
@@ -201,11 +201,11 @@ func TestExecuteFile_InPlace_VariableInBody(t *testing.T) {
 	parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
 	require.NoError(t, pErr)
 	require.NotNil(t, parsedFile.FileVariables)
-	assert.Equal(t, "SuperWidget", parsedFile.FileVariables["product_name"])
-	assert.Equal(t, "SW1000", parsedFile.FileVariables["product_id"])
-	assert.Equal(t, "49.99", parsedFile.FileVariables["product_price"]) // Variables are stored as strings
-	// Programmatic variables are resolved during parsing and stored with their actual values
-	assert.Equal(t, server.URL, parsedFile.FileVariables["test_server_url"])
+	assert.Equal(t, "SuperWidget", parsedFile.FileVariables["@product_name"], "Parsed file variable '@product_name' should be its raw value")
+	assert.Equal(t, "SW1000", parsedFile.FileVariables["@product_id"], "Parsed file variable '@product_id' should be its raw value")
+	assert.Equal(t, "49.99", parsedFile.FileVariables["@product_price"], "Parsed file variable '@product_price' should be its raw value") // Variables are stored as strings
+	// Programmatic variables are NOT stored in ParsedFile.FileVariables if not file-scoped (i.e. no '@' prefix in .http file)
+	assert.Equal(t, "", parsedFile.FileVariables["test_server_url"], "'test_server_url' should not be in ParsedFile.FileVariables as it is not file-scoped")
 }
 
 func TestExecuteFile_InPlace_VariableDefinedByAnotherVariable(t *testing.T) {
@@ -265,11 +265,11 @@ func TestExecuteFile_InPlace_VariableDefinedByAnotherVariable(t *testing.T) {
 	require.NoError(t, pErr)
 	require.NotNil(t, parsedFile.FileVariables)
 	// base_url references the programmatic variable test_server_url, so it should be resolved
-	assert.Equal(t, server.URL, parsedFile.FileVariables["base_url"])
-	assert.Equal(t, "/users", parsedFile.FileVariables["path"])
-	assert.Equal(t, fmt.Sprintf("%s/users/123", server.URL), parsedFile.FileVariables["full_url"])
+	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["@base_url"], "Parsed file variable '@base_url' should be the raw placeholder")
+	assert.Equal(t, "/users", parsedFile.FileVariables["@path"], "Parsed file variable '@path' should be its raw value")
+	assert.Equal(t, "{{base_url}}{{path}}/123", parsedFile.FileVariables["@full_url"], "Parsed file variable '@full_url' should be the raw placeholder")
 	// Programmatic variables are resolved during parsing
-	assert.Equal(t, server.URL, parsedFile.FileVariables["test_server_url"]) // Resolved programmatic var
+	assert.Equal(t, "", parsedFile.FileVariables["test_server_url"], "'test_server_url' should not be in ParsedFile.FileVariables as it is not file-scoped") // Not a file-scoped variable
 }
 
 func TestExecuteFile_InPlace_VariablePrecedenceOverEnvironment(t *testing.T) {
@@ -314,7 +314,7 @@ func TestExecuteFile_InPlace_VariablePrecedenceOverEnvironment(t *testing.T) {
 	parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
 	require.NoError(t, pErr)
 	require.NotNil(t, parsedFile.FileVariables)
-	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["host"], "File variable 'host' mismatch")
+	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["@host"], "File variable '@host' mismatch")
 }
 
 func TestExecuteFile_InPlace_VariableInCustomHeader(t *testing.T) {
@@ -367,8 +367,8 @@ func TestExecuteFile_InPlace_VariableInCustomHeader(t *testing.T) {
 	parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
 	require.NoError(t, pErr)
 	require.NotNil(t, parsedFile.FileVariables)
-	assert.Equal(t, "secret-token", parsedFile.FileVariables["my_header_value"])
-	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["test_server_url"]) // Check placeholder
+	assert.Equal(t, "secret-token", parsedFile.FileVariables["@my_header_value"], "Parsed file variable '@my_header_value' mismatch")
+	assert.Equal(t, "", parsedFile.FileVariables["test_server_url"], "'test_server_url' should not be in ParsedFile.FileVariables as it is not file-scoped") // Not a file-scoped variable
 }
 
 func TestExecuteFile_InPlace_VariableSubstitutionInBody(t *testing.T) {
@@ -426,7 +426,7 @@ func TestExecuteFile_InPlace_VariableSubstitutionInBody(t *testing.T) {
 	parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
 	require.NoError(t, pErr)
 	require.NotNil(t, parsedFile.FileVariables)
-	assert.Equal(t, "user123", parsedFile.FileVariables["user_id"], "Parsed file variable 'user_id' mismatch")
+	assert.Equal(t, "user123", parsedFile.FileVariables["@user_id"], "Parsed file variable '@user_id' mismatch")
 }
 
 func TestExecuteFile_InPlace_VariableDefinedBySystemVariable(t *testing.T) {
@@ -485,7 +485,7 @@ func TestExecuteFile_InPlace_VariableDefinedBySystemVariable(t *testing.T) {
 	parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
 	require.NoError(t, pErr)
 	require.NotNil(t, parsedFile.FileVariables)
-	assert.Equal(t, "{{$uuid}}", parsedFile.FileVariables["my_request_id"], "Parsed file variable 'my_request_id' mismatch")
+	assert.Equal(t, "{{$uuid}}", parsedFile.FileVariables["@my_request_id"], "Parsed file variable '@my_request_id' mismatch")
 }
 
 func TestExecuteFile_InPlace_VariableDefinedByOsEnvVariable(t *testing.T) {
