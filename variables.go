@@ -61,7 +61,8 @@ var randomWords = []string{"apple", "banana", "cherry", "date", "elderberry", "f
 // 7. Fallback value provided in the placeholder itself.
 // System variables (e.g., {{$uuid}}, {{$timestamp}}) are handled if the placeholder is like {{$systemVarName}} (i.e. varName starts with '$').
 func resolveVariablesInText(text string, clientProgrammaticVars map[string]interface{}, fileScopedVars map[string]string, environmentVars map[string]string, globalVars map[string]string, requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool), dotEnvVars map[string]string, options *ResolveOptions) string {
-	const maxIterations = 10 // Safety break for circular dependencies
+	slog.Debug("resolveVariablesInText: Entered function", "clientProgrammaticVars", clientProgrammaticVars) // Cascade: Added for debugging
+	const maxIterations = 10                                                                                 // Safety break for circular dependencies
 	currentText := text
 
 	for i := 0; i < maxIterations; i++ {
@@ -97,6 +98,7 @@ func resolveVariablesInText(text string, clientProgrammaticVars map[string]inter
 
 			// 2. Try programmatic variables set by client code (highest precedence for non-system vars)
 			if clientProgrammaticVars != nil {
+				slog.Debug("resolveVariablesInText: Checking clientProgrammaticVars", "varName", varName, "found", clientProgrammaticVars[varName] != nil) // Cascade: Added for debugging
 				if val, ok := clientProgrammaticVars[varName]; ok {
 					return fmt.Sprintf("%v", val)
 				}
@@ -160,6 +162,7 @@ func resolveVariablesInText(text string, clientProgrammaticVars map[string]inter
 
 			return match // Shouldn't reach here if options are well-defined
 		}) // End of ReplaceAllStringFunc
+		slog.Debug("resolveVariablesInText: After ReplaceAllStringFunc pass", "iteration", i, "previousText", previousText, "currentText", currentText) // Cascade: Added for debugging
 
 		if currentText == previousText {
 			break // No more substitutions made in this pass
@@ -213,12 +216,22 @@ func randomStringFromCharset(length int, charset string) string {
 // substituteRequestVariables handles the substitution of variables in the request's URL and headers.
 // It returns the final parsed URL or an error if substitution/parsing fails.
 func substituteRequestVariables(rcRequest *Request, parsedFile *ParsedFile, requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool), programmaticVars map[string]interface{}, currentDotEnvVars map[string]string, clientBaseURL string) (*url.URL, error) {
+	slog.Debug("substituteRequestVariables: Entered function", "requestName", rcRequest.Name, "programmaticVars", programmaticVars, "currentDotEnvVars", currentDotEnvVars, "clientBaseURL", clientBaseURL, "parsedFile_is_nil", parsedFile == nil)
+
+	var envVarsFromFile map[string]string
+	var globalVarsFromFile map[string]string
+
+	if parsedFile != nil {
+		envVarsFromFile = parsedFile.EnvironmentVariables
+		globalVarsFromFile = parsedFile.GlobalVariables
+	}
+
 	substitutedRawURL := resolveVariablesInText(
 		rcRequest.RawURLString,
 		programmaticVars,
-		rcRequest.ActiveVariables,
-		parsedFile.EnvironmentVariables,
-		parsedFile.GlobalVariables,
+		rcRequest.ActiveVariables, // These are request-scoped @variable definitions
+		envVarsFromFile,
+		globalVarsFromFile,
 		requestScopedSystemVars,
 		osEnvGetter,
 		currentDotEnvVars,
@@ -232,12 +245,14 @@ func substituteRequestVariables(rcRequest *Request, parsedFile *ParsedFile, requ
 	}
 
 	substitutedRawURL = _applyBaseURLIfNeeded(substitutedRawURL, clientBaseURL)
+	slog.Debug("substituteRequestVariables: URL string before final parse", "substitutedRawURL_after_base_apply", substitutedRawURL, "requestName", rcRequest.Name) // Cascade: Log before parse
 
 	finalParsedURL, parseErr := url.Parse(substitutedRawURL)
+	slog.Debug("substituteRequestVariables: URL after final parse", "finalParsedURL_is_nil", finalParsedURL == nil, "parseErr_is_nil", parseErr == nil, "requestName", rcRequest.Name) // Cascade: Log after parse
 	if parseErr != nil {
 		return nil, fmt.Errorf("failed to parse URL after variable substitution: %s (original: %s): %w", substitutedRawURL, rcRequest.RawURLString, parseErr)
 	}
-	rcRequest.URL = finalParsedURL // Assign here as it's successfully parsed
+	// rcRequest.URL = finalParsedURL // Assign here as it's successfully parsed - redundant, caller should assign
 
 	if rcRequest.Headers != nil {
 		for key, values := range rcRequest.Headers {
@@ -246,9 +261,9 @@ func substituteRequestVariables(rcRequest *Request, parsedFile *ParsedFile, requ
 				resolvedVal := resolveVariablesInText(
 					val,
 					programmaticVars,
-					rcRequest.ActiveVariables,
-					parsedFile.EnvironmentVariables,
-					parsedFile.GlobalVariables,
+					rcRequest.ActiveVariables, // These are request-scoped @variable definitions
+					envVarsFromFile,
+					globalVarsFromFile,
 					requestScopedSystemVars,
 					osEnvGetter,
 					currentDotEnvVars,

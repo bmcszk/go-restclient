@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	rand "math/rand"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -191,6 +191,7 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 	}
 
 	for i, restClientReq := range parsedFile.Requests {
+		slog.Debug("ExecuteFile: Loop start", "iteration", i, "requestName", restClientReq.Name, "restClientReq_addr", fmt.Sprintf("%p", restClientReq), "URL_is_nil_at_loop_start", restClientReq.URL == nil)
 		requestScopedSystemVars := c.generateRequestScopedSystemVariables()
 
 		// If URL is nil initially, substituteRequestVariables will handle it based on RawURLString
@@ -211,6 +212,7 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 			c.currentDotEnvVars,
 			c.BaseURL,
 		)
+		slog.Debug("ExecuteFile: After substituteRequestVariables", "finalParsedURL_is_nil", finalParsedURL == nil, "subsErr_is_nil", subsErr == nil, "requestName", restClientReq.Name) // Cascade: Log here
 		if subsErr != nil {
 			slog.Error("Failed to substitute variables for URL/Headers", "request", restClientReq.Name, "error", subsErr)
 			// Ensure a response object exists to store the error
@@ -222,7 +224,8 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 			multiErr = multierror.Append(multiErr, fmt.Errorf("error substituting URL/Header variables for request %s (index %d): %w", restClientReq.Name, i, subsErr))
 			continue // Skip to the next request in the loop
 		}
-		restClientReq.URL = finalParsedURL // Assign the substituted URL
+		restClientReq.URL = finalParsedURL                                                                                                                                         // Assign the substituted URL
+		slog.Debug("ExecuteFile: restClientReq.URL after assignment from finalParsedURL", "restClientReq_URL_is_nil", restClientReq.URL == nil, "requestName", restClientReq.Name) // Cascade: Log URL state
 
 		// Substitute variables for Body
 		var finalSubstitutedBody string
@@ -254,6 +257,7 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 			restClientReq.Body = nil    // Ensure body is nil if RawBody is empty
 			restClientReq.GetBody = nil // And GetBody too
 		}
+		slog.Debug("ExecuteFile: Pointer check before executeRequest call", "restClientReq_addr", fmt.Sprintf("%p", restClientReq), "requestName", restClientReq.Name, "URL_is_nil", restClientReq.URL == nil, "RawURLString", restClientReq.RawURLString)
 
 		resp, execErr := c.executeRequest(ctx, restClientReq)
 
@@ -372,28 +376,64 @@ func (c *Client) _resolveRequestURL(baseURLStr string, initialRequestURL *url.UR
 // A non-nil error is returned by this function only for critical pre-execution failures (e.g. nil request, bad BaseURL).
 func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Response, error) {
 	if rcRequest == nil {
+		slog.Error("executeRequest: called with nil rcRequest", "rcRequest_addr", fmt.Sprintf("%p", rcRequest))
 		// For a nil request, we can't even populate a Response struct meaningfully.
 		return nil, fmt.Errorf("cannot execute a nil request")
 	}
+
+	slog.Debug("executeRequest: Entry point", "rcRequest_addr", fmt.Sprintf("%p", rcRequest), "baseURL", c.BaseURL, "rcRequest.URL_is_nil", rcRequest.URL == nil, "rcRequest.RawURLString", rcRequest.RawURLString, "rcRequest.Name", rcRequest.Name)
 
 	// Initialize a response object upfront to hold results or errors
 	clientResponse := &Response{
 		Request: rcRequest, // Link the request early
 	}
 
-	// Before resolving the URL, ensure variables in RawURLString are expanded.
-	// This is typically done by Request.ExpandVariables() if called before executeRequest,
-	// or needs to be handled if executeRequest is the first point of expansion.
-	// For now, assuming RawURLString is expanded if rcRequest.URL is nil.
-	slog.Debug("executeRequest: Before _resolveRequestURL", "baseURL", c.BaseURL, "rcRequest.URL_is_nil", rcRequest.URL == nil, "rcRequest.RawURLString", rcRequest.RawURLString)
-	urlToUse, urlErr := c._resolveRequestURL(c.BaseURL, rcRequest.URL, rcRequest.RawURLString)
-	if urlErr != nil {
-		// An error from _resolveRequestURL implies a bad BaseURL or nil rcRequest.URL.
-		// Per original logic for bad BaseURL, return nil for *Response.
-		return nil, urlErr
+	slog.Debug("executeRequest: Before _resolveRequestURL block", "baseURL", c.BaseURL, "rcRequest.URL_is_nil", rcRequest.URL == nil, "rcRequest.RawURLString", rcRequest.RawURLString, "rcRequest.Name", rcRequest.Name)
+
+	// If rcRequest.URL is nil but RawURLString is present, it means the URL hasn't been parsed yet,
+	// likely because it contained variables. Perform substitution now.
+	if rcRequest.URL == nil && rcRequest.RawURLString != "" {
+		slog.Debug("executeRequest: rcRequest.URL is nil and RawURLString is present, performing variable substitution", "requestName", rcRequest.Name, "rawURL", rcRequest.RawURLString)
+
+		// For currentDotEnvVars, in a direct executeRequest call, there's no specific .env file context.
+		// $dotenv substitutions will fall back to OS env vars if not found in ProgrammaticVars.
+		substitutedAndParsedURL, subsErr := substituteRequestVariables(
+			rcRequest,
+			nil, // parsedFile - no file context for direct executeRequest
+			c.generateRequestScopedSystemVariables(),
+			os.LookupEnv,
+			c.programmaticVars,
+			nil,       // currentDotEnvVars - no specific .env file for direct call
+			c.BaseURL, // Pass client's BaseURL for consistency
+		)
+		if subsErr != nil {
+			err := fmt.Errorf("variable substitution failed in executeRequest for '%s': %w", rcRequest.Name, subsErr)
+			slog.Error("executeRequest: Variable substitution error", "error", err, "requestName", rcRequest.Name)
+			return nil, err // Critical pre-execution failure, similar to _resolveRequestURL failure
+		}
+		rcRequest.URL = substitutedAndParsedURL
+		var logURLString string
+		if rcRequest.URL != nil {
+			logURLString = rcRequest.URL.String()
+		} else {
+			logURLString = "<nil>"
+		}
+		slog.Debug("executeRequest: Variable substitution complete", "requestName", rcRequest.Name, "new_rcRequest.URL_is_nil", rcRequest.URL == nil, "new_rcRequest.URL_string", logURLString)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, rcRequest.Method, urlToUse.String(), rcRequest.Body)
+	slog.Debug("executeRequest: Before c._resolveRequestURL call", "baseURL", c.BaseURL, "rcRequest.URL_is_nil", rcRequest.URL == nil, "rcRequest.RawURLString", rcRequest.RawURLString, "rcRequest.Name", rcRequest.Name)
+	// Resolve the request URL. If rcRequest.URL is already parsed (e.g., from the substitution step above or programmatic setup),
+	// _resolveRequestURL will use it. Otherwise, it might re-parse RawURLString if URL is still nil (though less likely now)
+	// or primarily handle BaseURL resolution against the now-populated rcRequest.URL.
+	var err error
+	rcRequest.URL, err = c._resolveRequestURL(c.BaseURL, rcRequest.URL, rcRequest.RawURLString)
+	if err != nil {
+		// An error from _resolveRequestURL implies a bad BaseURL or nil rcRequest.URL.
+		// Per original logic for bad BaseURL, return nil for *Response.
+		return nil, err
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, rcRequest.Method, rcRequest.URL.String(), rcRequest.Body)
 	if err != nil {
 		clientResponse.Error = fmt.Errorf("failed to create http request: %w", err)
 		return clientResponse, nil
