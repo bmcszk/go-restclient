@@ -41,7 +41,6 @@ func TestExecuteFile_SingleRequest(t *testing.T) {
 }
 
 func TestExecuteFile_MultipleRequests(t *testing.T) {
-	t.Skip("Skipping due to parser failing to switch from header to body parsing after a blank line, misinterpreting body as headers. See MEMORY 6a7dd1c6-9ec5-4a2a-a65b-deafd36939f5. Task TBD for fix.")
 	// Given
 	var requestCounter int
 	server := startMockServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
