@@ -300,18 +300,36 @@ func (c *Client) generateRequestScopedSystemVariables() map[string]string {
 
 // _resolveRequestURL resolves the final request URL based on the client's BaseURL and the request's URL.
 // It returns the resolved URL or an error if the BaseURL is invalid or requestURL is nil.
-func (c *Client) _resolveRequestURL(baseURLStr string, requestURL *url.URL) (*url.URL, error) {
-	slog.Debug("_resolveRequestURL: Entered function", "baseURL", baseURLStr)
+// _resolveRequestURL resolves the final request URL based on the client's BaseURL, the request's initial URL (if parsed),
+// and the request's RawURLString (if initial URL parsing was deferred).
+// It returns the resolved URL or an error.
+func (c *Client) _resolveRequestURL(baseURLStr string, initialRequestURL *url.URL, rawRequestURLStr string) (*url.URL, error) {
+	slog.Debug("_resolveRequestURL: Entered function", "baseURL", baseURLStr, "initialRequestURL_is_nil", initialRequestURL == nil, "rawRequestURLStr", rawRequestURLStr)
 
-	if requestURL == nil {
-		return nil, fmt.Errorf("request URL is unexpectedly nil")
+	var currentRequestURL *url.URL
+
+	if initialRequestURL != nil {
+		currentRequestURL = initialRequestURL
+	} else if rawRequestURLStr != "" {
+		// If initialRequestURL was nil (e.g., deferred parsing due to variables),
+		// try to parse the rawRequestURLStr. This string should have had variables expanded by now.
+		parsedRawURL, err := url.Parse(rawRequestURLStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse rawRequestURLString '%s' after variable expansion: %w", rawRequestURLStr, err)
+		}
+		currentRequestURL = parsedRawURL
+		slog.Debug("_resolveRequestURL: Parsed rawRequestURLStr successfully", "parsedURL", currentRequestURL.String())
+	} else {
+		// Both initialRequestURL is nil and rawRequestURLStr is empty. This is an error.
+		return nil, fmt.Errorf("request URL is unexpectedly nil and rawRequestURLString is empty")
 	}
 
-	// Sanitize the incoming requestURL
-	requestURLStr := requestURL.String()
-	freshRequestURL, err := url.Parse(requestURLStr)
+	// Sanitize the currentRequestURL (which could be from initialRequestURL or parsed rawRequestURLStr)
+	// This re-parsing ensures we work with a 'fresh' copy and validates its structure.
+	currentRequestURLStr := currentRequestURL.String()
+	freshRequestURL, err := url.Parse(currentRequestURLStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to re-parse incoming requestURL string '%s': %w", requestURLStr, err)
+		return nil, fmt.Errorf("failed to re-parse current requestURL string '%s': %w", currentRequestURLStr, err)
 	}
 
 	// If freshRequestURL is absolute, use it directly
@@ -363,8 +381,12 @@ func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Respo
 		Request: rcRequest, // Link the request early
 	}
 
-	slog.Debug("executeRequest: Before _resolveRequestURL", "baseURL", c.BaseURL, "rcRequestURLPath", rcRequest.URL.Path, "rcRequestURLScheme", rcRequest.URL.Scheme, "rcRequestURLHost", rcRequest.URL.Host, "rcRequestURLOpaque", rcRequest.URL.Opaque)
-	urlToUse, urlErr := c._resolveRequestURL(c.BaseURL, rcRequest.URL)
+	// Before resolving the URL, ensure variables in RawURLString are expanded.
+	// This is typically done by Request.ExpandVariables() if called before executeRequest,
+	// or needs to be handled if executeRequest is the first point of expansion.
+	// For now, assuming RawURLString is expanded if rcRequest.URL is nil.
+	slog.Debug("executeRequest: Before _resolveRequestURL", "baseURL", c.BaseURL, "rcRequest.URL_is_nil", rcRequest.URL == nil, "rcRequest.RawURLString", rcRequest.RawURLString)
+	urlToUse, urlErr := c._resolveRequestURL(c.BaseURL, rcRequest.URL, rcRequest.RawURLString)
 	if urlErr != nil {
 		// An error from _resolveRequestURL implies a bad BaseURL or nil rcRequest.URL.
 		// Per original logic for bad BaseURL, return nil for *Response.

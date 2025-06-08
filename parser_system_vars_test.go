@@ -25,9 +25,12 @@ func TestParseRequestFile_BasicSystemVariables(t *testing.T) {
 	// Verify UUID/GUID request
 	uuidRequest := parsedFile.Requests[0]
 	assert.Equal(t, "GET", uuidRequest.Method)
-	// URL placeholders are encoded in the URL string
-	assert.Contains(t, uuidRequest.URL.Path, "/api/uuid/")
-	assert.Contains(t, uuidRequest.URL.String(), "%7B%7B$guid%7D%7D") // URL-encoded version of {{$guid}}
+	// For requests with system variables in RawURLString, URL parsing is deferred.
+	assert.Nil(t, uuidRequest.URL, "uuidRequest.URL should be nil due to deferred parsing of system variables")
+
+	// Check path components and variable placeholders in the RawURLString
+	assert.Contains(t, uuidRequest.RawURLString, "/api/uuid/", "uuidRequest.RawURLString should contain /api/uuid/ path component")
+	assert.Contains(t, uuidRequest.RawURLString, "{{$guid}}", "uuidRequest.RawURLString should contain {{$guid}} placeholder")
 
 	// Check headers - note that header values are stored as []string
 	require.Contains(t, uuidRequest.Headers, "X-Request-Id") // HTTP headers are normalized to Title-Case with lowercase
@@ -37,8 +40,10 @@ func TestParseRequestFile_BasicSystemVariables(t *testing.T) {
 	// Verify Timestamp request
 	timestampRequest := parsedFile.Requests[1]
 	assert.Equal(t, "GET", timestampRequest.Method)
-	assert.Contains(t, timestampRequest.URL.Path, "/api/timestamp/")
-	assert.Contains(t, timestampRequest.URL.String(), "%7B%7B$timestamp%7D%7D") // URL-encoded version of {{$timestamp}}
+	// For requests with system variables in RawURLString, URL parsing is deferred.
+	assert.Nil(t, timestampRequest.URL, "timestampRequest.URL should be nil due to deferred parsing of system variables")
+	assert.Contains(t, timestampRequest.RawURLString, "/api/timestamp/", "timestampRequest.RawURLString should contain /api/timestamp/ path component")
+	assert.Contains(t, timestampRequest.RawURLString, "{{$timestamp}}", "timestampRequest.RawURLString should contain {{$timestamp}} placeholder")
 
 	require.Contains(t, timestampRequest.Headers, "X-Request-Time")
 	require.Len(t, timestampRequest.Headers["X-Request-Time"], 1)

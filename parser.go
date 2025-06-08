@@ -23,6 +23,19 @@ const (
 	slashCommentPrefix = "//"
 )
 
+// isPotentialRequestLine checks if a line starts with a known HTTP method.
+func isPotentialRequestLine(line string) bool {
+	parts := strings.Fields(line)
+	if len(parts) == 0 {
+		return false
+	}
+	methodToken := strings.ToUpper(parts[0])
+	validMethods := map[string]bool{
+		"GET": true, "POST": true, "PUT": true, "DELETE": true, "PATCH": true, "HEAD": true, "OPTIONS": true, "TRACE": true, "CONNECT": true,
+	}
+	return validMethods[methodToken]
+}
+
 // requestParserState holds the state during the parsing of a request file.
 type requestParserState struct {
 	filePath                string
@@ -470,6 +483,16 @@ func (p *requestParserState) handleEmptyLine(trimmedLine string) error {
 func (p *requestParserState) handleRequestLine(trimmedLine, originalLine string) error {
 	slog.Debug("handleRequestLine: Entered", "trimmedLine", trimmedLine, "requestPtr", fmt.Sprintf("%p", p.currentRequest), "line", p.lineNumber)
 
+	if p.justSawEmptyLineSeparator && p.currentRequest != nil && p.currentRequest.Method != "" && isPotentialRequestLine(trimmedLine) {
+		slog.Debug("handleRequestLine: Previous line was empty separator, current line is new request. Finalizing previous request.",
+			"line", p.lineNumber,
+			"previousRequestMethod", p.currentRequest.Method,
+			"currentLine", trimmedLine)
+		p.finalizeCurrentRequest()
+		// ensureCurrentRequest() will be called by subsequent logic if needed, preparing for the new request.
+	}
+	p.justSawEmptyLineSeparator = false // Reset flag as we are processing a non-empty line.
+
 	if strings.HasPrefix(trimmedLine, requestSeparator) {
 		slog.Debug("handleRequestLine: Detected request separator '###'", "line", trimmedLine, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
 		p.finalizeCurrentRequest() // Finalize the previous request
@@ -746,11 +769,24 @@ func (p *requestParserState) parseRequestLineDetails(originalRequestLine string)
 	p.currentRequest.HTTPVersion = httpVersion
 	slog.Debug("parseRequestLineDetails: Set RawURLString and HTTPVersion", "RawURLString", p.currentRequest.RawURLString, "HTTPVersion", p.currentRequest.HTTPVersion, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
 
-	parsedURL, err := url.Parse(urlStr)
-	if err != nil {
-		slog.Warn("parseRequestLineDetails: Failed to parse RawURLString", "rawURL", urlStr, "error", err, "line", p.lineNumber, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
+	// Check if URL contains variables (using {{ and }} as variable markers)
+	containsVariables := strings.Contains(urlStr, "{{") || strings.Contains(urlStr, "}}")
+
+	if containsVariables {
+		slog.Debug("parseRequestLineDetails: RawURLString contains variables, deferring full parsing",
+			"rawURL", urlStr,
+			"line", p.lineNumber,
+			"requestPtr", fmt.Sprintf("%p", p.currentRequest))
+		// p.currentRequest.URL remains nil as parsing is deferred
 	} else {
-		p.currentRequest.URL = parsedURL
+		// No variables, try to parse URL now
+		parsedURL, err := url.Parse(urlStr)
+		if err != nil {
+			slog.Warn("parseRequestLineDetails: Failed to parse RawURLString (no variables)", "rawURL", urlStr, "error", err, "line", p.lineNumber, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
+			// p.currentRequest.URL remains nil or as set by url.Parse on error (which is typically nil for parse errors)
+		} else {
+			p.currentRequest.URL = parsedURL
+		}
 	}
 
 	if finalizedBySeparator {
@@ -761,18 +797,6 @@ func (p *requestParserState) parseRequestLineDetails(originalRequestLine string)
 	}
 
 	return false
-}
-
-// extractURLAndVersion splits a string like "/path HTTP/1.1" or "/path" into URL and HTTP version.
-func (p *requestParserState) extractURLAndVersion(urlAndVersionStr string) (urlStr, httpVersion string) {
-	lastSpaceIdx := strings.LastIndex(urlAndVersionStr, " ")
-	if lastSpaceIdx != -1 {
-		potentialVersion := strings.TrimSpace(urlAndVersionStr[lastSpaceIdx+1:])
-		if strings.HasPrefix(strings.ToUpper(potentialVersion), "HTTP/") {
-			return strings.TrimSpace(urlAndVersionStr[:lastSpaceIdx]), potentialVersion
-		}
-	}
-	return urlAndVersionStr, "" // No valid HTTP version found, assume entire string is URL
 }
 
 // Removed unused function parseHeaderOrStartBody

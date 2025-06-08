@@ -157,12 +157,13 @@ func TestParseChainedRequests(t *testing.T) {
 	// Verify second request has references to first request's response
 	secondRequest := parsedFile.Requests[1]
 	assert.Equal(t, "GET", secondRequest.Method, "Second request should be GET")
-	// Check URL path components in the URL string
-	urls := secondRequest.URL.String()
-	assert.Contains(t, urls, "user", "Second request URL should contain user path")
-	assert.Contains(t, urls, "profile", "Second request URL should contain profile path")
-	// Check for presence of a template variable in the raw URL string (before URL encoding)
-	assert.Contains(t, secondRequest.RawURLString, "{{firstRequest.response.body.id}}", "Second request URL template should contain reference to first request's response")
+	// For requests with variables in RawURLString, URL parsing is deferred.
+	assert.Nil(t, secondRequest.URL, "Second request URL should be nil due to deferred parsing of variables")
+
+	// Check URL path components and template variables in the RawURLString
+	assert.Contains(t, secondRequest.RawURLString, "/user/", "Second request RawURLString should contain user path component")
+	assert.Contains(t, secondRequest.RawURLString, "/profile", "Second request RawURLString should contain profile path component")
+	assert.Contains(t, secondRequest.RawURLString, "{{firstRequest.response.body.id}}", "Second request RawURLString should contain reference to first request's response id")
 
 	authHeader := secondRequest.Headers.Get("Authorization")
 	require.Contains(t, authHeader, "{{firstRequest.response.body.token}}",
