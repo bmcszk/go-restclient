@@ -47,6 +47,10 @@ install-lint: ## Install golangci-lint
 	@echo "Installing golangci-lint..."
 	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6
 
+install-gotestsum: ## Install gotestsum
+	@echo "Installing gotestsum..."
+	@go install gotest.tools/gotestsum@latest
+
 # Clean
 clean: ## Clean build artifacts
 	@echo "Cleaning..."
@@ -60,4 +64,4 @@ tidy: ## Tidy go.mod file
 deps: tidy ## Install/update dependencies
 	@go get -u ./...
 
-.PHONY: tidy deps install-lint 
+.PHONY: tidy deps install-lint install-gotestsum
