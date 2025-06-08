@@ -19,7 +19,7 @@
 | T17     | **Implementation:** Response validation & handling                      | Todo   | T8           | Implement missing features for FR7.1-7.3 based on test findings                                    |
 | T18     | **Implementation:** Advanced request imports capabilities               | Todo   | T9           | Implement missing features for FR8.1-8.3 based on test findings                                    |
 | T19     | **Implementation:** Cookies & redirect handling                         | Todo   | T10          | Implement missing features for FR9.1-9.2 based on test findings                                    |
-| T20     | **Refactor:** Remove redundant tests to follow single positive/negative pattern | Todo | T1       | Ensure at most one positive and one negative test per requirement                                  |
+| T20     | **Refactor:** Remove redundant tests to follow single positive/negative pattern | In Progress | T1       | Updated test_coverage_mapping.md for FR1. Analysis of FR1 revealed outdated mapping and several test/implementation gaps (e.g., short-form GET, @name directive testing, specific header scenarios) rather than significant test redundancies. Minimal test code consolidation for FR1. Continuing analysis for FR2. |
 | T21     | **Documentation:** Update README.md with new features                   | Todo   | T11-T19      | Document all new features and syntax support                                                       |
 
 
