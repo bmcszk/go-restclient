@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url" // Added for TestExecuteFile_WithRandomIntSystemVariable
-	"os"      // Added for TestExecuteFile_WithDatetimeSystemVariables
+	"net/http/httptest" // Added for mock server
+	"net/url"           // Added for TestExecuteFile_WithRandomIntSystemVariable
+	"os"                // Added for TestExecuteFile_WithDatetimeSystemVariables
 	"strconv"
 	"strings"
 	"testing"
@@ -140,25 +141,52 @@ func TestExecuteFile_WithIsoTimestampSystemVariable(t *testing.T) {
 	assert.Equal(t, interceptedRequest.Header, isoTimeFromBody, "ISO Timestamp from header and body should be the same")
 }
 
-func TestExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
-	// Given
-	var interceptedRequest struct {
-		Headers map[string]string
-		Body    string
-	}
-	interceptedRequest.Headers = make(map[string]string)
+// detailedInterceptedRequestData holds detailed data captured by the mock server, including multiple headers.
+type detailedInterceptedRequestData struct {
+	Headers map[string]string
+	Body    string
+}
 
-	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
-		bodyBytes, _ := io.ReadAll(r.Body)
-		interceptedRequest.Body = string(bodyBytes)
+// setupDetailedMockServerInterceptor initializes a mock HTTP server that intercepts
+// request headers (as a map) and body, logging them for debugging.
+func setupDetailedMockServerInterceptor(t *testing.T) (*httptest.Server, *detailedInterceptedRequestData) {
+	t.Helper() // Mark as test helper
+	data := &detailedInterceptedRequestData{
+		Headers: make(map[string]string),
+	}
+
+	// Using httptest.NewServer directly.
+	// The original startMockServer was likely a simple wrapper.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Logf("[DEBUG_MOCK_SERVER] Received request to: %s %s", r.Method, r.URL.Path)
+		bodyBytes, err := io.ReadAll(r.Body) // Added error check
+		if err != nil {
+			t.Logf("[DEBUG_MOCK_SERVER] Error reading body: %v", err)
+			http.Error(w, "server error reading body", http.StatusInternalServerError)
+			return
+		}
+		data.Body = string(bodyBytes)
+		t.Logf("[DEBUG_MOCK_SERVER] Received Body: %s", data.Body)
+		t.Logf("[DEBUG_MOCK_SERVER] --- Headers Start ---")
 		for name, values := range r.Header {
+			canonicalName := http.CanonicalHeaderKey(name)
 			if len(values) > 0 {
-				interceptedRequest.Headers[name] = values[0]
+				data.Headers[canonicalName] = values[0]
+				t.Logf("[DEBUG_MOCK_SERVER] Header: %s = %q", canonicalName, values[0])
+			} else {
+				t.Logf("[DEBUG_MOCK_SERVER] Header (empty): %s", canonicalName)
 			}
 		}
+		t.Logf("[DEBUG_MOCK_SERVER] --- Headers End ---")
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprint(w, "ok")
-	})
+	}))
+	return server, data
+}
+
+func TestExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
+	// Given
+	server, interceptedRequest := setupDetailedMockServerInterceptor(t)
 	defer server.Close()
 
 	client, _ := NewClient()
