@@ -470,7 +470,7 @@ func substituteDynamicSystemVariables(text string, activeDotEnvVars map[string]s
 
 	// REQ-LIB-011: $dotenv MY_VARIABLE_NAME
 	// First, try with double braces
-	reDotEnv := regexp.MustCompile(`{{$dotenv\s+([a-zA-Z_][a-zA-Z0-9_]*)}}`)
+	reDotEnv := regexp.MustCompile(`{{\$dotenv\s+([a-zA-Z_][a-zA-Z0-9_]*)}}`)
 	text = reDotEnv.ReplaceAllStringFunc(text, func(match string) string {
 		parts := reDotEnv.FindStringSubmatch(match)
 		if len(parts) == 2 {
@@ -480,11 +480,12 @@ func substituteDynamicSystemVariables(text string, activeDotEnvVars map[string]s
 			}
 			return "" // Variable not found in .env, return empty string
 		}
+		slog.Warn("Failed to parse $dotenv, returning original match", "match", match, "parts_len", len(parts))
 		return match // Should not happen with a valid regex, but good for safety
 	})
 
 	// Also handle URL encoded version
-	reDotEnvEncoded := regexp.MustCompile(`%7B%7B$dotenv\s+([a-zA-Z_][a-zA-Z0-9_]*)%7D%7D`)
+	reDotEnvEncoded := regexp.MustCompile(`%7B%7B\$dotenv\s+([a-zA-Z_][a-zA-Z0-9_]*)%7D%7D`)
 	text = reDotEnvEncoded.ReplaceAllStringFunc(text, func(match string) string {
 		parts := reDotEnvEncoded.FindStringSubmatch(match)
 		if len(parts) == 2 {
@@ -494,6 +495,7 @@ func substituteDynamicSystemVariables(text string, activeDotEnvVars map[string]s
 			}
 			return "" // Variable not found in .env, return empty string
 		}
+		slog.Warn("Failed to parse URL-encoded $dotenv, returning original match", "match", match, "parts_len", len(parts))
 		return match
 	})
 

@@ -311,7 +311,7 @@ func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
 }
 
 func TestExecuteFile_WithDotEnvSystemVariable(t *testing.T) {
-	t.Skip("Skipping due to bug in {{$dotenv VAR}} substitution (MEMORY ???): placeholder not replaced with empty string when .env file/OS env var is missing. See task TBD for fix.")
+	//t.Skip("Skipping due to bug in {{$dotenv VAR}} substitution (MEMORY ???): placeholder not replaced with empty string when .env file/OS env var is missing. See task TBD for fix.")
 	// Given
 	var interceptedRequest struct {
 		URL    string
