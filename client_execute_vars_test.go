@@ -233,7 +233,7 @@ func TestExecuteFile_WithCustomVariables(t *testing.T) {
 }
 
 func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
-	t.Skip("Skipping due to bug in {{$processEnv VAR}} substitution (MEMORY d1edb831-da89-4cde-93ad-a9129eb7b8aa): placeholder not replaced with OS environment variable value. See task TBD for fix.")
+	//t.Skip("Skipping due to bug in {{$processEnv VAR}} substitution (MEMORY d1edb831-da89-4cde-93ad-a9129eb7b8aa): placeholder not replaced with OS environment variable value. See task TBD for fix.")
 	// Given
 	const testEnvVarName = "GO_RESTCLIENT_TEST_VAR"
 	const testEnvVarValue = "test_env_value_123"

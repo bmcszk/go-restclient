@@ -499,7 +499,7 @@ func substituteDynamicSystemVariables(text string, activeDotEnvVars map[string]s
 
 	// REQ-LIB-012: $processEnv MY_ENV_VAR
 	// First, try with double braces
-	reProcessEnv := regexp.MustCompile(`{{$processEnv\s+([a-zA-Z_][a-zA-Z0-9_]*)}}`)
+	reProcessEnv := regexp.MustCompile(`{{\$processEnv\s+([A-Za-z_][A-Za-z0-9_]*)}}`)
 	text = reProcessEnv.ReplaceAllStringFunc(text, func(match string) string {
 		parts := reProcessEnv.FindStringSubmatch(match)
 		if len(parts) == 2 {
@@ -507,13 +507,14 @@ func substituteDynamicSystemVariables(text string, activeDotEnvVars map[string]s
 			if val, ok := os.LookupEnv(varName); ok {
 				return val
 			}
-			return "" // Variable not found in process env, return empty string
+			return match // Variable not found, return original placeholder
 		}
-		return match // Should not happen
+		slog.Warn("Failed to parse $processEnv, returning original match", "match", match, "parts_len", len(parts))
+		return match
 	})
 
 	// Also handle URL encoded version
-	reProcessEnvEncoded := regexp.MustCompile(`%7B%7B$processEnv\s+([a-zA-Z_][a-zA-Z0-9_]*)%7D%7D`)
+	reProcessEnvEncoded := regexp.MustCompile(`%7B%7B\$processEnv\s+([A-Za-z_][A-Za-z0-9_]*)%7D%7D`)
 	text = reProcessEnvEncoded.ReplaceAllStringFunc(text, func(match string) string {
 		parts := reProcessEnvEncoded.FindStringSubmatch(match)
 		if len(parts) == 2 {
@@ -521,8 +522,9 @@ func substituteDynamicSystemVariables(text string, activeDotEnvVars map[string]s
 			if val, ok := os.LookupEnv(varName); ok {
 				return val
 			}
-			return "" // Variable not found in process env, return empty string
+			return match // Variable not found, return original placeholder
 		}
+		slog.Warn("Failed to parse URL-encoded $processEnv, returning original match", "match", match, "parts_len", len(parts))
 		return match
 	})
 
