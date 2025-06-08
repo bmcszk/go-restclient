@@ -10,7 +10,6 @@ import (
 
 // TestParseRequestFile_EnvironmentVariables tests parsing of environment variables in requests (FR2.1, FR2.2)
 func TestParseRequestFile_EnvironmentVariables(t *testing.T) {
-	t.Skip("Skipping due to parser bug: expected 6 requests, got 3. Requests 1 & 2 are unexpectedly missing from the final parsed list. Additionally, request 6 (with default value syntax) fails to parse its method/URL.")
 	// Given
 	const requestFilePath = "testdata/variables/environment_variables.http"
 
@@ -77,7 +76,6 @@ func TestParseRequestFile_EnvironmentVariables(t *testing.T) {
 
 // TestParseRequestFile_VariableDefinitions tests parsing of variable definitions in request files (FR2.3)
 func TestParseRequestFile_VariableDefinitions(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): parser may skip requests if file starts with variable definitions. This test expects 3 requests but gets 0.")
 	// Given
 	const requestFilePath = "testdata/variables/variable_definitions.http"
 

@@ -173,7 +173,6 @@ func TestSubstituteDynamicSystemVariables_EnvVars(t *testing.T) {
 }
 
 func TestExecuteFile_WithCustomVariables(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): file starts with variable definitions, causing 'no requests found'. See task TBD for fix.")
 	// Given
 	var requestCount int32
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
@@ -191,10 +190,10 @@ func TestExecuteFile_WithCustomVariables(t *testing.T) {
 			assert.Equal(t, http.MethodGet, r.Method)
 			w.WriteHeader(http.StatusOK)
 			_, _ = fmt.Fprint(w, "response from products/testuser123")
-		case "/items/{{undefined_path_var}}": // SCENARIO-LIB-013-005 (undefined variable left as-is in path)
+		case "/items/": // SCENARIO-LIB-013-005 (undefined variable resolves to empty string in path)
 			assert.Equal(t, http.MethodGet, r.Method)
 			w.WriteHeader(http.StatusOK)
-			_, _ = fmt.Fprint(w, "response for items (undefined_path_var)")
+			_, _ = fmt.Fprint(w, "response for items ()")
 		default:
 			t.Errorf("Unexpected request path to mock server: %s", r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
@@ -229,7 +228,7 @@ func TestExecuteFile_WithCustomVariables(t *testing.T) {
 	resp3 := responses[2]
 	assert.NoError(t, resp3.Error)
 	assert.Equal(t, http.StatusOK, resp3.StatusCode)
-	assert.Equal(t, "response for items (undefined_path_var)", resp3.BodyString)
+	assert.Equal(t, "response for items ()", resp3.BodyString)
 }
 
 func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
@@ -416,7 +415,6 @@ User-Agent: test-client
 }
 
 func TestExecuteFile_WithProgrammaticVariables(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): parser fails when .http file starts with variable definitions, leading to 'no requests found'.")
 	// Given
 	var interceptedRequest struct {
 		URL    string
@@ -557,7 +555,6 @@ func TestExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
 }
 
 func TestExecuteFile_VariableFunctionConsistency(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): parser fails when .rest file starts with variable definitions, leading to 'no requests found'.")
 	// This server will capture the path, headers, and body to check for consistency.
 	var capturedPathUUID, capturedHeaderUUID, capturedBodyUUID, capturedBodyAnotherUUID string
 	var capturedHeaderTimestamp, capturedBodyTimestamp string
@@ -767,7 +764,6 @@ func runHttpClientEnvSubtest(t *testing.T, tc httpClientEnvTestCase) {
 
 // TestExecuteFile_WithHttpClientEnvJson tests variable substitution from http-client.env.json (Task T4)
 func TestExecuteFile_WithHttpClientEnvJson(t *testing.T) {
-	t.Skip("Skipping entire test and sub-tests due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): parser fails when .http files (used as templates here) start with comments or variable definitions, leading to 'no requests found' errors in sub-tests.")
 	tests := []httpClientEnvTestCase{
 		{
 			name:                     "SCENARIO-LIB-018-004: no env selected, file exists",

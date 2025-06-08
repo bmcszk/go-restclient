@@ -16,7 +16,6 @@ import (
 )
 
 func TestExecuteFile_InPlace_SimpleVariableInURL(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): file starts with variable definitions, causing 'no requests found'. See task TBD for fix.")
 	// Given
 	var capturedPath string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -80,7 +79,6 @@ func TestExecuteFile_InPlace_SimpleVariableInURL(t *testing.T) {
 }
 
 func TestExecuteFile_InPlace_VariableInHeader(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): file starts with variable definitions, causing 'no requests found'. See task TBD for fix.")
 	// Given
 	var capturedHeaders http.Header
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -144,7 +142,6 @@ func TestExecuteFile_InPlace_VariableInHeader(t *testing.T) {
 }
 
 func TestExecuteFile_InPlace_VariableInBody(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): file starts with variable definitions, causing 'no requests found'. See task TBD for fix.")
 	// Given
 	var capturedBody []byte
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -212,7 +209,6 @@ func TestExecuteFile_InPlace_VariableInBody(t *testing.T) {
 }
 
 func TestExecuteFile_InPlace_VariableDefinedByAnotherVariable(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): file starts with variable definitions, causing 'no requests found'. See task TBD for fix.")
 	// Given
 	var capturedURL string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -277,7 +273,6 @@ func TestExecuteFile_InPlace_VariableDefinedByAnotherVariable(t *testing.T) {
 }
 
 func TestExecuteFile_InPlace_VariablePrecedenceOverEnvironment(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): file starts with variable definitions, causing 'no requests found'. See task TBD for fix.")
 	// Given: an .http file with an in-place variable and an environment variable with the same name
 	var capturedURLPath string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -323,7 +318,6 @@ func TestExecuteFile_InPlace_VariablePrecedenceOverEnvironment(t *testing.T) {
 }
 
 func TestExecuteFile_InPlace_VariableInCustomHeader(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): file starts with variable definitions, causing 'no requests found'. See task TBD for fix.")
 	// Given: an .http file with an in-place variable used in a custom header
 	var capturedHeaderValue string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -378,7 +372,6 @@ func TestExecuteFile_InPlace_VariableInCustomHeader(t *testing.T) {
 }
 
 func TestExecuteFile_InPlace_VariableSubstitutionInBody(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): file starts with variable definitions, causing 'no requests found'. See task TBD for fix.")
 	// Given: an .http file with an in-place variable used in a JSON request body
 	var capturedBody []byte
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -437,7 +430,6 @@ func TestExecuteFile_InPlace_VariableSubstitutionInBody(t *testing.T) {
 }
 
 func TestExecuteFile_InPlace_VariableDefinedBySystemVariable(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): file starts with variable definitions, causing 'no requests found'. See task TBD for fix.")
 	// Given: an .http file with an in-place variable defined by a system variable {{$uuid}}
 	var capturedURLPath string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -497,7 +489,6 @@ func TestExecuteFile_InPlace_VariableDefinedBySystemVariable(t *testing.T) {
 }
 
 func TestExecuteFile_InPlace_VariableDefinedByOsEnvVariable(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): file starts with variable definitions, causing 'no requests found'. See task TBD for fix.")
 	// Given: an OS environment variable and an .http file with an in-place variable defined by it
 	const testEnvVarName = "TEST_USER_HOME_INPLACE"
 	const testEnvVarValue = "/testhome/userdir" // This value starts with a slash
@@ -554,11 +545,10 @@ func TestExecuteFile_InPlace_VariableDefinedByOsEnvVariable(t *testing.T) {
 	parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
 	require.NoError(t, pErr)
 	require.NotNil(t, parsedFile.FileVariables)
-	assert.Equal(t, "{{$processEnv TEST_USER_HOME_INPLACE}}", parsedFile.FileVariables["my_home_dir"], "Parsed file variable 'my_home_dir' mismatch")
+	assert.Equal(t, "{{$processEnv TEST_USER_HOME_INPLACE}}", parsedFile.FileVariables["@my_home_dir"], "Parsed file variable '@my_home_dir' mismatch")
 }
 
 func TestExecuteFile_InPlace_VariableInAuthHeader(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): file starts with variable definitions, causing 'no requests found'. See task TBD for fix.")
 	// Given: an .http file with an in-place variable used in an X-Auth-Token header
 	const headerKey = "X-Auth-Token"
 	const headerValue = "secret-token-12345"
@@ -612,12 +602,11 @@ func TestExecuteFile_InPlace_VariableInAuthHeader(t *testing.T) {
 	parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
 	require.NoError(t, pErr)
 	require.NotNil(t, parsedFile.FileVariables)
-	assert.Equal(t, headerValue, parsedFile.FileVariables["my_token"], "Parsed file variable 'my_token' mismatch")
-	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["test_server_url"], "Parsed file variable 'test_server_url' (placeholder) mismatch")
+	assert.Equal(t, headerValue, parsedFile.FileVariables["@my_token"], "Parsed file variable '@my_token' mismatch")
+	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["@test_server_url"], "Parsed file variable '@test_server_url' (placeholder) mismatch")
 }
 
 func TestExecuteFile_InPlace_VariableInJsonRequestBody(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): file starts with variable definitions, causing 'no requests found'. See task TBD for fix.")
 	// Given: an .http file with an in-place variable used in the JSON request body
 	const userIdValue = "user-from-var-456" // This value is defined in request.http
 	const expectedSentBody = `{"id": "user-from-var-456", "status": "pending"}`
@@ -673,12 +662,11 @@ func TestExecuteFile_InPlace_VariableInJsonRequestBody(t *testing.T) {
 	parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
 	require.NoError(t, pErr)
 	require.NotNil(t, parsedFile.FileVariables)
-	assert.Equal(t, userIdValue, parsedFile.FileVariables["my_user_id"], "Parsed file variable 'my_user_id' mismatch")
-	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["test_server_url"], "Parsed file variable 'test_server_url' (placeholder) mismatch")
+	assert.Equal(t, userIdValue, parsedFile.FileVariables["@my_user_id"], "Parsed file variable '@my_user_id' mismatch")
+	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["@test_server_url"], "Parsed file variable '@test_server_url' (placeholder) mismatch")
 }
 
 func TestExecuteFile_InPlace_VariableDefinedByAnotherInPlaceVariable(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): file starts with variable definitions, causing 'no requests found'. See task TBD for fix.")
 	// Given: an .http file with an in-place variable defined by another in-place variable
 	const basePathValue = "/api/v1"   // Defined in request.http
 	const resourcePathValue = "items" // Defined in request.http
@@ -733,14 +721,13 @@ func TestExecuteFile_InPlace_VariableDefinedByAnotherInPlaceVariable(t *testing.
 	parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
 	require.NoError(t, pErr)
 	require.NotNil(t, parsedFile.FileVariables)
-	assert.Equal(t, basePathValue, parsedFile.FileVariables["base_path"], "Parsed file variable 'base_path' mismatch")
-	assert.Equal(t, resourcePathValue, parsedFile.FileVariables["resource"], "Parsed file variable 'resource' mismatch")
-	assert.Equal(t, "{{base_path}}/{{resource}}/123", parsedFile.FileVariables["full_url_segment"], "Parsed file variable 'full_url_segment' mismatch")
-	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["test_server_url"], "Parsed file variable 'test_server_url' (placeholder) mismatch")
+	assert.Equal(t, basePathValue, parsedFile.FileVariables["@base_path"], "Parsed file variable '@base_path' mismatch")
+	assert.Equal(t, resourcePathValue, parsedFile.FileVariables["@resource"], "Parsed file variable '@resource' mismatch")
+	assert.Equal(t, "{{base_path}}/{{resource}}/123", parsedFile.FileVariables["@full_url_segment"], "Parsed file variable '@full_url_segment' mismatch")
+	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["@test_server_url"], "Parsed file variable '@test_server_url' (placeholder) mismatch")
 }
 
 func TestExecuteFile_InPlace_VariableDefinedByDotEnvOsVariable(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): file starts with variable definitions, causing 'no requests found'. See task TBD for fix.")
 	// Given: an .http file with an in-place variable defined by an OS environment variable using {{$env.VAR_NAME}}
 	const testEnvVarName = "MY_CONFIG_PATH_TEST_DOT_ENV"
 	const testEnvVarValue = "/usr/local/appconfig_dotenv"
@@ -798,8 +785,8 @@ func TestExecuteFile_InPlace_VariableDefinedByDotEnvOsVariable(t *testing.T) {
 	parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
 	require.NoError(t, pErr)
 	require.NotNil(t, parsedFile.FileVariables)
-	assert.Equal(t, "{{$env.MY_CONFIG_PATH_TEST_DOT_ENV}}", parsedFile.FileVariables["my_path_from_env"], "Parsed file variable 'my_path_from_env' mismatch")
-	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["test_server_url"], "Parsed file variable 'test_server_url' (placeholder) mismatch")
+	assert.Equal(t, "{{$env.MY_CONFIG_PATH_TEST_DOT_ENV}}", parsedFile.FileVariables["@my_path_from_env"], "Parsed file variable '@my_path_from_env' mismatch")
+	assert.Equal(t, "", parsedFile.FileVariables["test_server_url"], "Parsed file variable 'test_server_url' should be empty as it's not defined with @ in this file")
 }
 
 func TestExecuteFile_InPlace_Malformed_NameOnlyNoEqualsNoValue(t *testing.T) {
@@ -839,7 +826,6 @@ func TestExecuteFile_InPlace_Malformed_NoNameEqualsValue(t *testing.T) {
 }
 
 func TestExecuteFile_InPlace_VariableDefinedByDotEnvSystemVariable(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): file starts with variable definitions, causing 'no requests found'. See task TBD for fix.")
 	// Given: an .http file using {{$dotenv VAR_NAME}} for an in-place variable,
 	// and a .env file defining VAR_NAME in the same directory as the .http file.
 	const requestFilePath = "testdata/execute_inplace_vars/inplace_variable_defined_by_dotenv_system_variable/request.http"
@@ -874,12 +860,11 @@ func TestExecuteFile_InPlace_VariableDefinedByDotEnvSystemVariable(t *testing.T)
 	parsedFile, pErr := parseRequestFile(requestFilePath, client, make([]string, 0))
 	require.NoError(t, pErr)
 	require.NotNil(t, parsedFile.FileVariables)
-	assert.Equal(t, "{{$dotenv DOTENV_VAR_FOR_SYSTEM_TEST}}", parsedFile.FileVariables["my_api_key"], "Parsed file variable 'my_api_key' (placeholder) mismatch")
-	assert.Equal(t, "{{test_server_url}}", parsedFile.FileVariables["test_server_url"], "Parsed file variable 'test_server_url' (placeholder) mismatch")
+	assert.Equal(t, "{{$dotenv DOTENV_VAR_FOR_SYSTEM_TEST}}", parsedFile.FileVariables["@my_api_key"], "Parsed file variable '@my_api_key' (placeholder) mismatch")
+	assert.Equal(t, "", parsedFile.FileVariables["test_server_url"], "Parsed file variable 'test_server_url' should be empty as it's not defined with @ in this file")
 }
 
 func TestExecuteFile_InPlace_VariableDefinedByRandomInt(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): file starts with variable definitions, causing 'no requests found'. See task TBD for fix.")
 	// Given: an .http file using {{$randomInt MIN MAX}} for an in-place variable
 	const requestFilePath = "testdata/execute_inplace_vars/inplace_variable_defined_by_random_int/request.http"
 	const minPort = 8000

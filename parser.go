@@ -38,6 +38,7 @@ func isPotentialRequestLine(line string) bool {
 
 // requestParserState holds the state during the parsing of a request file.
 type requestParserState struct {
+	nextRequestName         string // Stores the name for the *next* request, captured from '### name' or 'METHOD URL ### name'
 	filePath                string
 	client                  *Client
 	requestScopedSystemVars map[string]string
@@ -47,7 +48,6 @@ type requestParserState struct {
 
 	parsedFile                *ParsedFile
 	currentRequest            *Request
-	nextRequestName           string // Stores the name for the *next* request, captured from '### name' or 'METHOD URL ### name'
 	bodyLines                 []string
 	parsingBody               bool
 	lineNumber                int
@@ -152,37 +152,37 @@ func parseRequestFile(filePath string, client *Client, importStack []string) (*P
 	loadEnvironmentSpecificVariables(filePath, client, parsedFile) // Pass original filePath
 
 	// Ensure programmatic variables are included in the file variables
-	if client != nil && client.programmaticVars != nil {
-		for key, val := range client.programmaticVars {
-			// Convert value to string representation
-			strVal := fmt.Sprintf("%v", val)
-			parsedFile.FileVariables[key] = strVal
+	// Cascade: Commenting out this block to prevent mutation of parsedFile.FileVariables.
+	// Programmatic variables should be applied with precedence during request execution substitution.
+	/*
+		if false { // Ensure this block is not executed
+			if client != nil && client.programmaticVars != nil {
+				for key, val := range client.programmaticVars {
+					// Convert value to string representation
+					strVal := fmt.Sprintf("%v", val)
+					parsedFile.FileVariables[key] = strVal
+				}
+			}
 		}
-	}
+	*/
 
 	// Second pass - resolve variables that reference other variables
-	// This ensures that references like {{test_server_url}} in base_url get fully resolved
-	for key, val := range parsedFile.FileVariables {
-		// Only try to resolve if the value contains a variable reference
-		if strings.Contains(val, "{{") && strings.Contains(val, "}}") {
-			resolvedVal := resolveVariablesInValue(val, parsedFile.FileVariables)
-			parsedFile.FileVariables[key] = resolvedVal
+	// Cascade: Commenting out this block. Resolution of nested file variables should use
+	// the main resolveVariablesInText engine during request execution on a copied map.
+	/*
+		// This ensures that references like {{test_server_url}} in base_url get fully resolved
+		if false { // Ensure this block is not executed
+			for key, val := range parsedFile.FileVariables {
+				// Only try to resolve if the value contains a variable reference
+				if strings.Contains(val, "{{") && strings.Contains(val, "}}") {
+					resolvedVal := resolveVariablesInValue(val, parsedFile.FileVariables)
+					parsedFile.FileVariables[key] = resolvedVal
+				}
+			}
 		}
-	}
+	*/
 
 	return parsedFile, nil
-}
-
-// resolveVariablesInValue resolves variables within a string value using
-// the provided file variables map
-func resolveVariablesInValue(value string, variables map[string]string) string {
-	// Use the same variable substitution logic that's used elsewhere in the codebase
-	result := value
-	for varName, varValue := range variables {
-		placeholder := "{{" + varName + "}}"
-		result = strings.ReplaceAll(result, placeholder, varValue)
-	}
-	return result
 }
 
 // loadEnvironmentSpecificVariables loads environment-specific variables from
@@ -502,12 +502,13 @@ func (p *requestParserState) handleRequestLine(trimmedLine, originalLine string)
 		// or when a new request line is actually encountered.
 
 		// FR1.3: Support for request naming via ### Request Name
-		requestName := strings.TrimSpace(strings.TrimPrefix(trimmedLine, requestSeparator))
-		if requestName != "" {
-			p.ensureCurrentRequest() // Ensure a request object exists to hold the name
-			slog.Debug("handleRequestLine: Setting request name from separator line", "name", requestName, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
-			p.currentRequest.Name = requestName
+		requestNameFromSeparator := strings.TrimSpace(strings.TrimPrefix(trimmedLine, requestSeparator))
+		if requestNameFromSeparator != "" {
+			p.nextRequestName = requestNameFromSeparator
+			slog.Debug("handleRequestLine: Stored nextRequestName from separator line", "nextRequestName", p.nextRequestName, "line", p.lineNumber)
 		}
+		// After a separator, currentRequest should be nil (finalized by finalizeCurrentRequest).
+		// The next actual request line will create a new currentRequest via ensureCurrentRequest.
 		return nil
 	}
 
@@ -515,7 +516,19 @@ func (p *requestParserState) handleRequestLine(trimmedLine, originalLine string)
 	p.ensureCurrentRequest() // Ensure a request object is available
 	slog.Debug("handleRequestLine: About to call parseRequestLineDetails", "trimmedLine", trimmedLine, "requestPtr", fmt.Sprintf("%p", p.currentRequest), "currentMethod", p.currentRequest.Method, "currentRawURL", p.currentRequest.RawURLString)
 
-	_ = p.parseRequestLineDetails(trimmedLine) // Pass trimmedLine as requestLine; it returns a boolean indicating if it finalized due to same-line separator
+	finalizedBySeparatorInLine := p.parseRequestLineDetails(trimmedLine) // Pass trimmedLine as requestLine
+
+	// Apply stored nextRequestName if available, the request wasn't finalized by a separator in the same line,
+	// and a name hasn't already been set (e.g., by a @name directive in a comment).
+	if !finalizedBySeparatorInLine && p.currentRequest != nil && p.currentRequest.Method != "" && p.nextRequestName != "" {
+		if p.currentRequest.Name == "" { // Only apply if no name is set yet
+			p.currentRequest.Name = p.nextRequestName
+			slog.Debug("handleRequestLine: Applied stored nextRequestName to current request as no prior name was set", "name", p.currentRequest.Name, "requestPtr", fmt.Sprintf("%p", p.currentRequest), "line", p.lineNumber)
+		} else {
+			slog.Debug("handleRequestLine: Did not apply stored nextRequestName as a name was already set", "existingName", p.currentRequest.Name, "nextRequestName", p.nextRequestName, "requestPtr", fmt.Sprintf("%p", p.currentRequest), "line", p.lineNumber)
+		}
+		p.nextRequestName = "" // Clear nextRequestName as it has been considered for this request block
+	}
 
 	slog.Debug("handleRequestLine: Returned from parseRequestLineDetails", "trimmedLine", trimmedLine, "requestPtr", fmt.Sprintf("%p", p.currentRequest), "method", p.currentRequest.Method, "rawURL", p.currentRequest.RawURLString)
 	return nil

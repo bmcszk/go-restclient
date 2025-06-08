@@ -203,6 +203,12 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 
 		// Substitute variables for URL and Headers
 		// substituteRequestVariables modifies rcRequest.Headers in place and returns the new substituted URL.
+		// Create a mutable copy of file-scoped variables for this request execution
+		requestSpecificFileVars := make(map[string]string, len(parsedFile.FileVariables))
+		for k, v := range parsedFile.FileVariables {
+			requestSpecificFileVars[k] = v
+		}
+
 		finalParsedURL, subsErr := substituteRequestVariables(
 			restClientReq,
 			parsedFile,
@@ -299,6 +305,7 @@ func (c *Client) generateRequestScopedSystemVariables() map[string]string {
 
 	// For logging/debugging purposes, to see what was generated once per request
 	// fmt.Printf("[DEBUG] Generated request-scoped system variables: %v\n", vars)
+	slog.Debug("generateRequestScopedSystemVariables: Generated map", "vars", vars) // Cascade: Added for debugging
 	return vars
 }
 
