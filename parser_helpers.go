@@ -25,3 +25,24 @@ func (p *requestParserState) extractURLAndVersion(urlAndVersion string) (string,
 	// No HTTP version, whole string is URL
 	return urlAndVersion, ""
 }
+
+// isValidHTTPToken checks if a string is a valid HTTP token (method, header field name, etc.)
+// as per RFC 7230, Section 3.2.6: 1*tchar.
+// tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." /
+//
+//	"^" / "_" / "`" / "|" / "~" / DIGIT / ALPHA
+func isValidHTTPToken(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') ||
+			r == '!' || r == '#' || r == '$' || r == '%' || r == '&' || r == '\'' ||
+			r == '*' || r == '+' || r == '-' || r == '.' || r == '^' || r == '_' ||
+			r == '`' || r == '|' || r == '~' {
+			continue
+		}
+		return false
+	}
+	return true
+}

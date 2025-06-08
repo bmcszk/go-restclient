@@ -148,7 +148,6 @@ func TestExecuteFile_NoRequestsInFile(t *testing.T) {
 }
 
 func TestExecuteFile_ValidThenInvalidSyntax(t *testing.T) {
-	t.Skip("Skipping due to parser only identifying one request when a valid request is followed by one with an invalid method. This is a parser deficiency. See task TBD for fix.")
 	// Given
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/first" {
