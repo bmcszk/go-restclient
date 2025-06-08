@@ -391,7 +391,6 @@ Response 2`,
 
 // TestParseRequestFile_VariableScoping tests variable scoping and references (FR2.4)
 func TestParseRequestFile_VariableScoping(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): parser may skip first request if preceded by file-level variables. This test expects 4 requests but gets 3.")
 	// Given
 	const requestFilePath = "testdata/variables/variable_references.http"
 

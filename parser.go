@@ -350,14 +350,14 @@ func (p *requestParserState) isRequestLine(trimmedLine string) bool {
 
 	// Check if first part is a valid HTTP method
 	method := parts[0]
+	// TODO: Consider making validMethods a package-level const or var for efficiency.
 	validMethods := []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS", "TRACE", "CONNECT"}
 	for _, validMethod := range validMethods {
 		if method == validMethod {
-			// Check if the second part looks like a URL
-			urlPart := parts[1]
-			return strings.HasPrefix(urlPart, "http://") ||
-				strings.HasPrefix(urlPart, "https://") ||
-				strings.HasPrefix(urlPart, "//")
+			// If the first part is a valid HTTP method and there's a second part (the URL part),
+			// consider it a request line. The URL part can be a placeholder like {{url}}.
+			// The actual parsing and validation of the URL happens in handleRequestLine.
+			return true
 		}
 	}
 
