@@ -452,15 +452,15 @@ func substituteDynamicSystemVariables(text string, activeDotEnvVars map[string]s
 	text = substituteRandomVariables(text, programmaticVars)
 
 	// Handle {{$env.VAR_NAME}}
-	reSystemEnvVar := regexp.MustCompile(`{{$env\.([A-Za-z_][A-Za-z0-9_]*?)}}`)
+	reSystemEnvVar := regexp.MustCompile(`{{\$env\.([A-Za-z_][A-Za-z0-9_]*?)}}`)
 	text = reSystemEnvVar.ReplaceAllStringFunc(text, func(match string) string {
 		parts := reSystemEnvVar.FindStringSubmatch(match)
 		if len(parts) == 2 {
 			varName := parts[1]
-			// os.Getenv returns empty string if var is not set, which is desired.
-			return os.Getenv(varName)
+			value := os.Getenv(varName)
+			return value
 		}
-		slog.Warn("Failed to parse $env.VAR_NAME, returning original match", "match", match)
+		slog.Warn("Failed to parse $env.VAR_NAME, returning original match", "match", match, "parts_len", len(parts))
 		return match
 	})
 

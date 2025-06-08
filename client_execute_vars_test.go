@@ -97,7 +97,7 @@ func TestRandomStringFromCharset(t *testing.T) {
 
 // TestSubstituteDynamicSystemVariables_EnvVars tests the {{$env.VAR_NAME}} substitution.
 func TestSubstituteDynamicSystemVariables_EnvVars(t *testing.T) {
-	t.Skip("Skipping due to bugs in {{$env VAR}} substitution (MEMORY 1e157e39-d7fc-4b0e-b273-5f22eb1f27c6, MEMORY d7bc6730-ff10-42fb-8959-482f75102f4b): issues with empty values and var names starting with underscores. See tasks TBD for fixes.")
+	//t.Skip("Skipping due to bugs in {{$env VAR}} substitution (MEMORY 1e157e39-d7fc-4b0e-b273-5f22eb1f27c6, MEMORY d7bc6730-ff10-42fb-8959-482f75102f4b): issues with empty values and var names starting with underscores. See tasks TBD for fixes.")
 	client, _ := NewClient()
 	tests := []struct {
 		name    string
