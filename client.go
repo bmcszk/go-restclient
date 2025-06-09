@@ -217,8 +217,6 @@ func (c *Client) generateRequestScopedSystemVariables() map[string]string {
 	vars["$randomInt"] = strconv.Itoa(rand.Intn(1001))            // 0-1000 inclusive as per PRD
 	// Add other simple, no-argument system variables here if any
 
-	// For logging/debugging purposes, to see what was generated once per request
-	// fmt.Printf("[DEBUG] Generated request-scoped system variables: %v\n", vars)
 	return vars
 }
 
