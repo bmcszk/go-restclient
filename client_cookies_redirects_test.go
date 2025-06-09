@@ -13,6 +13,78 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type cookieJarTestCase struct {
+	name                       string
+	httpFilePath               string
+	expectedCookieCheckValue   bool
+	isNoCookieJarDirectiveTest bool // True if testing the @no-cookie-jar directive specifically
+}
+
+// runCookieJarSubtest executes a subtest for cookie jar handling scenarios.
+// It uses a pointer to cookieCheck because the HTTP handler modifies this global variable.
+func runCookieJarSubtest(t *testing.T, tc cookieJarTestCase, serverVars map[string]interface{}, cookieCheck *bool) {
+	t.Helper()
+
+	*cookieCheck = false // Reset for each subtest
+
+	if tc.isNoCookieJarDirectiveTest {
+		// Special handling for @no-cookie-jar directive test
+		// Create a client without a cookie jar for the @no-cookie-jar test, but with server variables
+		noJarClient, err := NewClient(WithVars(serverVars))
+		require.NoError(t, err, "Should create client without error for @no-cookie-jar test")
+		// Intentionally NOT setting a cookie jar for noJarClient
+
+		// Parse the file. serverVars are now in noJarClient.programmaticVars.
+		parsedFile, err := parseRequestFile(tc.httpFilePath, noJarClient, nil)
+		require.NoError(t, err, "Should parse request file without error for @no-cookie-jar test")
+		require.Len(t, parsedFile.Requests, 2, "Should have parsed two requests for @no-cookie-jar test")
+
+		// For first request (setting cookie), use a client with jar
+		firstRequest := parsedFile.Requests[0]
+
+		// Create a new client with jar for first request, and with server variables
+		jarClient, err := NewClient(WithVars(serverVars))
+		require.NoError(t, err, "Should create jarClient without error for @no-cookie-jar test")
+		jar, err := cookiejar.New(nil)
+		require.NoError(t, err, "Should create cookie jar for jarClient for @no-cookie-jar test")
+		jarClient.httpClient.Jar = jar
+
+		// Execute first request (sets cookie)
+		_, err = jarClient.executeRequest(context.Background(), firstRequest)
+		require.NoError(t, err, "Should execute first request without error for @no-cookie-jar test")
+
+		// For second request (with @no-cookie-jar directive), use client without jar
+		secondRequest := parsedFile.Requests[1]
+		require.True(t, secondRequest.NoCookieJar, "Second request should have NoCookieJar flag set for @no-cookie-jar test")
+
+		// Use the client without jar for second request
+		_, err = noJarClient.executeRequest(context.Background(), secondRequest)
+		require.NoError(t, err, "Should execute second request without error for @no-cookie-jar test")
+
+		assert.Equal(t, tc.expectedCookieCheckValue, *cookieCheck, "Cookie check assertion failed for @no-cookie-jar test")
+	} else {
+		// Default behavior test (with or without jar based on client setup)
+		client, err := NewClient(WithVars(serverVars))
+		require.NoError(t, err, "Should create client without error")
+
+		// For the default 'with cookie jar' case, the client needs a jar.
+		// For a hypothetical 'explicitly no jar on client' case (not currently tested this way),
+		// we wouldn't add a jar here.
+		// Based on tc.name, this implies the default test where client *should* have a jar.
+		if tc.httpFilePath == "testdata/cookies_redirects/with_cookie_jar.http" { // A bit of a hack to infer client needs jar
+			jar, err := cookiejar.New(nil)
+			require.NoError(t, err, "Should create cookie jar without error")
+			client.httpClient.Jar = jar
+		}
+
+		responses, err := client.ExecuteFile(context.Background(), tc.httpFilePath)
+		require.NoError(t, err, "Should execute requests without error")
+		require.Len(t, responses, 2, "Should have received two responses")
+
+		assert.Equal(t, tc.expectedCookieCheckValue, *cookieCheck, "Cookie check assertion failed")
+	}
+}
+
 // PRD-COMMENT: FR9.1 - Client Execution: Cookie Jar Management
 // Corresponds to: Client execution behavior regarding HTTP cookies and the '@no-cookie-jar' request setting (http_syntax.md "Request Settings", "@no-cookie-jar").
 // This test verifies the client's cookie jar functionality. It checks:
@@ -21,19 +93,14 @@ import (
 // It uses dynamically created 'testdata/cookies_redirects/with_cookie_jar.http' and 'testdata/cookies_redirects/without_cookie_jar.http' files.
 func TestCookieJarHandling(t *testing.T) {
 	// Given: A test server that sets cookies
-	var cookieCheck bool
+	var cookieCheck bool // This variable is modified by the HTTP handler
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/set-cookie":
-			// Set a cookie
-			http.SetCookie(w, &http.Cookie{
-				Name:  "test-cookie",
-				Value: "test-value",
-			})
+			http.SetCookie(w, &http.Cookie{Name: "test-cookie", Value: "test-value"})
 			w.WriteHeader(http.StatusOK)
 			return
 		case "/check-cookie":
-			// Check if the cookie is present
 			cookie, err := r.Cookie("test-cookie")
 			if err == nil && cookie.Value == "test-value" {
 				cookieCheck = true
@@ -46,14 +113,11 @@ func TestCookieJarHandling(t *testing.T) {
 	}))
 	defer testServer.Close()
 
-	// Create test files for cookie testing
+	// Common setup: Create test files and parse server URL
 	withCookieJarFilePath := "testdata/cookies_redirects/with_cookie_jar.http"
 	withoutCookieJarFilePath := "testdata/cookies_redirects/without_cookie_jar.http"
-
-	// Create required test directories
 	require.NoError(t, createTestDirectories("testdata/cookies_redirects"))
 
-	// Create HTTP request files with variables
 	withCookieJarContent := "### Set Cookie Request\nGET {{scheme}}://{{host}}:{{port}}/set-cookie\n\n" +
 		"### Check Cookie Request\nGET {{scheme}}://{{host}}:{{port}}/check-cookie\n"
 	require.NoError(t, writeTestFile(withCookieJarFilePath, withCookieJarContent))
@@ -62,7 +126,6 @@ func TestCookieJarHandling(t *testing.T) {
 		"### Check Cookie Request\n// @no-cookie-jar\nGET {{scheme}}://{{host}}:{{port}}/check-cookie\n"
 	require.NoError(t, writeTestFile(withoutCookieJarFilePath, withoutCookieJarContent))
 
-	// Parse testServer.URL to get scheme, host, and port
 	parsedURL, err := url.Parse(testServer.URL)
 	require.NoError(t, err, "Failed to parse testServer.URL")
 	serverVars := map[string]interface{}{
@@ -71,63 +134,26 @@ func TestCookieJarHandling(t *testing.T) {
 		"port":   parsedURL.Port(),
 	}
 
-	// When/Then: Test with cookie jar (default)
-	cookieCheck = false
+	tests := []cookieJarTestCase{
+		{
+			name:                       "default_behavior_with_cookie_jar",
+			httpFilePath:               withCookieJarFilePath,
+			expectedCookieCheckValue:   true,
+			isNoCookieJarDirectiveTest: false,
+		},
+		{
+			name:                       "directive_no_cookie_jar",
+			httpFilePath:               withoutCookieJarFilePath,
+			expectedCookieCheckValue:   false,
+			isNoCookieJarDirectiveTest: true,
+		},
+	}
 
-	// Create a client with a cookie jar and server variables
-	jar, err := cookiejar.New(nil)
-	require.NoError(t, err, "Should create cookie jar without error")
-
-	client, err := NewClient(WithVars(serverVars))
-	require.NoError(t, err, "Should create client without error")
-	client.httpClient.Jar = jar
-
-	// Execute file with cookie jar enabled (default)
-	responses, err := client.ExecuteFile(context.Background(), withCookieJarFilePath)
-	require.NoError(t, err, "Should execute requests without error")
-	require.Len(t, responses, 2, "Should have received two responses")
-
-	// Check if cookie was saved and sent in the second request
-	assert.True(t, cookieCheck, "Cookie should be sent in second request with cookie jar enabled")
-
-	// When/Then: Test without cookie jar (@no-cookie-jar directive)
-	cookieCheck = false
-
-	// Create a client without a cookie jar for the @no-cookie-jar test, but with server variables
-	noJarClient, err := NewClient(WithVars(serverVars))
-	require.NoError(t, err, "Should create client without error")
-	// Intentionally NOT setting a cookie jar
-
-	// Parse the file. serverVars are now in noJarClient.programmaticVars.
-	// The third argument to parseRequestFile is for file-level variables, not client-programmatic ones.
-	parsedFile, err := parseRequestFile(withoutCookieJarFilePath, noJarClient, nil)
-	require.NoError(t, err, "Should parse request file without error")
-	require.Len(t, parsedFile.Requests, 2, "Should have parsed two requests")
-
-	// For first request (setting cookie), use a client with jar
-	firstRequest := parsedFile.Requests[0]
-
-	// Create a new client with jar for first request, and with server variables
-	jarClient, err := NewClient(WithVars(serverVars)) // Renamed to jarClient for clarity
-	require.NoError(t, err, "Should create client without error")
-	jar, err = cookiejar.New(nil)
-	require.NoError(t, err, "Should create cookie jar without error")
-	jarClient.httpClient.Jar = jar
-
-	// Execute first request (sets cookie)
-	_, err = jarClient.executeRequest(context.Background(), firstRequest)
-	require.NoError(t, err, "Should execute first request without error")
-
-	// For second request (with @no-cookie-jar directive), use client without jar
-	secondRequest := parsedFile.Requests[1]
-	require.True(t, secondRequest.NoCookieJar, "Second request should have NoCookieJar flag set")
-
-	// Use the client without jar for second request
-	_, err = noJarClient.executeRequest(context.Background(), secondRequest)
-	require.NoError(t, err, "Should execute second request without error")
-
-	// Check that cookie was NOT sent in the second request
-	assert.False(t, cookieCheck, "Cookie should not be sent in second request with @no-cookie-jar directive")
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			runCookieJarSubtest(t, tc, serverVars, &cookieCheck)
+		})
+	}
 }
 
 // PRD-COMMENT: FR9.2 - Client Execution: Redirect Handling
