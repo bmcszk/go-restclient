@@ -22,6 +22,15 @@
 *   **Issue:** `prds/jetbrains_compatibility/test_coverage_mapping.md` (as of 2025-06-09) lists `TestParseRequestFile_MultipleRequestsChained` in `parser_test.go` as a test covering FR7.2 ("Response Reference Variables"). However, this function does not exist in `parser_test.go` on the `feature/jetbrains-client-compatibility2` branch.
 *   **Next Step:** Re-evaluating the `test_coverage_mapping.md` entry for FR7.2 to identify the correct test function or file, or to note a potential coverage gap/documentation error.
 
+
+### Missing Import After Helper Function Extraction (2025-06-09)
+
+*   **Mistake:** When refactoring `client_execute_edgecases_test.go` (during Step ID 1041), a new helper function `setupIgnoreEmptyBlocksMockServer` was created. This function returned `*httptest.Server`, but the required import `net/http/httptest` was not added to the file's import block.
+*   **File/Command:** `client_execute_edgecases_test.go`
+*   **Symptom:** `make check` (during Step ID 1043) failed with a typecheck error: `client_execute_edgecases_test.go:112:54: undefined: httptest (typecheck)`.
+*   **Resolution:** The missing import `net/http/httptest` was added to the import block of `client_execute_edgecases_test.go` (Step ID 1046).
+*   **Lesson Learned:** When extracting code into new helper functions, especially if they introduce new types from external packages (even standard library ones like `httptest`), always ensure that all necessary imports are present in the file. Running a build or linter immediately after such refactoring can help catch these omissions early.
+
 Last Updated: 2025-06-05
 
 ## 2025-06-05: `view_line_range` Tool - Output Truncation and Pagination

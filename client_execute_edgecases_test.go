@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath" // Added
 	"testing"
@@ -108,15 +109,10 @@ func runExecuteFileSubtest(t *testing.T, client *Client, serverURL string, tc ex
 	}
 }
 
-// PRD-COMMENT: FR2.4 - Parser: Request Separators and Comments / FR11.2 - Client Execution: Handling of Non-Request Content
-// Corresponds to: Client and parser behavior regarding non-executable content within .http files, such as comments, empty blocks between request separators ('###'), and files containing only variable definitions (http_syntax.md "Request Separation", "Comments", "Variables").
-// This test suite verifies various scenarios:
-// 1. Requests correctly parsed and executed when separated by comments or empty lines around separators.
-// 2. Correct error handling (e.g., 'no requests found') for files that only contain variable definitions or are otherwise empty of executable requests.
-// It uses test case templates from 'testdata/execute_file_ignore_empty_blocks/' (e.g., 'scenario_004_template.http', 'only_vars.http') to dynamically create test files.
-func TestExecuteFile_IgnoreEmptyBlocks_Client(t *testing.T) {
-	// Given common setup for all subtests
-	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+// setupIgnoreEmptyBlocksMockServer sets up a mock HTTP server for TestExecuteFile_IgnoreEmptyBlocks_Client.
+func setupIgnoreEmptyBlocksMockServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return startMockServer(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/first":
 			assert.Equal(t, http.MethodGet, r.Method)
@@ -141,6 +137,17 @@ func TestExecuteFile_IgnoreEmptyBlocks_Client(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
+}
+
+// PRD-COMMENT: FR2.4 - Parser: Request Separators and Comments / FR11.2 - Client Execution: Handling of Non-Request Content
+// Corresponds to: Client and parser behavior regarding non-executable content within .http files, such as comments, empty blocks between request separators ('###'), and files containing only variable definitions (http_syntax.md "Request Separation", "Comments", "Variables").
+// This test suite verifies various scenarios:
+// 1. Requests correctly parsed and executed when separated by comments or empty lines around separators.
+// 2. Correct error handling (e.g., 'no requests found') for files that only contain variable definitions or are otherwise empty of executable requests.
+// It uses test case templates from 'testdata/execute_file_ignore_empty_blocks/' (e.g., 'scenario_004_template.http', 'only_vars.http') to dynamically create test files.
+func TestExecuteFile_IgnoreEmptyBlocks_Client(t *testing.T) {
+	// Given common setup for all subtests
+	server := setupIgnoreEmptyBlocksMockServer(t)
 	defer server.Close()
 	client, _ := NewClient()
 
