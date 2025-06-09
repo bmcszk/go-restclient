@@ -359,6 +359,10 @@ func TestParseExpectedResponses_Simple(t *testing.T) {
 		expectError      bool
 	}{
 		{
+			// PRD-COMMENT: FR7.1 - Parsing Full Expected Response
+			// Corresponds to: http_syntax.md "Expected Responses (.hresp)", "Status Line", "Headers", "Response Body"
+			// This test verifies the parsing of a complete and valid expected response,
+			// including status line, multiple headers, and a JSON body.
 			name: "SCENARIO-LIB-007-001: Full valid response",
 			content: `HTTP/1.1 200 OK
 Content-Type: application/json
@@ -376,12 +380,20 @@ X-Test-Header: TestValue
 			expectedBodyJSON: `{"message": "success"}`,
 		},
 		{
+			// PRD-COMMENT: FR7.1 - Parsing Status Line Only in Expected Response
+			// Corresponds to: http_syntax.md "Expected Responses (.hresp)", "Status Line"
+			// This test verifies that an expected response containing only a status line
+			// is parsed correctly.
 			name:           "SCENARIO-LIB-007-002: Status line only",
 			content:        `HTTP/1.1 404 Not Found`,
 			expectedCount:  1,
 			expectedStatus: ptr("404 Not Found"),
 		},
 		{
+			// PRD-COMMENT: FR7.1 - Parsing Status and Headers in Expected Response
+			// Corresponds to: http_syntax.md "Expected Responses (.hresp)", "Status Line", "Headers"
+			// This test checks the parsing of an expected response that includes a status line
+			// and headers, but no body.
 			name: "SCENARIO-LIB-007-003: Status and headers only",
 			content: `HTTP/1.1 201 Created
 Cache-Control: no-cache`,
@@ -392,6 +404,10 @@ Cache-Control: no-cache`,
 			},
 		},
 		{
+			// PRD-COMMENT: FR7.1 - Parsing Status and Body in Expected Response
+			// Corresponds to: http_syntax.md "Expected Responses (.hresp)", "Status Line", "Response Body"
+			// This test verifies parsing of an expected response with a status line and a body,
+			// but no explicit headers.
 			name: "SCENARIO-LIB-007-004: Status and body only",
 			content: `HTTP/1.1 500 Internal Server Error
 
@@ -401,12 +417,20 @@ Cache-Control: no-cache`,
 			expectedBody:   ptr("<error>Server Error</error>"),
 		},
 		{
+			// PRD-COMMENT: FR7.1 - Parsing Empty Expected Response File
+			// Corresponds to: http_syntax.md "Expected Responses (.hresp)"
+			// This test ensures that an empty .hresp file content is handled gracefully,
+			// resulting in zero parsed responses and no error.
 			name:          "SCENARIO-LIB-007-005: Empty content",
 			content:       ``,
 			expectedCount: 0,
 			expectError:   false, // Empty content is not an error, just no responses.
 		},
 		{
+			// PRD-COMMENT: FR7.1 - Handling Malformed Status Line in Expected Response
+			// Corresponds to: http_syntax.md "Expected Responses (.hresp)", "Status Line"
+			// This test verifies that a malformed status line in an expected response
+			// results in a parsing error.
 			name:          "SCENARIO-LIB-007-006: Malformed status line",
 			content:       `HTTP/1.1OK`, // No space
 			expectedCount: 0,
