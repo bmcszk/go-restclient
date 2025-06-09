@@ -7,6 +7,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// PRD-COMMENT: FR7.1.1 - Response Validation: $any Placeholder
+// Corresponds to: http_syntax.md "Response Validation Placeholders", "$any"
+// This test verifies the parser's ability to correctly process the '$any' placeholder
+// within expected response (.hresp) files. It ensures that the placeholder is recognized
+// and the response body containing it is parsed correctly.
+// It uses 'testdata/response_validation/expected_response_any.hresp'.
 func TestParseResponseValidationPlaceholder_Any(t *testing.T) {
 	// Given: An expected response with $any placeholders
 	expectedResponseFile := "testdata/response_validation/expected_response_any.hresp"
@@ -31,6 +37,12 @@ func TestParseResponseValidationPlaceholder_Any(t *testing.T) {
 	assert.Contains(t, *resp.Body, "{{$any}}world", "Response should contain suffix with $any placeholder")
 }
 
+// PRD-COMMENT: FR7.1.2 - Response Validation: $regexp Placeholder
+// Corresponds to: http_syntax.md "Response Validation Placeholders", "$regexp"
+// This test verifies the parser's ability to correctly process the '$regexp' placeholder
+// within expected response (.hresp) files. It checks that various regular expressions,
+// including those with special characters requiring escaping, are parsed correctly.
+// It uses 'testdata/response_validation/expected_response_regexp.hresp'.
 func TestParseResponseValidationPlaceholder_Regexp(t *testing.T) {
 	// Given: An expected response with $regexp placeholders
 	expectedResponseFile := "testdata/response_validation/expected_response_regexp.hresp"
@@ -64,6 +76,12 @@ func TestParseResponseValidationPlaceholder_Regexp(t *testing.T) {
 	assert.Contains(t, *resp.Body, "\\\\d{3}-\\\\d{3}-\\\\d{4}", "Response body should contain phone number format")
 }
 
+// PRD-COMMENT: FR7.1.3 - Response Validation: $anyGuid Placeholder
+// Corresponds to: http_syntax.md "Response Validation Placeholders", "$anyGuid"
+// This test verifies the parser's ability to correctly process the '$anyGuid' (or '$anyUuid')
+// placeholder within expected response (.hresp) files. It ensures that these placeholders,
+// used for matching any valid UUID/GUID, are parsed correctly.
+// It uses 'testdata/response_validation/expected_response_guid.hresp'.
 func TestParseResponseValidationPlaceholder_AnyGuid(t *testing.T) {
 	// Given: An expected response with $anyGuid placeholders
 	expectedResponseFile := "testdata/response_validation/expected_response_guid.hresp"
@@ -86,6 +104,12 @@ func TestParseResponseValidationPlaceholder_AnyGuid(t *testing.T) {
 		"Response should contain $anyGuid placeholder within a string")
 }
 
+// PRD-COMMENT: FR7.1.4 - Response Validation: $anyTimestamp Placeholder
+// Corresponds to: http_syntax.md "Response Validation Placeholders", "$anyTimestamp"
+// This test verifies the parser's ability to correctly process the '$anyTimestamp'
+// placeholder within expected response (.hresp) files. This placeholder is used for matching
+// any valid Unix timestamp (integer).
+// It uses 'testdata/response_validation/expected_response_timestamp.hresp'.
 func TestParseResponseValidationPlaceholder_AnyTimestamp(t *testing.T) {
 	// Given: An expected response with $anyTimestamp placeholders
 	expectedResponseFile := "testdata/response_validation/expected_response_timestamp.hresp"
@@ -110,6 +134,12 @@ func TestParseResponseValidationPlaceholder_AnyTimestamp(t *testing.T) {
 		"Response body should contain nested timestamp placeholder")
 }
 
+// PRD-COMMENT: FR7.1.5 - Response Validation: $anyDatetime Placeholder
+// Corresponds to: http_syntax.md "Response Validation Placeholders", "$anyDatetime"
+// This test verifies the parser's ability to correctly process the '$anyDatetime'
+// placeholder with various format specifiers (RFC3339, RFC1123, custom Go format string)
+// within expected response (.hresp) files.
+// It uses 'testdata/response_validation/expected_response_datetime.hresp'.
 func TestParseResponseValidationPlaceholder_AnyDatetime(t *testing.T) {
 	// Given: An expected response with $anyDatetime placeholders
 	expectedResponseFile := "testdata/response_validation/expected_response_datetime.hresp"
@@ -135,6 +165,12 @@ func TestParseResponseValidationPlaceholder_AnyDatetime(t *testing.T) {
 		"Response should contain $anyDatetime placeholder with custom format")
 }
 
+// PRD-COMMENT: FR8.1 - Chained Requests: Response Reference Parsing
+// Corresponds to: http_syntax.md "Chained Requests and Response References"
+// This test verifies the parser's ability to correctly parse .http files containing chained requests,
+// where subsequent requests reference values from the responses of previous requests (e.g., {{requestName.response.body.field}}).
+// It ensures that request names are captured and that RawURLString and RawBody containing these references are preserved.
+// It uses 'testdata/response_validation/chained_requests.http'.
 func TestParseChainedRequests(t *testing.T) {
 	// Given: HTTP file with chained requests using response references
 	requestFile := "testdata/response_validation/chained_requests.http"
