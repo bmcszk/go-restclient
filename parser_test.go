@@ -280,6 +280,12 @@ func TestParseExpectedResponses_SeparatorComments(t *testing.T) {
 		expResp2Status string
 	}{
 		{
+			// PRD-COMMENT: FR7.1, FR1.4 - Expected Response Separation with Comments
+			// Corresponds to: http_syntax.md "Expected Responses (.hresp)", "Comments"
+			// This test verifies the parsing of expected response files (.hresp) that contain
+			// multiple expected responses separated by '###', where comments are present
+			// on the separator lines. It ensures that expected responses are correctly delineated
+			// and comments are ignored during parsing.
 			name: "SCENARIO-LIB-027-002: Separator comment in response file",
 			fileContent: `
 HTTP/1.1 200 OK
