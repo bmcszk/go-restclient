@@ -151,37 +151,6 @@ func parseRequestFile(filePath string, client *Client, importStack []string) (*P
 	// Load http-client.env.json for environment-specific variables (Task T4)
 	loadEnvironmentSpecificVariables(filePath, client, parsedFile) // Pass original filePath
 
-	// Ensure programmatic variables are included in the file variables
-	// Cascade: Commenting out this block to prevent mutation of parsedFile.FileVariables.
-	// Programmatic variables should be applied with precedence during request execution substitution.
-	/*
-		if false { // Ensure this block is not executed
-			if client != nil && client.programmaticVars != nil {
-				for key, val := range client.programmaticVars {
-					// Convert value to string representation
-					strVal := fmt.Sprintf("%v", val)
-					parsedFile.FileVariables[key] = strVal
-				}
-			}
-		}
-	*/
-
-	// Second pass - resolve variables that reference other variables
-	// Cascade: Commenting out this block. Resolution of nested file variables should use
-	// the main resolveVariablesInText engine during request execution on a copied map.
-	/*
-		// This ensures that references like {{test_server_url}} in base_url get fully resolved
-		if false { // Ensure this block is not executed
-			for key, val := range parsedFile.FileVariables {
-				// Only try to resolve if the value contains a variable reference
-				if strings.Contains(val, "{{") && strings.Contains(val, "}}") {
-					resolvedVal := resolveVariablesInValue(val, parsedFile.FileVariables)
-					parsedFile.FileVariables[key] = resolvedVal
-				}
-			}
-		}
-	*/
-
 	return parsedFile, nil
 }
 
@@ -229,15 +198,11 @@ func loadEnvironmentSpecificVariables(originalFilePath string, client *Client, p
 	}
 }
 
-// reqScopedSystemVarsForParser is generated once per file parsing pass for resolving @-vars consistently.
-// var reqScopedSystemVarsForParser map[string]string // REMOVED GLOBAL
-
 // parseRequests reads HTTP requests from a reader and parses them into a ParsedFile struct.
 // It's used by parseRequestFile to process individual HTTP request files.
 func parseRequests(reader *bufio.Reader, filePath string, client *Client,
 	requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool),
 	dotEnvVars map[string]string, importStack []string) (*ParsedFile, error) {
-
 	// Initialize parser state
 	parserState := &requestParserState{
 		filePath:                filePath,
@@ -250,16 +215,13 @@ func parseRequests(reader *bufio.Reader, filePath string, client *Client,
 		currentFileVariables:    make(map[string]string),
 		lineNumber:              0,
 	}
-
 	// Process each line in the file
 	for {
 		line, err := reader.ReadString('\n')
-
 		// Handle errors except EOF
 		if err != nil && err != io.EOF {
 			return nil, fmt.Errorf("error reading request file: %w", err)
 		}
-
 		// Process this line if not empty
 		if line != "" {
 			parserState.lineNumber++
@@ -267,23 +229,19 @@ func parseRequests(reader *bufio.Reader, filePath string, client *Client,
 				return nil, err
 			}
 		}
-
 		// Break at EOF
 		if err == io.EOF {
 			break
 		}
 	}
-
 	// Finalize the last request if there is one
 	if parserState.currentRequest != nil {
 		parserState.finalizeCurrentRequest()
 	}
-
 	// Ensure all file variables are copied to the parsed file
 	for k, v := range parserState.currentFileVariables {
 		parserState.parsedFile.FileVariables[k] = v
 	}
-
 	// Return the ParsedFile
 	return parserState.parsedFile, nil
 }
@@ -293,18 +251,14 @@ func processFileLine(parserState *requestParserState, line string) error {
 	// Remove trailing newline and carriage return if present
 	line = strings.TrimRight(line, "\r\n")
 	trimmedLine := strings.TrimSpace(line)
-
 	// Process the line based on content
 	if trimmedLine == "" {
 		return parserState.handleEmptyLine(line)
 	}
-
 	// Process non-empty line
 	lineType := determineLineType(trimmedLine)
 	return parserState.processLine(lineType, trimmedLine, line)
 }
-
-// ...
 
 // ensureCurrentRequest creates a new request if one doesn't exist yet
 // isRequestLine determines if a line is an HTTP request line (e.g., GET https://example.com)
@@ -545,9 +499,11 @@ func (p *requestParserState) handleBodyContent(line string) {
 	// Ensure we're in body parsing mode
 	p.parsingBody = true
 
-	// Check for external file reference syntax
+	// Check for external file reference syntax - only if this is the first body line
+	// and no other body content exists (to avoid interfering with multipart form data)
 	trimmedLine := strings.TrimSpace(line)
-	if strings.HasPrefix(trimmedLine, "<") {
+	if len(p.bodyLines) == 0 && strings.HasPrefix(trimmedLine, "<") &&
+		(strings.HasPrefix(trimmedLine, "< ") || strings.HasPrefix(trimmedLine, "<@")) {
 		p.handleExternalFileReference(trimmedLine)
 		return
 	}
@@ -569,28 +525,7 @@ func (p *requestParserState) handleExternalFileReference(line string) {
 
 	// Check for variable substitution syntax (<@)
 	if strings.HasPrefix(content, "@") {
-		contentAfterAt := content[1:] // Remove the '@'
-		p.currentRequest.ExternalFileWithVariables = true
-
-		// Check for encoding specification
-		parts := strings.Fields(contentAfterAt)
-		if len(parts) >= 2 {
-			// First part might be encoding, second part is file path
-			possibleEncoding := parts[0]
-			possiblePath := strings.Join(parts[1:], " ") // Join in case path has spaces
-
-			// Check if first part looks like an encoding
-			if isValidEncoding(possibleEncoding) {
-				p.currentRequest.ExternalFileEncoding = possibleEncoding
-				p.currentRequest.ExternalFilePath = possiblePath
-			} else {
-				// No encoding specified, treat entire content after @ as path
-				p.currentRequest.ExternalFilePath = strings.TrimSpace(contentAfterAt)
-			}
-		} else {
-			// Single part, treat as path
-			p.currentRequest.ExternalFilePath = strings.TrimSpace(contentAfterAt)
-		}
+		p.parseExternalFileWithVariables(content[1:]) // Remove the '@'
 	} else {
 		// Static file reference (< ./path/to/file)
 		p.currentRequest.ExternalFilePath = strings.TrimSpace(content)
@@ -601,16 +536,23 @@ func (p *requestParserState) handleExternalFileReference(line string) {
 	p.currentRequest.RawBody = line
 }
 
+// parseExternalFileWithVariables handles parsing of external file references with variable substitution
+func (p *requestParserState) parseExternalFileWithVariables(contentAfterAt string) {
+	p.currentRequest.ExternalFileWithVariables = true
+	parts := strings.Fields(contentAfterAt)
+	if len(parts) >= 2 && isValidEncoding(parts[0]) {
+		p.currentRequest.ExternalFileEncoding = parts[0]
+		p.currentRequest.ExternalFilePath = strings.Join(parts[1:], " ")
+	} else {
+		p.currentRequest.ExternalFilePath = strings.TrimSpace(contentAfterAt)
+	}
+}
+
 // isValidEncoding checks if the given string is a valid encoding name
 func isValidEncoding(encoding string) bool {
 	validEncodings := map[string]bool{
-		"utf-8":    true,
-		"utf8":     true,
-		"latin1":   true,
-		"iso-8859-1": true,
-		"ascii":    true,
-		"cp1252":   true,
-		"windows-1252": true,
+		"utf-8": true, "utf8": true, "latin1": true, "iso-8859-1": true,
+		"ascii": true, "cp1252": true, "windows-1252": true,
 	}
 	return validEncodings[strings.ToLower(encoding)]
 }
@@ -767,6 +709,29 @@ func (p *requestParserState) handleNonMethodRequestLine(requestLine string, firs
 		"token", firstToken, "requestLine", requestLine, "currentMethod", p.currentRequest.Method, "currentRawURL", p.currentRequest.RawURLString, "line", p.lineNumber, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
 }
 
+// processSameLineSeparator handles same-line request separators (### on the same line as request)
+func (p *requestParserState) processSameLineSeparator(requestLine string) (processedLine string, hasSeparator bool) {
+	sepIndex := strings.Index(requestLine, requestSeparator)
+	if sepIndex == -1 {
+		return requestLine, false
+	}
+
+	actualRequestPart := strings.TrimSpace(requestLine[:sepIndex])
+	nextNamePart := ""
+	if len(requestLine) > sepIndex+len(requestSeparator) {
+		nextNamePart = strings.TrimSpace(requestLine[sepIndex+len(requestSeparator):])
+	}
+
+	if nextNamePart != "" {
+		p.nextRequestName = nextNamePart
+		slog.Debug("parseRequestLineDetails: Found same-line separator, captured next request name", "nextRequestName", p.nextRequestName, "line", p.lineNumber)
+	} else {
+		slog.Debug("parseRequestLineDetails: Found same-line separator, no specific name for next request", "line", p.lineNumber)
+	}
+
+	return actualRequestPart, true
+}
+
 // parseRequestLineDetails attempts to parse the given trimmedLine as a request line (METHOD URL HTTP/Version).
 // It updates p.currentRequest with the parsed details.
 // If the request line includes a same-line request separator (###), it finalizes the current request
@@ -776,27 +741,7 @@ func (p *requestParserState) handleNonMethodRequestLine(requestLine string, firs
 func (p *requestParserState) parseRequestLineDetails(originalRequestLine string) (finalizedBySeparator bool) {
 	slog.Debug("parseRequestLineDetails: Parsing request line", "originalRequestLine", originalRequestLine, "requestPtr", fmt.Sprintf("%p", p.currentRequest), "line", p.lineNumber)
 
-	requestLine := originalRequestLine
-	finalizedBySeparator = false // Initialize
-
-	// Check for same-line request separator
-	if sepIndex := strings.Index(requestLine, requestSeparator); sepIndex != -1 {
-		actualRequestPart := strings.TrimSpace(requestLine[:sepIndex])
-		nextNamePart := ""
-		if len(requestLine) > sepIndex+len(requestSeparator) {
-			nextNamePart = strings.TrimSpace(requestLine[sepIndex+len(requestSeparator):])
-		}
-
-		if nextNamePart != "" {
-			p.nextRequestName = nextNamePart
-			slog.Debug("parseRequestLineDetails: Found same-line separator, captured next request name", "nextRequestName", p.nextRequestName, "line", p.lineNumber)
-		} else {
-			slog.Debug("parseRequestLineDetails: Found same-line separator, no specific name for next request", "line", p.lineNumber)
-		}
-
-		requestLine = actualRequestPart // Process only the part before "###"
-		finalizedBySeparator = true     // Mark that this request needs finalization
-	}
+	requestLine, finalizedBySeparator := p.processSameLineSeparator(originalRequestLine)
 
 	parts := strings.Fields(requestLine)
 	if len(parts) == 0 {
@@ -894,23 +839,15 @@ func (p *requestParserState) parseRequestLineDetails(originalRequestLine string)
 	return false // Not finalized by a same-line separator
 }
 
-// Removed unused function parseHeaderOrStartBody
-
-// ParseExpectedResponseFile reads a file and parses it into a slice of ExpectedResponse definitions.
-//
-// DEPRECATED: This function is deprecated and will be removed or made internal in a future version.
-// It does not support variable substitution. Users should migrate to using `ValidateResponses` from the
-// `validator.go` file, which handles .hresp file parsing, variable extraction, and substitution
-// before validation. For direct parsing of already substituted .hresp content, one can read the file
-// into an `io.Reader` and use `parseExpectedResponses` directly.
+// parseExpectedResponseFile reads a file and parses it into a slice of ExpectedResponse definitions.
+// DEPRECATED: This function is deprecated. Use ValidateResponses from validator.go instead.
 func parseExpectedResponseFile(filePath string) ([]*ExpectedResponse, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open expected response file %s: %w", filePath, err)
 	}
-	defer func() { _ = file.Close() }() // Correctly ignore error for defer file.Close()
-
-	return parseExpectedResponses(file, filePath) // filePath is used for error reporting within parseExpectedResponses
+	defer func() { _ = file.Close() }()
+	return parseExpectedResponses(file, filePath)
 }
 
 // parseExpectedStatusLine parses a line as an HTTP status line (HTTP_VERSION STATUS_CODE [STATUS_TEXT]).

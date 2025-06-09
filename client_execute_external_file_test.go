@@ -13,7 +13,7 @@ import (
 func TestExecuteFile_ExternalFileWithVariables(t *testing.T) {
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
-	
+
 	// Create a test JSON file with variables
 	jsonContent := `{
   "userId": "{{userId}}",
@@ -61,7 +61,7 @@ Content-Type: application/json
 	assert.Contains(t, bodyStr, `"name": "Override Name"`) // Programmatic variable should override
 	assert.Contains(t, bodyStr, `"environment": "testing"`)
 	assert.Contains(t, bodyStr, `"timestamp":`) // Should contain a timestamp
-	
+
 	// Verify that timestamp is a number
 	assert.Regexp(t, `"timestamp": "\d+"`, bodyStr)
 }
@@ -69,7 +69,7 @@ Content-Type: application/json
 func TestExecuteFile_ExternalFileWithoutVariables(t *testing.T) {
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
-	
+
 	// Create a test JSON file with variable placeholders (should NOT be substituted)
 	jsonContent := `{
   "userId": "{{userId}}",
@@ -117,10 +117,10 @@ Content-Type: application/json
 func TestExecuteFile_ExternalFileWithEncoding(t *testing.T) {
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
-	
+
 	// Create a test file with special characters
 	textContent := "Café français: été, naïve, résumé"
-	
+
 	// Write as UTF-8 (Go's default)
 	textFile := filepath.Join(tempDir, "test_encoding.txt")
 	err := os.WriteFile(textFile, []byte(textContent), 0644)
@@ -158,7 +158,7 @@ Content-Type: text/plain
 func TestExecuteFile_ExternalFileNotFound(t *testing.T) {
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
-	
+
 	// Create a test HTTP file referencing a non-existent file
 	httpContent := `### External File Not Found
 POST https://httpbin.org/post
@@ -177,9 +177,9 @@ Content-Type: application/json
 	// Execute the file - should return error
 	responses, err := client.ExecuteFile(context.Background(), httpFile)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "error processing external file")
+	require.Contains(t, err.Error(), "error processing body for request")
 	require.Contains(t, err.Error(), "nonexistent.json")
-	
+
 	// Should still get responses array but with error
 	require.Len(t, responses, 0) // No responses should be returned on file processing error
 }
@@ -187,7 +187,7 @@ Content-Type: application/json
 func TestClient_ProcessExternalFile(t *testing.T) {
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
-	
+
 	// Create a test file with variables
 	fileContent := "Hello {{name}}, your ID is {{userId}}"
 	testFile := filepath.Join(tempDir, "test.txt")
@@ -196,7 +196,7 @@ func TestClient_ProcessExternalFile(t *testing.T) {
 
 	// Create client with variables
 	client, err := NewClient(WithVars(map[string]interface{}{
-		"name": "Alice",
+		"name":   "Alice",
 		"userId": "12345",
 	}))
 	require.NoError(t, err)
@@ -227,7 +227,7 @@ func TestClient_ProcessExternalFile(t *testing.T) {
 func TestClient_ReadFileWithEncoding(t *testing.T) {
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
-	
+
 	// Create test content
 	content := "Hello World"
 	testFile := filepath.Join(tempDir, "test.txt")

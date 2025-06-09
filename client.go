@@ -130,16 +130,6 @@ func WithEnvironment(name string) ClientOption {
 	}
 }
 
-// SetProgrammaticVar sets or updates a single programmatic variable for the client instance.
-// These variables can be used in .http and .hresp files and have the highest precedence.
-func (c *Client) SetProgrammaticVar(key string, value interface{}) error {
-	if c.programmaticVars == nil {
-		c.programmaticVars = make(map[string]interface{})
-	}
-	c.programmaticVars[key] = value
-	return nil
-}
-
 // ExecuteFile parses a request file (.http, .rest), executes all requests found, and returns their responses.
 // It returns an error if the file cannot be parsed or no requests are found.
 // Individual request execution errors are stored within each Response object.
@@ -167,140 +157,44 @@ func (c *Client) SetProgrammaticVar(key string, value interface{}) error {
 //
 // Programmatic variables for substitution can be set on the Client using `WithVars()`.
 func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Response, error) {
-	slog.Debug("ExecuteFile: Entered function", "requestFilePath", requestFilePath)
-	parsedFile, err := parseRequestFile(requestFilePath, c, make([]string, 0)) // Pass initial empty import stack
+	parsedFile, err := c.parseAndValidateFile(requestFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse request file %s: %w", requestFilePath, err)
-	}
-	if len(parsedFile.Requests) == 0 {
-		return nil, fmt.Errorf("no requests found in file %s", requestFilePath)
-	}
-	slog.Debug("ExecuteFile: parseRequestFile completed successfully", "numRequests", len(parsedFile.Requests), "requestFilePath", requestFilePath)
-
-	c.currentDotEnvVars = make(map[string]string)
-	envFilePath := filepath.Join(filepath.Dir(requestFilePath), ".env")
-	if _, err := os.Stat(envFilePath); err == nil {
-		loadedVars, loadErr := godotenv.Read(envFilePath)
-		if loadErr == nil {
-			c.currentDotEnvVars = loadedVars
-		}
+		return nil, err
 	}
 
-	responses := make([]*Response, len(parsedFile.Requests))
+	c.loadDotEnvVars(requestFilePath)
+
+	var responses []*Response
 	var multiErr *multierror.Error
-
-	osEnvGetter := func(key string) (string, bool) {
-		return os.LookupEnv(key)
-	}
+	osEnvGetter := func(key string) (string, bool) { return os.LookupEnv(key) }
 
 	for i, restClientReq := range parsedFile.Requests {
-		slog.Debug("ExecuteFile: Loop start", "iteration", i, "requestName", restClientReq.Name, "restClientReq_addr", fmt.Sprintf("%p", restClientReq), "URL_is_nil_at_loop_start", restClientReq.URL == nil)
-		requestScopedSystemVars := c.generateRequestScopedSystemVariables()
-
-		// If URL is nil initially, substituteRequestVariables will handle it based on RawURLString
-		if restClientReq.URL == nil {
-			slog.Warn("ExecuteFile: restClientReq.URL is nil before variable substitution", "method", restClientReq.Method, "rawURL", restClientReq.RawURLString, "requestName", restClientReq.Name)
-		}
-
-		// "[DEBUG_EXECUTEFILE_HEADERS_BEFORE_EXECREQ]", "filePath", requestFilePath, "reqName", restClientReq.Name, "headers", restClientReq.Headers)
-
-		// Substitute variables for URL and Headers
-		// substituteRequestVariables modifies rcRequest.Headers in place and returns the new substituted URL.
-		// Create a mutable copy of file-scoped variables for this request execution
-		requestSpecificFileVars := make(map[string]string, len(parsedFile.FileVariables))
-		for k, v := range parsedFile.FileVariables {
-			requestSpecificFileVars[k] = v
-		}
-
-		finalParsedURL, subsErr := substituteRequestVariables(
-			restClientReq,
-			parsedFile,
-			requestScopedSystemVars,
-			osEnvGetter,
-			c.programmaticVars,
-			c.currentDotEnvVars,
-			c.BaseURL,
-		)
-		slog.Debug("ExecuteFile: After substituteRequestVariables", "finalParsedURL_is_nil", finalParsedURL == nil, "subsErr_is_nil", subsErr == nil, "requestName", restClientReq.Name) // Cascade: Log here
-		if subsErr != nil {
-			slog.Error("Failed to substitute variables for URL/Headers", "request", restClientReq.Name, "error", subsErr)
-			// Ensure a response object exists to store the error
-			if responses[i] == nil {
-				responses[i] = &Response{Request: restClientReq}
+		response, err := c.executeRequestWithVariables(ctx, restClientReq, parsedFile, osEnvGetter, i)
+		if err != nil {
+			multiErr = multierror.Append(multiErr, err)
+			// For body processing errors (like external file not found), skip this request entirely
+			if response != nil && response.Error != nil &&
+				(strings.Contains(err.Error(), "error processing body for request") ||
+					strings.Contains(err.Error(), "failed to read external file")) {
+				continue // Skip adding this response to the results
 			}
-			// subsErr from substituteRequestVariables should already be contextually wrapped.
-			responses[i].Error = subsErr
-			multiErr = multierror.Append(multiErr, fmt.Errorf("error substituting URL/Header variables for request %s (index %d): %w", restClientReq.Name, i, subsErr))
-			continue // Skip to the next request in the loop
-		}
-		restClientReq.URL = finalParsedURL                                                                                                                                         // Assign the substituted URL
-		slog.Debug("ExecuteFile: restClientReq.URL after assignment from finalParsedURL", "restClientReq_URL_is_nil", restClientReq.URL == nil, "requestName", restClientReq.Name) // Cascade: Log URL state
-
-		// Substitute variables for Body
-		var finalSubstitutedBody string
-		var bodyErr error
-		
-		// Handle external file references
-		if restClientReq.ExternalFilePath != "" {
-			finalSubstitutedBody, bodyErr = c.processExternalFile(
-				restClientReq,
-				parsedFile,
-				requestScopedSystemVars,
-				osEnvGetter,
-			)
-			if bodyErr != nil {
-				multiErr = multierror.Append(multiErr, fmt.Errorf("error processing external file for request %s (index %d): %w", restClientReq.Name, i, bodyErr))
-				continue // Skip to the next request in the loop
+			// Ensure we have a response for other types of errors
+			if response == nil {
+				response = &Response{Request: restClientReq, Error: fmt.Errorf("request processing failed")}
 			}
-		} else if restClientReq.RawBody != "" {
-			resolvedBody := resolveVariablesInText(
-				restClientReq.RawBody,
-				c.programmaticVars,
-				restClientReq.ActiveVariables, // These are file-scoped variables for the current request
-				parsedFile.EnvironmentVariables,
-				parsedFile.GlobalVariables,
-				requestScopedSystemVars,
-				osEnvGetter,
-				c.currentDotEnvVars,
-				nil, // default options
-			)
-			// Note: programmaticVars is passed to substituteDynamicSystemVariables as it might be needed by substituteRandomVariables
-			finalSubstitutedBody = substituteDynamicSystemVariables(
-				resolvedBody,
-				c.currentDotEnvVars,
-				c.programmaticVars,
-			)
 		}
-
-		if finalSubstitutedBody != "" {
-			restClientReq.RawBody = finalSubstitutedBody // Update RawBody with the fully substituted content
-			restClientReq.Body = strings.NewReader(finalSubstitutedBody)
-			// It's crucial to update GetBody as well, so that retries use the substituted body
-			restClientReq.GetBody = func() (io.ReadCloser, error) {
-				return io.NopCloser(strings.NewReader(finalSubstitutedBody)), nil
+		// Handle error wrapping for logging
+		if response != nil && response.Error != nil {
+			urlForError := restClientReq.RawURLString
+			if restClientReq.URL != nil {
+				urlForError = restClientReq.URL.String()
 			}
-		} else {
-			restClientReq.Body = nil    // Ensure body is nil if RawBody is empty
-			restClientReq.GetBody = nil // And GetBody too
-		}
-		slog.Debug("ExecuteFile: Pointer check before executeRequest call", "restClientReq_addr", fmt.Sprintf("%p", restClientReq), "requestName", restClientReq.Name, "URL_is_nil", restClientReq.URL == nil, "RawURLString", restClientReq.RawURLString)
-
-		resp, execErr := c.executeRequest(ctx, restClientReq)
-
-		urlForError := restClientReq.RawURLString
-		if restClientReq.URL != nil {
-			urlForError = restClientReq.URL.String()
-		}
-
-		if execErr != nil { // Critical error from executeRequest, resp from executeRequest is nil
-			resp = &Response{Request: restClientReq, Error: execErr} // Initialize resp and set its error
-			wrappedErr := fmt.Errorf("request %d (%s %s) failed with critical error: %w", i+1, restClientReq.Method, urlForError, execErr)
-			multiErr = multierror.Append(multiErr, wrappedErr)
-		} else if resp.Error != nil { // Non-critical error, execErr was nil, resp is non-nil from executeRequest
-			wrappedErr := fmt.Errorf("request %d (%s %s) processing resulted in error: %w", i+1, restClientReq.Method, urlForError, resp.Error)
+			wrappedErr := fmt.Errorf("request %d (%s %s) processing resulted in error: %w", i+1, restClientReq.Method, urlForError, response.Error)
 			multiErr = multierror.Append(multiErr, wrappedErr)
 		}
-		responses[i] = resp
+		if response != nil {
+			responses = append(responses, response)
+		}
 	}
 
 	return responses, multiErr.ErrorOrNil()
@@ -647,7 +541,7 @@ func (c *Client) readFileWithEncoding(filePath, encodingName string) (string, er
 // getEncodingDecoder returns the appropriate decoder for the given encoding name
 func (c *Client) getEncodingDecoder(encodingName string) (*encoding.Decoder, error) {
 	encodingName = strings.ToLower(encodingName)
-	
+
 	switch encodingName {
 	case "latin1", "iso-8859-1":
 		return charmap.ISO8859_1.NewDecoder(), nil
@@ -659,6 +553,127 @@ func (c *Client) getEncodingDecoder(encodingName string) (*encoding.Decoder, err
 	default:
 		return nil, fmt.Errorf("unsupported encoding: %s", encodingName)
 	}
+}
+
+// parseAndValidateFile parses the request file and validates it has requests
+func (c *Client) parseAndValidateFile(requestFilePath string) (*ParsedFile, error) {
+	slog.Debug("ExecuteFile: Entered function", "requestFilePath", requestFilePath)
+	parsedFile, err := parseRequestFile(requestFilePath, c, make([]string, 0))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse request file %s: %w", requestFilePath, err)
+	}
+	if len(parsedFile.Requests) == 0 {
+		return nil, fmt.Errorf("no requests found in file %s", requestFilePath)
+	}
+	slog.Debug("ExecuteFile: parseRequestFile completed successfully", "numRequests", len(parsedFile.Requests), "requestFilePath", requestFilePath)
+	return parsedFile, nil
+}
+
+// loadDotEnvVars loads .env variables from the same directory as the request file
+func (c *Client) loadDotEnvVars(requestFilePath string) {
+	c.currentDotEnvVars = make(map[string]string)
+	envFilePath := filepath.Join(filepath.Dir(requestFilePath), ".env")
+	if _, err := os.Stat(envFilePath); err == nil {
+		loadedVars, loadErr := godotenv.Read(envFilePath)
+		if loadErr == nil {
+			c.currentDotEnvVars = loadedVars
+		}
+	}
+}
+
+// executeRequestWithVariables handles variable substitution and execution for a single request
+func (c *Client) executeRequestWithVariables(ctx context.Context, restClientReq *Request, parsedFile *ParsedFile, osEnvGetter func(string) (string, bool), index int) (*Response, error) {
+	slog.Debug("ExecuteFile: Loop start", "iteration", index, "requestName", restClientReq.Name)
+	requestScopedSystemVars := c.generateRequestScopedSystemVariables()
+
+	// Substitute variables for URL and Headers
+	err := c.substituteRequestURLAndHeaders(restClientReq, parsedFile, requestScopedSystemVars, osEnvGetter)
+	if err != nil {
+		return &Response{Request: restClientReq, Error: err}, fmt.Errorf("variable substitution failed for request %s (index %d): %w", restClientReq.Name, index, err)
+	}
+
+	// Substitute variables for Body
+	err = c.substituteRequestBody(restClientReq, parsedFile, requestScopedSystemVars, osEnvGetter)
+	if err != nil {
+		return &Response{Request: restClientReq, Error: err}, fmt.Errorf("error processing body for request %s (index %d): %w", restClientReq.Name, index, err)
+	}
+
+	// Execute the HTTP request
+	resp, execErr := c.executeRequest(ctx, restClientReq)
+	if execErr != nil {
+		return &Response{Request: restClientReq, Error: execErr}, nil
+	}
+	return resp, nil
+}
+
+// substituteRequestURLAndHeaders handles URL and header variable substitution
+func (c *Client) substituteRequestURLAndHeaders(restClientReq *Request, parsedFile *ParsedFile, requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool)) error {
+	if restClientReq.URL == nil {
+		slog.Warn("ExecuteFile: restClientReq.URL is nil before variable substitution", "method", restClientReq.Method, "rawURL", restClientReq.RawURLString, "requestName", restClientReq.Name)
+	}
+
+	finalParsedURL, subsErr := substituteRequestVariables(
+		restClientReq,
+		parsedFile,
+		requestScopedSystemVars,
+		osEnvGetter,
+		c.programmaticVars,
+		c.currentDotEnvVars,
+		c.BaseURL,
+	)
+	if subsErr != nil {
+		return subsErr
+	}
+	restClientReq.URL = finalParsedURL
+	return nil
+}
+
+// substituteRequestBody handles body variable substitution including external files
+func (c *Client) substituteRequestBody(restClientReq *Request, parsedFile *ParsedFile, requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool)) error {
+	var finalSubstitutedBody string
+	var bodyErr error
+
+	// Handle external file references
+	if restClientReq.ExternalFilePath != "" {
+		finalSubstitutedBody, bodyErr = c.processExternalFile(
+			restClientReq,
+			parsedFile,
+			requestScopedSystemVars,
+			osEnvGetter,
+		)
+		if bodyErr != nil {
+			return bodyErr
+		}
+	} else if restClientReq.RawBody != "" {
+		resolvedBody := resolveVariablesInText(
+			restClientReq.RawBody,
+			c.programmaticVars,
+			restClientReq.ActiveVariables,
+			parsedFile.EnvironmentVariables,
+			parsedFile.GlobalVariables,
+			requestScopedSystemVars,
+			osEnvGetter,
+			c.currentDotEnvVars,
+			nil,
+		)
+		finalSubstitutedBody = substituteDynamicSystemVariables(
+			resolvedBody,
+			c.currentDotEnvVars,
+			c.programmaticVars,
+		)
+	}
+
+	if finalSubstitutedBody != "" {
+		restClientReq.RawBody = finalSubstitutedBody
+		restClientReq.Body = strings.NewReader(finalSubstitutedBody)
+		restClientReq.GetBody = func() (io.ReadCloser, error) {
+			return io.NopCloser(strings.NewReader(finalSubstitutedBody)), nil
+		}
+	} else {
+		restClientReq.Body = nil
+		restClientReq.GetBody = nil
+	}
+	return nil
 }
 
 // TODO: Add other public methods as needed, e.g.:

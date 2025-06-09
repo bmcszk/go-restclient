@@ -16,7 +16,7 @@ func TestParseRequestFile_ExternalFileReferences(t *testing.T) {
 		expectedExternalFilePath     string
 		expectedExternalFileEncoding string
 		expectedWithVariables        bool
-		expectedRawBody             string
+		expectedRawBody              string
 	}{
 		{
 			name: "Basic external file reference",
@@ -27,7 +27,7 @@ Content-Type: application/json
 			expectedExternalFilePath:     "./path/to/file.json",
 			expectedExternalFileEncoding: "",
 			expectedWithVariables:        false,
-			expectedRawBody:             "< ./path/to/file.json",
+			expectedRawBody:              "< ./path/to/file.json",
 		},
 		{
 			name: "External file with variable substitution",
@@ -38,7 +38,7 @@ Content-Type: application/json
 			expectedExternalFilePath:     "./path/to/file.json",
 			expectedExternalFileEncoding: "",
 			expectedWithVariables:        true,
-			expectedRawBody:             "<@ ./path/to/file.json",
+			expectedRawBody:              "<@ ./path/to/file.json",
 		},
 		{
 			name: "External file with encoding specification",
@@ -49,7 +49,7 @@ Content-Type: text/plain
 			expectedExternalFilePath:     "./path/to/file.txt",
 			expectedExternalFileEncoding: "latin1",
 			expectedWithVariables:        true,
-			expectedRawBody:             "<@latin1 ./path/to/file.txt",
+			expectedRawBody:              "<@latin1 ./path/to/file.txt",
 		},
 		{
 			name: "External file with path containing spaces",
@@ -60,7 +60,7 @@ Content-Type: application/json
 			expectedExternalFilePath:     "./path with spaces/file.json",
 			expectedExternalFileEncoding: "",
 			expectedWithVariables:        true,
-			expectedRawBody:             "<@ ./path with spaces/file.json",
+			expectedRawBody:              "<@ ./path with spaces/file.json",
 		},
 		{
 			name: "External file with encoding and path with spaces",
@@ -71,7 +71,7 @@ Content-Type: text/plain
 			expectedExternalFilePath:     "./path with spaces/file.txt",
 			expectedExternalFileEncoding: "cp1252",
 			expectedWithVariables:        true,
-			expectedRawBody:             "<@cp1252 ./path with spaces/file.txt",
+			expectedRawBody:              "<@cp1252 ./path with spaces/file.txt",
 		},
 		{
 			name: "External file with non-encoding first part",
@@ -82,7 +82,7 @@ Content-Type: application/json
 			expectedExternalFilePath:     "./some/path.json",
 			expectedExternalFileEncoding: "",
 			expectedWithVariables:        true,
-			expectedRawBody:             "<@ ./some/path.json",
+			expectedRawBody:              "<@ ./some/path.json",
 		},
 	}
 
@@ -122,7 +122,7 @@ func TestIsValidEncoding(t *testing.T) {
 		{"ascii", true},
 		{"cp1252", true},
 		{"windows-1252", true},
-		{"UTF-8", true}, // Case insensitive
+		{"UTF-8", true},  // Case insensitive
 		{"LATIN1", true}, // Case insensitive
 		{"invalid", false},
 		{"random", false},

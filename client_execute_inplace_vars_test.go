@@ -29,11 +29,10 @@ func TestExecuteFile_InPlace_SimpleVariableInURL(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/simple_variable_in_url/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/simple_variable_in_url/expected.hresp"
 
-	client, err := NewClient()
+	client, err := NewClient(WithVars(map[string]interface{}{
+		"test_server_url": server.URL,
+	}))
 	require.NoError(t, err)
-
-	// Set the mock server URL as a programmatic variable for {{test_server_url}} in request.http
-	client.SetProgrammaticVar("test_server_url", server.URL)
 
 	// When
 	responses, execErr := client.ExecuteFile(context.Background(), requestFilePath)
@@ -92,11 +91,10 @@ func TestExecuteFile_InPlace_VariableInHeader(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/variable_in_header/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/variable_in_header/expected.hresp"
 
-	client, err := NewClient()
+	client, err := NewClient(WithVars(map[string]interface{}{
+		"test_server_url": server.URL,
+	}))
 	require.NoError(t, err)
-
-	// Set the mock server URL as a programmatic variable for {{test_server_url}} in request.http
-	client.SetProgrammaticVar("test_server_url", server.URL)
 
 	// When
 	responses, execErr := client.ExecuteFile(context.Background(), requestFilePath)
@@ -158,11 +156,10 @@ func TestExecuteFile_InPlace_VariableInBody(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/variable_in_body/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/variable_in_body/expected.hresp"
 
-	client, err := NewClient()
+	client, err := NewClient(WithVars(map[string]interface{}{
+		"test_server_url": server.URL,
+	}))
 	require.NoError(t, err)
-
-	// Set the mock server URL as a programmatic variable for {{test_server_url}} in request.http
-	client.SetProgrammaticVar("test_server_url", server.URL)
 
 	// When
 	responses, execErr := client.ExecuteFile(context.Background(), requestFilePath)
@@ -223,10 +220,10 @@ func TestExecuteFile_InPlace_VariableDefinedByAnotherVariable(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/variable_defined_by_another_variable/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/variable_defined_by_another_variable/expected.hresp"
 
-	client, err := NewClient()
+	client, err := NewClient(WithVars(map[string]interface{}{
+		"test_server_url": server.URL,
+	}))
 	require.NoError(t, err)
-
-	client.SetProgrammaticVar("test_server_url", server.URL)
 
 	// When
 	responses, execErr := client.ExecuteFile(context.Background(), requestFilePath)
@@ -289,12 +286,13 @@ func TestExecuteFile_InPlace_VariablePrecedenceOverEnvironment(t *testing.T) {
 	// The environment name matches the one in the .json filename
 	envName := "testPrecedenceEnv"
 	// The client will look for http-client.env.testPrecedenceEnv.json in the same dir as request.http
-	client, err := NewClient(WithEnvironment(envName))
+	client, err := NewClient(
+		WithEnvironment(envName),
+		WithVars(map[string]interface{}{
+			"test_server_url": server.URL,
+		}),
+	)
 	require.NoError(t, err)
-
-	// Set the mock server URL for the {{test_server_url}} variable in request.http
-	// This is distinct from the 'host' variable defined in the .env.json file
-	client.SetProgrammaticVar("test_server_url", server.URL)
 
 	// When: the .http file is executed
 	_, execErr := client.ExecuteFile(context.Background(), requestFilePath)
@@ -330,11 +328,10 @@ func TestExecuteFile_InPlace_VariableInCustomHeader(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/variable_in_custom_header/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/variable_in_custom_header/expected.hresp"
 
-	client, err := NewClient()
+	client, err := NewClient(WithVars(map[string]interface{}{
+		"test_server_url": server.URL,
+	}))
 	require.NoError(t, err)
-
-	// Set the mock server URL as a programmatic variable
-	client.SetProgrammaticVar("test_server_url", server.URL)
 
 	// When: the .http file is executed
 	responses, execErr := client.ExecuteFile(context.Background(), requestFilePath)
@@ -386,11 +383,10 @@ func TestExecuteFile_InPlace_VariableSubstitutionInBody(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/variable_substitution_in_body/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/variable_substitution_in_body/expected.hresp"
 
-	client, err := NewClient()
+	client, err := NewClient(WithVars(map[string]interface{}{
+		"test_server_url": server.URL,
+	}))
 	require.NoError(t, err)
-
-	// Set the mock server URL as a programmatic variable for {{test_server_url}} in request.http
-	client.SetProgrammaticVar("test_server_url", server.URL)
 
 	// When: the .http file is executed
 	responses, execErr := client.ExecuteFile(context.Background(), requestFilePath)
@@ -442,11 +438,10 @@ func TestExecuteFile_InPlace_VariableDefinedBySystemVariable(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_defined_by_system_variable/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_defined_by_system_variable/expected.hresp"
 
-	client, err := NewClient()
+	client, err := NewClient(WithVars(map[string]interface{}{
+		"test_server_url": server.URL,
+	}))
 	require.NoError(t, err)
-
-	// Set the mock server URL as a programmatic variable
-	client.SetProgrammaticVar("test_server_url", server.URL)
 
 	// When: the .http file is executed
 	responses, execErr := client.ExecuteFile(context.Background(), requestFilePath)
@@ -509,11 +504,10 @@ func TestExecuteFile_InPlace_VariableDefinedByOsEnvVariable(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_defined_by_os_env_variable/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_defined_by_os_env_variable/expected.hresp"
 
-	client, err := NewClient()
+	client, err := NewClient(WithVars(map[string]interface{}{
+		"test_server_url": server.URL,
+	}))
 	require.NoError(t, err)
-
-	// Set the mock server URL as a programmatic variable for {{test_server_url}} in request.http
-	client.SetProgrammaticVar("test_server_url", server.URL)
 
 	// When: the .http file is executed
 	responses, execErr := client.ExecuteFile(context.Background(), requestFilePath)
@@ -563,11 +557,10 @@ func TestExecuteFile_InPlace_VariableInAuthHeader(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_in_auth_header/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_in_auth_header/expected.hresp"
 
-	client, err := NewClient()
+	client, err := NewClient(WithVars(map[string]interface{}{
+		"test_server_url": server.URL,
+	}))
 	require.NoError(t, err)
-
-	// Set the mock server URL as a programmatic variable for {{test_server_url}} in request.http
-	client.SetProgrammaticVar("test_server_url", server.URL)
 
 	// When: the .http file is executed
 	responses, execErr := client.ExecuteFile(context.Background(), requestFilePath)
@@ -623,11 +616,10 @@ func TestExecuteFile_InPlace_VariableInJsonRequestBody(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_in_json_request_body/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_in_json_request_body/expected.hresp" // Minimal hresp
 
-	client, err := NewClient()
+	client, err := NewClient(WithVars(map[string]interface{}{
+		"test_server_url": server.URL,
+	}))
 	require.NoError(t, err)
-
-	// Set the mock server URL as a programmatic variable for {{test_server_url}} in request.http
-	client.SetProgrammaticVar("test_server_url", server.URL)
 
 	// When: the .http file is executed
 	responses, execErr := client.ExecuteFile(context.Background(), requestFilePath)
@@ -682,11 +674,10 @@ func TestExecuteFile_InPlace_VariableDefinedByAnotherInPlaceVariable(t *testing.
 	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_defined_by_another_inplace_variable/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_defined_by_another_inplace_variable/expected.hresp"
 
-	client, err := NewClient()
+	client, err := NewClient(WithVars(map[string]interface{}{
+		"test_server_url": server.URL,
+	}))
 	require.NoError(t, err)
-
-	// Set the mock server URL as a programmatic variable for {{test_server_url}} in request.http
-	client.SetProgrammaticVar("test_server_url", server.URL)
 
 	// When: the .http file is executed
 	responses, execErr := client.ExecuteFile(context.Background(), requestFilePath)
@@ -745,11 +736,10 @@ func TestExecuteFile_InPlace_VariableDefinedByDotEnvOsVariable(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_defined_by_dot_env_os_variable/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_defined_by_dot_env_os_variable/expected.hresp"
 
-	client, err := NewClient()
+	client, err := NewClient(WithVars(map[string]interface{}{
+		"test_server_url": server.URL,
+	}))
 	require.NoError(t, err)
-
-	// Set the mock server URL as a programmatic variable for {{test_server_url}} in request.http
-	client.SetProgrammaticVar("test_server_url", server.URL)
 
 	// When: the .http file is executed
 	responses, execErr := client.ExecuteFile(context.Background(), requestFilePath)
