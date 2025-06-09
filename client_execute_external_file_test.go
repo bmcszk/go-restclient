@@ -15,6 +15,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// PRD-COMMENT: FR4.1 - Request Body: External File with Variables (<@)
+// Corresponds to: Client's ability to process request bodies specified via '<@ filepath' where 'filepath' points to an external file whose content is subject to variable substitution (http_syntax.md "Request Body", "External File with Variables (<@ filepath)").
+// This test verifies that variables defined in the .http file or programmatically are correctly substituted into the content of the external file ('test_vars.json') before it's used as the request body.
 func TestExecuteFile_ExternalFileWithVariables(t *testing.T) {
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
@@ -94,6 +97,9 @@ Content-Type: application/json
 	assert.Regexp(t, `"timestamp": "\d+"`, bodyStr)
 }
 
+// PRD-COMMENT: FR4.2 - Request Body: External File Static (<)
+// Corresponds to: Client's ability to process request bodies specified via '< filepath' where 'filepath' points to an external file whose content is included statically, without variable substitution (http_syntax.md "Request Body", "External File Static (< filepath)").
+// This test verifies that the content of the external file ('test_static.json') is used as the request body verbatim, with any variable-like syntax within it preserved literally.
 func TestExecuteFile_ExternalFileWithoutVariables(t *testing.T) {
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
@@ -160,6 +166,9 @@ Content-Type: application/json
 	assert.Contains(t, bodyStr, `"literal": "this should stay as-is"`)
 }
 
+// PRD-COMMENT: FR4.3 - Request Body: External File with Encoding (<@|encoding)
+// Corresponds to: Client's ability to process request bodies from external files with a specified character encoding using '<@|encoding filepath' (http_syntax.md "Request Body", "External File with Encoding (<@|encoding filepath)").
+// This test verifies that an external file ('test_encoded.txt') with a specific encoding (e.g., latin1) is correctly read and used as the request body.
 func TestExecuteFile_ExternalFileWithEncoding(t *testing.T) {
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
@@ -215,6 +224,9 @@ Content-Type: text/plain
 	assert.Equal(t, textContent, bodyStr)
 }
 
+// PRD-COMMENT: FR4.4 - Request Body: External File Not Found
+// Corresponds to: Client error handling when an external file referenced in a request body (e.g., via '<@ ./nonexistent.json') cannot be found (http_syntax.md "Request Body").
+// This test verifies that the client reports an appropriate error when attempting to process a request that references a non-existent external file.
 func TestExecuteFile_ExternalFileNotFound(t *testing.T) {
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
@@ -244,6 +256,9 @@ Content-Type: application/json
 	require.Len(t, responses, 0) // No responses should be returned on file processing error
 }
 
+// PRD-COMMENT: FR4.1 - Request Body: External File with Variables (<@) (Internal Helper)
+// Corresponds to: Internal client logic for processing external files with variable substitution, supporting FR4.1.
+// This is a unit test for the internal `processExternalFile` helper function, ensuring it correctly reads an external file ('test.txt') and substitutes variables.
 func TestClient_ProcessExternalFile(t *testing.T) {
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
@@ -284,6 +299,9 @@ func TestClient_ProcessExternalFile(t *testing.T) {
 	assert.Equal(t, expected, result)
 }
 
+// PRD-COMMENT: FR4.3 - Request Body: External File with Encoding (<@|encoding) (Internal Helper)
+// Corresponds to: Internal client logic for reading files with specified encodings, supporting FR4.3.
+// This is a unit test for the internal `readFileWithEncoding` helper function, ensuring it correctly reads a file ('test.txt') using various supported encodings and handles unsupported ones.
 func TestClient_ReadFileWithEncoding(t *testing.T) {
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
@@ -327,6 +345,9 @@ func TestClient_ReadFileWithEncoding(t *testing.T) {
 	}
 }
 
+// PRD-COMMENT: FR4.3 - Request Body: External File with Encoding (<@|encoding) (Internal Helper)
+// Corresponds to: Internal client logic for obtaining a character encoding decoder, supporting FR4.3.
+// This is a unit test for the internal `getEncodingDecoder` helper function, verifying it returns correct decoders for supported encodings and errors for unsupported ones.
 func TestClient_GetEncodingDecoder(t *testing.T) {
 	client, err := NewClient()
 	require.NoError(t, err)
