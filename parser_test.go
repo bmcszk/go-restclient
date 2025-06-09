@@ -66,24 +66,40 @@ func runParseRequestsIgnoreEmptyBlocksSubtest(t *testing.T, tc parseRequestsIgno
 func TestParseRequests_IgnoreEmptyBlocks(t *testing.T) {
 	tests := []parseRequestsIgnoreEmptyBlocksTestCase{
 		{
+			// PRD-COMMENT: FR1 - Empty Block Handling (Comments)
+			// Corresponds to: http_syntax.md "Empty Blocks and Comments"
+			// This test case verifies that files containing only comments are parsed correctly,
+			// resulting in zero requests and no errors, aligning with FR1.
 			name:          "SCENARIO-LIB-028-001: File with only comments",
 			filePath:      "testdata/parser/ignore_empty_blocks/scenario_001_only_comments.http",
 			expectedCount: 0,
 			expectedError: false,
 		},
 		{
+			// PRD-COMMENT: FR1 - Empty Block Handling (Separators)
+			// Corresponds to: http_syntax.md "Request Separator"
+			// This test case ensures that files containing only request separators ('###')
+			// are parsed as having zero requests and no errors, as per FR1.
 			name:          "SCENARIO-LIB-028-002: File with only ### separators",
 			filePath:      "testdata/parser/ignore_empty_blocks/scenario_002_only_separators.http",
 			expectedCount: 0,
 			expectedError: false,
 		},
 		{
+			// PRD-COMMENT: FR1 - Empty Block Handling (Comments & Separators)
+			// Corresponds to: http_syntax.md "Empty Blocks and Comments", "Request Separator"
+			// Validates that files with a mix of only comments and separators result in zero requests
+			// and no errors, consistent with FR1.
 			name:          "SCENARIO-LIB-028-003: File with comments and ### separators only",
 			filePath:      "testdata/parser/ignore_empty_blocks/scenario_003_comments_and_separators.http",
 			expectedCount: 0,
 			expectedError: false,
 		},
 		{
+			// PRD-COMMENT: FR1 - Empty Block Handling (Valid Request, Separator, Empty Comment Block)
+			// Corresponds to: http_syntax.md "Empty Blocks and Comments", "Request Separator"
+			// This test case verifies that a file containing a valid request, followed by a separator,
+			// and then an empty comment block, is parsed correctly, resulting in one request and no errors.
 			name:           "SCENARIO-LIB-028-004: Valid request, then separator, then only comments",
 			filePath:       "testdata/parser/ignore_empty_blocks/scenario_004_valid_then_empty_comment.http",
 			expectedCount:  1,
@@ -92,6 +108,10 @@ func TestParseRequests_IgnoreEmptyBlocks(t *testing.T) {
 			firstReqURL:    "https://example.com/first",
 		},
 		{
+			// PRD-COMMENT: FR1 - Empty Block Handling (Empty Comment Block, Separator, Valid Request)
+			// Corresponds to: http_syntax.md "Empty Blocks and Comments", "Request Separator"
+			// This test case ensures that a file starting with an empty comment block, followed by a separator,
+			// and then a valid request, is parsed correctly, resulting in one request and no errors.
 			name:           "SCENARIO-LIB-028-005: Only comments, then separator, then valid request",
 			filePath:       "testdata/parser/ignore_empty_blocks/scenario_005_empty_comment_then_valid.http",
 			expectedCount:  1,
@@ -100,6 +120,10 @@ func TestParseRequests_IgnoreEmptyBlocks(t *testing.T) {
 			firstReqURL:    "https://example.com/second",
 		},
 		{
+			// PRD-COMMENT: FR1 - Empty Block Handling (Valid Request, Separator with Comments, Valid Request)
+			// Corresponds to: http_syntax.md "Empty Blocks and Comments", "Request Separator"
+			// This test case verifies that a file containing two valid requests separated by a separator
+			// with comments in between is parsed correctly, resulting in two requests and no errors.
 			name:           "SCENARIO-LIB-028-006: Valid request, separator with comments, then another valid request",
 			filePath:       "testdata/parser/ignore_empty_blocks/scenario_006_two_valid_with_empty_comment.http",
 			expectedCount:  2,
@@ -110,13 +134,21 @@ func TestParseRequests_IgnoreEmptyBlocks(t *testing.T) {
 			lastReqURL:     "https://example.com/req2",
 		},
 		{
-			name:          "Empty file content",
+			// PRD-COMMENT: FR1 - Empty Block Handling (Empty File)
+			// Corresponds to: http_syntax.md "Empty Blocks and Comments"
+			// Verifies that an entirely empty file is parsed as having zero requests and no errors,
+			// in accordance with FR1.
+			name:          "SCENARIO-LIB-028-007: Completely empty file",
 			filePath:      "testdata/parser/ignore_empty_blocks/empty_file_content.http",
 			expectedCount: 0,
 			expectedError: false,
 		},
 		{
-			name:           "Single valid request no trailing newline",
+			// PRD-COMMENT: FR1 - Empty Block Handling (Single Valid Request, No Trailing Newline)
+			// Corresponds to: http_syntax.md "Request Syntax"
+			// This test case ensures that a file containing a single valid request without a trailing newline
+			// is parsed correctly, resulting in one request and no errors.
+			name:           "SCENARIO-LIB-028-008: Single valid request no trailing newline",
 			filePath:       "testdata/parser/ignore_empty_blocks/single_valid_no_newline.http",
 			expectedCount:  1,
 			expectedError:  false,
@@ -124,8 +156,22 @@ func TestParseRequests_IgnoreEmptyBlocks(t *testing.T) {
 			firstReqURL:    "http://localhost/api/test",
 		},
 		{
-			name:          "File with only variable definitions",
+			// PRD-COMMENT: FR1 - Empty Block Handling (File with Only Variable Definitions)
+			// Corresponds to: http_syntax.md "File-Level Variables"
+			// Validates that a file containing only variable definitions and no request blocks
+			// results in zero requests and no errors, consistent with FR1.
+			name:          "SCENARIO-LIB-028-009: File with only variable definitions",
 			filePath:      "testdata/parser/ignore_empty_blocks/only_variables.http",
+			expectedCount: 0,
+			expectedError: false,
+		},
+		{
+			// PRD-COMMENT: FR1 - Empty Block Handling (Mixed Non-Request Content)
+			// Corresponds to: http_syntax.md "Empty Blocks and Comments", "Request Separator", "File-Level Variables"
+			// Validates that a file with a mix of comments, separators, variable definitions, and empty lines,
+			// but no actual request blocks, results in zero requests and no errors, fulfilling FR1.
+			name:          "SCENARIO-LIB-028-010: File with mixed non-request content",
+			filePath:      "testdata/parser/ignore_empty_blocks/scenario_007_mixed_non_request_content.http", // Assuming this file exists or will be created
 			expectedCount: 0,
 			expectedError: false,
 		},
