@@ -2,6 +2,13 @@
 
 ## 2025-06-09
 
+### Git Commit Failure due to Unescaped Single Quote
+
+*   **Mistake:** Generated a `git commit` command with an unescaped single quote in the commit message (e.g., `function's`), causing the `zsh` shell to fail the command due to an unmatched quote.
+*   **File/Command:** `git commit -m '... function's length.'`
+*   **Resolution:** The commit message was corrected by changing `function's` to `function` to avoid the problematic single quote. The commit command was then re-executed successfully.
+*   **Lesson Learned:** Ensure all special characters in commit messages, especially those passed as string literals to shell commands, are properly escaped or avoided to prevent shell interpretation errors. When a shell command fails due to quoting issues, simplify the string or use stronger quoting/escaping mechanisms appropriate for the shell being used.
+
 ### Discrepancy in `test_coverage_mapping.md`
 *   **Mistake:** `prds/jetbrains_compatibility/test_coverage_mapping.md` (as of 2025-06-09) incorrectly listed `parser_response_handler_test.go` as the location for FR7.2 (Response Handler Script) tests. This file does not exist in the `feature/jetbrains-client-compatibility2` branch.
 *   **Resolution:** Re-examining `test_coverage_mapping.md` to find the correct location for FR7.2 tests. (Ongoing)
