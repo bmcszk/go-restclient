@@ -2,7 +2,7 @@ package restclient
 
 import (
 	crypto_rand "crypto/rand"
-	"fmt" // Cascade: Ensuring fmt is imported for temp debug line
+	"fmt"
 	"log/slog"
 	"math/rand"
 	"net/url"
@@ -65,8 +65,7 @@ var randomWords = []string{"apple", "banana", "cherry", "date", "elderberry", "f
 // 7. Fallback value provided in the placeholder itself.
 // System variables (e.g., {{$uuid}}, {{$timestamp}}) are handled if the placeholder is like {{$systemVarName}} (i.e. varName starts with '$').
 func resolveVariablesInText(text string, clientProgrammaticVars map[string]interface{}, fileScopedVars map[string]string, environmentVars map[string]string, globalVars map[string]string, requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool), dotEnvVars map[string]string, options *ResolveOptions) string {
-	slog.Debug("resolveVariablesInText: Entered function", "clientProgrammaticVars", clientProgrammaticVars, "fileScopedVars", fileScopedVars, "requestScopedSystemVars", requestScopedSystemVars, "environmentVars", environmentVars, "globalVars", globalVars, "dotEnvVars", dotEnvVars) // Cascade: Added more context to entry log
-	const maxIterations = 10                                                                                                                                                                                                                                                               // Safety break for circular dependencies
+	const maxIterations = 10 // Safety break for circular dependencies
 	currentText := text
 
 	for i := 0; i < maxIterations; i++ {
@@ -74,7 +73,6 @@ func resolveVariablesInText(text string, clientProgrammaticVars map[string]inter
 		re := regexp.MustCompile(`{{\s*(.*?)\s*}}`)
 
 		currentText = re.ReplaceAllStringFunc(previousText, func(match string) string {
-			slog.Debug("resolveVariablesInText: ReplaceAllStringFunc: processing match", "match", match) // Cascade: Added for debugging
 			directive := strings.TrimSpace(match[2 : len(match)-2])
 
 			var varName string
@@ -93,7 +91,6 @@ func resolveVariablesInText(text string, clientProgrammaticVars map[string]inter
 			// 1. Request-scoped System Variables (if varName starts with $)
 			// These are simple, pre-generated variables like $uuid, $timestamp, $randomInt (no-args).
 			if strings.HasPrefix(varName, "$") {
-				slog.Debug("resolveVariablesInText: varName is a system variable candidate", "varName", varName, "requestScopedSystemVars_content", requestScopedSystemVars) // Cascade: Refined log and added map content
 				if val, ok := requestScopedSystemVars[varName]; ok {
 					slog.Debug("resolveVariablesInText: Found system var in requestScopedSystemVars", "varName", varName, "value", val)
 					return val
@@ -102,7 +99,6 @@ func resolveVariablesInText(text string, clientProgrammaticVars map[string]inter
 				return match // Preserve for substituteDynamicSystemVariables if it's like {{$dotenv NAME}}
 			}
 
-			slog.Debug("resolveVariablesInText: varName is NOT a system var, proceeding with regular resolution", "varName", varName) // Cascade: Added for debugging
 			// Precedence for {{variableName}} placeholders:
 
 			// 1. Client programmatic variables (clientProgrammaticVars)
@@ -139,69 +135,55 @@ func resolveVariablesInText(text string, clientProgrammaticVars map[string]inter
 
 			// 3. Try environment-specific variables (from http-client.env.json)
 			if environmentVars != nil {
-				slog.Debug("resolveVariablesInText: Checking environmentVars", "varName", varName, "found", environmentVars[varName] != "") // Cascade: Added for debugging
 				if val, ok := environmentVars[varName]; ok {
-					slog.Debug("resolveVariablesInText: Found in environmentVars", "varName", varName, "value", val) // Cascade: Added for debugging
 					return val
 				}
 			}
 
 			// 4. Try global variables (from http-client.private.env.json)
 			if globalVars != nil {
-				slog.Debug("resolveVariablesInText: Checking globalVars", "varName", varName, "found", globalVars[varName] != "") // Cascade: Added for debugging
 				if val, ok := globalVars[varName]; ok {
-					slog.Debug("resolveVariablesInText: Found in globalVars", "varName", varName, "value", val) // Cascade: Added for debugging
 					return val
 				}
 			}
 
 			// 5. Try OS environment variables
 			if osEnvGetter != nil {
-				slog.Debug("resolveVariablesInText: Checking osEnvGetter", "varName", varName) // Cascade: Added for debugging
 				if val, ok := osEnvGetter(varName); ok {
-					slog.Debug("resolveVariablesInText: Found in osEnvGetter", "varName", varName, "value", val) // Cascade: Added for debugging
 					return val
 				}
 			}
 
 			// 6. Try .env file variables
 			if dotEnvVars != nil {
-				slog.Debug("resolveVariablesInText: Checking dotEnvVars", "varName", varName, "found", dotEnvVars[varName] != "") // Cascade: Added for debugging
 				if val, ok := dotEnvVars[varName]; ok {
-					slog.Debug("resolveVariablesInText: Found in dotEnvVars", "varName", varName, "value", val) // Cascade: Added for debugging
 					return val
 				}
 			}
 
 			// 7. Use fallback value if provided in the placeholder itself
 			if hasFallback {
-				slog.Debug("resolveVariablesInText: Using fallback value", "varName", varName, "fallbackValue", fallbackValue) // Cascade: Added for debugging
 				return fallbackValue
 			}
 
 			// No resolution found, handle based on options
 			if options != nil {
 				if options.FallbackToOriginal {
-					slog.Debug("resolveVariablesInText: FallbackToOriginal, returning original match", "varName", varName, "match", match) // Cascade: Added for debugging
-					return match                                                                                                           // Return original placeholder {{varName}}
+					return match // Return original placeholder {{varName}}
 				}
 				if options.FallbackToEmpty {
-					slog.Debug("resolveVariablesInText: FallbackToEmpty, returning empty string", "varName", varName) // Cascade: Added for debugging
-					return ""                                                                                         // Return empty string
+					return "" // Return empty string
 				}
 			}
 
 			// Default behavior if no options specify otherwise, or if options is nil.
 			// For backward compatibility with existing code, default to empty string
 			if options == nil {
-				slog.Debug("resolveVariablesInText: Not found, options is nil, returning empty string", "varName", varName) // Cascade: Added for debugging
-				return ""                                                                                                   // Default to empty string if no options and not found
+				return "" // Default to empty string if no options and not found
 			}
 
-			slog.Debug("resolveVariablesInText: Not found, returning original match as per options or unexpected fallthrough", "varName", varName, "match", match) // Cascade: Added for debugging
-			return match                                                                                                                                           // Shouldn't reach here if options are well-defined
+			return match // Shouldn't reach here if options are well-defined
 		}) // End of ReplaceAllStringFunc
-		slog.Debug("resolveVariablesInText: After ReplaceAllStringFunc pass", "iteration", i, "previousText", previousText, "currentText", currentText) // Cascade: Added for debugging
 
 		if currentText == previousText {
 			break // No more substitutions made in this pass
@@ -302,11 +284,6 @@ func randomStringFromCharset(length int, charset string) string {
 // substituteRequestVariables handles the substitution of variables in the request's URL and headers.
 // It returns the final parsed URL or an error if substitution/parsing fails.
 func substituteRequestVariables(rcRequest *Request, parsedFile *ParsedFile, requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool), programmaticVars map[string]interface{}, currentDotEnvVars map[string]string, clientBaseURL string) (*url.URL, error) {
-	var requestNameForLog string
-	if rcRequest != nil {
-		requestNameForLog = rcRequest.Name
-	}
-	slog.Debug("substituteRequestVariables: Entered function", "requestName", requestNameForLog, "programmaticVars", programmaticVars, "currentDotEnvVars", currentDotEnvVars, "clientBaseURL", clientBaseURL, "parsedFile_is_nil", parsedFile == nil, "requestScopedSystemVars", requestScopedSystemVars) // Cascade: Added requestScopedSystemVars logging
 
 	var fileScopedVars map[string]string // Declare fileScopedVars at function scope
 	var envVarsFromFile map[string]string
@@ -354,10 +331,8 @@ func substituteRequestVariables(rcRequest *Request, parsedFile *ParsedFile, requ
 	}
 
 	substitutedRawURL = _applyBaseURLIfNeeded(substitutedRawURL, clientBaseURL)
-	slog.Debug("substituteRequestVariables: URL string before final parse", "substitutedRawURL_after_base_apply", substitutedRawURL, "requestName", rcRequest.Name) // Cascade: Log before parse
 
 	finalParsedURL, parseErr := url.Parse(substitutedRawURL)
-	slog.Debug("substituteRequestVariables: URL after final parse", "finalParsedURL_is_nil", finalParsedURL == nil, "parseErr_is_nil", parseErr == nil, "requestName", rcRequest.Name) // Cascade: Log after parse
 	if parseErr != nil {
 		return nil, fmt.Errorf("failed to parse URL after variable substitution: %s (original: %s): %w", substitutedRawURL, rcRequest.RawURLString, parseErr)
 	}
@@ -569,7 +544,6 @@ func _substituteDateTimeVariables(text string) string {
 // should have been pre-resolved and substituted by resolveVariablesInText via the
 // requestScopedSystemVars map.
 func substituteDynamicSystemVariables(text string, activeDotEnvVars map[string]string, programmaticVars map[string]interface{}) string {
-	slog.Debug("substituteDynamicSystemVariables: Entered function", "inputText", text, "activeDotEnvVars", activeDotEnvVars, "programmaticVars", programmaticVars) // Cascade: Added for debugging
 	// "[DEBUG_DYN_VARS_INPUT]", "inputText", text)
 	originalTextForLogging := text // Keep a copy for logging. Used if we add more complex types with logging.
 	_ = originalTextForLogging     // Avoid unused variable error if no logging exists below.
@@ -583,7 +557,6 @@ func substituteDynamicSystemVariables(text string, activeDotEnvVars map[string]s
 		if len(parts) == 2 {
 			varName := parts[1]
 			value := os.Getenv(varName)
-			slog.Debug("substituteDynamicSystemVariables: $env.VAR_NAME resolved", "varName", varName, "value", value) // Cascade: Added for debugging
 			return value
 		}
 		slog.Warn("Failed to parse $env.VAR_NAME, returning original match", "match", match, "parts_len", len(parts))
@@ -596,7 +569,6 @@ func substituteDynamicSystemVariables(text string, activeDotEnvVars map[string]s
 		if len(parts) == 2 {
 			varName := parts[1]
 			if val, ok := activeDotEnvVars[varName]; ok {
-				slog.Debug("substituteDynamicSystemVariables: $dotenv resolved", "varName", varName, "value", val) // Cascade: Added for debugging
 				return val
 			}
 			return "" // Variable not found in .env, return empty string
@@ -652,7 +624,6 @@ func substituteDynamicSystemVariables(text string, activeDotEnvVars map[string]s
 	})
 
 	text = _substituteDateTimeVariables(text)
-	slog.Debug("substituteDynamicSystemVariables: Exiting function", "outputText", text) // Cascade: Added for debugging
 	return text
 }
 

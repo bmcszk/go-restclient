@@ -299,14 +299,12 @@ func (p *requestParserState) handleContent(trimmedLine, originalLine string) err
 	// If we are already in the body parsing state, all non-empty, non-comment lines are body content.
 	// A new request can only start after a '###' separator (which would have reset parsingBody to false in finalizeCurrentRequest)
 	if p.parsingBody {
-		slog.Debug("handleContent: parsingBody is true, treating as body content", "line", originalLine, "requestPtr", fmt.Sprintf("%p", p.currentRequest), "lineNumber", p.lineNumber)
 		p.handleBodyContent(originalLine)
 		return nil
 	}
 
 	// Not parsing body. This line could be a request line or a header.
 	if p.isRequestLine(trimmedLine) {
-		slog.Debug("handleContent: Detected request line", "line", trimmedLine, "requestPtr", fmt.Sprintf("%p", p.currentRequest), "lineNumber", p.lineNumber)
 		return p.handleRequestLine(trimmedLine, originalLine)
 	}
 
@@ -318,7 +316,6 @@ func (p *requestParserState) handleContent(trimmedLine, originalLine string) err
 			slog.Warn("Parser: Encountered header-like line without an active request context or before a request line", "line", trimmedLine, "lineNumber", p.lineNumber)
 			return nil // Or return an error: fmt.Errorf("line %d: header found outside of request block: %s", p.lineNumber, trimmedLine)
 		}
-		slog.Debug("handleContent: Detected header line", "line", trimmedLine, "requestPtr", fmt.Sprintf("%p", p.currentRequest), "lineNumber", p.lineNumber)
 		return p.handleHeader(trimmedLine)
 	}
 
@@ -331,7 +328,6 @@ func (p *requestParserState) handleContent(trimmedLine, originalLine string) err
 	}
 
 	// If there is a request context, treat as body content (e.g. single-line body without preceding empty line).
-	slog.Debug("handleContent: Orphaned line with active request, treating as body content by default", "line", originalLine, "requestPtr", fmt.Sprintf("%p", p.currentRequest), "lineNumber", p.lineNumber)
 	p.parsingBody = true // Explicitly switch to body parsing if we decide this is body content.
 	p.handleBodyContent(originalLine)
 	return nil
@@ -339,15 +335,12 @@ func (p *requestParserState) handleContent(trimmedLine, originalLine string) err
 
 func (p *requestParserState) ensureCurrentRequest() {
 	if p.currentRequest == nil {
-		slog.Debug("ensureCurrentRequest: p.currentRequest is nil, creating new Request object", "line", p.lineNumber, "filePath", p.filePath)
 		p.currentRequest = &Request{
 			Headers:    make(http.Header),
 			FilePath:   p.filePath,
 			LineNumber: p.lineNumber, // Line number of the first significant line of this request
 			// ActiveVariables will be populated by finalizeCurrentRequest or when a new request context truly begins.
 		}
-	} else {
-		slog.Debug("ensureCurrentRequest: p.currentRequest already exists", "line", p.lineNumber, "filePath", p.filePath, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
 	}
 }
 
@@ -409,7 +402,6 @@ func (p *requestParserState) handleEmptyLine(trimmedLine string) error {
 	// and we are not already parsing the body,
 	// this empty line acts as the separator before the body.
 	if p.currentRequest != nil && p.currentRequest.Method != "" && !p.parsingBody {
-		slog.Debug("handleEmptyLine: Transitioning to body parsing mode", "requestPtr", fmt.Sprintf("%p", p.currentRequest), "lineNumber", p.lineNumber)
 		p.parsingBody = true               // Crucial: now we are officially parsing the body
 		p.justSawEmptyLineSeparator = true // This flag can still be useful for other logic
 	}
@@ -421,20 +413,14 @@ func (p *requestParserState) handleEmptyLine(trimmedLine string) error {
 
 // handleRequestLine processes a potential HTTP request line (METHOD URL HTTP/Version).
 func (p *requestParserState) handleRequestLine(trimmedLine, originalLine string) error {
-	slog.Debug("handleRequestLine: Entered", "trimmedLine", trimmedLine, "requestPtr", fmt.Sprintf("%p", p.currentRequest), "line", p.lineNumber)
 
 	if p.justSawEmptyLineSeparator && p.currentRequest != nil && p.currentRequest.Method != "" && isPotentialRequestLine(trimmedLine) {
-		slog.Debug("handleRequestLine: Previous line was empty separator, current line is new request. Finalizing previous request.",
-			"line", p.lineNumber,
-			"previousRequestMethod", p.currentRequest.Method,
-			"currentLine", trimmedLine)
 		p.finalizeCurrentRequest()
 		// ensureCurrentRequest() will be called by subsequent logic if needed, preparing for the new request.
 	}
 	p.justSawEmptyLineSeparator = false // Reset flag as we are processing a non-empty line.
 
 	if strings.HasPrefix(trimmedLine, requestSeparator) {
-		slog.Debug("handleRequestLine: Detected request separator '###'", "line", trimmedLine, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
 		p.finalizeCurrentRequest() // Finalize the previous request
 
 		// Reset parser state fields that are per-request, but p.currentRequest itself is now nil.
@@ -445,7 +431,6 @@ func (p *requestParserState) handleRequestLine(trimmedLine, originalLine string)
 		requestNameFromSeparator := strings.TrimSpace(strings.TrimPrefix(trimmedLine, requestSeparator))
 		if requestNameFromSeparator != "" {
 			p.nextRequestName = requestNameFromSeparator
-			slog.Debug("handleRequestLine: Stored nextRequestName from separator line", "nextRequestName", p.nextRequestName, "line", p.lineNumber)
 		}
 		// After a separator, currentRequest should be nil (finalized by finalizeCurrentRequest).
 		// The next actual request line will create a new currentRequest via ensureCurrentRequest.
@@ -454,7 +439,6 @@ func (p *requestParserState) handleRequestLine(trimmedLine, originalLine string)
 
 	// Not a separator, so it's a potential request line (METHOD URL)
 	p.ensureCurrentRequest() // Ensure a request object is available
-	slog.Debug("handleRequestLine: About to call parseRequestLineDetails", "trimmedLine", trimmedLine, "requestPtr", fmt.Sprintf("%p", p.currentRequest), "currentMethod", p.currentRequest.Method, "currentRawURL", p.currentRequest.RawURLString)
 
 	finalizedBySeparatorInLine := p.parseRequestLineDetails(trimmedLine) // Pass trimmedLine as requestLine
 
@@ -463,14 +447,10 @@ func (p *requestParserState) handleRequestLine(trimmedLine, originalLine string)
 	if !finalizedBySeparatorInLine && p.currentRequest != nil && p.currentRequest.Method != "" && p.nextRequestName != "" {
 		if p.currentRequest.Name == "" { // Only apply if no name is set yet
 			p.currentRequest.Name = p.nextRequestName
-			slog.Debug("handleRequestLine: Applied stored nextRequestName to current request as no prior name was set", "name", p.currentRequest.Name, "requestPtr", fmt.Sprintf("%p", p.currentRequest), "line", p.lineNumber)
-		} else {
-			slog.Debug("handleRequestLine: Did not apply stored nextRequestName as a name was already set", "existingName", p.currentRequest.Name, "nextRequestName", p.nextRequestName, "requestPtr", fmt.Sprintf("%p", p.currentRequest), "line", p.lineNumber)
 		}
 		p.nextRequestName = "" // Clear nextRequestName as it has been considered for this request block
 	}
 
-	slog.Debug("handleRequestLine: Returned from parseRequestLineDetails", "trimmedLine", trimmedLine, "requestPtr", fmt.Sprintf("%p", p.currentRequest), "method", p.currentRequest.Method, "rawURL", p.currentRequest.RawURLString)
 	return nil
 }
 
@@ -596,21 +576,13 @@ func (p *requestParserState) handleImportDirective(trimmedLine string) error {
 // finalizeCurrentRequest adds the current request to the parsed file's requests list
 // and prepares for a new request
 func (p *requestParserState) finalizeCurrentRequest() {
-	slog.Debug("finalizeCurrentRequest: Attempting to finalize request", "requestPtr", fmt.Sprintf("%p", p.currentRequest), "line", p.lineNumber)
 	if p.currentRequest == nil {
-		slog.Debug("finalizeCurrentRequest: p.currentRequest is nil, nothing to finalize.", "line", p.lineNumber)
 		return
 	}
 
 	// A request is only considered valid and added if it has both a method and a URL.
 	// Body, headers, etc., are optional.
 	if p.currentRequest.Method == "" || p.currentRequest.RawURLString == "" {
-		slog.Debug("finalizeCurrentRequest: Request not added. Missing Method or RawURLString.",
-			"requestPtr", fmt.Sprintf("%p", p.currentRequest),
-			"method", p.currentRequest.Method,
-			"rawURL", p.currentRequest.RawURLString,
-			"line", p.lineNumber,
-			"filePath", p.filePath)
 	} else {
 		// Set the request body from collected lines (only if external file is not used)
 		if p.currentRequest.ExternalFilePath == "" {
@@ -629,13 +601,6 @@ func (p *requestParserState) finalizeCurrentRequest() {
 		// This part might need refinement if @variable directives inside a request block are meant to be request-scoped
 		// For now, assuming currentFileVariables is the primary source at finalization.
 
-		slog.Debug("finalizeCurrentRequest: Adding request to parsedFile.Requests",
-			"requestPtr", fmt.Sprintf("%p", p.currentRequest),
-			"method", p.currentRequest.Method,
-			"rawURL", p.currentRequest.RawURLString,
-			"name", p.currentRequest.Name,
-			"line", p.lineNumber,
-			"filePath", p.filePath)
 		p.parsedFile.Requests = append(p.parsedFile.Requests, p.currentRequest)
 	}
 
@@ -645,7 +610,6 @@ func (p *requestParserState) finalizeCurrentRequest() {
 	p.bodyLines = []string{}
 	p.parsingBody = false
 	p.justSawEmptyLineSeparator = false // Reset separator state
-	slog.Debug("finalizeCurrentRequest: p.currentRequest set to nil. Body/parsing flags reset.", "line", p.lineNumber)
 }
 
 // processTimeoutDirective handles the @timeout directive with milliseconds value
@@ -724,9 +688,6 @@ func (p *requestParserState) processSameLineSeparator(requestLine string) (proce
 
 	if nextNamePart != "" {
 		p.nextRequestName = nextNamePart
-		slog.Debug("parseRequestLineDetails: Found same-line separator, captured next request name", "nextRequestName", p.nextRequestName, "line", p.lineNumber)
-	} else {
-		slog.Debug("parseRequestLineDetails: Found same-line separator, no specific name for next request", "line", p.lineNumber)
 	}
 
 	return actualRequestPart, true
@@ -739,7 +700,6 @@ func (p *requestParserState) processSameLineSeparator(requestLine string) (proce
 // It returns true if the request was finalized due to a same-line separator, otherwise false.
 // originalLine is used for logging/error context.
 func (p *requestParserState) parseRequestLineDetails(originalRequestLine string) (finalizedBySeparator bool) {
-	slog.Debug("parseRequestLineDetails: Parsing request line", "originalRequestLine", originalRequestLine, "requestPtr", fmt.Sprintf("%p", p.currentRequest), "line", p.lineNumber)
 
 	requestLine, finalizedBySeparator := p.processSameLineSeparator(originalRequestLine)
 
@@ -749,7 +709,6 @@ func (p *requestParserState) parseRequestLineDetails(originalRequestLine string)
 			// If there was a separator, and the part before it was empty,
 			// finalize any existing request and prepare for a new one.
 			if p.currentRequest != nil && (p.currentRequest.Method != "" || p.currentRequest.RawURLString != "") {
-				slog.Debug("parseRequestLineDetails: Finalizing potentially non-empty current request before empty line with separator", "requestPtr", fmt.Sprintf("%p", p.currentRequest))
 				p.finalizeCurrentRequest()
 			}
 			p.ensureCurrentRequest() // Prepare for the request that might be named by nextRequestName
@@ -764,7 +723,6 @@ func (p *requestParserState) parseRequestLineDetails(originalRequestLine string)
 	if !isValidHTTPToken(methodCandidate) {
 		// First token is not a valid HTTP method token.
 		// Try to handle as a non-method line (e.g., a bare URL which implies GET).
-		slog.Debug("parseRequestLineDetails: First token is not a valid HTTP method, calling handleNonMethodRequestLine", "token", methodCandidate, "requestLine", requestLine, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
 		p.handleNonMethodRequestLine(requestLine, methodCandidate)
 		// handleNonMethodRequestLine might set RawURLString and imply a method (e.g. GET)
 		// or leave Method empty if it can't determine one.
@@ -772,7 +730,6 @@ func (p *requestParserState) parseRequestLineDetails(originalRequestLine string)
 		if finalizedBySeparator {
 			// If there was a separator, finalize this "non-method" request if it's valid enough.
 			if p.currentRequest != nil && (p.currentRequest.Method != "" || p.currentRequest.RawURLString != "") {
-				slog.Debug("parseRequestLineDetails: Finalizing current request (non-method line) due to same-line separator", "requestPtr", fmt.Sprintf("%p", p.currentRequest))
 				p.finalizeCurrentRequest()
 			}
 			p.ensureCurrentRequest() // Prepare for the next request
@@ -786,13 +743,11 @@ func (p *requestParserState) parseRequestLineDetails(originalRequestLine string)
 	// methodCandidate IS a valid HTTP token, so treat it as the method.
 	// Store in original case as per RFC 7230 (methods are case-sensitive).
 	p.currentRequest.Method = methodCandidate
-	slog.Debug("parseRequestLineDetails: Set Method", "Method", p.currentRequest.Method, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
 
 	if len(parts) < 2 {
 		slog.Warn("parseRequestLineDetails: Method found, but no URL part.", "method", methodCandidate, "line", p.lineNumber, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
 		// Even if there's no URL, if a separator follows, we finalize this incomplete request.
 		if finalizedBySeparator {
-			slog.Debug("parseRequestLineDetails: Finalizing current request (method, no URL) due to same-line separator", "requestPtr", fmt.Sprintf("%p", p.currentRequest))
 			p.finalizeCurrentRequest()
 			p.ensureCurrentRequest() // Prepare for the next request
 			return true
@@ -805,16 +760,11 @@ func (p *requestParserState) parseRequestLineDetails(originalRequestLine string)
 
 	p.currentRequest.RawURLString = urlStr
 	p.currentRequest.HTTPVersion = httpVersion // Can be empty if not specified
-	slog.Debug("parseRequestLineDetails: Set RawURLString and HTTPVersion", "RawURLString", p.currentRequest.RawURLString, "HTTPVersion", p.currentRequest.HTTPVersion, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
 
 	// Check if URL contains variables (using {{ and }} as variable markers)
 	containsVariables := strings.Contains(urlStr, "{{") || strings.Contains(urlStr, "}}")
 
 	if containsVariables {
-		slog.Debug("parseRequestLineDetails: RawURLString contains variables, deferring full parsing",
-			"rawURL", urlStr,
-			"line", p.lineNumber,
-			"requestPtr", fmt.Sprintf("%p", p.currentRequest))
 		// p.currentRequest.URL remains nil as parsing is deferred
 	} else {
 		// No variables, try to parse URL now
@@ -824,13 +774,11 @@ func (p *requestParserState) parseRequestLineDetails(originalRequestLine string)
 			// p.currentRequest.URL remains nil or as set by url.Parse on error (which is typically nil for parse errors)
 		} else {
 			p.currentRequest.URL = parsedURL
-			slog.Debug("parseRequestLineDetails: Successfully parsed RawURLString (no variables)", "parsedURL", p.currentRequest.URL.String(), "requestPtr", fmt.Sprintf("%p", p.currentRequest))
 		}
 	}
 
 	if finalizedBySeparator {
 		// If there was a separator on the same line, finalize this now-parsed request.
-		slog.Debug("parseRequestLineDetails: Finalizing current request (valid method line) due to same-line separator", "requestPtr", fmt.Sprintf("%p", p.currentRequest))
 		p.finalizeCurrentRequest()
 		p.ensureCurrentRequest() // Prepare for the next request
 		return true
