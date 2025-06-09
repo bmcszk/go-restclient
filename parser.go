@@ -13,8 +13,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/joho/godotenv"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 const (
@@ -283,8 +284,6 @@ func (p *requestParserState) processLine(lineType lineType, trimmedLine, origina
 		return p.handleRequestLine(trimmedLine, originalLine) // Use handleRequestLine for requestSeparator
 	case lineTypeVariableDefinition:
 		return p.handleVariableDefinition(trimmedLine)
-	case lineTypeImportDirective:
-		return p.handleImportDirective(trimmedLine)
 	case lineTypeComment:
 		return p.handleComment(trimmedLine, originalLine)
 	case lineTypeContent:
@@ -564,12 +563,6 @@ func (p *requestParserState) handleVariableDefinition(trimmedLine string) error 
 
 	// Store in the file variables using the full @name (e.g. "@foo")
 	p.currentFileVariables[varNameWithAt] = varValue
-	return nil
-}
-
-// handleImportDirective silently ignores @import directives as they are not supported in http_syntax.md.
-func (p *requestParserState) handleImportDirective(trimmedLine string) error {
-	// Silently ignore @import directives - they are not documented in http_syntax.md
 	return nil
 }
 
