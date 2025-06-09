@@ -2,17 +2,6 @@ SHELL := /bin/bash
 
 .PHONY: all build clean fmt lint test test-unit check help
 
-BINARY_NAME=go-restclient-lib-checker # Example, not really a binary for a lib
-
-# Go parameters
-GOBASE := $(shell pwd)
-GOPATH := $(GOBASE)/vendor
-GOBIN := $(GOBASE)/bin
-GOFILES := $(wildcard *.go)
-
-# Tools
-GOLANGCI_LINT := $(GOBIN)/golangci-lint
-
 all: check
 
 help: ## Display this help screen
@@ -21,7 +10,6 @@ help: ## Display this help screen
 # Build
 build: fmt lint ## Build the Go application (not typical for a library)
 	@echo "Building... (Note: Libraries are typically not "built" into a binary like this)"
-	# @go build -o $(GOBIN)/$(BINARY_NAME) $(GOFILES)
 	@go build ./...
 
 # Format, Lint, Test

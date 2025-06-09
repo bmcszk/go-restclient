@@ -568,26 +568,30 @@ func TestExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
 	assert.Equal(t, timestampFromBody1, timestampFromBody2)
 }
 
-// PRD-COMMENT: FR1.6 - Variable Function Consistency (Internal)
-// Corresponds to: Ensuring internal consistency between how variables are resolved by the dedicated variable substitution functions and how they are resolved during a full ExecuteFile operation. This is more of an internal consistency check than a direct user-facing feature test.
-// This test compares the output of `SubstituteVariablesInString` with the actual substituted values observed in a request made via `ExecuteFile`, using 'testdata/http_request_files/variable_consistency.http'.
-func TestExecuteFile_VariableFunctionConsistency(t *testing.T) {
-	// This server will capture the path, headers, and body to check for consistency.
-	var capturedPathUUID, capturedHeaderUUID, capturedBodyUUID, capturedBodyAnotherUUID string
-	var capturedHeaderTimestamp, capturedBodyTimestamp string
-	var capturedHeaderRandomInt, capturedBodyRandomInt string
+type capturedConsistencyValues struct {
+	PathUUID        string
+	HeaderUUID      string
+	BodyUUID        string
+	BodyAnotherUUID string
+	HeaderTimestamp string
+	BodyTimestamp   string
+	HeaderRandomInt string
+	BodyRandomInt   string
+}
 
-	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+func setupConsistencyTestServer(t *testing.T, capturedVals *capturedConsistencyValues) *httptest.Server {
+	t.Helper()
+	return startMockServer(func(w http.ResponseWriter, r *http.Request) {
 		pathParts := strings.Split(r.URL.Path, "/")
 		if len(pathParts) == 3 && pathParts[1] == "test-uuid" {
-			capturedPathUUID = pathParts[2]
+			capturedVals.PathUUID = pathParts[2]
 		} else {
-			t.Logf("Unexpected path format: %s", r.URL.Path)
+			t.Logf("Unexpected path format in setupConsistencyTestServer: %s", r.URL.Path)
 		}
 
-		capturedHeaderUUID = r.Header.Get("X-Request-UUID")
-		capturedHeaderTimestamp = r.Header.Get("X-Request-Timestamp")
-		capturedHeaderRandomInt = r.Header.Get("X-Request-RandomInt")
+		capturedVals.HeaderUUID = r.Header.Get("X-Request-UUID")
+		capturedVals.HeaderTimestamp = r.Header.Get("X-Request-Timestamp")
+		capturedVals.HeaderRandomInt = r.Header.Get("X-Request-RandomInt")
 
 		bodyBytes, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
@@ -596,24 +600,75 @@ func TestExecuteFile_VariableFunctionConsistency(t *testing.T) {
 		require.NoError(t, err)
 
 		if id, ok := bodyJSON["id"].(string); ok {
-			capturedBodyUUID = id
+			capturedVals.BodyUUID = id
 		}
 		if anotherID, ok := bodyJSON["another_id"].(string); ok {
-			capturedBodyAnotherUUID = anotherID
+			capturedVals.BodyAnotherUUID = anotherID
 		}
 		if ts, ok := bodyJSON["timestamp"].(string); ok {
-			capturedBodyTimestamp = ts
+			capturedVals.BodyTimestamp = ts
 		}
 		if ri, ok := bodyJSON["randomInt"].(string); ok {
-			capturedBodyRandomInt = ri
+			capturedVals.BodyRandomInt = ri
 		}
 
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprint(w, "ok")
 	})
+}
+
+func assertServerCapturedConsistencyValues(t *testing.T, capturedVals *capturedConsistencyValues) {
+	t.Helper()
+	assert.NotEmpty(t, capturedVals.PathUUID, "Path UUID should not be empty")
+	assert.NotEqual(t, "{{$uuid}}", capturedVals.PathUUID, "Path UUID should be resolved from {{$uuid}}")
+	_, parseUUIDErr := uuid.Parse(capturedVals.PathUUID)
+	assert.NoError(t, parseUUIDErr, "Captured Path UUID should be a valid UUID")
+
+	assert.NotEmpty(t, capturedVals.HeaderTimestamp, "Header Timestamp should not be empty")
+	assert.NotEqual(t, "{{$timestamp}}", capturedVals.HeaderTimestamp, "Header Timestamp should be resolved")
+	_, parseIntErr := strconv.ParseInt(capturedVals.HeaderTimestamp, 10, 64)
+	assert.NoError(t, parseIntErr, "Captured Header Timestamp should be a valid integer")
+
+	assert.NotEmpty(t, capturedVals.HeaderRandomInt, "Header RandomInt should not be empty")
+	assert.NotEqual(t, "{{$randomInt}}", capturedVals.HeaderRandomInt, "Header RandomInt should be resolved")
+	_, parseIntErr = strconv.ParseInt(capturedVals.HeaderRandomInt, 10, 64)
+	assert.NoError(t, parseIntErr, "Captured Header RandomInt should be a valid integer")
+
+	assert.Equal(t, capturedVals.PathUUID, capturedVals.HeaderUUID, "Path UUID and Header UUID should be the same")
+	assert.Equal(t, capturedVals.PathUUID, capturedVals.BodyUUID, "Path UUID and Body UUID should be the same")
+	assert.Equal(t, capturedVals.PathUUID, capturedVals.BodyAnotherUUID, "Path UUID and Body Another UUID should be the same")
+	assert.Equal(t, capturedVals.HeaderTimestamp, capturedVals.BodyTimestamp, "Header Timestamp and Body Timestamp should be the same")
+	assert.Equal(t, capturedVals.HeaderRandomInt, capturedVals.BodyRandomInt, "Header RandomInt and Body RandomInt should be the same")
+}
+
+func assertRequestObjectConsistency(t *testing.T, parsedReq *Request, capturedVals *capturedConsistencyValues) {
+	t.Helper()
+	require.NotNil(t, parsedReq)
+
+	assert.Equal(t, "/test-uuid/"+capturedVals.PathUUID, parsedReq.URL.Path, "Parsed request URL path mismatch")
+	assert.Equal(t, capturedVals.PathUUID, parsedReq.Headers.Get("X-Request-UUID"))
+	assert.Equal(t, capturedVals.HeaderTimestamp, parsedReq.Headers.Get("X-Request-Timestamp"))
+	assert.Equal(t, capturedVals.HeaderRandomInt, parsedReq.Headers.Get("X-Request-RandomInt"))
+
+	var clientReqBodyJSON map[string]interface{}
+	err := json.Unmarshal([]byte(parsedReq.RawBody), &clientReqBodyJSON)
+	require.NoError(t, err, "Failed to unmarshal client request RawBody JSON")
+
+	assert.Equal(t, capturedVals.PathUUID, clientReqBodyJSON["id"], "Client request body UUID mismatch")
+	assert.Equal(t, capturedVals.PathUUID, clientReqBodyJSON["another_id"], "Client request body Another UUID mismatch")
+	assert.Equal(t, capturedVals.HeaderTimestamp, clientReqBodyJSON["timestamp"], "Client request body Timestamp mismatch")
+	assert.Equal(t, capturedVals.HeaderRandomInt, clientReqBodyJSON["randomInt"], "Client request body RandomInt mismatch")
+}
+
+// PRD-COMMENT: FR1.6 - Variable Function Consistency (Internal)
+// Corresponds to: Ensuring internal consistency between how variables are resolved by the dedicated variable substitution functions and how they are resolved during a full ExecuteFile operation. This is more of an internal consistency check than a direct user-facing feature test.
+// This test compares the output of `SubstituteVariablesInString` with the actual substituted values observed in a request made via `ExecuteFile`, using 'testdata/http_request_files/variable_consistency.http'.
+func TestExecuteFile_VariableFunctionConsistency(t *testing.T) {
+	var capturedVals capturedConsistencyValues
+	server := setupConsistencyTestServer(t, &capturedVals)
 	defer server.Close()
 
-	client, err := NewClient(WithBaseURL(server.URL)) // Set BaseURL to mock server
+	client, err := NewClient(WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	requestFilePath := "testdata/http_request_files/variable_function_consistency.rest"
@@ -627,55 +682,8 @@ func TestExecuteFile_VariableFunctionConsistency(t *testing.T) {
 	assert.NoError(t, resp.Error, "Error in response object should be nil")
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "Status code should be OK")
 
-	// Assert that captured values are not the placeholders themselves
-	assert.NotEmpty(t, capturedPathUUID, "Path UUID should not be empty")
-	assert.NotEqual(t, "{{$uuid}}", capturedPathUUID, "Path UUID should be resolved from {{$uuid}}")
-	_, parseUUIDErr := uuid.Parse(capturedPathUUID)
-	assert.NoError(t, parseUUIDErr, "Captured Path UUID should be a valid UUID")
-
-	assert.NotEmpty(t, capturedHeaderTimestamp, "Header Timestamp should not be empty")
-	assert.NotEqual(t, "{{$timestamp}}", capturedHeaderTimestamp, "Header Timestamp should be resolved")
-	_, parseIntErr := strconv.ParseInt(capturedHeaderTimestamp, 10, 64)
-	assert.NoError(t, parseIntErr, "Captured Header Timestamp should be a valid integer")
-
-	assert.NotEmpty(t, capturedHeaderRandomInt, "Header RandomInt should not be empty")
-	assert.NotEqual(t, "{{$randomInt}}", capturedHeaderRandomInt, "Header RandomInt should be resolved")
-	_, parseIntErr = strconv.ParseInt(capturedHeaderRandomInt, 10, 64) // Re-check, should be parsable as int
-	assert.NoError(t, parseIntErr, "Captured Header RandomInt should be a valid integer")
-
-	// Assert UUID consistency
-	assert.Equal(t, capturedPathUUID, capturedHeaderUUID, "Path UUID and Header UUID should be the same")
-	assert.Equal(t, capturedPathUUID, capturedBodyUUID, "Path UUID and Body UUID should be the same")
-	assert.Equal(t, capturedPathUUID, capturedBodyAnotherUUID, "Path UUID and Body Another UUID should be the same")
-
-	// Assert Timestamp consistency
-	assert.Equal(t, capturedHeaderTimestamp, capturedBodyTimestamp, "Header Timestamp and Body Timestamp should be the same")
-
-	// Assert RandomInt consistency
-	assert.Equal(t, capturedHeaderRandomInt, capturedBodyRandomInt, "Header RandomInt and Body RandomInt should be the same")
-
-	// Additionally, verify that the actual substituted values in the request object (client-side) are consistent.
-	parsedReq := resp.Request
-	require.NotNil(t, parsedReq)
-
-	// Check substituted URL Path
-	// capturedPathUUID is what the server received and should be the actual resolved UUID.
-	assert.Equal(t, "/test-uuid/"+capturedPathUUID, parsedReq.URL.Path, "Parsed request URL path mismatch")
-
-	// Check substituted Header
-	assert.Equal(t, capturedPathUUID, parsedReq.Headers.Get("X-Request-UUID"))
-	assert.Equal(t, capturedHeaderTimestamp, parsedReq.Headers.Get("X-Request-Timestamp"))
-	assert.Equal(t, capturedHeaderRandomInt, parsedReq.Headers.Get("X-Request-RandomInt"))
-
-	// Check substituted Body
-	var finalBodyJSON map[string]interface{}
-	err = json.Unmarshal([]byte(parsedReq.RawBody), &finalBodyJSON)
-	require.NoError(t, err, "Failed to parse RawBody as JSON")
-
-	assert.Equal(t, capturedPathUUID, finalBodyJSON["id"].(string))
-	assert.Equal(t, capturedPathUUID, finalBodyJSON["another_id"].(string))
-	assert.Equal(t, capturedHeaderTimestamp, finalBodyJSON["timestamp"].(string))
-	assert.Equal(t, capturedHeaderRandomInt, finalBodyJSON["randomInt"].(string))
+	assertServerCapturedConsistencyValues(t, &capturedVals)
+	assertRequestObjectConsistency(t, resp.Request, &capturedVals)
 }
 
 // interceptedRequestData holds data captured by the mock server for assertions.
