@@ -20,7 +20,7 @@ lint: ## Lint Go source files using golangci-lint
 	@echo "Linting..."
 	@golangci-lint run ./...
 
-check: build lint test-unit ## Run all pre-commit checks (build, lint, unit tests)
+check: lint test-unit ## Run all pre-commit checks (lint, unit tests)
 	@echo "Checks completed."
 
 test: test-unit ## Run all tests

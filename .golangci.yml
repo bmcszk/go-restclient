@@ -13,10 +13,13 @@ linters:
     - staticcheck
     - unused
     - ineffassign
+    - unparam
     - dupl
     - nestif
     - funlen
     - revive
+    - testpackage
+    - thelper
   exclusions:
     rules:
       - path: '(.+)_test\.go$'
