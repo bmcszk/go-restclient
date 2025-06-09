@@ -271,6 +271,80 @@ POST https://example.com/api/item2
 	}
 }
 
+// PRD-COMMENT: FR1.3 - Request Naming with # @name Directive
+// Corresponds to: http_syntax.md "Named requests > # @name name"
+// This test, TestParseRequests_AtNameDirective, specifically validates the parser's ability
+// to correctly interpret and assign request names using the '# @name RequestName' directive.
+// Key aspects tested:
+// 1. Parsing of a simple request name via '# @name'.
+// 2. Precedence of '# @name' over '### Name' when both are present for the same request block.
+// 3. Correct naming of multiple requests in a file, each using the '# @name' directive.
+// 4. Handling of leading/trailing whitespace in the name provided via '# @name' (expecting trim).
+// 5. Correct parsing when '### Name' is used for one request and '# @name' for a subsequent request.
+func TestParseRequests_AtNameDirective(t *testing.T) {
+	client, err := NewClient() // Create client once
+	require.NoError(t, err)
+	require.NotNil(t, client)
+
+	tests := []struct {
+		name          string
+		filePath      string // Changed from fileContent
+		expectedCount int
+		expectedNames []string // Changed to slice for all cases
+	}{
+		{
+			name:          "SCENARIO-FR1.3-001: Simple request with # @name directive",
+			filePath:      "testdata/http_request_files/at_name_simple.http",
+			expectedCount: 1,
+			expectedNames: []string{"SimpleDirectiveName"},
+		},
+		{
+			name:          "SCENARIO-FR1.3-002: # @name directive overrides ### Name from separator",
+			filePath:      "testdata/http_request_files/at_name_overrides_separator.http",
+			expectedCount: 1,
+			expectedNames: []string{"DirectiveNameOverride"}, // Updated to match file content
+		},
+		{
+			name:          "SCENARIO-FR1.3-003: Multiple requests with different # @name directives",
+			filePath:      "testdata/http_request_files/at_name_multiple_requests.http",
+			expectedCount: 2,
+			expectedNames: []string{"RequestOne", "RequestTwo"},
+		},
+		{
+			name:          "SCENARIO-FR1.3-004: # @name directive with leading/trailing spaces",
+			filePath:      "testdata/http_request_files/at_name_whitespace.http",
+			expectedCount: 2, // This file now has two requests
+			expectedNames: []string{"Spaced Name", "Tabbed Name"},
+		},
+		{
+			name:          "SCENARIO-FR1.3-005: Mixed ### Name and # @name usage",
+			filePath:      "testdata/http_request_files/at_name_mixed.http",
+			expectedCount: 4,                                                                                                                                   // This file has four requests
+			expectedNames: []string{"SeparatorOnlyName", "DirectiveNameForNext", "ThisShouldBeIgnoredDueToSeparatorNameAbove", "DirectiveAfterEmptySeparator"}, // Corrected 3rd name
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given (client is already initialized)
+
+			// When
+			parsedFile, err := parseRequestFile(tt.filePath, client, nil)
+
+			// Then
+			require.NoError(t, err, "Error parsing file %s", tt.filePath)
+			require.NotNil(t, parsedFile, "Parsed file should not be nil for %s", tt.filePath)
+			require.Len(t, parsedFile.Requests, tt.expectedCount, "Request count mismatch for %s", tt.filePath)
+
+			if len(parsedFile.Requests) == tt.expectedCount { // Ensure we don't panic on index out of bounds
+				for i, expectedName := range tt.expectedNames {
+					assert.Equal(t, expectedName, parsedFile.Requests[i].Name, "Request %d name mismatch for %s (file: %s)", i, tt.name, tt.filePath)
+				}
+			}
+		})
+	}
+}
+
 func TestParseExpectedResponses_SeparatorComments(t *testing.T) {
 	tests := []struct {
 		name           string

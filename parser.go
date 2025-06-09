@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"time"
 
@@ -35,6 +36,42 @@ func isPotentialRequestLine(line string) bool {
 		"GET": true, "POST": true, "PUT": true, "DELETE": true, "PATCH": true, "HEAD": true, "OPTIONS": true, "TRACE": true, "CONNECT": true,
 	}
 	return validMethods[methodToken]
+}
+
+// parseNameFromAtNameDirective checks if the commentContent is a well-formed @name directive
+// and extracts the name value if present.
+// It returns the extracted name (trimmed, or empty if no value) and a boolean indicating
+// if the commentContent was indeed a recognized @name directive pattern.
+func parseNameFromAtNameDirective(commentContent string) (nameValue string, isAtNamePattern bool) {
+	if !strings.HasPrefix(commentContent, "@name") {
+		return "", false // Not an @name pattern at all
+	}
+
+	// It starts with "@name". Now check if it's a valid form.
+	// Valid forms: "@name" (no value), or "@name<whitespace>value"
+
+	// Case 1: Exactly "@name"
+	if len(commentContent) == len("@name") {
+		return "", true // It's the @name pattern, value is empty.
+	}
+
+	// Case 2: Must be "@name" followed by whitespace to be our pattern.
+	if !unicode.IsSpace(rune(commentContent[len("@name")])) {
+		// e.g., "@nametag". This is not the "@name <value>" pattern.
+		return "", false
+	}
+
+	// It's "@name" followed by whitespace. This is a recognized @name pattern.
+	// Extract the potential value.
+	// commentContent[len("@name"):] will get the part after "@name", including leading spaces.
+	valuePart := commentContent[len("@name"):]
+	// First, trim leading/trailing whitespace from the raw value part.
+	trimmedValue := strings.TrimSpace(valuePart)
+	// Then, normalize internal whitespace sequences (tabs, multiple spaces) to single spaces.
+	// strings.Fields splits by any whitespace and removes empty strings resulting from multiple spaces.
+	// strings.Join then puts them back with single spaces.
+	normalizedName := strings.Join(strings.Fields(trimmedValue), " ")
+	return normalizedName, true
 }
 
 // requestParserState holds the state during the parsing of a request file.
@@ -366,11 +403,12 @@ func (p *requestParserState) handleComment(trimmedLine, originalLine string) err
 	p.ensureCurrentRequest() // Comments might have directives that require a request context
 
 	// Process directives
-	// Handle @name directive
-	if strings.HasPrefix(commentContent, "@name ") {
-		nameValue := strings.TrimSpace(commentContent[len("@name "):])
-		p.currentRequest.Name = nameValue
-		return nil
+	parsedName, isNameDirective := parseNameFromAtNameDirective(commentContent)
+	if isNameDirective {
+		if parsedName != "" {
+			p.currentRequest.Name = parsedName // Apply directly
+		}
+		return nil // @name directive was recognized and handled (even if name was empty)
 	}
 
 	// Handle @no-redirect directive
@@ -441,13 +479,13 @@ func (p *requestParserState) handleRequestLine(trimmedLine, originalLine string)
 
 	finalizedBySeparatorInLine := p.parseRequestLineDetails(trimmedLine) // Pass trimmedLine as requestLine
 
-	// Apply stored nextRequestName if available, the request wasn't finalized by a separator in the same line,
-	// and a name hasn't already been set (e.g., by a @name directive in a comment).
+	// Apply stored nextRequestName if available and current request has no name yet.
+	// @name directive would have already set p.currentRequest.Name directly.
 	if !finalizedBySeparatorInLine && p.currentRequest != nil && p.currentRequest.Method != "" && p.nextRequestName != "" {
-		if p.currentRequest.Name == "" { // Only apply if no name is set yet
+		if p.currentRequest.Name == "" { // Only apply if no name is set yet (e.g. by @name)
 			p.currentRequest.Name = p.nextRequestName
 		}
-		p.nextRequestName = "" // Clear nextRequestName as it has been considered for this request block
+		p.nextRequestName = "" // Clear nextRequestName as it has been considered/applied or overridden
 	}
 
 	return nil
