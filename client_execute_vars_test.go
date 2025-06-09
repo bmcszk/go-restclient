@@ -97,7 +97,6 @@ func TestRandomStringFromCharset(t *testing.T) {
 
 // TestSubstituteDynamicSystemVariables_EnvVars tests the {{$env.VAR_NAME}} substitution.
 func TestSubstituteDynamicSystemVariables_EnvVars(t *testing.T) {
-	//t.Skip("Skipping due to bugs in {{$env VAR}} substitution (MEMORY 1e157e39-d7fc-4b0e-b273-5f22eb1f27c6, MEMORY d7bc6730-ff10-42fb-8959-482f75102f4b): issues with empty values and var names starting with underscores. See tasks TBD for fixes.")
 	client, _ := NewClient()
 	tests := []struct {
 		name    string
@@ -314,39 +313,104 @@ func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
 	assert.Equal(t, "{{$processEnv UNDEFINED_CACHE_VAR_SHOULD_BE_EMPTY}}", interceptedRequest.CacheControlHeader, "Cache-Control header should be the unresolved placeholder")
 }
 
+type dotEnvInterceptedRequestData struct {
+	URL    string
+	Header string
+	Body   string
+}
+
+type dotEnvTestCase struct {
+	name                string
+	dotEnvContent       string // Content to write to .env file for this test case
+	requestFileTemplate string // Template for the .http file content
+	expectedURL         string
+	expectedHeader      string
+	expectedBodyPayload map[string]string // Key-value pairs for expected JSON body
+	expectErrorInExec   bool
+	expectErrorInResp   bool
+}
+
+func runDotEnvScenarioTest(t *testing.T, client *Client, serverURL string, tempDir string, tc dotEnvTestCase, interceptedData *dotEnvInterceptedRequestData) {
+	t.Helper()
+
+	// Given: Setup .env file for the current scenario
+	dotEnvFilePath := filepath.Join(tempDir, ".env")
+	if tc.dotEnvContent != "" {
+		err := os.WriteFile(dotEnvFilePath, []byte(tc.dotEnvContent), 0644)
+		require.NoError(t, err, "Failed to write .env file for scenario: %s", tc.name)
+	} else {
+		// Ensure .env file does not exist if no content is specified
+		_ = os.Remove(dotEnvFilePath) // Ignore error if file doesn't exist
+	}
+
+	// Given: Create .http file from template
+	requestFileContent := fmt.Sprintf(tc.requestFileTemplate, serverURL)
+	httpFilePath := filepath.Join(tempDir, "request.http") // Use a consistent name, overwritten per test
+	err := os.WriteFile(httpFilePath, []byte(requestFileContent), 0644)
+	require.NoError(t, err, "Failed to write .http file for scenario: %s", tc.name)
+
+	// When
+	responses, execErr := client.ExecuteFile(context.Background(), httpFilePath)
+
+	// Then
+	if tc.expectErrorInExec {
+		assert.Error(t, execErr, "Expected an error during ExecuteFile for scenario: %s", tc.name)
+		return // Stop further checks if execution error was expected
+	}
+	require.NoError(t, execErr, "ExecuteFile should not return an error for scenario: %s", tc.name)
+	require.Len(t, responses, 1, "Expected 1 response for scenario: %s", tc.name)
+
+	resp := responses[0]
+	if tc.expectErrorInResp {
+		assert.Error(t, resp.Error, "Expected an error in the response object for scenario: %s", tc.name)
+		return // Stop further checks if response error was expected
+	}
+	assert.NoError(t, resp.Error, "Response error should be nil for scenario: %s", tc.name)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "Status code should be OK for scenario: %s", tc.name)
+
+	assert.Equal(t, tc.expectedURL, interceptedData.URL, "URL mismatch for scenario: %s", tc.name)
+	if tc.expectedHeader != "" { // Only assert header if an expectation is set
+		assert.Equal(t, tc.expectedHeader, interceptedData.Header, "Header mismatch for scenario: %s", tc.name)
+	}
+
+	if len(tc.expectedBodyPayload) > 0 {
+		var bodyJSON map[string]string
+		err = json.Unmarshal([]byte(interceptedData.Body), &bodyJSON)
+		require.NoError(t, err, "Failed to unmarshal request body JSON for scenario: %s. Body: %s", tc.name, interceptedData.Body)
+		for key, expectedValue := range tc.expectedBodyPayload {
+			actualValue, ok := bodyJSON[key]
+			assert.True(t, ok, "Expected key '%s' not found in body for scenario: %s", key, tc.name)
+			assert.Equal(t, expectedValue, actualValue, "Body payload for key '%s' mismatch for scenario: %s", key, tc.name)
+		}
+	}
+}
+
 // PRD-COMMENT: FR1.3.7 - System Variables: {{$dotenv.VAR_NAME}}
 // Corresponds to: Client's ability to substitute the {{$dotenv.VAR_NAME}} system variable with values from a .env file located in the same directory as the .http file (http_syntax.md "System Variables").
 // This test uses 'testdata/http_request_files/system_var_dotenv.http' and a dynamically created '.env' file to verify substitution in URLs, headers, and bodies. It also checks behavior for variables not present in the .env file.
 func TestExecuteFile_WithDotEnvSystemVariable(t *testing.T) {
-	//t.Skip("Skipping due to bug in {{$dotenv VAR}} substitution (MEMORY ???): placeholder not replaced with empty string when .env file/OS env var is missing. See task TBD for fix.")
-	// Given
-	var interceptedRequest struct {
-		URL    string
-		Header string
-		Body   string
-	}
+	var currentInterceptedData dotEnvInterceptedRequestData // Use a single instance, reset/captured by mock server per call
 
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
-		interceptedRequest.URL = r.URL.String()
+		currentInterceptedData.URL = r.URL.String() // Capture relative URL path and query
 		bodyBytes, _ := io.ReadAll(r.Body)
-		interceptedRequest.Body = string(bodyBytes)
-		interceptedRequest.Header = r.Header.Get("X-Dotenv-Value")
+		currentInterceptedData.Body = string(bodyBytes)
+		currentInterceptedData.Header = r.Header.Get("X-Dotenv-Value") // Specific header for these tests
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprint(w, "ok")
 	})
 	defer server.Close()
 
-	client, _ := NewClient()
+	client, err := NewClient()
+	require.NoError(t, err) // Ensure client creation doesn't fail
+
 	tempDir := t.TempDir()
 
-	// Scenario 1: .env file exists and variable is present
-	// Given
-	dotEnvContent1 := "DOTENV_VAR1=dotenv_value_one\nDOTENV_VAR2=another val from dotenv"
-	dotEnvFile1Path := filepath.Join(tempDir, ".env")
-	err := os.WriteFile(dotEnvFile1Path, []byte(dotEnvContent1), 0644)
-	require.NoError(t, err)
-
-	requestFileContent1 := fmt.Sprintf(`
+	testCases := []dotEnvTestCase{
+		{
+			name:          "Scenario 1: .env file exists and variable is present",
+			dotEnvContent: "DOTENV_VAR1=dotenv_value_one\nDOTENV_VAR2=another val from dotenv",
+			requestFileTemplate: `
 GET %s/path-{{$dotenv DOTENV_VAR1}}/data
 Content-Type: application/json
 X-Dotenv-Value: {{$dotenv DOTENV_VAR2}}
@@ -354,72 +418,38 @@ X-Dotenv-Value: {{$dotenv DOTENV_VAR2}}
 {
   "payload": "{{$dotenv DOTENV_VAR1}}",
   "missing_payload": "{{$dotenv MISSING_DOTENV_VAR}}"
-}
-`, server.URL)
-	httpFile1Path := filepath.Join(tempDir, "request1.http")
-	err = os.WriteFile(httpFile1Path, []byte(requestFileContent1), 0644)
-	require.NoError(t, err)
-
-	// When
-	responses1, err1 := client.ExecuteFile(context.Background(), httpFile1Path)
-
-	// Then
-	require.NoError(t, err1, "ExecuteFile (scenario 1) should not return an error for $dotenv processing")
-	require.Len(t, responses1, 1, "Expected 1 response for scenario 1")
-	resp1 := responses1[0]
-	assert.NoError(t, resp1.Error)
-	assert.Equal(t, http.StatusOK, resp1.StatusCode)
-
-	expectedURL1 := "/path-dotenv_value_one/data" // SCENARIO-LIB-020-001
-	assert.Equal(t, expectedURL1, interceptedRequest.URL, "URL (scenario 1) should contain substituted dotenv variable")
-	assert.Equal(t, "another val from dotenv", interceptedRequest.Header, "X-Dotenv-Value header (scenario 1) should contain substituted dotenv variable") // SCENARIO-LIB-020-001
-
-	var bodyJSON1 map[string]string
-	err = json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON1)
-	require.NoError(t, err, "Failed to unmarshal request body JSON (scenario 1)")
-	dotenvPayload1, ok1 := bodyJSON1["payload"]
-	require.True(t, ok1, "payload not found in body (scenario 1)")
-	assert.Equal(t, "dotenv_value_one", dotenvPayload1, "Body payload (scenario 1) should contain substituted dotenv variable") // SCENARIO-LIB-020-001
-	missingPayload1, ok2 := bodyJSON1["missing_payload"]
-	require.True(t, ok2, "missing_payload not found in body (scenario 1)")
-	assert.Empty(t, missingPayload1, "Body missing_payload (scenario 1) should be empty for a missing dotenv variable") // SCENARIO-LIB-020-002
-
-	// Scenario 2: .env file does not exist
-	// Given
-	err = os.Remove(dotEnvFile1Path)
-	require.NoError(t, err, "Failed to remove .env file for scenario 2 prep")
-
-	requestFileContent2 := fmt.Sprintf(`
+}`,
+			expectedURL:    "/path-dotenv_value_one/data",
+			expectedHeader: "another val from dotenv",
+			expectedBodyPayload: map[string]string{
+				"payload":         "dotenv_value_one",
+				"missing_payload": "", // SCENARIO-LIB-020-002: Missing var results in empty string
+			},
+		},
+		{
+			name:          "Scenario 2: .env file does not exist",
+			dotEnvContent: "", // Empty content means .env file will be removed/not created
+			requestFileTemplate: `
 GET %s/path-{{$dotenv DOTENV_VAR_SHOULD_BE_EMPTY}}/data
 User-Agent: test-client
 
 {
   "payload": "{{$dotenv DOTENV_VAR_ALSO_EMPTY}}"
-}
-`, server.URL)
-	httpFile2Path := filepath.Join(tempDir, "request2.http")
-	err = os.WriteFile(httpFile2Path, []byte(requestFileContent2), 0644)
-	require.NoError(t, err)
+}`,
+			expectedURL: "/path-/data", // SCENARIO-LIB-020-003: Missing .env or var results in empty string
+			expectedBodyPayload: map[string]string{
+				"payload": "",
+			},
+		},
+		// Add more scenarios as needed, e.g., empty .env file, variable present in OS but not .env, etc.
+	}
 
-	// When
-	responses2, err2 := client.ExecuteFile(context.Background(), httpFile2Path)
-
-	// Then
-	require.NoError(t, err2, "ExecuteFile (scenario 2) should not return an error if .env not found")
-	require.Len(t, responses2, 1, "Expected 1 response for scenario 2")
-	resp2 := responses2[0]
-	assert.NoError(t, resp2.Error)
-	assert.Equal(t, http.StatusOK, resp2.StatusCode)
-
-	expectedURL2 := "/path-/data" // SCENARIO-LIB-020-003
-	assert.Equal(t, expectedURL2, interceptedRequest.URL, "URL (scenario 2) should have empty substitution for dotenv variable")
-
-	var bodyJSON2 map[string]string
-	err = json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON2)
-	require.NoError(t, err, "Failed to unmarshal request body JSON (scenario 2)")
-	dotenvPayload2, ok3 := bodyJSON2["payload"]
-	require.True(t, ok3, "payload not found in body (scenario 2)")
-	assert.Empty(t, dotenvPayload2, "Body payload (scenario 2) should be empty if .env not found") // SCENARIO-LIB-020-003
+	for _, tc := range testCases {
+		capturedTC := tc // Capture range variable for t.Run
+		t.Run(capturedTC.name, func(t *testing.T) {
+			runDotEnvScenarioTest(t, client, server.URL, tempDir, capturedTC, &currentInterceptedData)
+		})
+	}
 }
 
 // PRD-COMMENT: FR1.5 - Programmatic Variable Injection

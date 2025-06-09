@@ -42,7 +42,6 @@ install-gotestsum: ## Install gotestsum
 # Clean
 clean: ## Clean build artifacts
 	@echo "Cleaning..."
-	@rm -f $(GOBIN)/$(BINARY_NAME)
 	@go clean -cache -testcache -modcache
 
 # Go Mod
