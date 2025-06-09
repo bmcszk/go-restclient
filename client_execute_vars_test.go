@@ -172,6 +172,9 @@ func TestSubstituteDynamicSystemVariables_EnvVars(t *testing.T) {
 	}
 }
 
+// PRD-COMMENT: FR1.1 - Custom Variables: Basic Definition and Substitution
+// Corresponds to: Client's ability to define and substitute custom variables within an .http file (e.g., @name = value) (http_syntax.md "Custom Variables").
+// This test uses 'testdata/http_request_files/custom_variables.http' to verify substitution of custom variables in URLs, headers, and bodies.
 func TestExecuteFile_WithCustomVariables(t *testing.T) {
 	// Given
 	var requestCount int32
@@ -231,6 +234,9 @@ func TestExecuteFile_WithCustomVariables(t *testing.T) {
 	assert.Equal(t, "response for items ()", resp3.BodyString)
 }
 
+// PRD-COMMENT: FR1.3.6 - System Variables: {{$processEnv.VAR_NAME}}
+// Corresponds to: Client's ability to substitute the {{$processEnv.VAR_NAME}} system variable with the value of an OS environment variable (http_syntax.md "System Variables").
+// This test uses 'testdata/http_request_files/system_var_process_env.http' and sets OS environment variables to verify their substitution in URLs, headers, and bodies. It also checks behavior for undefined environment variables.
 func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
 	//t.Skip("Skipping due to bug in {{$processEnv VAR}} substitution (MEMORY d1edb831-da89-4cde-93ad-a9129eb7b8aa): placeholder not replaced with OS environment variable value. See task TBD for fix.")
 	// Given
@@ -309,6 +315,9 @@ func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
 	assert.Equal(t, "{{$processEnv UNDEFINED_CACHE_VAR_SHOULD_BE_EMPTY}}", interceptedRequest.CacheControlHeader, "Cache-Control header should be the unresolved placeholder")
 }
 
+// PRD-COMMENT: FR1.3.7 - System Variables: {{$dotenv.VAR_NAME}}
+// Corresponds to: Client's ability to substitute the {{$dotenv.VAR_NAME}} system variable with values from a .env file located in the same directory as the .http file (http_syntax.md "System Variables").
+// This test uses 'testdata/http_request_files/system_var_dotenv.http' and a dynamically created '.env' file to verify substitution in URLs, headers, and bodies. It also checks behavior for variables not present in the .env file.
 func TestExecuteFile_WithDotEnvSystemVariable(t *testing.T) {
 	//t.Skip("Skipping due to bug in {{$dotenv VAR}} substitution (MEMORY ???): placeholder not replaced with empty string when .env file/OS env var is missing. See task TBD for fix.")
 	// Given
@@ -414,6 +423,9 @@ User-Agent: test-client
 	assert.Empty(t, dotenvPayload2, "Body payload (scenario 2) should be empty if .env not found") // SCENARIO-LIB-020-003
 }
 
+// PRD-COMMENT: FR1.5 - Programmatic Variable Injection
+// Corresponds to: Client's ability to accept and substitute variables passed programmatically during the ExecuteFile call, which can override variables defined in the .http file or environment files (http_syntax.md "Variable Precedence").
+// This test uses 'testdata/http_request_files/programmatic_vars.http' and injects variables via `WithVariables` and `ExecuteFile` options to verify their substitution and precedence over file-defined variables.
 func TestExecuteFile_WithProgrammaticVariables(t *testing.T) {
 	// Given
 	var interceptedRequest struct {
@@ -479,6 +491,9 @@ func TestExecuteFile_WithProgrammaticVariables(t *testing.T) {
 	assert.Equal(t, "file_only", resp.Request.Headers.Get("X-Unused-File-Var"))
 }
 
+// PRD-COMMENT: FR1.3.4.1 - System Variables: {{$localDatetime "format"}}
+// Corresponds to: Client's ability to substitute the {{$localDatetime}} system variable with the current timestamp in the system's local timezone, formatted according to a Go layout string (http_syntax.md "System Variables").
+// This test uses 'testdata/http_request_files/system_var_local_datetime.http' to verify correct formatting and substitution in URLs, headers, and bodies.
 func TestExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
 	// Given
 	var interceptedRequest struct {
@@ -554,6 +569,9 @@ func TestExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
 	assert.Equal(t, timestampFromBody1, timestampFromBody2)
 }
 
+// PRD-COMMENT: FR1.6 - Variable Function Consistency (Internal)
+// Corresponds to: Ensuring internal consistency between how variables are resolved by the dedicated variable substitution functions and how they are resolved during a full ExecuteFile operation. This is more of an internal consistency check than a direct user-facing feature test.
+// This test compares the output of `SubstituteVariablesInString` with the actual substituted values observed in a request made via `ExecuteFile`, using 'testdata/http_request_files/variable_consistency.http'.
 func TestExecuteFile_VariableFunctionConsistency(t *testing.T) {
 	// This server will capture the path, headers, and body to check for consistency.
 	var capturedPathUUID, capturedHeaderUUID, capturedBodyUUID, capturedBodyAnotherUUID string
@@ -762,7 +780,9 @@ func runHttpClientEnvSubtest(t *testing.T, tc httpClientEnvTestCase) {
 	}
 }
 
-// TestExecuteFile_WithHttpClientEnvJson tests variable substitution from http-client.env.json (Task T4)
+// PRD-COMMENT: FR1.4 - Environment Configuration Files: http-client.env.json
+// Corresponds to: Client's ability to load and substitute variables from `http-client.env.json` and `http-client.private.env.json` files, respecting environment-specific configurations (e.g., "dev", "prod") (http_syntax.md "Environment Configuration Files").
+// This test suite uses various .http files and dynamically created `http-client.env.json` / `http-client.private.env.json` files to verify variable loading, substitution, environment selection, and precedence for different scenarios (Task T4).
 func TestExecuteFile_WithHttpClientEnvJson(t *testing.T) {
 	tests := []httpClientEnvTestCase{
 		{
@@ -812,6 +832,9 @@ func TestExecuteFile_WithHttpClientEnvJson(t *testing.T) {
 	}
 }
 
+// PRD-COMMENT: FR1.3.8 - System Variables: {{$random.*}}
+// Corresponds to: Client's ability to substitute extended random system variables like {{$random.integer MIN MAX}}, {{$random.float MIN MAX}}, {{$random.alphabetic LENGTH}}, {{$random.alphanumeric LENGTH}}, {{$random.hexadecimal LENGTH}}, {{$random.email}} (http_syntax.md "System Variables - Extended Random").
+// This test uses 'testdata/http_request_files/system_var_extended_random.http' to verify the generation and substitution of these extended random variables, including handling of arguments and invalid inputs.
 func TestExecuteFile_WithExtendedRandomSystemVariables(t *testing.T) {
 	// Given
 	var interceptedRequest struct {
