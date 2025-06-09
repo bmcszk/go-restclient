@@ -20,7 +20,6 @@ import (
 // 2. '@no-cookie-jar' directive: When a request includes the '@no-cookie-jar' setting, the client does not use its cookie jar for that specific request (neither sending stored cookies nor saving new ones from the response).
 // It uses dynamically created 'testdata/cookies_redirects/with_cookie_jar.http' and 'testdata/cookies_redirects/without_cookie_jar.http' files.
 func TestCookieJarHandling(t *testing.T) {
-	//t.Skip("Skipping due to parser failing to find requests when .http file starts with '### name' line. See MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33. Task TBD for fix.")
 	// Given: A test server that sets cookies
 	var cookieCheck bool
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
