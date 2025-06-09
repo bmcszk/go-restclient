@@ -13,8 +13,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestCookieJarHandling tests the client's cookie jar functionality
-// by sending requests to a test server that sets cookies
+// PRD-COMMENT: FR9.1 - Client Execution: Cookie Jar Management
+// Corresponds to: Client execution behavior regarding HTTP cookies and the '@no-cookie-jar' request setting (http_syntax.md "Request Settings", "@no-cookie-jar").
+// This test verifies the client's cookie jar functionality. It checks:
+// 1. Default behavior: Cookies set by a server are stored in the client's cookie jar and sent with subsequent requests to the same domain.
+// 2. '@no-cookie-jar' directive: When a request includes the '@no-cookie-jar' setting, the client does not use its cookie jar for that specific request (neither sending stored cookies nor saving new ones from the response).
+// It uses dynamically created 'testdata/cookies_redirects/with_cookie_jar.http' and 'testdata/cookies_redirects/without_cookie_jar.http' files.
 func TestCookieJarHandling(t *testing.T) {
 	//t.Skip("Skipping due to parser failing to find requests when .http file starts with '### name' line. See MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33. Task TBD for fix.")
 	// Given: A test server that sets cookies
@@ -127,7 +131,12 @@ func TestCookieJarHandling(t *testing.T) {
 	assert.False(t, cookieCheck, "Cookie should not be sent in second request with @no-cookie-jar directive")
 }
 
-// TestRedirectHandling tests the client's redirect handling functionality
+// PRD-COMMENT: FR9.2 - Client Execution: Redirect Handling
+// Corresponds to: Client execution behavior regarding HTTP redirects and the '@no-redirect' request setting (http_syntax.md "Request Settings", "@no-redirect").
+// This test verifies the client's redirect handling. It checks:
+// 1. Default behavior: The client automatically follows HTTP redirects (e.g., 302 Found).
+// 2. '@no-redirect' directive: When a request includes the '@no-redirect' setting, the client does not automatically follow redirects and instead returns the redirect response itself.
+// It uses dynamically created 'testdata/cookies_redirects/with_redirect.http' and 'testdata/cookies_redirects/without_redirect.http' files.
 func TestRedirectHandling(t *testing.T) {
 	// Given: A test server that performs redirects
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
