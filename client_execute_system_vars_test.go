@@ -19,9 +19,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestExecuteFile_WithGuidSystemVariable tests the {{$guid}} and {{$uuid}} system variables.
-// It verifies that GUIDs are correctly generated and substituted in URLs, headers, and bodies.
-// It also checks that multiple instances of {{$guid}} or {{$uuid}} within the same request resolve to the same value.
+// PRD-COMMENT: FR1.3.1 - System Variables: {{$guid}} and {{$uuid}}
+// Corresponds to: Client's ability to substitute {{$guid}} and {{$uuid}} system variables with a unique, request-scoped UUID (http_syntax.md "System Variables").
+// This test uses 'testdata/http_request_files/system_var_guid.http' to verify that these variables are correctly generated and substituted in URLs, headers, and bodies. It also confirms that multiple instances of {{$guid}} or {{$uuid}} within the same request resolve to the *same* generated UUID for that request.
 func TestExecuteFile_WithGuidSystemVariable(t *testing.T) {
 	// Given
 	var interceptedRequest struct {
@@ -95,6 +95,9 @@ func TestExecuteFile_WithGuidSystemVariable(t *testing.T) {
 	assert.Equal(t, guidFromBody1, guidFromBody2, "GUIDs from body (transactionId and correlationId) should be the same")
 }
 
+// PRD-COMMENT: FR1.3.3 - System Variables: {{$isoTimestamp}}
+// Corresponds to: Client's ability to substitute the {{$isoTimestamp}} system variable with the current UTC timestamp in ISO 8601 format (YYYY-MM-DDTHH:mm:ss.sssZ) (http_syntax.md "System Variables").
+// This test uses 'testdata/http_request_files/system_var_iso_timestamp.http' to verify correct substitution in URLs, headers, and bodies, and checks that multiple instances resolve to the same request-scoped timestamp.
 func TestExecuteFile_WithIsoTimestampSystemVariable(t *testing.T) {
 	// Given
 	var interceptedRequest struct {
@@ -184,6 +187,9 @@ func setupDetailedMockServerInterceptor(t *testing.T) (*httptest.Server, *detail
 	return server, data
 }
 
+// PRD-COMMENT: FR1.3.4 - System Variables: {{$datetime "format" [offset]}}
+// Corresponds to: Client's ability to substitute the {{$datetime}} system variable with the current timestamp formatted according to a Go layout string, optionally with a timezone offset (http_syntax.md "System Variables").
+// This test uses 'testdata/http_request_files/system_var_datetime.http' to verify various datetime formats (RFC3339, custom, with local/UTC/specific offsets) in URLs, headers, and bodies. It ensures multiple instances resolve to the same request-scoped timestamp (respecting their individual formatting and offsets).
 func TestExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
 	// Given
 	server, interceptedRequest := setupDetailedMockServerInterceptor(t)
@@ -278,6 +284,9 @@ func TestExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
 	assert.Equal(t, "{{$datetime \"invalidFormat\"}}", bodyJSON["invalid_format_test"], "body.invalid_format_test should remain unresolved")
 }
 
+// PRD-COMMENT: FR1.3.2 - System Variables: {{$timestamp}}
+// Corresponds to: Client's ability to substitute the {{$timestamp}} system variable with the current Unix timestamp (seconds since epoch) (http_syntax.md "System Variables").
+// This test uses 'testdata/http_request_files/system_var_timestamp.http' to verify correct substitution in URLs, headers, and bodies. It ensures multiple instances resolve to the same request-scoped timestamp.
 func TestExecuteFile_WithTimestampSystemVariable(t *testing.T) {
 	// Given
 	var interceptedRequest struct {
@@ -401,6 +410,9 @@ func validateRandomIntMalformedArgs(t *testing.T, urlStr, header, body string) {
 	assert.Equal(t, "{{$randomInt foo bar}}", bodyJSON["value"], "Body should retain malformed $randomInt")
 }
 
+// PRD-COMMENT: FR1.3.5 - System Variables: {{$randomInt [MIN MAX]}}
+// Corresponds to: Client's ability to substitute the {{$randomInt}} system variable with a random integer. Supports optional MIN and MAX arguments. If no args, defaults to a wide range. If MIN > MAX, or args are malformed, the literal placeholder is used. (http_syntax.md "System Variables").
+// This test suite uses various .http files (e.g., 'system_var_randomint_valid_args.http', 'system_var_randomint_no_args.http') to verify behavior with valid arguments, no arguments, swapped arguments (min > max), and malformed arguments, checking substitution in URLs, headers, and bodies.
 func TestExecuteFile_WithRandomIntSystemVariable(t *testing.T) {
 	// Given common setup for all subtests
 	var interceptedRequest struct {

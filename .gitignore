@@ -69,3 +69,4 @@ coverage.html
 /.windsurf/rules/test_design_and_execution.md
 /.windsurf/rules/testing_fundamentals.md
 /.windsurf/rules/unit_testing_guidelines.md
+.aider*
