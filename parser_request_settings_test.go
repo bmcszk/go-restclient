@@ -21,7 +21,12 @@ func parseSettingsTestFile(t *testing.T, filePath string) *ParsedFile {
 	return parsedFile
 }
 
-// TestNameDirective tests parsing of @name directive (FR6.1)
+// PRD-COMMENT: FR6.1 - Request Setting: @name Directive
+// Corresponds to: http_syntax.md "Request Settings", "@name"
+// This test verifies the parser's ability to correctly process the '@name' directive.
+// It ensures that the specified name is assigned to the Request.Name field, allowing for easier
+// identification and selection of requests, especially when multiple requests are defined in a single file.
+// It uses 'testdata/request_settings/name_directive.http'.
 func TestNameDirective(t *testing.T) {
 	// Given
 	const requestFilePath = "testdata/request_settings/name_directive.http"
@@ -45,7 +50,12 @@ func TestNameDirective(t *testing.T) {
 	assert.Equal(t, "https://api.example.com/products", secondReq.URL.String(), "Request URL mismatch")
 }
 
-// TestNoRedirectDirective tests parsing of @no-redirect directive (FR6.1)
+// PRD-COMMENT: FR6.1 - Request Setting: @no-redirect Directive
+// Corresponds to: http_syntax.md "Request Settings", "@no-redirect"
+// This test verifies the parser's ability to correctly process the '@no-redirect' directive.
+// It ensures that when this directive is present, the Request.NoRedirect field is set to true,
+// signaling that HTTP redirects should not be followed automatically for this specific request.
+// It uses 'testdata/request_settings/no_redirect_directive.http'.
 func TestNoRedirectDirective(t *testing.T) {
 	// Given
 	const requestFilePath = "testdata/request_settings/no_redirect_directive.http"
@@ -69,7 +79,12 @@ func TestNoRedirectDirective(t *testing.T) {
 	assert.Equal(t, "https://api.example.com/redirect-me", secondReq.URL.String(), "Request URL mismatch")
 }
 
-// TestNoCookieJarDirective tests parsing of @no-cookie-jar directive (FR6.1)
+// PRD-COMMENT: FR6.1 - Request Setting: @no-cookie-jar Directive
+// Corresponds to: http_syntax.md "Request Settings", "@no-cookie-jar"
+// This test verifies the parser's ability to correctly process the '@no-cookie-jar' directive.
+// It ensures that when this directive is present, the Request.NoCookieJar field is set to true,
+// indicating that the client's cookie jar should not be used for this specific request (neither for sending stored cookies nor for saving new ones).
+// It uses 'testdata/request_settings/no_cookie_jar_directive.http'.
 func TestNoCookieJarDirective(t *testing.T) {
 	// Given
 	const requestFilePath = "testdata/request_settings/no_cookie_jar_directive.http"
@@ -93,7 +108,12 @@ func TestNoCookieJarDirective(t *testing.T) {
 	assert.Equal(t, "https://api.example.com/no-cookies", secondReq.URL.String(), "Request URL mismatch")
 }
 
-// TestTimeoutDirective tests parsing of @timeout directive (FR6.2)
+// PRD-COMMENT: FR6.2 - Request Setting: @timeout Directive
+// Corresponds to: http_syntax.md "Request Settings", "@timeout"
+// This test verifies the parser's ability to correctly process the '@timeout' directive.
+// It ensures that the specified timeout value (in milliseconds) is parsed and assigned to the Request.Timeout field.
+// This allows for configuring request-specific timeouts.
+// It uses 'testdata/request_settings/timeout_directive.http'.
 func TestTimeoutDirective(t *testing.T) {
 	// Given
 	const requestFilePath = "testdata/request_settings/timeout_directive.http"
