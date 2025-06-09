@@ -215,3 +215,16 @@ During the implementation of multipart/form-data support (specifically when modi
 *   **Cause:** Likely due to imprecise `TargetContent` in one or both chunks, or the tool's diffing mechanism incorrectly interpreting the context for the replacements, especially given the structural similarity of Go code blocks. The file state might have been desynchronized from previous edits.
 *   **Resolution (Achieved & Planned):** `parser.go` was reverted to its previous state (HEAD Step 874). The edit to add logs will be re-attempted. This reinforces the need for extreme caution and precise targeting with `replace_file_content`, especially for multi-chunk edits.
 *   **Lesson Learned:** `replace_file_content` can be highly destructive if `TargetContent` is not perfectly accurate or if the surrounding context is ambiguous to the tool. For surgical insertions or modifications within existing code, especially if previous attempts with `replace_file_content` have failed, breaking down the change into extremely small, single, verifiable automated calls is necessary. Always verify the diff produced by the tool carefully. If significant unexpected changes occur, revert the file immediately.
+
+### Accidental Deletion of Test Function During Refactoring (2025-06-09)
+
+*   **Mistake:** During the refactoring of `hresp_vars_test.go` (Checkpoint 15, around Step 394), the `TestExtractHrespDefines` function was unintentionally deleted. The operation focused on removing `TestResolveAndSubstitute` and its helpers, and the `edit_file` tool (or `replace_file_content`) was likely given a range or set of replacements that inadvertently included `TestExtractHrespDefines`. The summary indicated it was "retained," but a subsequent check (Step 426) showed the file was nearly empty.
+*   **File Affected:** `hresp_vars_test.go`
+*   **Symptom:** Discovered when attempting to verify the call to the moved `ExtractHrespDefines` function; `view_code_item` failed to find `TestExtractHrespDefines` (Step 424), and `view_file_outline` showed an almost empty file (Step 426).
+*   **Resolution (Completed):**
+    1.  The `TestExtractHrespDefines` function was restored to `hresp_vars_test.go` (Step 434).
+    2.  The restored test now calls the `ExtractHrespDefines` helper function from `test_helpers_test.go` (within the same `restclient_test` package).
+*   **Lesson Learned:** When performing large-scale deletions or modifications using tools like `edit_file` or `replace_file_content`, it's crucial to:
+    *   Precisely define the scope of changes to avoid unintended side effects on adjacent code.
+    *   Verify the file content thoroughly after such operations, especially if multiple distinct functions or code blocks were within the edited region. Relying solely on the tool's success message is insufficient.
+    *   If a function is meant to be retained, double-check its presence immediately after the refactoring operation.

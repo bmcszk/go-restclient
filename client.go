@@ -465,7 +465,6 @@ func (c *Client) processExternalFile(
 			requestScopedSystemVars,
 			osEnvGetter,
 			c.currentDotEnvVars,
-			nil, // default options
 		)
 		content = substituteDynamicSystemVariables(
 			resolvedContent,
@@ -615,7 +614,6 @@ func (c *Client) substituteRequestBody(restClientReq *Request, parsedFile *Parse
 			requestScopedSystemVars,
 			osEnvGetter,
 			c.currentDotEnvVars,
-			nil,
 		)
 		finalSubstitutedBody = substituteDynamicSystemVariables(
 			resolvedBody,

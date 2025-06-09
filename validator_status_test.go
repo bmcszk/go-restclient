@@ -1,45 +1,20 @@
-package restclient
+package restclient_test
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 
+	rc "github.com/bmcszk/go-restclient"
 	"github.com/hashicorp/go-multierror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func assertValidationErrors(t *testing.T, actualErr error, expectedErrCount int, currentExpectedErrTexts []string, fallbackSingleErrText string) {
-	t.Helper()
-	require.Error(t, actualErr)
-	merr, ok := actualErr.(*multierror.Error)
-	require.True(t, ok, "Expected a multierror.Error, got %T", actualErr)
-	assert.Len(t, merr.Errors, expectedErrCount)
-
-	// Check specific error texts if provided for the adjusted expectation
-	if len(currentExpectedErrTexts) > 0 {
-		for _, expectedText := range currentExpectedErrTexts {
-			found := false
-			for _, e := range merr.Errors {
-				if strings.Contains(e.Error(), expectedText) {
-					found = true
-					break
-				}
-			}
-			assert.True(t, found, "Expected error text '%s' not found in %v", expectedText, merr.Errors)
-		}
-	} else if fallbackSingleErrText != "" && expectedErrCount == 1 {
-		// Original single error check, if no multi-texts were specified and we expect exactly one error
-		assert.ErrorContains(t, merr.Errors[0], fallbackSingleErrText)
-	}
-}
-
 func TestValidateResponses_StatusString(t *testing.T) {
 	// Given: Test cases defined in 'tests' slice
 	tests := []struct {
 		name             string
-		actualResponse   *Response
+		actualResponse   *rc.Response
 		expectedFilePath string
 		expectedErrCount int
 		expectedErrText  string // Kept for single error cases not using multierror helper
@@ -47,34 +22,34 @@ func TestValidateResponses_StatusString(t *testing.T) {
 	}{
 		{
 			name:             "matching status string",
-			actualResponse:   &Response{StatusCode: 200, Status: "200 OK"},
+			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK"},
 			expectedFilePath: "testdata/http_response_files/validator_body_exact_no_body_exp.hresp",
 			expectedErrCount: 0,
 		},
 		{
 			name:             "mismatching status string",
-			actualResponse:   &Response{StatusCode: 200, Status: "200 Something Else"},
+			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 Something Else"},
 			expectedFilePath: "testdata/http_response_files/validator_body_exact_no_body_exp.hresp",
 			expectedErrCount: 1,
 			expectedErrText:  "status string mismatch: expected '200 OK', got '200 Something Else'",
 		},
 		{
 			name:             "actual status string is correct, expected file has only status code",
-			actualResponse:   &Response{StatusCode: 200, Status: "200 OK"},
+			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK"},
 			expectedFilePath: "testdata/http_response_files/validator_partial_status_code_mismatch.hresp",
 			expectedErrCount: 1,
 			expectedErrText:  "status string mismatch: expected '200', got '200 OK'",
 		},
 		{
 			name:             "mismatching status code, status strings also mismatch",
-			actualResponse:   &Response{StatusCode: 404, Status: "404 Not Found"},
+			actualResponse:   &rc.Response{StatusCode: 404, Status: "404 Not Found"},
 			expectedFilePath: "testdata/http_response_files/validator_body_exact_no_body_exp.hresp",
 			expectedErrCount: 2,
 			expectedErrTexts: []string{"status code mismatch: expected 200, got 404", "status string mismatch: expected '200 OK', got '404 Not Found'"},
 		},
 		{
 			name:             "matching status code, expected file only code, actual also only code in status",
-			actualResponse:   &Response{StatusCode: 200, Status: "200"},
+			actualResponse:   &rc.Response{StatusCode: 200, Status: "200"},
 			expectedFilePath: "testdata/http_response_files/validator_partial_status_code_mismatch.hresp",
 			expectedErrCount: 0,
 		},
@@ -82,7 +57,7 @@ func TestValidateResponses_StatusString(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Given: actualResponse and expectedFilePath from the test case tt
-			client, _ := NewClient()
+			client, _ := rc.NewClient()
 
 			// When
 			err := client.ValidateResponses(tt.expectedFilePath, tt.actualResponse)
@@ -111,7 +86,7 @@ func TestValidateResponses_StatusCode(t *testing.T) {
 	// Given: Test cases defined in 'tests' slice
 	tests := []struct {
 		name                string
-		actualResponse      *Response
+		actualResponse      *rc.Response
 		actualResponseCode  *int   // Pointer to allow nil
 		expectedFileContent string // To become FilePath
 		expectedFilePath    string // New
@@ -160,7 +135,7 @@ func TestValidateResponses_StatusCode(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Given
-			actual := &Response{}
+			actual := &rc.Response{}
 			if tt.actualResponseCode != nil {
 				actual.StatusCode = *tt.actualResponseCode
 				actual.Status = fmt.Sprintf("%d", actual.StatusCode) // Populate actual.Status
@@ -168,7 +143,7 @@ func TestValidateResponses_StatusCode(t *testing.T) {
 				actual.Status = "0"   // Default if StatusCode is 0 (from nil actualResponseCode)
 				actual.StatusCode = 0 // ensure StatusCode is also 0 if actualResponseCode is nil
 			}
-			client, _ := NewClient()
+			client, _ := rc.NewClient()
 
 			currentExpectedErrCount := tt.expectedErrCount
 			var currentExpectedErrTexts []string
@@ -193,7 +168,7 @@ func TestValidateResponses_StatusCode(t *testing.T) {
 			if currentExpectedErrCount == 0 {
 				assert.NoError(t, err)
 			} else {
-				assertValidationErrors(t, err, currentExpectedErrCount, currentExpectedErrTexts, tt.expectedErrText)
+				assertMultierrorContains(t, err, currentExpectedErrCount, currentExpectedErrTexts)
 			}
 		})
 	}

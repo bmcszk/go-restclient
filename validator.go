@@ -60,7 +60,7 @@ func (c *Client) ValidateResponses(responseFilePath string, actualResponses ...*
 		return fmt.Errorf("failed to extract @defines from %s: %w", responseFilePath, err)
 	}
 
-	substitutedContent, err := resolveAndSubstitute(contentWithoutDefines, fileVars, c)
+	substitutedContent := resolveAndSubstitute(contentWithoutDefines, fileVars, c)
 	if err != nil {
 		return fmt.Errorf("failed to substitute variables in %s: %w", responseFilePath, err)
 	}
@@ -159,7 +159,7 @@ type placeholderInfo struct {
 
 // buildRegexFromExpectedBody constructs a complete regular expression string
 // from an expected body string containing placeholders.
-func buildRegexFromExpectedBody(normalizedExpectedBody string) (string, error) {
+func buildRegexFromExpectedBody(normalizedExpectedBody string) string {
 	var finalRegexPattern strings.Builder
 	finalRegexPattern.WriteString("^")
 
@@ -239,7 +239,7 @@ func buildRegexFromExpectedBody(normalizedExpectedBody string) (string, error) {
 	}
 
 	finalRegexPattern.WriteString("$")
-	return finalRegexPattern.String(), nil
+	return finalRegexPattern.String()
 }
 
 // compareBodies compares the expected body string with the actual body string,
@@ -266,12 +266,7 @@ func compareBodies(responseFilePath string, responseIndex int, expectedBody, act
 	}
 
 	// Placeholder-based comparison
-	regexPatternString, err := buildRegexFromExpectedBody(normalizedExpectedBody)
-	if err != nil {
-		// This case should ideally not be reached if buildRegexFromExpectedBody is robust.
-		// If buildRegexFromExpectedBody is enhanced to return errors (e.g., for invalid placeholder syntax), they'd be caught here.
-		return fmt.Errorf("validation for response #%d ('%s'): error building regex from expected body: %w", responseIndex, responseFilePath, err)
-	}
+	regexPatternString := buildRegexFromExpectedBody(normalizedExpectedBody)
 
 	compiledRegex, err := regexp.Compile(regexPatternString)
 	if err != nil {

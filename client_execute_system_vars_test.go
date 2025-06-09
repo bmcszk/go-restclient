@@ -1,6 +1,7 @@
-package restclient
+package restclient_test
 
 import (
+	rc "github.com/bmcszk/go-restclient"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -39,7 +40,7 @@ func TestExecuteFile_WithGuidSystemVariable(t *testing.T) {
 	})
 	defer server.Close()
 
-	client, _ := NewClient()
+	client, _ := rc.NewClient()
 	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_guid.http", struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
@@ -113,7 +114,7 @@ func TestExecuteFile_WithIsoTimestampSystemVariable(t *testing.T) {
 	})
 	defer server.Close()
 
-	client, _ := NewClient()
+	client, _ := rc.NewClient()
 	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_iso_timestamp.http", struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
@@ -195,7 +196,7 @@ func TestExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
 	server, interceptedRequest := setupDetailedMockServerInterceptor(t)
 	defer server.Close()
 
-	client, _ := NewClient()
+	client, _ := rc.NewClient()
 	requestFilePath := createTestFileFromTemplate(t,
 		"testdata/http_request_files/system_var_datetime.http",
 		struct{ ServerURL string }{ServerURL: server.URL},
@@ -305,7 +306,7 @@ func TestExecuteFile_WithTimestampSystemVariable(t *testing.T) {
 	})
 	defer server.Close()
 
-	client, _ := NewClient()
+	client, _ := rc.NewClient()
 	beforeTime := time.Now().UTC().Unix()
 	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_timestamp.http", struct{ ServerURL string }{ServerURL: server.URL})
 
@@ -358,6 +359,7 @@ func TestExecuteFile_WithTimestampSystemVariable(t *testing.T) {
 }
 
 func validateRandomIntValidMinMaxArgs(t *testing.T, url, header, body string) {
+	t.Helper()
 	urlParts := strings.Split(url, "/")
 	valURL, err := strconv.Atoi(urlParts[len(urlParts)-2])
 	require.NoError(t, err, "Random int from URL should be valid int")
@@ -374,6 +376,7 @@ func validateRandomIntValidMinMaxArgs(t *testing.T, url, header, body string) {
 }
 
 func validateRandomIntNoArgs(t *testing.T, url, header, body string) {
+	t.Helper()
 	urlParts := strings.Split(url, "/")
 	valURL, err := strconv.Atoi(urlParts[len(urlParts)-2])
 	require.NoError(t, err, "Random int from URL (no args) should be valid int")
@@ -390,6 +393,7 @@ func validateRandomIntNoArgs(t *testing.T, url, header, body string) {
 }
 
 func validateRandomIntSwappedMinMaxArgs(t *testing.T, url, header, body string) {
+	t.Helper()
 	urlParts := strings.Split(url, "/")
 	require.Len(t, urlParts, 4, "URL path should have 4 parts for swapped args test")
 	assert.Equal(t, "{{$randomInt 30 25}}", urlParts[2], "URL part1 for swapped_min_max_args should be the unresolved placeholder")
@@ -401,6 +405,7 @@ func validateRandomIntSwappedMinMaxArgs(t *testing.T, url, header, body string) 
 }
 
 func validateRandomIntMalformedArgs(t *testing.T, urlStr, header, body string) {
+	t.Helper()
 	expectedLiteralPlaceholder := "{{$randomInt abc def}}"
 	assert.Contains(t, urlStr, expectedLiteralPlaceholder, "URL should contain literal malformed $randomInt")
 	assert.Equal(t, "{{$randomInt 1 xyz}}", header, "Header should retain malformed $randomInt")
@@ -429,7 +434,7 @@ func TestExecuteFile_WithRandomIntSystemVariable(t *testing.T) {
 		_, _ = fmt.Fprint(w, "ok")
 	})
 	defer server.Close()
-	client, _ := NewClient()
+	client, _ := rc.NewClient()
 
 	tests := []struct {
 		name               string

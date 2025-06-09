@@ -1,4 +1,4 @@
-package restclient
+package restclient_test
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"net/url" // Added import
 	"os"
 	"testing"
+
+	rc "github.com/bmcszk/go-restclient"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,54 +30,43 @@ func runCookieJarSubtest(t *testing.T, tc cookieJarTestCase, serverVars map[stri
 	*cookieCheck = false // Reset for each subtest
 
 	if tc.isNoCookieJarDirectiveTest {
-		// Special handling for @no-cookie-jar directive test
-		// Create a client without a cookie jar for the @no-cookie-jar test, but with server variables
-		noJarClient, err := NewClient(WithVars(serverVars))
-		require.NoError(t, err, "Should create client without error for @no-cookie-jar test")
-		// Intentionally NOT setting a cookie jar for noJarClient
-
-		// Parse the file. serverVars are now in noJarClient.programmaticVars.
-		parsedFile, err := parseRequestFile(tc.httpFilePath, noJarClient, nil)
-		require.NoError(t, err, "Should parse request file without error for @no-cookie-jar test")
-		require.Len(t, parsedFile.Requests, 2, "Should have parsed two requests for @no-cookie-jar test")
-
-		// For first request (setting cookie), use a client with jar
-		firstRequest := parsedFile.Requests[0]
-
-		// Create a new client with jar for first request, and with server variables
-		jarClient, err := NewClient(WithVars(serverVars))
-		require.NoError(t, err, "Should create jarClient without error for @no-cookie-jar test")
+		// For the @no-cookie-jar test, we need a client that *has* a cookie jar initially,
+		// so the first request can set a cookie. The second request in the file
+		// uses the @no-cookie-jar directive, which should prevent that cookie from being sent.
 		jar, err := cookiejar.New(nil)
-		require.NoError(t, err, "Should create cookie jar for jarClient for @no-cookie-jar test")
-		jarClient.httpClient.Jar = jar
+		require.NoError(t, err, "Should create cookie jar for @no-cookie-jar test")
+		customHTTPClientForJar := &http.Client{Jar: jar}
+		// Create client with the cookie jar and server variables
+		clientWithJar, err := rc.NewClient(rc.WithVars(serverVars), rc.WithHTTPClient(customHTTPClientForJar))
+		require.NoError(t, err, "Should create clientWithJar without error for @no-cookie-jar test")
 
-		// Execute first request (sets cookie)
-		_, err = jarClient.executeRequest(context.Background(), firstRequest)
-		require.NoError(t, err, "Should execute first request without error for @no-cookie-jar test")
+		// Execute the entire file. The file contains two requests:
+		// 1. Sets a cookie (should use the jar).
+		// 2. Checks for the cookie, but with @no-cookie-jar directive (should not send the cookie).
+		responses, err := clientWithJar.ExecuteFile(context.Background(), tc.httpFilePath)
+		require.NoError(t, err, "Should execute request file without error for @no-cookie-jar test")
+		require.Len(t, responses, 2, "Should have received two responses for @no-cookie-jar test")
 
-		// For second request (with @no-cookie-jar directive), use client without jar
-		secondRequest := parsedFile.Requests[1]
-		require.True(t, secondRequest.NoCookieJar, "Second request should have NoCookieJar flag set for @no-cookie-jar test")
-
-		// Use the client without jar for second request
-		_, err = noJarClient.executeRequest(context.Background(), secondRequest)
-		require.NoError(t, err, "Should execute second request without error for @no-cookie-jar test")
-
+		// Check for errors in responses
+		for _, resp := range responses {
+			// For this specific test, we expect successful HTTP transactions, so resp.Error should be nil.
+			require.NoError(t, resp.Error, "Response error should be nil for @no-cookie-jar test, response: %+v", resp)
+		}
+		
 		assert.Equal(t, tc.expectedCookieCheckValue, *cookieCheck, "Cookie check assertion failed for @no-cookie-jar test")
 	} else {
 		// Default behavior test (with or without jar based on client setup)
-		client, err := NewClient(WithVars(serverVars))
-		require.NoError(t, err, "Should create client without error")
-
-		// For the default 'with cookie jar' case, the client needs a jar.
-		// For a hypothetical 'explicitly no jar on client' case (not currently tested this way),
-		// we wouldn't add a jar here.
-		// Based on tc.name, this implies the default test where client *should* have a jar.
+		var client *rc.Client
+		var clientErr error
 		if tc.httpFilePath == "testdata/cookies_redirects/with_cookie_jar.http" { // A bit of a hack to infer client needs jar
 			jar, err := cookiejar.New(nil)
 			require.NoError(t, err, "Should create cookie jar without error")
-			client.httpClient.Jar = jar
+			customHTTPClientWithJar := &http.Client{Jar: jar}
+			client, clientErr = rc.NewClient(rc.WithVars(serverVars), rc.WithHTTPClient(customHTTPClientWithJar))
+		} else {
+			client, clientErr = rc.NewClient(rc.WithVars(serverVars))
 		}
+		require.NoError(t, clientErr, "Should create client without error")
 
 		responses, err := client.ExecuteFile(context.Background(), tc.httpFilePath)
 		require.NoError(t, err, "Should execute requests without error")
@@ -206,7 +197,7 @@ func TestRedirectHandling(t *testing.T) {
 
 	// When/Then: Test with redirect following (default)
 	// Create a fresh client for redirect tests, with server variables
-	client, err := NewClient(WithVars(serverVars))
+	client, err := rc.NewClient(rc.WithVars(serverVars))
 	require.NoError(t, err, "Should create client without error")
 
 	// Execute file with default redirect behavior
@@ -223,13 +214,13 @@ func TestRedirectHandling(t *testing.T) {
 
 	// For the @no-redirect test, create a client with a custom CheckRedirect function
 	// that prevents following redirects, and with server variables
-	client, err = NewClient(WithVars(serverVars))
-	require.NoError(t, err, "Should create client without error")
-
-	// Override the client's CheckRedirect function to capture the redirect status
-	client.httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse // Don't follow redirects
+	customRedirectHTTPClient := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse // Don't follow redirects
+		},
 	}
+	client, err = rc.NewClient(rc.WithVars(serverVars), rc.WithHTTPClient(customRedirectHTTPClient))
+	require.NoError(t, err, "Should create client without error")
 
 	// Execute file with @no-redirect directive
 	responses, err = client.ExecuteFile(context.Background(), withoutRedirectFilePath)

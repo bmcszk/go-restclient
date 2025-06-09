@@ -1,27 +1,29 @@
-package restclient
+package restclient_test
 
 import (
 	"net/http"
 	"testing"
 
+	rc "github.com/bmcszk/go-restclient"
+
 	// Imported to ensure assertMultierrorContains compiles
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	// No fmt needed
 	// No strings needed
 )
 
 type validateResponsesWithSampleFileTestCase struct {
 	name               string
-	actualModifier     func(actual *Response)
+	actualModifier     func(actual *rc.Response)
 	expectedFileSource string
 	expectedErrCount   int
 	expectedErrTexts   []string
 }
 
-func runValidateResponsesWithSampleFileSubtest(t *testing.T, tc validateResponsesWithSampleFileTestCase, baseActual *Response) {
+func runValidateResponsesWithSampleFileSubtest(t *testing.T, tc validateResponsesWithSampleFileTestCase, baseActual *rc.Response) {
+	t.Helper()
 	// Given: A modified actual response based on baseActual and tc.actualModifier
-	actualTest := &Response{
+	actualTest := &rc.Response{
 		StatusCode: baseActual.StatusCode,
 		Status:     baseActual.Status,
 		Headers:    make(http.Header),
@@ -33,7 +35,7 @@ func runValidateResponsesWithSampleFileSubtest(t *testing.T, tc validateResponse
 	tc.actualModifier(actualTest)
 
 	currentExpectedFilePath := tc.expectedFileSource
-	client, _ := NewClient()
+	client, _ := rc.NewClient()
 
 	// When
 	err := client.ValidateResponses(currentExpectedFilePath, actualTest)
@@ -46,16 +48,30 @@ func runValidateResponsesWithSampleFileSubtest(t *testing.T, tc validateResponse
 	}
 }
 
-func TestValidateResponses_WithSampleFile(t *testing.T) {
-	// Given: Setup with a sample response file and base actual response
-	sampleFilePath := "testdata/http_response_files/sample1.http" // Use the actual file
+func setupBaseActualResponseForSampleFileTests() (string, *rc.Response) {
+	sampleFilePath := "testdata/http_response_files/sample1.http"
 
-	parsedSampleExpected, err := parseExpectedResponseFile(sampleFilePath)
-	require.NoError(t, err)
-	require.Len(t, parsedSampleExpected, 1)
-	sampleExpectedStruct := parsedSampleExpected[0]
+	expectedStatusCode := 200
+	expectedStatus := "200 OK"
+	expectedBody := `{
+  "userId": 1,
+  "id": 1,
+  "title": "delectus aut autem",
+  "completed": false
+}`
+	expectedHeaders := http.Header{
+		"Content-Type": {"application/json; charset=utf-8"},
+		"Date":         {"Tue, 27 May 2025 20:05:38 GMT"}, // Example date, actual can vary
+	}
 
-	baseActual := &Response{
+	sampleExpectedStruct := &rc.ExpectedResponse{
+		StatusCode: &expectedStatusCode,
+		Status:     &expectedStatus,
+		Headers:    expectedHeaders,
+		Body:       &expectedBody,
+	}
+
+	baseActual := &rc.Response{
 		StatusCode: *sampleExpectedStruct.StatusCode,
 		Status:     *sampleExpectedStruct.Status,
 		Headers:    make(http.Header),
@@ -64,17 +80,20 @@ func TestValidateResponses_WithSampleFile(t *testing.T) {
 	for k, v := range sampleExpectedStruct.Headers { // Deep copy headers
 		baseActual.Headers[k] = append([]string{}, v...)
 	}
+	return sampleFilePath, baseActual
+}
 
-	tests := []validateResponsesWithSampleFileTestCase{
+func getValidateResponsesWithSampleFileTestCases(sampleFilePath string) []validateResponsesWithSampleFileTestCase {
+	return []validateResponsesWithSampleFileTestCase{
 		{
 			name:               "perfect match with sample1.http",
-			actualModifier:     func(actual *Response) {},
+			actualModifier:     func(actual *rc.Response) {},
 			expectedFileSource: sampleFilePath,
 			expectedErrCount:   0,
 		},
 		{
 			name: "status code mismatch",
-			actualModifier: func(actual *Response) {
+			actualModifier: func(actual *rc.Response) {
 				actual.StatusCode = 500
 			},
 			expectedFileSource: sampleFilePath,
@@ -83,7 +102,7 @@ func TestValidateResponses_WithSampleFile(t *testing.T) {
 		},
 		{
 			name: "status string mismatch",
-			actualModifier: func(actual *Response) {
+			actualModifier: func(actual *rc.Response) {
 				actual.Status = "200 Everything is Fine"
 			},
 			expectedFileSource: sampleFilePath,
@@ -92,7 +111,7 @@ func TestValidateResponses_WithSampleFile(t *testing.T) {
 		},
 		{
 			name: "header value mismatch for Content-Type",
-			actualModifier: func(actual *Response) {
+			actualModifier: func(actual *rc.Response) {
 				actual.Headers.Set("Content-Type", "text/plain")
 			},
 			expectedFileSource: sampleFilePath,
@@ -101,7 +120,7 @@ func TestValidateResponses_WithSampleFile(t *testing.T) {
 		},
 		{
 			name: "missing expected header Date",
-			actualModifier: func(actual *Response) {
+			actualModifier: func(actual *rc.Response) {
 				actual.Headers.Del("Date")
 			},
 			expectedFileSource: sampleFilePath,
@@ -110,7 +129,7 @@ func TestValidateResponses_WithSampleFile(t *testing.T) {
 		},
 		{
 			name: "body mismatch",
-			actualModifier: func(actual *Response) {
+			actualModifier: func(actual *rc.Response) {
 				actual.BodyString = "{\"message\": \"this is not the sample body\"}"
 			},
 			expectedFileSource: sampleFilePath,
@@ -119,31 +138,36 @@ func TestValidateResponses_WithSampleFile(t *testing.T) {
 		},
 		{
 			name:               "BodyContains logic not triggered by exact file match (positive case)",
-			actualModifier:     func(actual *Response) {},
+			actualModifier:     func(actual *rc.Response) {},
 			expectedFileSource: sampleFilePath,
 			expectedErrCount:   0,
 		},
 		{
 			name:               "BodyContains logic not triggered, exact body mismatch from file",
-			actualModifier:     func(actual *Response) {},
+			actualModifier:     func(actual *rc.Response) {},
 			expectedFileSource: "testdata/http_response_files/validator_withsample_bodycontains_exactmismatch.hresp",
 			expectedErrCount:   1,
 			expectedErrTexts:   []string{"body mismatch"},
 		},
 		{
 			name:               "BodyNotContains logic not triggered by exact file match (positive case)",
-			actualModifier:     func(actual *Response) {},
+			actualModifier:     func(actual *rc.Response) {},
 			expectedFileSource: sampleFilePath,
 			expectedErrCount:   0,
 		},
 		{
 			name:               "BodyNotContains logic not triggered, exact body mismatch from file (actual contains something unwanted by this hypothetical check)",
-			actualModifier:     func(actual *Response) { actual.BodyString = "{\"title\": \"delectus aut autem\"}" },
+			actualModifier:     func(actual *rc.Response) { actual.BodyString = "{\"title\": \"delectus aut autem\"}" },
 			expectedFileSource: "testdata/http_response_files/validator_withsample_bodynotcontains_exactmismatch.hresp",
 			expectedErrCount:   1,
 			expectedErrTexts:   []string{"body mismatch"},
 		},
 	}
+}
+
+func TestValidateResponses_WithSampleFile(t *testing.T) {
+	sampleFilePath, baseActual := setupBaseActualResponseForSampleFileTests()
+	tests := getValidateResponsesWithSampleFileTestCases(sampleFilePath)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -156,14 +180,14 @@ func TestValidateResponses_PartialExpected(t *testing.T) {
 	// Given: Test cases defined in 'tests' slice
 	tests := []struct {
 		name             string
-		actualResponse   *Response
+		actualResponse   *rc.Response
 		expectedFilePath string // Was expectedFileContent
 		expectedErrCount int
 		expectedErrTexts []string
 	}{
 		{
 			name: "SCENARIO-LIB-009-005 Equiv: Expected file has only status code - match",
-			actualResponse: &Response{
+			actualResponse: &rc.Response{
 				StatusCode: 200,
 				Status:     "200",
 				Headers:    http.Header{"Content-Type": {"application/json"}},
@@ -174,20 +198,20 @@ func TestValidateResponses_PartialExpected(t *testing.T) {
 		},
 		{
 			name:             "SCENARIO-LIB-009-005 Corrected: File has status code and empty body - actual matches",
-			actualResponse:   &Response{StatusCode: 200, Status: "200", BodyString: ""},
+			actualResponse:   &rc.Response{StatusCode: 200, Status: "200", BodyString: ""},
 			expectedFilePath: "testdata/http_response_files/validator_partial_status_code_mismatch.hresp",
 			expectedErrCount: 0,
 		},
 		{
 			name:             "SCENARIO-LIB-009-005-003 Corrected: File has status code and empty body - actual body mismatch",
-			actualResponse:   &Response{StatusCode: 200, Status: "200", BodyString: "non-empty body"},
+			actualResponse:   &rc.Response{StatusCode: 200, Status: "200", BodyString: "non-empty body"},
 			expectedFilePath: "testdata/http_response_files/validator_partial_status_code_mismatch.hresp",
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"body mismatch"},
 		},
 		{
 			name: "SCENARIO-LIB-009-005-004 Equiv: Expected file has only status code - status code mismatch",
-			actualResponse: &Response{
+			actualResponse: &rc.Response{
 				StatusCode: 404,
 				Status:     "404",
 				Headers:    http.Header{"Content-Type": {"application/json"}},
@@ -199,7 +223,7 @@ func TestValidateResponses_PartialExpected(t *testing.T) {
 		},
 		{
 			name: "SCENARIO-LIB-009-006 Equiv: Expected file has only specific headers (and status, empty body) - match",
-			actualResponse: &Response{
+			actualResponse: &rc.Response{
 				StatusCode: 200,
 				Status:     "200",
 				Headers:    http.Header{"Content-Type": {"application/json"}, "X-Custom": {"val"}},
@@ -210,7 +234,7 @@ func TestValidateResponses_PartialExpected(t *testing.T) {
 		},
 		{
 			name: "SCENARIO-LIB-009-006-002 Equiv: Expected file has only specific headers - header value mismatch",
-			actualResponse: &Response{
+			actualResponse: &rc.Response{
 				StatusCode: 200,
 				Status:     "200",
 				Headers:    http.Header{"Content-Type": {"text/plain"}, "X-Custom": {"val"}},
@@ -222,7 +246,7 @@ func TestValidateResponses_PartialExpected(t *testing.T) {
 		},
 		{
 			name: "SCENARIO-LIB-009-006-003 Equiv: Expected file has only specific headers - header missing in actual",
-			actualResponse: &Response{
+			actualResponse: &rc.Response{
 				StatusCode: 200,
 				Status:     "200",
 				Headers:    http.Header{"X-Other": {"value"}},
@@ -237,7 +261,7 @@ func TestValidateResponses_PartialExpected(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Given: actualResponse and expectedFilePath from the test case tt
-			client, _ := NewClient()
+			client, _ := rc.NewClient()
 
 			// When
 			err := client.ValidateResponses(tt.expectedFilePath, tt.actualResponse)

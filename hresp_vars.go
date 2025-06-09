@@ -76,7 +76,7 @@ func extractHrespDefines(hrespContent string) (map[string]string, string, error)
 // If a variable is not found in any source and no fallback is specified, the placeholder remains unchanged.
 // The `client` parameter is optional; if nil, client-side programmatic variable substitution and all system
 // variable substitutions will not occur.
-func resolveAndSubstitute(content string, fileVars map[string]string, client *Client) (string, error) {
+func resolveAndSubstitute(content string, fileVars map[string]string, client *Client) string {
 	// Regex to find {{variable}}, {{variable | fallback}}, or {{$systemVar}}
 	re := regexp.MustCompile(`{{\s*(.*?)\s*}}`)
 
@@ -165,5 +165,5 @@ func resolveAndSubstitute(content string, fileVars map[string]string, client *Cl
 		resolvedContent = substituteDynamicSystemVariables(resolvedContent, client.currentDotEnvVars, client.programmaticVars)
 	}
 
-	return resolvedContent, nil
+	return resolvedContent
 }

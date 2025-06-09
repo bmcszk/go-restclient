@@ -64,7 +64,7 @@ var randomWords = []string{"apple", "banana", "cherry", "date", "elderberry", "f
 // 6. Variables from .env file (dotEnvVars)
 // 7. Fallback value provided in the placeholder itself.
 // System variables (e.g., {{$uuid}}, {{$timestamp}}) are handled if the placeholder is like {{$systemVarName}} (i.e. varName starts with '$').
-func resolveVariablesInText(text string, clientProgrammaticVars map[string]interface{}, fileScopedVars map[string]string, environmentVars map[string]string, globalVars map[string]string, requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool), dotEnvVars map[string]string, options *ResolveOptions) string {
+func resolveVariablesInText(text string, clientProgrammaticVars map[string]interface{}, fileScopedVars map[string]string, environmentVars map[string]string, globalVars map[string]string, requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool), dotEnvVars map[string]string) string {
 	const maxIterations = 10 // Safety break for circular dependencies
 	currentText := text
 
@@ -166,23 +166,8 @@ func resolveVariablesInText(text string, clientProgrammaticVars map[string]inter
 				return fallbackValue
 			}
 
-			// No resolution found, handle based on options
-			if options != nil {
-				if options.FallbackToOriginal {
-					return match // Return original placeholder {{varName}}
-				}
-				if options.FallbackToEmpty {
-					return "" // Return empty string
-				}
-			}
-
-			// Default behavior if no options specify otherwise, or if options is nil.
-			// For backward compatibility with existing code, default to empty string
-			if options == nil {
-				return "" // Default to empty string if no options and not found
-			}
-
-			return match // Shouldn't reach here if options are well-defined
+			// No resolution found, and no fallback in placeholder. Default to empty string.
+			return ""
 		}) // End of ReplaceAllStringFunc
 
 		if currentText == previousText {
@@ -321,7 +306,6 @@ func substituteRequestVariables(rcRequest *Request, parsedFile *ParsedFile, requ
 		requestScopedSystemVars, // requestScopedSystemVars (e.g. {{$uuid}}, {{$timestamp}})
 		osEnvGetter,             // osEnvGetter
 		currentDotEnvVars,       // dotEnvVars (from .env file in request's dir, or client's current if no file)
-		nil,                     // options *ResolveOptions
 	)
 	substitutedRawURL = substituteDynamicSystemVariables(substitutedRawURL, currentDotEnvVars, programmaticVars)
 
@@ -351,7 +335,6 @@ func substituteRequestVariables(rcRequest *Request, parsedFile *ParsedFile, requ
 					requestScopedSystemVars,
 					osEnvGetter,
 					currentDotEnvVars,
-					nil, // Use default options (fallback to empty for unresolved)
 				)
 				newValues[j] = substituteDynamicSystemVariables(resolvedVal, currentDotEnvVars, programmaticVars)
 			}
@@ -425,9 +408,9 @@ func _substituteRandomFloatFunc(re *regexp.Regexp, defaultMin, defaultMax float6
 }
 
 // _substituteRandomLengthCharsetFunc returns a function for ReplaceAllStringFunc to generate random strings from a charset.
-func _substituteRandomLengthCharsetFunc(re *regexp.Regexp, defaultLength int, charset string) func(string) string {
+func _substituteRandomLengthCharsetFunc(re *regexp.Regexp, charset string) func(string) string {
 	return func(match string) string {
-		length, ok := _parseLength(match, re, defaultLength)
+		length, ok := _parseLength(match, re, defaultRandomLength)
 		if !ok { // Invalid length format
 			return match
 		}
@@ -645,12 +628,12 @@ func substituteRandomVariables(text string, programmaticVars map[string]interfac
 	text = reRandomDotHexadecimal.ReplaceAllStringFunc(text, _substituteRandomHexHelper(reRandomDotHexadecimal, defaultRandomHexLength))
 
 	// Alphabetic / Alphanumeric
-	text = reRandomDotAlphabetic.ReplaceAllStringFunc(text, _substituteRandomLengthCharsetFunc(reRandomDotAlphabetic, defaultRandomLength, charsetAlphabetic))
-	text = reRandomAlphaNumeric.ReplaceAllStringFunc(text, _substituteRandomLengthCharsetFunc(reRandomAlphaNumeric, defaultRandomLength, charsetAlphaNumericWithExtra)) // Uses underscore
-	text = reRandomDotAlphanumeric.ReplaceAllStringFunc(text, _substituteRandomLengthCharsetFunc(reRandomDotAlphanumeric, defaultRandomLength, charsetAlphaNumeric))    // No underscore
+	text = reRandomDotAlphabetic.ReplaceAllStringFunc(text, _substituteRandomLengthCharsetFunc(reRandomDotAlphabetic, charsetAlphabetic))
+	text = reRandomAlphaNumeric.ReplaceAllStringFunc(text, _substituteRandomLengthCharsetFunc(reRandomAlphaNumeric, charsetAlphaNumericWithExtra)) // Uses underscore
+	text = reRandomDotAlphanumeric.ReplaceAllStringFunc(text, _substituteRandomLengthCharsetFunc(reRandomDotAlphanumeric, charsetAlphaNumeric))    // No underscore
 
 	// General Random String
-	text = reRandomString.ReplaceAllStringFunc(text, _substituteRandomLengthCharsetFunc(reRandomString, defaultRandomLength, charsetFull))
+	text = reRandomString.ReplaceAllStringFunc(text, _substituteRandomLengthCharsetFunc(reRandomString, charsetFull))
 
 	// Email
 	emailGenerator := func() string {

@@ -1,4 +1,4 @@
-package restclient
+package restclient_test
 
 import (
 	"context"
@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	rc "github.com/bmcszk/go-restclient"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,7 +29,7 @@ func TestExecuteFile_SingleRequest(t *testing.T) {
 	})
 	defer server.Close()
 
-	client, _ := NewClient()
+	client, _ := rc.NewClient()
 	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/single_request.http", struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
@@ -70,7 +72,7 @@ func TestExecuteFile_MultipleRequests(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := NewClient()
+	client, _ := rc.NewClient()
 	processedFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/multiple_requests.http", struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
@@ -107,7 +109,7 @@ func TestExecuteFile_RequestWithError(t *testing.T) {
 	})
 	defer server2.Close()
 
-	client, _ := NewClient()
+	client, _ := rc.NewClient()
 	processedFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/request_with_error.http", struct{ ServerURL string }{ServerURL: server2.URL})
 
 	// When
@@ -135,7 +137,7 @@ func TestExecuteFile_RequestWithError(t *testing.T) {
 // This test verifies that the client reports a suitable error if the provided file 'testdata/http_request_files/parse_error.http' (which is expected to be empty or syntactically invalid to the point of yielding no requests) cannot be successfully parsed into executable requests.
 func TestExecuteFile_ParseError(t *testing.T) {
 	// Given
-	client, _ := NewClient()
+	client, _ := rc.NewClient()
 	filePath := "testdata/http_request_files/parse_error.http"
 
 	// When
@@ -151,7 +153,7 @@ func TestExecuteFile_ParseError(t *testing.T) {
 // This test uses 'testdata/http_request_files/no_requests.http' to verify that the client correctly identifies that no requests are present and returns an appropriate error or empty response set.
 func TestExecuteFile_NoRequestsInFile(t *testing.T) {
 	// Given
-	client, _ := NewClient()
+	client, _ := rc.NewClient()
 	filePath := "testdata/http_request_files/comment_only_file.http"
 
 	// When
@@ -181,7 +183,7 @@ func TestExecuteFile_ValidThenInvalidSyntax(t *testing.T) {
 	})
 	defer server.Close()
 
-	client, _ := NewClient()
+	client, _ := rc.NewClient()
 	tempFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/valid_then_invalid_syntax.http", struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
@@ -209,7 +211,7 @@ func TestExecuteFile_ValidThenInvalidSyntax(t *testing.T) {
 // This test uses 'testdata/http_request_files/multiple_errors.http' (containing requests designed to fail) to verify that each failing request's error is captured in its respective response object and that an aggregated error is returned by ExecuteFile.
 func TestExecuteFile_MultipleErrors(t *testing.T) {
 	// Given
-	client, _ := NewClient()
+	client, _ := rc.NewClient()
 	filePath := "testdata/http_request_files/multiple_errors.http"
 
 	// When
@@ -249,7 +251,7 @@ func TestExecuteFile_CapturesResponseHeaders(t *testing.T) {
 	})
 	defer server.Close()
 
-	client, _ := NewClient()
+	client, _ := rc.NewClient()
 	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/captures_response_headers.http", struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
@@ -286,7 +288,7 @@ func TestExecuteFile_SimpleGetHTTP(t *testing.T) {
 		},
 	}
 
-	clientWithMockTransport, err := NewClient(WithHTTPClient(&http.Client{Transport: mockTransport}))
+	clientWithMockTransport, err := rc.NewClient(rc.WithHTTPClient(&http.Client{Transport: mockTransport}))
 	require.NoError(t, err)
 	requestFilePath := "testdata/http_request_files/simple_get.http"
 
@@ -335,7 +337,7 @@ func TestExecuteFile_MultipleRequests_GreaterThanTwo(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := NewClient()
+	client, _ := rc.NewClient()
 	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/multiple_requests_gt2.http", struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When

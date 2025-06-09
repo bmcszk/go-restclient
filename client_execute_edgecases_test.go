@@ -1,4 +1,4 @@
-package restclient
+package restclient_test
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"path/filepath" // Added
 	"testing"
 
+	rc "github.com/bmcszk/go-restclient"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +20,7 @@ import (
 // This test verifies that the client correctly identifies an invalid HTTP method in 'testdata/http_request_files/invalid_method.http', reports an error for that request, and handles the overall execution flow appropriately (e.g., by aggregating errors).
 func TestExecuteFile_InvalidMethodInFile(t *testing.T) {
 	// Given
-	client, _ := NewClient()
+	client, _ := rc.NewClient()
 	requestFilePath := "testdata/http_request_files/invalid_method.http"
 
 	// When
@@ -47,10 +48,10 @@ type executeFileTestCase struct {
 	expectedResponses              int
 	expectedError                  bool
 	expectedErrorMessageSubstrings []string
-	responseValidators             []func(t *testing.T, resp *Response)
+	responseValidators             []func(t *testing.T, resp *rc.Response)
 }
 
-func assertSuccessfulExecutionAndValidateResponses(t *testing.T, tcName string, execErr error, actualResponses []*Response, expectedResponseCount int, responseValidators []func(t *testing.T, resp *Response)) {
+func assertSuccessfulExecutionAndValidateResponses(t *testing.T, tcName string, execErr error, actualResponses []*rc.Response, expectedResponseCount int, responseValidators []func(t *testing.T, resp *rc.Response)) {
 	t.Helper()
 	assert.NoError(t, execErr, "Did not expect an error for test: %s", tcName)
 	require.Len(t, actualResponses, expectedResponseCount, "Number of responses mismatch for test: %s", tcName)
@@ -66,7 +67,7 @@ func assertSuccessfulExecutionAndValidateResponses(t *testing.T, tcName string, 
 	}
 }
 
-func runExecuteFileSubtest(t *testing.T, client *Client, serverURL string, tc executeFileTestCase) {
+func runExecuteFileSubtest(t *testing.T, client *rc.Client, serverURL string, tc executeFileTestCase) {
 	t.Helper() // Mark as test helper
 
 	// Read the base content from the testdata file
@@ -149,7 +150,7 @@ func TestExecuteFile_IgnoreEmptyBlocks_Client(t *testing.T) {
 	// Given common setup for all subtests
 	server := setupIgnoreEmptyBlocksMockServer(t)
 	defer server.Close()
-	client, _ := NewClient()
+	client, _ := rc.NewClient()
 
 	testDataDir := "testdata/execute_file_ignore_empty_blocks"
 
@@ -160,8 +161,9 @@ func TestExecuteFile_IgnoreEmptyBlocks_Client(t *testing.T) {
 			needsServerURLCount: 1,
 			expectedResponses:   1,
 			expectedError:       false,
-			responseValidators: []func(t *testing.T, resp *Response){
-				func(t *testing.T, resp *Response) {
+			responseValidators: []func(t *testing.T, resp *rc.Response){
+				func(t *testing.T, resp *rc.Response) {
+					t.Helper()
 					assert.NoError(t, resp.Error)
 					assert.Equal(t, http.StatusOK, resp.StatusCode)
 					assert.Equal(t, "response from /first", resp.BodyString)
@@ -174,8 +176,9 @@ func TestExecuteFile_IgnoreEmptyBlocks_Client(t *testing.T) {
 			needsServerURLCount: 1,
 			expectedResponses:   1,
 			expectedError:       false,
-			responseValidators: []func(t *testing.T, resp *Response){
-				func(t *testing.T, resp *Response) {
+			responseValidators: []func(t *testing.T, resp *rc.Response){
+				func(t *testing.T, resp *rc.Response) {
+					t.Helper()
 					assert.NoError(t, resp.Error)
 					assert.Equal(t, http.StatusOK, resp.StatusCode)
 					assert.Equal(t, "response from /second", resp.BodyString)
@@ -188,13 +191,15 @@ func TestExecuteFile_IgnoreEmptyBlocks_Client(t *testing.T) {
 			needsServerURLCount: 2,
 			expectedResponses:   2,
 			expectedError:       false,
-			responseValidators: []func(t *testing.T, resp *Response){
-				func(t *testing.T, resp *Response) { // For GET /req1
+			responseValidators: []func(t *testing.T, resp *rc.Response){
+				func(t *testing.T, resp *rc.Response) { // For GET /req1
+					t.Helper()
 					assert.NoError(t, resp.Error)
 					assert.Equal(t, http.StatusAccepted, resp.StatusCode)
 					assert.Equal(t, "response from /req1", resp.BodyString)
 				},
-				func(t *testing.T, resp *Response) { // For POST /req2
+				func(t *testing.T, resp *rc.Response) { // For POST /req2
+					t.Helper()
 					assert.NoError(t, resp.Error)
 					assert.Equal(t, http.StatusCreated, resp.StatusCode)
 					assert.Equal(t, "response from /req2", resp.BodyString)
@@ -208,7 +213,7 @@ func TestExecuteFile_IgnoreEmptyBlocks_Client(t *testing.T) {
 			expectedResponses:              0,
 			expectedError:                  true,
 			expectedErrorMessageSubstrings: []string{"no requests found in file"},
-			responseValidators:             []func(t *testing.T, resp *Response){},
+			responseValidators:             []func(t *testing.T, resp *rc.Response){},
 		},
 	}
 

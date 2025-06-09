@@ -1,9 +1,10 @@
-package restclient
+package restclient_test
 
 import (
 	// Used by actualResp in TestValidateResponses_FileErrors
 	"testing"
 
+	rc "github.com/bmcszk/go-restclient"
 	"github.com/hashicorp/go-multierror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,8 +16,8 @@ func TestValidateResponses_NilAndEmptyActuals(t *testing.T) {
 
 	t.Run("nil actual response slice", func(t *testing.T) {
 		// Given
-		var nilActuals []*Response // nil slice
-		client, _ := NewClient()
+		var nilActuals []*rc.Response // nil slice
+		client, _ := rc.NewClient()
 
 		// When
 		err := client.ValidateResponses(testFilePath, nilActuals...)
@@ -28,8 +29,8 @@ func TestValidateResponses_NilAndEmptyActuals(t *testing.T) {
 
 	t.Run("empty actual response slice", func(t *testing.T) {
 		// Given
-		emptyActuals := []*Response{} // empty slice
-		client, _ := NewClient()
+		emptyActuals := []*rc.Response{} // empty slice
+		client, _ := rc.NewClient()
 
 		// When
 		err := client.ValidateResponses(testFilePath, emptyActuals...)
@@ -41,8 +42,8 @@ func TestValidateResponses_NilAndEmptyActuals(t *testing.T) {
 
 	t.Run("slice with one nil actual response", func(t *testing.T) {
 		// Given
-		oneNilActual := []*Response{nil}
-		client, _ := NewClient()
+		oneNilActual := []*rc.Response{nil}
+		client, _ := rc.NewClient()
 
 		// When
 		err := client.ValidateResponses(testFilePath, oneNilActual...)
@@ -58,8 +59,8 @@ func TestValidateResponses_NilAndEmptyActuals(t *testing.T) {
 
 func TestValidateResponses_FileErrors(t *testing.T) {
 	// Given
-	actualResp := &Response{StatusCode: 200}
-	client, _ := NewClient()
+	actualResp := &rc.Response{StatusCode: 200}
+	client, _ := rc.NewClient()
 
 	t.Run("missing expected response file", func(t *testing.T) {
 		// Given: actualResp defined above, expected file path is "nonexistent.hresp"

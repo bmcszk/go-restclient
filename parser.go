@@ -291,7 +291,7 @@ func processFileLine(parserState *requestParserState, line string) error {
 	trimmedLine := strings.TrimSpace(line)
 	// Process the line based on content
 	if trimmedLine == "" {
-		return parserState.handleEmptyLine(line)
+		return parserState.handleEmptyLine()
 	}
 	// Process non-empty line
 	lineType := determineLineType(trimmedLine)
@@ -318,11 +318,11 @@ func (p *requestParserState) processLine(lineType lineType, trimmedLine, origina
 	switch lineType {
 	case lineTypeSeparator:
 		// Handle request separator (### or ---)
-		return p.handleRequestLine(trimmedLine, originalLine) // Use handleRequestLine for requestSeparator
+		return p.handleRequestLine(trimmedLine) // Use handleRequestLine for requestSeparator
 	case lineTypeVariableDefinition:
 		return p.handleVariableDefinition(trimmedLine)
 	case lineTypeComment:
-		return p.handleComment(trimmedLine, originalLine)
+		return p.handleComment(trimmedLine)
 	case lineTypeContent:
 		// Handle general content - could be a request line, header, or body
 		return p.handleContent(trimmedLine, originalLine)
@@ -341,7 +341,7 @@ func (p *requestParserState) handleContent(trimmedLine, originalLine string) err
 
 	// Not parsing body. This line could be a request line or a header.
 	if p.isRequestLine(trimmedLine) {
-		return p.handleRequestLine(trimmedLine, originalLine)
+		return p.handleRequestLine(trimmedLine)
 	}
 
 	// Not a request line, and not parsing body (implicitly true here).
@@ -382,7 +382,7 @@ func (p *requestParserState) ensureCurrentRequest() {
 
 // handleComment processes a comment line and extracts special directives (e.g., @name).
 // Supports both # and // style comments (FR1.4)
-func (p *requestParserState) handleComment(trimmedLine, originalLine string) error {
+func (p *requestParserState) handleComment(trimmedLine string) error {
 	var commentContent string
 
 	// FR1.4: Support for both # and // style comments
@@ -434,7 +434,7 @@ func (p *requestParserState) handleComment(trimmedLine, originalLine string) err
 }
 
 // handleEmptyLine processes an empty line, which can be used to separate headers from body
-func (p *requestParserState) handleEmptyLine(trimmedLine string) error {
+func (p *requestParserState) handleEmptyLine() error {
 	// If a method has been defined (i.e., we are past the request line),
 	// and we are not already parsing the body,
 	// this empty line acts as the separator before the body.
@@ -449,7 +449,7 @@ func (p *requestParserState) handleEmptyLine(trimmedLine string) error {
 // Removed unused function handleRequestLineParsing
 
 // handleRequestLine processes a potential HTTP request line (METHOD URL HTTP/Version).
-func (p *requestParserState) handleRequestLine(trimmedLine, originalLine string) error {
+func (p *requestParserState) handleRequestLine(trimmedLine string) error {
 
 	if p.justSawEmptyLineSeparator && p.currentRequest != nil && p.currentRequest.Method != "" && isPotentialRequestLine(trimmedLine) {
 		p.finalizeCurrentRequest()
@@ -818,16 +818,6 @@ func (p *requestParserState) parseRequestLineDetails(originalRequestLine string)
 	return false // Not finalized by a same-line separator
 }
 
-// parseExpectedResponseFile reads a file and parses it into a slice of ExpectedResponse definitions.
-// DEPRECATED: This function is deprecated. Use ValidateResponses from validator.go instead.
-func parseExpectedResponseFile(filePath string) ([]*ExpectedResponse, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open expected response file %s: %w", filePath, err)
-	}
-	defer func() { _ = file.Close() }()
-	return parseExpectedResponses(file, filePath)
-}
 
 // parseExpectedStatusLine parses a line as an HTTP status line (HTTP_VERSION STATUS_CODE [STATUS_TEXT]).
 // It updates the provided ExpectedResponse with the parsed status code and status string.

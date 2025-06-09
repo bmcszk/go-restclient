@@ -1,4 +1,4 @@
-package restclient
+package restclient_test
 
 import (
 	"context"
@@ -17,159 +17,12 @@ import (
 	"testing"
 	"time"
 
+	rc "github.com/bmcszk/go-restclient"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// TestRandomStringFromCharset tests the randomStringFromCharset helper function.
-func TestRandomStringFromCharset(t *testing.T) {
-	tests := []struct {
-		name     string
-		length   int
-		charset  string
-		wantLen  int
-		assertFn func(t *testing.T, s string, charset string)
-	}{
-		{
-			name:    "alphabetic_10",
-			length:  10,
-			charset: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
-			wantLen: 10,
-			assertFn: func(t *testing.T, s string, charset string) {
-				for _, r := range s {
-					assert.Contains(t, charset, string(r))
-				}
-			},
-		},
-		{
-			name:    "numeric_5",
-			length:  5,
-			charset: "0123456789",
-			wantLen: 5,
-			assertFn: func(t *testing.T, s string, charset string) {
-				for _, r := range s {
-					assert.Contains(t, charset, string(r))
-				}
-			},
-		},
-		{
-			name:    "empty_charset",
-			length:  5,
-			charset: "",
-			wantLen: 0,
-		},
-		{
-			name:    "zero_length",
-			length:  0,
-			charset: "abc",
-			wantLen: 0,
-			assertFn: func(t *testing.T, s string, charset string) {
-			},
-		},
-		{
-			name:    "negative_length",
-			length:  -5,
-			charset: "abc",
-			wantLen: 0,
-			assertFn: func(t *testing.T, s string, charset string) {
-			},
-		},
-	}
-
-	for _, testCase := range tests {
-		capturedTC := testCase // Explicitly capture the current test case
-		t.Run(capturedTC.name, func(t *testing.T) {
-			if capturedTC.charset == "" && capturedTC.length > 0 {
-				s := randomStringFromCharset(capturedTC.length, capturedTC.charset)
-				assert.Len(t, s, capturedTC.wantLen, "String length mismatch")
-
-			} else {
-				s := randomStringFromCharset(capturedTC.length, capturedTC.charset)
-				assert.Len(t, s, capturedTC.wantLen, "String length mismatch")
-				if capturedTC.assertFn != nil && capturedTC.wantLen > 0 {
-					capturedTC.assertFn(t, s, capturedTC.charset)
-				}
-			}
-		})
-	}
-}
-
-// TestSubstituteDynamicSystemVariables_EnvVars tests the {{$env.VAR_NAME}} substitution.
-func TestSubstituteDynamicSystemVariables_EnvVars(t *testing.T) {
-	client, _ := NewClient()
-	tests := []struct {
-		name    string
-		input   string
-		setup   func(t *testing.T) // For setting env vars
-		want    string
-		wantErr bool // If we expect a parsing warning (though not directly testable here without log capture)
-	}{
-		{
-			name:  "existing env var",
-			input: "Hello {{$env.MY_TEST_VAR}}!",
-			setup: func(t *testing.T) { t.Setenv("MY_TEST_VAR", "World") },
-			want:  "Hello World!",
-		},
-		{
-			name:  "non-existing env var",
-			input: "Value: {{$env.NON_EXISTENT_VAR}}",
-			setup: func(t *testing.T) {},
-			want:  "Value: ",
-		},
-		{
-			name:  "multiple env vars",
-			input: "{{$env.FIRST_VAR}} and {{$env.SECOND_VAR}}",
-			setup: func(t *testing.T) {
-				t.Setenv("FIRST_VAR", "Apple")
-				t.Setenv("SECOND_VAR", "Banana")
-			},
-			want: "Apple and Banana",
-		},
-		{
-			name:  "env var with underscore and numbers",
-			input: "{{$env.MY_VAR_123}}",
-			setup: func(t *testing.T) { t.Setenv("MY_VAR_123", "Test123") },
-			want:  "Test123",
-		},
-		{
-			name:  "empty env var value",
-			input: "Prefix{{$env.EMPTY_VAR}}Suffix",
-			setup: func(t *testing.T) { t.Setenv("EMPTY_VAR", "") },
-			want:  "PrefixSuffix",
-		},
-		{
-			name:    "malformed - no var name",
-			input:   "{{$env.}}",
-			setup:   func(t *testing.T) {},
-			want:    "{{$env.}}",
-			wantErr: true, // Expect original match due to regex non-match or parse fail
-		},
-		{
-			name:    "malformed - invalid char in var name",
-			input:   "{{$env.MY-VAR}}", // Hyphen is not allowed by regex
-			setup:   func(t *testing.T) { t.Setenv("MY-VAR", "ShouldNotBeUsed") },
-			want:    "{{$env.MY-VAR}}",
-			wantErr: true,
-		},
-		{
-			name:  "var name starting with underscore",
-			input: "{{$env._MY_VAR}}",
-			setup: func(t *testing.T) { t.Setenv("_MY_VAR", "StartsWithUnderscore") },
-			want:  "StartsWithUnderscore",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			tc.setup(t) // Set/unset env vars for this test case
-			output := substituteDynamicSystemVariables(tc.input, client.currentDotEnvVars, client.programmaticVars)
-			assert.Equal(t, tc.want, output)
-			// Note: Testing for slog.Warn would require log capture, which is out of scope here.
-			// We rely on the fact that if tc.wantErr is true, the output should be the original input.
-		})
-	}
-}
 
 // PRD-COMMENT: FR1.1 - Custom Variables: Basic Definition and Substitution
 // Corresponds to: Client's ability to define and substitute custom variables within an .http file (e.g., @name = value) (http_syntax.md "Custom Variables").
@@ -202,7 +55,7 @@ func TestExecuteFile_WithCustomVariables(t *testing.T) {
 	})
 	defer server.Close()
 
-	client, _ := NewClient()
+	client, _ := rc.NewClient()
 	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/custom_variables.http", struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
@@ -266,7 +119,7 @@ func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
 	})
 	defer server.Close()
 
-	client, _ := NewClient()
+	client, _ := rc.NewClient()
 	requestFilePath := createTestFileFromTemplate(t,
 		"testdata/http_request_files/system_var_process_env.http",
 		struct {
@@ -330,7 +183,7 @@ type dotEnvTestCase struct {
 	expectErrorInResp   bool
 }
 
-func runDotEnvScenarioTest(t *testing.T, client *Client, serverURL string, tempDir string, tc dotEnvTestCase, interceptedData *dotEnvInterceptedRequestData) {
+func runDotEnvScenarioTest(t *testing.T, client *rc.Client, serverURL string, tempDir string, tc dotEnvTestCase, interceptedData *dotEnvInterceptedRequestData) {
 	t.Helper()
 
 	// Given: Setup .env file for the current scenario
@@ -401,7 +254,7 @@ func TestExecuteFile_WithDotEnvSystemVariable(t *testing.T) {
 	})
 	defer server.Close()
 
-	client, err := NewClient()
+	client, err := rc.NewClient()
 	require.NoError(t, err) // Ensure client creation doesn't fail
 
 	tempDir := t.TempDir()
@@ -485,7 +338,7 @@ func TestExecuteFile_WithProgrammaticVariables(t *testing.T) {
 	_ = os.Setenv("PROG_ENV_VAR", "env_value_should_be_overridden")
 	defer os.Unsetenv("PROG_ENV_VAR")
 
-	client, err := NewClient(WithVars(clientProgrammaticVars))
+	client, err := rc.NewClient(rc.WithVars(clientProgrammaticVars))
 	require.NoError(t, err)
 
 	requestFilePath := "testdata/http_request_files/programmatic_variables.http"
@@ -540,7 +393,7 @@ func TestExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
 	})
 	defer server.Close()
 
-	client, _ := NewClient()
+	client, _ := rc.NewClient()
 
 	// Capture current time to compare against, allowing for slight delay
 	beforeTime := time.Now().UTC().Unix()
@@ -671,7 +524,7 @@ func assertServerCapturedConsistencyValues(t *testing.T, capturedVals *capturedC
 	assert.Equal(t, capturedVals.HeaderRandomInt, capturedVals.BodyRandomInt, "Header RandomInt and Body RandomInt should be the same")
 }
 
-func assertRequestObjectConsistency(t *testing.T, parsedReq *Request, capturedVals *capturedConsistencyValues) {
+func assertRequestObjectConsistency(t *testing.T, parsedReq *rc.Request, capturedVals *capturedConsistencyValues) {
 	t.Helper()
 	require.NotNil(t, parsedReq)
 
@@ -698,7 +551,7 @@ func TestExecuteFile_VariableFunctionConsistency(t *testing.T) {
 	server := setupConsistencyTestServer(t, &capturedVals)
 	defer server.Close()
 
-	client, err := NewClient(WithBaseURL(server.URL))
+	client, err := rc.NewClient(rc.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
 	requestFilePath := "testdata/http_request_files/variable_function_consistency.rest"
@@ -730,12 +583,12 @@ type httpClientEnvTestCase struct {
 	envFileTemplatePath      string // Path to http-client.env.json template
 	privateEnvFilePath       string // Path to http-client.private.env.json (optional)
 	requestFilePath          string // Path to .http request file
-	selectedEnv              string // Environment to select in NewClient
+	selectedEnv              string // Environment to select in rc.NewClient
 	expectExecuteFileError   bool
 	executeFileErrorContains string
 	expectResponseError      bool
 	responseErrorContains    string
-	responseAssertions       func(t *testing.T, resp *Response, interceptedReq *interceptedRequestData, serverURL string)
+	responseAssertions       func(t *testing.T, resp *rc.Response, interceptedReq *interceptedRequestData, serverURL string)
 }
 
 // runHttpClientEnvSubtest executes a single sub-test for TestExecuteFile_WithHttpClientEnvJson.
@@ -778,11 +631,11 @@ func runHttpClientEnvSubtest(t *testing.T, tc httpClientEnvTestCase) {
 	err = os.WriteFile(httpFilePath, requestFileContentBytes, 0600)
 	require.NoError(t, err)
 
-	var client *Client
+	var client *rc.Client
 	if tc.selectedEnv != "" {
-		client, err = NewClient(WithEnvironment(tc.selectedEnv))
+		client, err = rc.NewClient(rc.WithEnvironment(tc.selectedEnv))
 	} else {
-		client, err = NewClient()
+		client, err = rc.NewClient()
 	}
 	require.NoError(t, err)
 
@@ -831,7 +684,8 @@ func TestExecuteFile_WithHttpClientEnvJson(t *testing.T) {
 			executeFileErrorContains: "unsupported protocol scheme \"\"",
 			expectResponseError:      true,
 			responseErrorContains:    "unsupported protocol scheme \"\"",
-			responseAssertions: func(t *testing.T, resp *Response, interceptedReq *interceptedRequestData, serverURL string) {
+			responseAssertions: func(t *testing.T, resp *rc.Response, interceptedReq *interceptedRequestData, serverURL string) {
+				t.Helper()
 				assert.True(t, strings.Contains(resp.Request.RawURLString, "{{host}}"), "RawURLString should still contain {{host}}")
 			},
 		},
@@ -843,7 +697,8 @@ func TestExecuteFile_WithHttpClientEnvJson(t *testing.T) {
 			selectedEnv:            "dev",
 			expectExecuteFileError: false,
 			expectResponseError:    false,
-			responseAssertions: func(t *testing.T, resp *Response, interceptedReq *interceptedRequestData, serverURL string) {
+			responseAssertions: func(t *testing.T, resp *rc.Response, interceptedReq *interceptedRequestData, serverURL string) {
+				t.Helper()
 				assert.Equal(t, http.StatusOK, resp.StatusCode)
 				parsedServerURL, pErr := url.Parse(serverURL)
 				require.NoError(t, pErr)
@@ -962,7 +817,7 @@ func TestExecuteFile_WithExtendedRandomSystemVariables(t *testing.T) {
 	})
 	defer server.Close()
 
-	client, _ := NewClient()
+	client, _ := rc.NewClient()
 	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_extended_random.http", struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When

@@ -1,4 +1,4 @@
-package restclient
+package restclient_test
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	rc "github.com/bmcszk/go-restclient"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -67,7 +68,7 @@ Content-Type: application/json
 	require.NoError(t, err)
 
 	// Create client with additional programmatic variables
-	client, err := NewClient(WithVars(map[string]interface{}{
+	client, err := rc.NewClient(rc.WithVars(map[string]interface{}{
 		"userName": "Override Name", // This should override the file variable
 	}))
 	require.NoError(t, err)
@@ -147,7 +148,7 @@ Content-Type: application/json
 	require.NoError(t, err)
 
 	// Create client
-	client, err := NewClient()
+	client, err := rc.NewClient()
 	require.NoError(t, err)
 
 	// Execute the file
@@ -207,7 +208,7 @@ Content-Type: text/plain
 	require.NoError(t, err)
 
 	// Create client
-	client, err := NewClient()
+	client, err := rc.NewClient()
 	require.NoError(t, err)
 
 	// Execute the file
@@ -243,7 +244,7 @@ Content-Type: application/json
 	require.NoError(t, err)
 
 	// Create client
-	client, err := NewClient()
+	client, err := rc.NewClient()
 	require.NoError(t, err)
 
 	// Execute the file - should return error
@@ -254,128 +255,4 @@ Content-Type: application/json
 
 	// Should still get responses array but with error
 	require.Len(t, responses, 0) // No responses should be returned on file processing error
-}
-
-// PRD-COMMENT: FR4.1 - Request Body: External File with Variables (<@) (Internal Helper)
-// Corresponds to: Internal client logic for processing external files with variable substitution, supporting FR4.1.
-// This is a unit test for the internal `processExternalFile` helper function, ensuring it correctly reads an external file ('test.txt') and substitutes variables.
-func TestClient_ProcessExternalFile(t *testing.T) {
-	// Create a temporary directory for test files
-	tempDir := t.TempDir()
-
-	// Create a test file with variables
-	fileContent := "Hello {{name}}, your ID is {{userId}}"
-	testFile := filepath.Join(tempDir, "test.txt")
-	err := os.WriteFile(testFile, []byte(fileContent), 0644)
-	require.NoError(t, err)
-
-	// Create client with variables
-	client, err := NewClient(WithVars(map[string]interface{}{
-		"name":   "Alice",
-		"userId": "12345",
-	}))
-	require.NoError(t, err)
-
-	// Create a mock request
-	request := &Request{
-		ExternalFilePath:          "./test.txt",
-		ExternalFileWithVariables: true,
-		FilePath:                  tempDir + "/test.http", // Set directory context
-		ActiveVariables:           make(map[string]string),
-	}
-
-	// Create a mock parsed file
-	parsedFile := &ParsedFile{
-		EnvironmentVariables: make(map[string]string),
-		GlobalVariables:      make(map[string]string),
-	}
-
-	// Process the external file
-	result, err := client.processExternalFile(request, parsedFile, make(map[string]string), os.LookupEnv)
-	require.NoError(t, err)
-
-	// Check that variables were substituted
-	expected := "Hello Alice, your ID is 12345"
-	assert.Equal(t, expected, result)
-}
-
-// PRD-COMMENT: FR4.3 - Request Body: External File with Encoding (<@|encoding) (Internal Helper)
-// Corresponds to: Internal client logic for reading files with specified encodings, supporting FR4.3.
-// This is a unit test for the internal `readFileWithEncoding` helper function, ensuring it correctly reads a file ('test.txt') using various supported encodings and handles unsupported ones.
-func TestClient_ReadFileWithEncoding(t *testing.T) {
-	// Create a temporary directory for test files
-	tempDir := t.TempDir()
-
-	// Create test content
-	content := "Hello World"
-	testFile := filepath.Join(tempDir, "test.txt")
-	err := os.WriteFile(testFile, []byte(content), 0644)
-	require.NoError(t, err)
-
-	client, err := NewClient()
-	require.NoError(t, err)
-
-	tests := []struct {
-		name     string
-		encoding string
-		wantErr  bool
-	}{
-		{"UTF-8", "utf-8", false},
-		{"UTF8", "utf8", false},
-		{"Latin1", "latin1", false},
-		{"ISO-8859-1", "iso-8859-1", false},
-		{"ASCII", "ascii", false},
-		{"CP1252", "cp1252", false},
-		{"Windows-1252", "windows-1252", false},
-		{"Invalid", "invalid-encoding", true},
-		{"Empty", "", false}, // Should default to UTF-8
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := client.readFileWithEncoding(testFile, tt.encoding)
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "unsupported encoding")
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, content, result)
-			}
-		})
-	}
-}
-
-// PRD-COMMENT: FR4.3 - Request Body: External File with Encoding (<@|encoding) (Internal Helper)
-// Corresponds to: Internal client logic for obtaining a character encoding decoder, supporting FR4.3.
-// This is a unit test for the internal `getEncodingDecoder` helper function, verifying it returns correct decoders for supported encodings and errors for unsupported ones.
-func TestClient_GetEncodingDecoder(t *testing.T) {
-	client, err := NewClient()
-	require.NoError(t, err)
-
-	tests := []struct {
-		encoding string
-		wantErr  bool
-	}{
-		{"latin1", false},
-		{"iso-8859-1", false},
-		{"cp1252", false},
-		{"windows-1252", false},
-		{"ascii", false},
-		{"LATIN1", false}, // Case insensitive
-		{"invalid", true},
-		{"", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.encoding, func(t *testing.T) {
-			decoder, err := client.getEncodingDecoder(tt.encoding)
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Nil(t, decoder)
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, decoder)
-			}
-		})
-	}
 }
