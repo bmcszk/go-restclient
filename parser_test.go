@@ -475,14 +475,19 @@ Response 2`,
 	}
 }
 
-// PRD-COMMENT: FR2.4 - Variable Scoping and Templating
-// Corresponds to: http_syntax.md "Variables", "Variable Scopes (File, Request, Environment)"
-// This test function verifies multiple aspects of variable scoping and templating:
-// 1. Resolution of nested variable references (e.g., `{{url}}/users` where `url` itself might be a variable).
-// 2. Correct overriding of file-level variables by request-specific variables.
-// 3. Proper restoration of file-level variable values after a request-specific override has been processed for a preceding request.
-// 4. Complex variable expansion within request bodies, particularly ensuring placeholders are correctly identified in JSON structures.
-// All scenarios are tested by parsing 'testdata/variables/variable_references.http' which contains multiple requests designed to exercise these scoping rules.
+// PRD-COMMENT: FR1.3 - Request Naming & FR2.4 - Variable Scoping and Templating
+// Corresponds to:
+// - FR1.3: http_syntax.md "Request Name (### Name)"
+// - FR2.4: http_syntax.md "Variables", "Variable Scopes (File, Request, Environment)"
+// This test function verifies:
+//  1. Correct parsing of request names specified using the '### Request Name' syntax (FR1.3).
+//  2. Multiple aspects of variable scoping and templating (FR2.4):
+//     a. Resolution of nested variable references (e.g., `{{url}}/users` where `url` itself might be a variable).
+//     b. Correct overriding of file-level variables by request-specific variables.
+//     c. Proper restoration of file-level variable values after a request-specific override has been processed for a preceding request.
+//     d. Complex variable expansion within request bodies, particularly ensuring placeholders are correctly identified in JSON structures.
+//
+// All scenarios are tested by parsing 'testdata/variables/variable_references.http' which contains multiple named requests designed to exercise these rules.
 func TestParseRequestFile_VariableScoping(t *testing.T) {
 	// Given
 	const requestFilePath = "testdata/variables/variable_references.http"
@@ -504,7 +509,13 @@ func TestParseRequestFile_VariableScoping(t *testing.T) {
 	}
 	require.Len(t, parsedFile.Requests, 4, "Expected 4 requests")
 
-	// Verify nested variable references
+	// Assert Request Names (FR1.3)
+	assert.Equal(t, "Request demonstrating nested variable references", parsedFile.Requests[0].Name, "Request 0 name mismatch")
+	assert.Equal(t, "Request with request-specific variable that overrides file-level variable", parsedFile.Requests[1].Name, "Request 1 name mismatch")
+	assert.Equal(t, "Request using previous file-level variable definitions", parsedFile.Requests[2].Name, "Request 2 name mismatch")
+	assert.Equal(t, "Request with complex variable expansion in JSON body", parsedFile.Requests[3].Name, "Request 3 name mismatch")
+
+	// Verify nested variable references (FR2.4)
 	assert.Equal(t, "{{url}}/users", parsedFile.Requests[0].RawURLString, "Nested variable references mismatch")
 
 	// Verify request-specific variable overrides file-level variable
