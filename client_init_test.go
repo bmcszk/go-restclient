@@ -9,6 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// PRD-COMMENT: FR_CLIENT_INIT_DEFAULT - Client Initialization: Default
+// Corresponds to: The ability to create a new HTTP client instance with default configurations (e.g., standard http.Client, no base URL, empty default headers).
+// This test verifies that `NewClient()` without options returns a valid client with expected default values.
 func TestNewClient(t *testing.T) {
 	// Given
 	// No specific setup needed
@@ -25,6 +28,9 @@ func TestNewClient(t *testing.T) {
 	assert.Empty(t, c.DefaultHeaders)
 }
 
+// PRD-COMMENT: FR_CLIENT_INIT_OPTIONS - Client Initialization: With Options
+// Corresponds to: The ability to create a new HTTP client instance configured with specific options, such as a custom underlying `http.Client` (FR_CLIENT_CONFIG_HTTPCLIENT), a base URL (FR_CLIENT_CONFIG_BASEURL), and default headers (FR_CLIENT_CONFIG_HEADERS).
+// This test verifies that `NewClient()` with options (e.g., `WithHTTPClient`, `WithBaseURL`, `WithDefaultHeader`) correctly applies these configurations to the new client instance. It also checks that providing a nil http.Client results in a default client being used.
 func TestNewClient_WithOptions(t *testing.T) {
 	// Given
 	customHTTPClient := &http.Client{Timeout: 15 * time.Second}
