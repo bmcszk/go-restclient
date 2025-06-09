@@ -475,7 +475,14 @@ Response 2`,
 	}
 }
 
-// TestParseRequestFile_VariableScoping tests variable scoping and references (FR2.4)
+// PRD-COMMENT: FR2.4 - Variable Scoping and Templating
+// Corresponds to: http_syntax.md "Variables", "Variable Scopes (File, Request, Environment)"
+// This test function verifies multiple aspects of variable scoping and templating:
+// 1. Resolution of nested variable references (e.g., `{{url}}/users` where `url` itself might be a variable).
+// 2. Correct overriding of file-level variables by request-specific variables.
+// 3. Proper restoration of file-level variable values after a request-specific override has been processed for a preceding request.
+// 4. Complex variable expansion within request bodies, particularly ensuring placeholders are correctly identified in JSON structures.
+// All scenarios are tested by parsing 'testdata/variables/variable_references.http' which contains multiple requests designed to exercise these scoping rules.
 func TestParseRequestFile_VariableScoping(t *testing.T) {
 	// Given
 	const requestFilePath = "testdata/variables/variable_references.http"
