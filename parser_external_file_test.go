@@ -9,6 +9,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// PRD-COMMENT: FR3.1 & FR3.2 - External File References for Request Body (with/without variables) & FR3.3 - Encoding Specification
+// Corresponds to: http_syntax.md "Request Body > External file reference"
+// This test verifies the parser's ability to correctly handle external file references for request bodies.
+// It covers:
+// - Basic file inclusion using '< path/to/file'.
+// - File inclusion with variable substitution using '<@ path/to/file'.
+// - Specification of character encoding for the external file (e.g., '<@latin1 path/to/file').
+// - Handling of paths with spaces.
+// It ensures that the external file path, encoding, and variable substitution flag are correctly parsed and stored.
 func TestParseRequestFile_ExternalFileReferences(t *testing.T) {
 	tests := []struct {
 		name                         string

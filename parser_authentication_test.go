@@ -20,7 +20,11 @@ func parseAuthTestFile(t *testing.T, filePath string) *ParsedFile {
 	return parsedFile
 }
 
-// TestBasicAuthHeader tests parsing basic authentication via Authorization header (FR5.1)
+// PRD-COMMENT: FR5.1 - Basic Authentication via Authorization Header
+// Corresponds to: http_syntax.md "Authentication" (Basic Auth section)
+// This test verifies the parser's ability to correctly interpret the 'Authorization: Basic <credentials>' header.
+// It ensures that the header is parsed and stored appropriately for later use by the client.
+// The test uses 'testdata/authentication/basic_auth_header.http'.
 func TestBasicAuthHeader(t *testing.T) {
 	// Given
 	const requestFilePath = "testdata/authentication/basic_auth_header.http"
@@ -39,7 +43,11 @@ func TestBasicAuthHeader(t *testing.T) {
 	assert.Equal(t, "Basic dXNlcm5hbWU6cGFzc3dvcmQ=", authHeader[0], "Basic auth header value mismatch")
 }
 
-// TestBasicAuthURL tests parsing basic authentication via URL (user:pass@domain) (FR5.1)
+// PRD-COMMENT: FR5.1 - Basic Authentication via URL
+// Corresponds to: http_syntax.md "Authentication" (Basic Auth section)
+// This test verifies the parser's ability to extract username and password credentials embedded directly in the request URL (e.g., 'user:pass@domain.com').
+// It ensures these credentials are correctly parsed and associated with the request.
+// The test uses 'testdata/authentication/basic_auth_url.http'.
 func TestBasicAuthURL(t *testing.T) {
 	// Given
 	const requestFilePath = "testdata/authentication/basic_auth_url.http"
@@ -66,7 +74,11 @@ func TestBasicAuthURL(t *testing.T) {
 	assert.Equal(t, "/secured", req.URL.Path, "Path in URL mismatch")
 }
 
-// TestBearerTokenAuth tests parsing bearer token authentication (FR5.2)
+// PRD-COMMENT: FR5.2 - Bearer Token Authentication
+// Corresponds to: http_syntax.md "Authentication" (Bearer Token section)
+// This test verifies the parser's ability to correctly interpret the 'Authorization: Bearer <token>' header.
+// It ensures that the bearer token is extracted and stored for the request.
+// The test uses 'testdata/authentication/bearer_token.http'.
 func TestBearerTokenAuth(t *testing.T) {
 	// Given
 	const requestFilePath = "testdata/authentication/bearer_token.http"

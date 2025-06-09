@@ -8,7 +8,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestParseRequestFile_EnvironmentVariables tests parsing of environment variables in requests (FR2.1, FR2.2)
+// PRD-COMMENT: FR2.1 & FR2.2 - Environment Variable Substitution and Defaults
+// Corresponds to: http_syntax.md "Environment Variables", "Default Values for Variables"
+// This test verifies the parser's ability to correctly identify and preserve placeholders for environment variables
+// (e.g., `{{env_var}}`) in various parts of an HTTP request, including URLs, query parameters, headers, and bodies.
+// It also checks the handling of environment variables with default values (e.g., `{{env_var:default_value}}`).
+// The test uses 'testdata/variables/environment_variables.http'.
 func TestParseRequestFile_EnvironmentVariables(t *testing.T) {
 	// Given
 	const requestFilePath = "testdata/variables/environment_variables.http"
@@ -74,7 +79,11 @@ func TestParseRequestFile_EnvironmentVariables(t *testing.T) {
 	assert.Equal(t, "{{api_url:https://default-api.example.com}}/v1/resources", parsedFile.Requests[5].RawURLString, "Environment variable with default value mismatch")
 }
 
-// TestParseRequestFile_VariableDefinitions tests parsing of variable definitions in request files (FR2.3)
+// PRD-COMMENT: FR2.3 - File-Level Variable Definitions and Usage
+// Corresponds to: http_syntax.md "File Variables" (for @-variable syntax)
+// This test verifies the parser's ability to correctly process file-level variable definitions (e.g., `@name = value`).
+// It ensures that these defined variables can be subsequently used as placeholders (e.g., `{{name}}`) within the same file.
+// The test uses 'testdata/variables/variable_definitions.http'.
 func TestParseRequestFile_VariableDefinitions(t *testing.T) {
 	// Given
 	const requestFilePath = "testdata/variables/variable_definitions.http"
