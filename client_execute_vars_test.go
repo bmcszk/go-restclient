@@ -179,8 +179,7 @@ func TestExecuteFile_WithCustomVariables(t *testing.T) {
 	// Given
 	var requestCount int32
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
-		currentCount := atomic.AddInt32(&requestCount, 1)
-		t.Logf("Mock server received request #%d: %s %s", currentCount, r.Method, r.URL.Path)
+		atomic.AddInt32(&requestCount, 1)
 		switch r.URL.Path {
 		case "/users/testuser123": // SCENARIO-LIB-013-001, SCENARIO-LIB-013-002, SCENARIO-LIB-013-003
 			assert.Equal(t, http.MethodPost, r.Method)
