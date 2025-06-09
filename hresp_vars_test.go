@@ -83,6 +83,9 @@ func _assertTimestampResult(t *testing.T, content, result string) {
 	assert.Regexp(t, `^\d+$`, dynamicPart)
 }
 
+// PRD-COMMENT: FR_HRESP_DEFINE_VARS - .hresp Variable Definition: @define Directive
+// Corresponds to: The ability to define and extract variables within .hresp files using the '@define varName = value' syntax (http_syntax.md "Response Format (.hresp)", section "Defining Variables").
+// This test verifies that `extractHrespDefines` correctly parses various @define statements, including those with and without spaces, multiple definitions, and comments, and extracts the key-value pairs accurately.
 func TestExtractHrespDefines(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -311,6 +314,16 @@ func _getResolveAndSubstituteTestCases(mockClient *Client) []resolveSubstTestCas
 	return tests
 }
 
+// PRD-COMMENT: FR_VAR_SUBSTITUTION_CORE - Core Variable Substitution Logic
+// Corresponds to: The core engine for resolving and substituting variables in strings, covering various sources and precedence: file-defined variables (FR_HRESP_DEFINE_VARS for .hresp, FR_REQUEST_DEFINE_VARS for .http), client programmatic variables (FR_CLIENT_PROG_VARS), environment variables (FR_ENV_VARS_DOTENV, FR_ENV_VARS_PROCESS, FR_ENV_VARS_HTTP_CLIENT_ENV), system variables (FR_SYSTEM_VARS), and fallback values (FR_VAR_FALLBACK).
+// This test uses a comprehensive set of subtests to verify `resolveAndSubstitute` for:
+// 1. Basic substitution of file-defined variables.
+// 2. Precedence: programmatic client vars > file vars > environment vars.
+// 3. System variables: {{$uuid}}, {{$timestamp}}, etc., including their dynamic nature.
+// 4. Fallback mechanism: `{{var | fallback_value}}`.
+// 5. Handling of unresolved variables (should remain literal).
+// 6. Correct processing of spaces and different data types for programmatic variables.
+// It ensures the substitution logic is robust and adheres to the specified variable resolution hierarchy and syntax as detailed in http_syntax.md (sections "Variables", "System Variables", "Variable Precedence").
 func TestResolveAndSubstitute(t *testing.T) {
 	// Mock client for system variable substitution (optional, can be nil)
 	mockClient, _ := NewClient()
