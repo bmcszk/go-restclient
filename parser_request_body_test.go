@@ -34,6 +34,13 @@ func assertRequestBasics(t *testing.T, req *Request, method, url, contentType st
 	}
 }
 
+// PRD-COMMENT: FR1.5.1 - JSON Request Body Parsing
+// Corresponds to: http_syntax.md "Request Body", "JSON Body"
+// This test verifies the parser's ability to correctly handle various JSON request bodies,
+// including basic JSON objects, arrays, and nested structures. It ensures that the
+// Content-Type header is correctly identified as 'application/json' and the RawBody
+// field of the parsed Request contains the exact JSON string.
+// It uses 'testdata/request_body/json_body.http'.
 func TestJsonRequestBodies(t *testing.T) {
 	// Parse the HTTP test file
 	parsedFile := parseHTTPTestFile(t, "json_body.http")
@@ -81,6 +88,13 @@ func TestJsonRequestBodies(t *testing.T) {
 	assert.Contains(t, r3.RawBody, `"Product 2"`)
 }
 
+// PRD-COMMENT: FR1.5.2 - File-Based Request Body Parsing
+// Corresponds to: http_syntax.md "Request Body", "File as Request Body"
+// This test verifies that the parser correctly handles request bodies specified as external
+// file references (e.g., `< path/to/file.json`). It checks for different file types (JSON, text, XML)
+// and ensures the Content-Type header is appropriately set based on the file extension or explicit header,
+// and that the RawBody field contains the file reference string.
+// It uses 'testdata/request_body/file_body.http'.
 func TestFileBasedBodies(t *testing.T) {
 	// Parse the HTTP test file
 	parsedFile := parseHTTPTestFile(t, "file_body.http")
@@ -105,6 +119,12 @@ func TestFileBasedBodies(t *testing.T) {
 	assert.Equal(t, "< ./testdata/request_body/sample_data.xml", r3.RawBody)
 }
 
+// PRD-COMMENT: FR1.5.3 - Form URL Encoded Request Body Parsing
+// Corresponds to: http_syntax.md "Request Body", "Form URL Encoded Body"
+// This test verifies the parser's ability to handle 'application/x-www-form-urlencoded' request bodies.
+// It checks basic forms, forms with multiple fields (including repeated field names), and forms with special characters
+// that require URL encoding. Ensures Content-Type is correct and RawBody contains the form data string.
+// It uses 'testdata/request_body/form_urlencoded.http'.
 func TestFormUrlEncodedBodies(t *testing.T) {
 	// Parse the HTTP test file
 	parsedFile := parseHTTPTestFile(t, "form_urlencoded.http")
@@ -128,6 +148,12 @@ func TestFormUrlEncodedBodies(t *testing.T) {
 	assert.Equal(t, "query=test%20search&filter=date%3E2023-01-01&sort=relevance", r3.RawBody)
 }
 
+// PRD-COMMENT: FR1.5.4 - Multipart Form-Data Request Body Parsing (Text Fields)
+// Corresponds to: http_syntax.md "Request Body", "Multipart Form Data"
+// This test verifies the parsing of 'multipart/form-data' request bodies containing various text fields.
+// It checks for correct Content-Type (including boundary) and ensures the RawBody contains the
+// structured multipart content with correct dispositions for each field.
+// It uses 'testdata/request_body/multipart_form_data.http'.
 func TestMultipartFormDataBodies(t *testing.T) {
 	// Parse the HTTP test file
 	parsedFile := parseHTTPTestFile(t, "multipart_form_data.http")
@@ -164,6 +190,13 @@ func TestMultipartFormDataBodies(t *testing.T) {
 	assert.Contains(t, bodyStr, "true")
 }
 
+// PRD-COMMENT: FR1.5.5 - File Uploads in Multipart Form-Data Request Body Parsing
+// Corresponds to: http_syntax.md "Request Body", "File Uploads (Multipart Form Data)"
+// This test verifies the parsing of 'multipart/form-data' request bodies that include file uploads.
+// It checks single and multiple file uploads, ensuring correct Content-Disposition (with filename),
+// Content-Type for each file part, and that the RawBody preserves the file reference syntax (e.g., `< path/to/file`)
+// within the multipart structure. Also verifies non-file form fields alongside uploads.
+// It uses 'testdata/request_body/file_uploads.http'.
 func TestFileUploadBodies(t *testing.T) {
 	// Parse the HTTP test file
 	parsedFile := parseHTTPTestFile(t, "file_uploads.http")
