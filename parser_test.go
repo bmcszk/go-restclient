@@ -195,6 +195,11 @@ func TestParseRequests_SeparatorComments(t *testing.T) {
 		req2URL       string
 	}{
 		{
+			// PRD-COMMENT: FR1.2, FR1.4 - Request Separation with Comments
+			// Corresponds to: http_syntax.md "Request Separator", "Comments"
+			// This test verifies parsing of multiple requests separated by '###',
+			// where comments are present on the separator lines themselves.
+			// It ensures that requests are correctly delineated and comments are ignored.
 			name: "SCENARIO-LIB-027-001 & SCENARIO-LIB-027-004 combined",
 			fileContent: `
 GET https://example.com/api/resource1
@@ -213,6 +218,11 @@ PUT https://example.com/api/resource3
 			// req2 is POST to /resource2, req3 is PUT to /resource3
 		},
 		{
+			// PRD-COMMENT: FR1.2, FR1.4 - Request Separation with Inline Separator Comment
+			// Corresponds to: http_syntax.md "Request Separator", "Comments"
+			// This test checks the scenario where a request separator '###' and its comment
+			// are on the same line as the end of a request, followed immediately by the next request
+			// on the subsequent line. Ensures correct parsing of both requests.
 			name: "SCENARIO-LIB-027-003 style: Separator comment no newline before next request",
 			fileContent: `
 GET https://example.com/api/item1 ### Comment for item1
