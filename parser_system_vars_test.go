@@ -7,8 +7,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestParseRequestFile_BasicSystemVariables tests that basic system variables like UUID and
-// timestamp are properly preserved in requests during parsing (FR3.1)
+// PRD-COMMENT: FR3.1 - System Variables: Basic (UUID, Timestamp, Datetime)
+// Corresponds to: http_syntax.md "System Variables", "Basic System Variables (UUID, Timestamp, Datetime)"
+// This test verifies that the parser correctly preserves basic system variable placeholders
+// (like {{$guid}}, {{$uuid}}, {{$timestamp}}, {{$isoTimestamp}}, {{$datetime format}}, {{$localDatetime format}})
+// in the RawURLString and Headers of parsed requests. It ensures these placeholders are not prematurely evaluated.
+// It uses 'testdata/system_variables/basic_system_vars.http'.
 func TestParseRequestFile_BasicSystemVariables(t *testing.T) {
 	t.Parallel()
 
@@ -71,8 +75,13 @@ func TestParseRequestFile_BasicSystemVariables(t *testing.T) {
 	assert.Equal(t, `{{$localDatetime "2006-01-02 15:04:05"}}`, datetimeRequest.Headers["X-Local-Date"][0])
 }
 
-// TestParseRequestFile_RandomSystemVariables tests that random value system variables
-// are properly preserved in requests during parsing (FR3.2)
+// PRD-COMMENT: FR3.2 - System Variables: Random Values
+// Corresponds to: http_syntax.md "System Variables", "Random Value Generators"
+// This test verifies that the parser correctly preserves random value system variable placeholders
+// (e.g., {{$randomInt}}, {{$random.integer(min, max)}}, {{$random.float(min, max)}}, {{$random.alphabetic(length)}},
+// {{$random.alphanumeric(length)}}, {{$random.hexadecimal(length)}}) in parsed requests.
+// It ensures these placeholders are not prematurely evaluated by the parser.
+// It uses 'testdata/system_variables/random_values.http'.
 func TestParseRequestFile_RandomSystemVariables(t *testing.T) {
 	t.Parallel()
 
@@ -138,8 +147,12 @@ func TestParseRequestFile_RandomSystemVariables(t *testing.T) {
 	assert.Equal(t, "{{$random.hexadecimal(8)}}", stringRequest.Headers["X-Random-Hexadecimal"][0])
 }
 
-// TestParseRequestFile_EnvironmentAccess tests that environment access system variables
-// are properly preserved in requests during parsing (FR3.3)
+// PRD-COMMENT: FR3.3 - System Variables: Environment Variable Access
+// Corresponds to: http_syntax.md "System Variables", "Environment Variable Access"
+// This test verifies that the parser correctly preserves environment access system variable placeholders
+// (e.g., {{$processEnv VAR_NAME}}, {{$env.VAR_NAME}}) in parsed requests. It ensures these placeholders,
+// which are intended for runtime resolution, are not evaluated by the parser itself.
+// It uses 'testdata/system_variables/environment_access.http'.
 func TestParseRequestFile_EnvironmentAccess(t *testing.T) {
 	t.Parallel()
 
