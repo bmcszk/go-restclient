@@ -18,19 +18,23 @@ func determineLineType(trimmedLine string) lineType {
 		return lineTypeSeparator
 	}
 
-	variableParts := strings.Split(trimmedLine, "=")
-	if len(variableParts) > 1 && strings.HasPrefix(trimmedLine, "@") {
-		return lineTypeVariableDefinition
-	}
-
-	// Check for @import directive (can be at beginning of line or in a comment)
-	if strings.Contains(trimmedLine, "@import") {
-		return lineTypeImportDirective
-	}
-
+	// Handle comments first, as directives like @import might appear in comments
+	// but should not be treated as active directives if the line is a comment.
 	if strings.HasPrefix(trimmedLine, commentPrefix) || strings.HasPrefix(trimmedLine, slashCommentPrefix) {
 		return lineTypeComment
 	}
 
+	// Check for lines starting with "@"
+	if strings.HasPrefix(trimmedLine, "@") {
+		// Specifically check for "@import" at the beginning of the line.
+		if strings.HasPrefix(trimmedLine, "@import ") { // Note the space for robustness
+			return lineTypeImportDirective
+		}
+		// Any other line starting with "@" is considered a variable definition.
+		// The handleVariableDefinition function will validate its format (e.g., presence of "=").
+		return lineTypeVariableDefinition
+	}
+
+	// If none of the above, it's general content (request line, header, body part).
 	return lineTypeContent
 }

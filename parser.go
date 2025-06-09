@@ -552,15 +552,30 @@ func (p *requestParserState) handleBodyContent(line string) {
 // handleVariableDefinition processes file-level variables (e.g., @variable = value)
 func (p *requestParserState) handleVariableDefinition(trimmedLine string) error {
 	parts := strings.SplitN(trimmedLine, "=", 2)
-	if len(parts) != 2 {
-		return fmt.Errorf("malformed variable definition: %s", trimmedLine)
+
+	if len(parts) != 2 { // Case: "@name_only_var" or just "@"
+		// If trimmedLine is just "@", it's missing name and equals.
+		// If trimmedLine is "@foo", it's missing equals.
+		return fmt.Errorf("malformed in-place variable definition, missing '=' or name part invalid: %s", trimmedLine)
 	}
 
-	varName := strings.TrimSpace(parts[0])
+	varNameWithAt := strings.TrimSpace(parts[0]) // e.g., "@foo", or "@"
 	varValue := strings.TrimSpace(parts[1])
 
-	// Store in the file variables
-	p.currentFileVariables[varName] = varValue
+	if !strings.HasPrefix(varNameWithAt, "@") {
+		// This case should ideally be caught by determineLineType if it's not starting with @
+		// but good to be defensive.
+		return fmt.Errorf("malformed variable definition, must start with '@': %s", trimmedLine)
+	}
+
+	// Check if the name part after "@" is empty or just whitespace
+	actualVarName := strings.TrimSpace(varNameWithAt[1:])
+	if actualVarName == "" { // Case: "@ = value" or "@   = value"
+		return fmt.Errorf("malformed in-place variable definition, variable name cannot be empty: %s", trimmedLine)
+	}
+
+	// Store in the file variables using the full @name (e.g. "@foo")
+	p.currentFileVariables[varNameWithAt] = varValue
 	return nil
 }
 

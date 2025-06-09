@@ -790,10 +790,9 @@ func TestExecuteFile_InPlace_VariableDefinedByDotEnvOsVariable(t *testing.T) {
 }
 
 func TestExecuteFile_InPlace_Malformed_NameOnlyNoEqualsNoValue(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): file starts with (malformed) variable definitions, causing 'no requests found' instead of specific parse error. See task TBD for fix.")
 	// Given: an .http file with a malformed in-place variable (name only, no equals, no value)
 	requestFilePath := "testdata/execute_inplace_vars/malformed_name_only_no_equals_no_value/request.http"
-	expectedErrorSubstring := "malformed in-place variable definition, missing '=' or name"
+	expectedErrorSubstring := "malformed in-place variable definition, missing '=' or name part invalid"
 
 	client, err := NewClient()
 	require.NoError(t, err)
@@ -808,10 +807,9 @@ func TestExecuteFile_InPlace_Malformed_NameOnlyNoEqualsNoValue(t *testing.T) {
 }
 
 func TestExecuteFile_InPlace_Malformed_NoNameEqualsValue(t *testing.T) {
-	t.Skip("Skipping due to known parser bug (MEMORY 91e7ebbb-89c1-482a-a3ab-2172419e1d33): file starts with (malformed) variable definitions, causing 'no requests found' instead of specific parse error. See task TBD for fix.")
 	// Given: an .http file with a malformed in-place variable (no name, equals, value)
 	requestFilePath := "testdata/execute_inplace_vars/malformed_no_name_equals_value/request.http"
-	expectedErrorSubstring := "variable name cannot be empty in definition"
+	expectedErrorSubstring := "malformed in-place variable definition, variable name cannot be empty"
 
 	client, err := NewClient()
 	require.NoError(t, err)
