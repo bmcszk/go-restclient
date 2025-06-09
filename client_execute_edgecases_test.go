@@ -13,6 +13,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// PRD-COMMENT: FR11.1 - Client Execution: Invalid HTTP Method Handling
+// Corresponds to: Client robustness in handling syntactically incorrect HTTP methods within a .http file (http_syntax.md, implicitly by defining valid methods).
+// This test verifies that the client correctly identifies an invalid HTTP method in 'testdata/http_request_files/invalid_method.http', reports an error for that request, and handles the overall execution flow appropriately (e.g., by aggregating errors).
 func TestExecuteFile_InvalidMethodInFile(t *testing.T) {
 	// Given
 	client, _ := NewClient()
@@ -105,6 +108,12 @@ func runExecuteFileSubtest(t *testing.T, client *Client, serverURL string, tc ex
 	}
 }
 
+// PRD-COMMENT: FR2.4 - Parser: Request Separators and Comments / FR11.2 - Client Execution: Handling of Non-Request Content
+// Corresponds to: Client and parser behavior regarding non-executable content within .http files, such as comments, empty blocks between request separators ('###'), and files containing only variable definitions (http_syntax.md "Request Separation", "Comments", "Variables").
+// This test suite verifies various scenarios:
+// 1. Requests correctly parsed and executed when separated by comments or empty lines around separators.
+// 2. Correct error handling (e.g., 'no requests found') for files that only contain variable definitions or are otherwise empty of executable requests.
+// It uses test case templates from 'testdata/execute_file_ignore_empty_blocks/' (e.g., 'scenario_004_template.http', 'only_vars.http') to dynamically create test files.
 func TestExecuteFile_IgnoreEmptyBlocks_Client(t *testing.T) {
 	// Given common setup for all subtests
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
