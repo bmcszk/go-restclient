@@ -86,7 +86,19 @@ func TestBearerTokenAuth(t *testing.T) {
 	assert.Equal(t, "Bearer "+expectedToken, authHeader[0], "Bearer token header value mismatch")
 }
 
-// TestOAuthFlowWithRequestReferences tests parsing OAuth flow with request references (FR5.3)
+// PRD-COMMENT: FR5.3 - Authentication with Response References & FR7.2 - Response Reference Variables
+// Corresponds to:
+// - FR5.3: http_syntax.md "Authentication" (implicitly, via OAuth example), "Response Reference Variables" (general syntax)
+// - FR7.2: http_syntax.md "Response Reference Variables", "Response Handler > Response reference"
+// This test, TestOAuthFlowWithRequestReferences, validates the parser's ability to handle a common OAuth 2.0 client credentials flow
+// where a token is fetched in one request and its value (e.g., `{{getToken.response.body.access_token}}`) is referenced
+// in the Authorization header of a subsequent request.
+// Key aspects tested:
+// 1. Correct parsing of multiple requests within a single file.
+// 2. Identification and parsing of response reference variables (e.g., `{{reqName.response.body.field}}`) in request headers.
+// 3. Ensuring the structure of an OAuth token request (POST, form-urlencoded body) is correctly parsed.
+// 4. Ensuring the structure of a subsequent API request using the referenced token is correctly parsed.
+// The test uses 'testdata/authentication/oauth_flow.http'.
 func TestOAuthFlowWithRequestReferences(t *testing.T) {
 	// Given
 	const requestFilePath = "testdata/authentication/oauth_flow.http"

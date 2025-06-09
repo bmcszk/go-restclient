@@ -1,5 +1,20 @@
 # Learnings Log
 
+## 2025-06-09
+
+### Discrepancy in `test_coverage_mapping.md`
+*   **Mistake:** `prds/jetbrains_compatibility/test_coverage_mapping.md` (as of 2025-06-09) incorrectly listed `parser_response_handler_test.go` as the location for FR7.2 (Response Handler Script) tests. This file does not exist in the `feature/jetbrains-client-compatibility2` branch.
+*   **Resolution:** Re-examining `test_coverage_mapping.md` to find the correct location for FR7.2 tests. (Ongoing)
+
+### Feature Misidentification regarding "Response Handler Script"
+*   **Issue:** The feature termed "Response Handler Script" (expected syntax `> {% ... %}` and potentially involving `client.global.set`), which was targeted for annotation based on prior session summaries, does not appear to be a documented or implemented feature in the current version of `go-restclient` (as of 2025-06-09 on `feature/jetbrains-client-compatibility2` branch). Extensive searches for its characteristic syntax and related terms yielded no results.
+*   **Clarification:** The `test_coverage_mapping.md` entry for FR7.2 refers to "Response Reference Variables" (syntax `{{reqName.response.body.field}}`), which is a distinct feature. The initial association of "Response Handler Script" with FR3 was also incorrect, as FR3 pertains to "Dynamic System Variables."
+*   **Next Step:** Will proceed to annotate tests for FR7.2 "Response Reference Variables" as per `test_coverage_mapping.md`.
+
+### Missing Test Function: `TestParseRequestFile_MultipleRequestsChained`
+*   **Issue:** `prds/jetbrains_compatibility/test_coverage_mapping.md` (as of 2025-06-09) lists `TestParseRequestFile_MultipleRequestsChained` in `parser_test.go` as a test covering FR7.2 ("Response Reference Variables"). However, this function does not exist in `parser_test.go` on the `feature/jetbrains-client-compatibility2` branch.
+*   **Next Step:** Re-evaluating the `test_coverage_mapping.md` entry for FR7.2 to identify the correct test function or file, or to note a potential coverage gap/documentation error.
+
 Last Updated: 2025-06-05
 
 ## 2025-06-05: `view_line_range` Tool - Output Truncation and Pagination
@@ -167,6 +182,12 @@ During the implementation of multipart/form-data support (specifically when modi
     *   Maintain a robust `git commit` discipline to ensure easy rollbacks to known good states.
 
 
+
+## 2025-06-09: `replace_file_content` Tool - `TargetContent` Uniqueness and Specificity
+
+*   **Mistake**: When attempting to add a loop-level comment to `TestParseRequests_IgnoreEmptyBlocks` in `parser_test.go`, the `replace_file_content` tool initially failed. The `TargetContent` provided for the second chunk (to insert the comment before the loop) was `\tfor _, tt := range tests {\n\t\tt.Run(tt.name, func(t *testing.T) {`. This failed with the error "target content was not unique."
+*   **Resolution**: The `TargetContent` was made more specific by including more preceding context from the test case definitions: `\t\t},\n\t}\n\tfor _, tt := range tests {\n\t\tt.Run(tt.name, func(t *testing.T) {`. This provided enough unique context for the tool to correctly identify the insertion point and apply the change.
+*   **Lesson Learned**: If `replace_file_content` reports that `TargetContent` is not unique, it's crucial to provide more surrounding, unique context as part of `TargetContent`. Inspecting the file (e.g., using `view_line_range` or by examining the code structure from `view_file_outline` or `view_code_item`) helps identify unique anchor points. The `TargetContent` must be an exact match for the text in the file at the point of desired modification.
 
 ## 2025-06-07: `replace_file_content` Misapplication Leading to Large Deletions (Parser Logging Attempt)
 
