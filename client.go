@@ -18,6 +18,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-multierror"
 	"github.com/joho/godotenv"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/encoding/unicode"
 )
 
 // ResolveOptions controls the behavior of variable substitution.
@@ -235,7 +238,21 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 
 		// Substitute variables for Body
 		var finalSubstitutedBody string
-		if restClientReq.RawBody != "" {
+		var bodyErr error
+		
+		// Handle external file references
+		if restClientReq.ExternalFilePath != "" {
+			finalSubstitutedBody, bodyErr = c.processExternalFile(
+				restClientReq,
+				parsedFile,
+				requestScopedSystemVars,
+				osEnvGetter,
+			)
+			if bodyErr != nil {
+				multiErr = multierror.Append(multiErr, fmt.Errorf("error processing external file for request %s (index %d): %w", restClientReq.Name, i, bodyErr))
+				continue // Skip to the next request in the loop
+			}
+		} else if restClientReq.RawBody != "" {
 			resolvedBody := resolveVariablesInText(
 				restClientReq.RawBody,
 				c.programmaticVars,
@@ -253,6 +270,9 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 				c.currentDotEnvVars,
 				c.programmaticVars,
 			)
+		}
+
+		if finalSubstitutedBody != "" {
 			restClientReq.RawBody = finalSubstitutedBody // Update RawBody with the fully substituted content
 			restClientReq.Body = strings.NewReader(finalSubstitutedBody)
 			// It's crucial to update GetBody as well, so that retries use the substituted body
@@ -550,6 +570,94 @@ func (c *Client) _populateResponseDetails(resp *Response, httpResp *http.Respons
 		}
 		resp.TLSCipherSuite = tls.CipherSuiteName(httpResp.TLS.CipherSuite)
 		// TODO: Add more TLS details like server name, peer certificates if needed
+	}
+}
+
+// processExternalFile reads and processes external file references with optional variable substitution and encoding
+func (c *Client) processExternalFile(
+	restClientReq *Request,
+	parsedFile *ParsedFile,
+	requestScopedSystemVars map[string]string,
+	osEnvGetter func(string) (string, bool),
+) (string, error) {
+	// Resolve the file path relative to the request's file directory
+	requestDir := filepath.Dir(restClientReq.FilePath)
+	fullPath := restClientReq.ExternalFilePath
+	if !filepath.IsAbs(fullPath) {
+		fullPath = filepath.Join(requestDir, restClientReq.ExternalFilePath)
+	}
+
+	// Read the file with appropriate encoding
+	content, err := c.readFileWithEncoding(fullPath, restClientReq.ExternalFileEncoding)
+	if err != nil {
+		return "", fmt.Errorf("failed to read external file %s: %w", restClientReq.ExternalFilePath, err)
+	}
+
+	// Apply variable substitution if requested
+	if restClientReq.ExternalFileWithVariables {
+		resolvedContent := resolveVariablesInText(
+			content,
+			c.programmaticVars,
+			restClientReq.ActiveVariables,
+			parsedFile.EnvironmentVariables,
+			parsedFile.GlobalVariables,
+			requestScopedSystemVars,
+			osEnvGetter,
+			c.currentDotEnvVars,
+			nil, // default options
+		)
+		content = substituteDynamicSystemVariables(
+			resolvedContent,
+			c.currentDotEnvVars,
+			c.programmaticVars,
+		)
+	}
+
+	return content, nil
+}
+
+// readFileWithEncoding reads a file with the specified encoding, defaulting to UTF-8
+func (c *Client) readFileWithEncoding(filePath, encodingName string) (string, error) {
+	// Read the file as bytes
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+
+	// If no encoding specified or UTF-8, return as-is
+	if encodingName == "" || strings.ToLower(encodingName) == "utf-8" || strings.ToLower(encodingName) == "utf8" {
+		return string(data), nil
+	}
+
+	// Get the decoder for the specified encoding
+	decoder, err := c.getEncodingDecoder(encodingName)
+	if err != nil {
+		return "", fmt.Errorf("unsupported encoding %s: %w", encodingName, err)
+	}
+
+	// Decode the content
+	decodedContent, err := decoder.Bytes(data)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode content with encoding %s: %w", encodingName, err)
+	}
+
+	return string(decodedContent), nil
+}
+
+// getEncodingDecoder returns the appropriate decoder for the given encoding name
+func (c *Client) getEncodingDecoder(encodingName string) (*encoding.Decoder, error) {
+	encodingName = strings.ToLower(encodingName)
+	
+	switch encodingName {
+	case "latin1", "iso-8859-1":
+		return charmap.ISO8859_1.NewDecoder(), nil
+	case "cp1252", "windows-1252":
+		return charmap.Windows1252.NewDecoder(), nil
+	case "ascii":
+		// ASCII is a subset of UTF-8, so we can use UTF-8 decoder
+		return unicode.UTF8.NewDecoder(), nil
+	default:
+		return nil, fmt.Errorf("unsupported encoding: %s", encodingName)
 	}
 }
 

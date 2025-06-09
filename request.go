@@ -51,6 +51,14 @@ type Request struct {
 	NoCookieJar bool
 	// Timeout specifies a custom timeout for this request (from @timeout directive)
 	Timeout time.Duration
+
+	// External file body configuration
+	// ExternalFilePath stores the path for external file body references (< ./path/to/file or <@ ./path/to/file)
+	ExternalFilePath string
+	// ExternalFileEncoding specifies the encoding for external file reading (e.g., "latin1", "utf-8")
+	ExternalFileEncoding string
+	// ExternalFileWithVariables indicates if the external file should have variable substitution applied (<@ syntax)
+	ExternalFileWithVariables bool
 }
 
 // ParsedFile represents all content parsed from a single .rest or .http file.

@@ -545,8 +545,74 @@ func (p *requestParserState) handleBodyContent(line string) {
 	// Ensure we're in body parsing mode
 	p.parsingBody = true
 
+	// Check for external file reference syntax
+	trimmedLine := strings.TrimSpace(line)
+	if strings.HasPrefix(trimmedLine, "<") {
+		p.handleExternalFileReference(trimmedLine)
+		return
+	}
+
 	// Add the line to the body
 	p.bodyLines = append(p.bodyLines, line)
+}
+
+// handleExternalFileReference processes external file references in request body
+// Supports formats:
+// - < ./path/to/file (static file content)
+// - <@ ./path/to/file (file content with variable substitution)
+// - <@encoding ./path/to/file (file content with variable substitution and specific encoding)
+func (p *requestParserState) handleExternalFileReference(line string) {
+	p.ensureCurrentRequest()
+
+	// Remove leading whitespace and '<' character
+	content := strings.TrimSpace(line[1:]) // Remove the '<'
+
+	// Check for variable substitution syntax (<@)
+	if strings.HasPrefix(content, "@") {
+		contentAfterAt := content[1:] // Remove the '@'
+		p.currentRequest.ExternalFileWithVariables = true
+
+		// Check for encoding specification
+		parts := strings.Fields(contentAfterAt)
+		if len(parts) >= 2 {
+			// First part might be encoding, second part is file path
+			possibleEncoding := parts[0]
+			possiblePath := strings.Join(parts[1:], " ") // Join in case path has spaces
+
+			// Check if first part looks like an encoding
+			if isValidEncoding(possibleEncoding) {
+				p.currentRequest.ExternalFileEncoding = possibleEncoding
+				p.currentRequest.ExternalFilePath = possiblePath
+			} else {
+				// No encoding specified, treat entire content after @ as path
+				p.currentRequest.ExternalFilePath = strings.TrimSpace(contentAfterAt)
+			}
+		} else {
+			// Single part, treat as path
+			p.currentRequest.ExternalFilePath = strings.TrimSpace(contentAfterAt)
+		}
+	} else {
+		// Static file reference (< ./path/to/file)
+		p.currentRequest.ExternalFilePath = strings.TrimSpace(content)
+		p.currentRequest.ExternalFileWithVariables = false
+	}
+
+	// Set RawBody to indicate external file usage (for backward compatibility)
+	p.currentRequest.RawBody = line
+}
+
+// isValidEncoding checks if the given string is a valid encoding name
+func isValidEncoding(encoding string) bool {
+	validEncodings := map[string]bool{
+		"utf-8":    true,
+		"utf8":     true,
+		"latin1":   true,
+		"iso-8859-1": true,
+		"ascii":    true,
+		"cp1252":   true,
+		"windows-1252": true,
+	}
+	return validEncodings[strings.ToLower(encoding)]
 }
 
 // handleVariableDefinition processes file-level variables (e.g., @variable = value)
@@ -604,9 +670,11 @@ func (p *requestParserState) finalizeCurrentRequest() {
 			"line", p.lineNumber,
 			"filePath", p.filePath)
 	} else {
-		// Set the request body from collected lines
-		rawBody := strings.Join(p.bodyLines, "\n") // Use \n as per HTTP spec for line endings in body
-		p.currentRequest.RawBody = rawBody
+		// Set the request body from collected lines (only if external file is not used)
+		if p.currentRequest.ExternalFilePath == "" {
+			rawBody := strings.Join(p.bodyLines, "\n") // Use \n as per HTTP spec for line endings in body
+			p.currentRequest.RawBody = rawBody
+		}
 		// Note: p.currentRequest.Body (io.Reader) will be set by the consumer (e.g., Send) after variable substitution
 
 		// Populate ActiveVariables for this request from currentFileVariables
