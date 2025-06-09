@@ -2,6 +2,11 @@ package restclient
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -25,16 +30,34 @@ func TestExecuteFile_ExternalFileWithVariables(t *testing.T) {
 	err := os.WriteFile(jsonFile, []byte(jsonContent), 0644)
 	require.NoError(t, err)
 
+	// Setup mock server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		var data map[string]interface{}
+		err = json.Unmarshal(body, &data)
+		require.NoError(t, err)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"json": data,
+		})
+	}))
+	defer server.Close()
+
 	// Create a test HTTP file
-	httpContent := `@userId = user123
+	httpContent := fmt.Sprintf(`@userId = user123
 @userName = John Doe
 @env = testing
 
 ### External File with Variable Substitution
-POST https://httpbin.org/post
+POST %s/post
 Content-Type: application/json
 
-<@ ./test_vars.json`
+<@ ./test_vars.json`, server.URL)
 
 	httpFile := filepath.Join(tempDir, "test.http")
 	err = os.WriteFile(httpFile, []byte(httpContent), 0644)
@@ -63,6 +86,11 @@ Content-Type: application/json
 	assert.Contains(t, bodyStr, `"timestamp":`) // Should contain a timestamp
 
 	// Verify that timestamp is a number
+	// The actual response from httptest will be nested under a "json" key if we mimic httpbin
+	// For simplicity, we'll check the direct body content as sent.
+	// If we were to fully mimic httpbin's response structure, the assertions would need to change
+	// to look for response.Body.json.userId etc.
+	// For now, client.ExecuteFile populates response.Request.RawBody with the *sent* body.
 	assert.Regexp(t, `"timestamp": "\d+"`, bodyStr)
 }
 
@@ -80,15 +108,33 @@ func TestExecuteFile_ExternalFileWithoutVariables(t *testing.T) {
 	err := os.WriteFile(jsonFile, []byte(jsonContent), 0644)
 	require.NoError(t, err)
 
+	// Setup mock server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		var data map[string]interface{}
+		err = json.Unmarshal(body, &data)
+		require.NoError(t, err)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"json": data, // Echo back the received JSON data
+		})
+	}))
+	defer server.Close()
+
 	// Create a test HTTP file using static file reference
-	httpContent := `@userId = user123
+	httpContent := fmt.Sprintf(`@userId = user123
 @userName = John Doe
 
 ### External File without Variable Substitution
-POST https://httpbin.org/post
+POST %s/post
 Content-Type: application/json
 
-< ./test_static.json`
+< ./test_static.json`, server.URL)
 
 	httpFile := filepath.Join(tempDir, "test.http")
 	err = os.WriteFile(httpFile, []byte(httpContent), 0644)
@@ -126,12 +172,26 @@ func TestExecuteFile_ExternalFileWithEncoding(t *testing.T) {
 	err := os.WriteFile(textFile, []byte(textContent), 0644)
 	require.NoError(t, err)
 
+	// Setup mock server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "text/plain", r.Header.Get("Content-Type")) // Expecting text/plain
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+
+		w.Header().Set("Content-Type", "text/plain") // Echo back as text/plain
+		w.WriteHeader(http.StatusOK)
+		_, err = w.Write(body) // Echo back the exact body received
+		require.NoError(t, err)
+	}))
+	defer server.Close()
+
 	// Create a test HTTP file with encoding specification
-	httpContent := `### External File with UTF-8 Encoding
-POST https://httpbin.org/post
+	httpContent := fmt.Sprintf(`### External File with UTF-8 Encoding
+POST %s/post
 Content-Type: text/plain
 
-<@utf-8 ./test_encoding.txt`
+<@utf-8 ./test_encoding.txt`, server.URL)
 
 	httpFile := filepath.Join(tempDir, "test.http")
 	err = os.WriteFile(httpFile, []byte(httpContent), 0644)
