@@ -7,6 +7,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// PRD-COMMENT: FR1.3 - Request Naming via Separator
+// Corresponds to: http_syntax.md "Request Separator", "Named Requests"
+// This test verifies that requests can be explicitly named using the '### Request Name' syntax.
+// It ensures that the parser correctly extracts and assigns these names to the parsed Request objects.
+// The test uses 'testdata/http_request_files/request_name_separator.http'.
 func TestParserRequestNaming(t *testing.T) {
 	client, err := NewClient()
 	require.NoError(t, err)
@@ -22,6 +27,12 @@ func TestParserRequestNaming(t *testing.T) {
 	assert.Equal(t, "Second Request with Data", parsed.Requests[1].Name)
 }
 
+// PRD-COMMENT: FR1.4 - Support for Multiple Comment Styles
+// Corresponds to: http_syntax.md "Comments"
+// This test verifies the parser's ability to correctly handle both '#' and '//' style comments.
+// It ensures that comments are ignored for parsing request lines but that directives within
+// comments (e.g., @name, @no-redirect) are still processed correctly regardless of comment style.
+// The test uses 'testdata/http_request_files/comment_styles.http'.
 func TestParserCommentStyles(t *testing.T) {
 	client, err := NewClient()
 	require.NoError(t, err)
