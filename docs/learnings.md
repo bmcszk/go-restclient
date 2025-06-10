@@ -1,5 +1,15 @@
 # Learnings Log
 
+## 2025-06-10
+
+### `make check` Failure Preventing Documentation Commit
+
+*   **Issue:** The `make check` command (run on 2025-06-10) failed due to multiple pre-existing unit test failures in `parser_test.go`. Specifically, failures were observed in `TestParseRequest_RequestNaming`, `TestParseRequest_SlashStyleComments`, and `TestParseRequest_ShortFormGET`.
+*   **Impact:** As per project guidelines (`.windsurf/rules/project_standards.md` and `.windsurf/rules/testing_fundamentals.md`), commits are not allowed if `make check` fails. Consequently, the updates made to `prds/jetbrains_compatibility/test_coverage_mapping.md` (which are locally complete and reflect the new parser tasks T22-T44) cannot be committed to the `feature/jetbrains-client-compatibility2` branch at this time.
+*   **Resolution (Deferred):** The pre-existing test failures in `parser_test.go` need to be addressed before the documentation updates can be committed. The documentation changes themselves are ready.
+*   **Lesson Learned:** Adherence to pre-commit checks (`make check`) is critical. Even if the current task's changes are unrelated to the failing tests, project quality gates prevent proceeding with commits. This highlights the importance of maintaining a green test suite.
+
+
 ## 2025-06-09
 
 ### Git Commit Failure due to Unescaped Single Quote
