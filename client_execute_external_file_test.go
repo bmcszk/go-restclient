@@ -10,6 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/transform"
 
 	rc "github.com/bmcszk/go-restclient"
 	"github.com/stretchr/testify/assert"
@@ -165,6 +169,108 @@ Content-Type: application/json
 	assert.Contains(t, bodyStr, `"userId": "{{userId}}"`) // Should remain as template
 	assert.Contains(t, bodyStr, `"name": "{{userName}}"`) // Should remain as template
 	assert.Contains(t, bodyStr, `"literal": "this should stay as-is"`)
+}
+
+// PRD-COMMENT: FR4.3 - Request Body: External File with Encoding (<@|encoding)
+// Corresponds to: Client's ability to process request bodies from external files with a specified character encoding using '<@|encoding filepath' (http_syntax.md "Request Body", "External File with Encoding (<@|encoding filepath)")
+
+// TODO: Add tests for variable substitution within external files (<@ syntax).
+
+func TestClientExecuteFileWithEncoding(t *testing.T) {
+	type encodingTestCase struct {
+		name             string
+		encodingName     string // e.g., "latin1", "cp1252"
+		contentToWrite   string // Raw string content to be encoded
+		expectedUTF8Body string // Expected body received by server (should be UTF-8)
+		encoder          transform.Transformer
+	}
+
+	testCases := []encodingTestCase{
+		{
+			name:             "Latin-1 encoded file",
+			encodingName:     "latin1",
+			contentToWrite:   "H\u00e4llo W\u00f6rld! \u00d1ice to meet you. ?", // Simulating content where € was replaced by ? as it's not in Latin-1.
+			expectedUTF8Body: "Hällo Wörld! Ñice to meet you. ?", // How charmap.ISO8859_1 handles €
+			encoder:          charmap.ISO8859_1.NewEncoder(),
+		},
+		{
+			name:             "CP1252 (Windows-1252) encoded file",
+			encodingName:     "cp1252",
+			contentToWrite:   "H\u00e4llo W\u00f6rld! \u00d1ice to meet you. \u20ac\u2122", // € and ™ are in CP1252
+			expectedUTF8Body: "Hällo Wörld! Ñice to meet you. €™",
+			encoder:          charmap.Windows1252.NewEncoder(),
+		},
+		{
+			name:             "ASCII encoded file (as subset of UTF-8)",
+			encodingName:     "ascii",
+			contentToWrite:   "Hello World! Nice to meet you.",
+			expectedUTF8Body: "Hello World! Nice to meet you.",
+			encoder:          nil, // Will be handled as UTF-8 by client
+		},
+		{
+			name:             "UTF-8 encoded file (explicit)",
+			encodingName:     "utf-8",
+			contentToWrite:   "Hällo Wörld! Ñice to meet you. €😊",
+			expectedUTF8Body: "Hällo Wörld! Ñice to meet you. €😊",
+			encoder:          nil, // Will be handled as UTF-8 by client
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tempDir, err := os.MkdirTemp("", "client_enc_test_*")
+			require.NoError(t, err, "Failed to create temp dir")
+			defer os.RemoveAll(tempDir)
+
+			// Create the encoded data file
+			encodedDataFilePath := filepath.Join(tempDir, "encoded_body.txt")
+			var fileBytes []byte
+			if tc.encoder != nil {
+				fileBytes, _, err = transform.Bytes(tc.encoder, []byte(tc.contentToWrite))
+				require.NoError(t, err, "Failed to encode contentToWrite")
+			} else {
+				fileBytes = []byte(tc.contentToWrite) // For UTF-8 or ASCII
+			}
+			require.NoError(t, os.WriteFile(encodedDataFilePath, fileBytes, 0644),
+				"Failed to write encoded data file")
+
+			// Setup mock server to check received body
+			bodyReceived := make(chan []byte, 1)
+			mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				defer r.Body.Close()
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Logf("Mock server failed to read body: %v", err)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				bodyReceived <- body
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("mock response"))
+			}))
+			defer mockServer.Close()
+
+			// Create the .http file
+			httpFilePath := filepath.Join(tempDir, "request.http")
+			httpFileContent := fmt.Sprintf("POST %s\nContent-Type: text/plain\n\n<@%s encoded_body.txt", mockServer.URL, tc.encodingName)
+			require.NoError(t, os.WriteFile(httpFilePath, []byte(httpFileContent), 0644),
+				"Failed to write .http file")
+
+			client, err := rc.NewClient()
+			require.NoError(t, err)
+			responses, err := client.ExecuteFile(context.Background(), httpFilePath)
+			require.NoError(t, err, "ExecuteFile failed")
+			require.Len(t, responses, 1, "Expected one response")
+			assert.Equal(t, http.StatusOK, responses[0].StatusCode, "Expected status OK")
+
+			select {
+			case received := <-bodyReceived:
+				assert.Equal(t, tc.expectedUTF8Body, string(received), "Mismatch in body received by server")
+			case <-time.After(2 * time.Second): // Timeout for receiving body
+				t.Fatal("Timeout waiting for mock server to receive body")
+			}
+		})
+	}
 }
 
 // PRD-COMMENT: FR4.3 - Request Body: External File with Encoding (<@|encoding)
