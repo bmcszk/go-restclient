@@ -124,7 +124,7 @@ func TestExecuteFile_RequestWithError(t *testing.T) {
 
 	resp1 := responses[0]
 	assert.Error(t, resp1.Error)
-	assert.Contains(t, resp1.Error.Error(), "http request failed")
+	assert.Contains(t, resp1.Error.Error(), "failed to execute HTTP request:")
 
 	resp2 := responses[1]
 	assert.NoError(t, resp2.Error)

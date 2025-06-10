@@ -16,7 +16,7 @@ type extractHrespDefinesTestCase struct {
 	expectError       bool
 }
 
-func getTestExtractHrespDefinesTestCases() []extractHrespDefinesTestCase {
+func getBasicDefineTestCases() []extractHrespDefinesTestCase {
 	return []extractHrespDefinesTestCase{
 		{
 			name: "no defines",
@@ -71,6 +71,11 @@ HTTP/1.1 200 OK`,
 			expectedRemaining: `HTTP/1.1 200 OK`,
 			expectError:       false,
 		},
+	}
+}
+
+func getMixedDefineTestCases() []extractHrespDefinesTestCase {
+	return []extractHrespDefinesTestCase{
 		{
 			name: "defines mixed with comments and blank lines",
 			hrespContent: `// This is a comment
@@ -86,10 +91,16 @@ Body content here.`,
 			},
 			expectedRemaining: `// This is a comment
 
+
 HTTP/1.1 200 OK
 Body content here.`,
 			expectError: false,
 		},
+	}
+}
+
+func getMalformedAndEdgeDefineTestCases() []extractHrespDefinesTestCase {
+	return []extractHrespDefinesTestCase{
 		{
 			name: "malformed define - no equals",
 			hrespContent: `@name
@@ -117,6 +128,14 @@ HTTP/1.1 200 OK`,
 			expectError:       false,
 		},
 	}
+}
+
+func getTestExtractHrespDefinesTestCases() []extractHrespDefinesTestCase {
+	var tests []extractHrespDefinesTestCase
+	tests = append(tests, getBasicDefineTestCases()...)
+	tests = append(tests, getMixedDefineTestCases()...)
+	tests = append(tests, getMalformedAndEdgeDefineTestCases()...)
+	return tests
 }
 
 func TestExtractHrespDefines(t *testing.T) {

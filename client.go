@@ -359,26 +359,39 @@ func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Respo
 	}
 
 	startTime := time.Now()
-	httpResp, err := c.httpClient.Do(httpReq)
+	var httpResp *http.Response
+	var doErr error // Use a new variable for errors from .Do()
+
+	if rcRequest.NoCookieJar {
+		// If NoCookieJar is true, use a client without a cookie jar for this request.
+		// Create a shallow copy of the original client to keep other settings (Transport, Timeout, etc.)
+		// but explicitly set Jar to nil.
+		tempClient := *c.httpClient // Shallow copy
+		tempClient.Jar = nil
+		httpResp, doErr = tempClient.Do(httpReq)
+	} else {
+		// Default behavior: use the client's configured httpClient (which might have a jar)
+		httpResp, doErr = c.httpClient.Do(httpReq)
+	}
 	duration := time.Since(startTime)
 	clientResponse.Duration = duration // Set duration regardless of http error
 
-	if err != nil {
-		clientResponse.Error = fmt.Errorf("http request failed: %w", err)
-		if httpResp == nil {
-			return clientResponse, nil // Early return if httpResp is nil, error is already set
+	// Handle HTTP client errors (e.g., network issues, DNS resolution failures) from the .Do() call
+	if doErr != nil {
+		clientResponse.Error = fmt.Errorf("failed to execute HTTP request: %w", doErr)
+		// No body to read if httpResp is nil, but capture details like status if httpResp is partially populated (e.g. timeout before body)
+		if httpResp != nil {
+			// Attempt to populate details even if there was an error during .Do()
+			// For example, a timeout might occur after headers are received but before body is fully read.
+			// _populateResponseDetails will handle a nil bodyBytes if readErr is also passed.
+			var bodyBytes []byte // Will be nil
+			// Pass doErr as readErr so _populateResponseDetails knows the body read failed or was incomplete.
+			c._populateResponseDetails(clientResponse, httpResp, bodyBytes, doErr)
+			if httpResp.Body != nil {
+				_ = httpResp.Body.Close() // Attempt to close body if it exists
+			}
 		}
-
-		// At this point, httpResp is non-nil. Attempt to process its body and populate details.
-		var bodyBytes []byte
-		var readErr error
-		if httpResp.Body != nil {
-			defer func() { _ = httpResp.Body.Close() }() // Defer close if body exists
-			bodyBytes, readErr = io.ReadAll(httpResp.Body)
-		}
-		// If httpResp.Body was nil, bodyBytes and readErr remain nil.
-		// _populateResponseDetails is expected to handle this gracefully.
-		c._populateResponseDetails(clientResponse, httpResp, bodyBytes, readErr)
+		slog.Error("HTTP request execution failed", "error", doErr, "url", httpReq.URL.String())
 		return clientResponse, nil // Return response with error and any populated details
 	}
 
