@@ -331,6 +331,142 @@ Content-Type: text/plain
 	assert.Equal(t, textContent, bodyStr)
 }
 
+// PRD-COMMENT: FR4.5 / FR4.6 - Request Body: External File with Variables and Encoding (<@encoding)
+// Corresponds to: Client's ability to process request bodies from external files with specified character encoding and variable substitution.
+// This test verifies that variables are substituted into an encoded external file, and the resulting content is correctly sent to the server.
+func TestExecuteFile_ExternalFileWithVariablesAndEncoding(t *testing.T) {
+	// Create a temporary directory for test files
+	tempDir := t.TempDir()
+
+	// Define content with variables
+	contentWithVars := "name={{name}}, city={{city}}, id={{id}}"
+	expectedSubstitutedUTF8 := "name=TestName, city=ProgrammaticCity, id=12345"
+
+	// Encode content to latin1
+	latin1Encoder := charmap.ISO8859_1.NewEncoder()
+	encodedBytes, _, err := transform.Bytes(latin1Encoder, []byte(contentWithVars))
+	require.NoError(t, err, "Failed to encode content to latin1")
+
+	varsFile := filepath.Join(tempDir, "vars_latin1.txt")
+	err = os.WriteFile(varsFile, encodedBytes, 0644)
+	require.NoError(t, err)
+
+	// Channel to receive the body read by the server
+	bodyReceived := make(chan []byte, 1)
+
+	// Setup mock server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "text/plain; charset=iso-8859-1", r.Header.Get("Content-Type"))
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		bodyReceived <- body // Send raw bytes for later decoding
+
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	}))
+	defer server.Close()
+
+	// Create a test HTTP file
+	httpContent := fmt.Sprintf(`@name = TestName
+@id = 12345
+
+### External File with Variable Substitution and Encoding
+POST %s/post
+Content-Type: text/plain; charset=iso-8859-1
+
+<@latin1 ./vars_latin1.txt`, server.URL)
+
+	httpFile := filepath.Join(tempDir, "test_vars_encoded.http")
+	err = os.WriteFile(httpFile, []byte(httpContent), 0644)
+	require.NoError(t, err)
+
+	// Create client with additional programmatic variables
+	client, err := rc.NewClient(rc.WithVars(map[string]interface{}{
+		"city": "ProgrammaticCity", // This should be used
+	}))
+	require.NoError(t, err)
+
+	// Execute the file
+	responses, err := client.ExecuteFile(context.Background(), httpFile)
+	require.NoError(t, err)
+	require.Len(t, responses, 1)
+
+	response := responses[0]
+	assert.NoError(t, response.Error)
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+
+	// Check that the client-side RawBody (which should be UTF-8 after substitution) is correct
+	assert.Equal(t, expectedSubstitutedUTF8, response.Request.RawBody, "Client RawBody mismatch")
+
+	// Check body received by server
+	select {
+	case receivedBytes := <-bodyReceived:
+		// Decode received bytes from latin1 to UTF-8
+		latin1Decoder := charmap.ISO8859_1.NewDecoder()
+		decodedBytes, _, decErr := transform.Bytes(latin1Decoder, receivedBytes)
+		require.NoError(t, decErr, "Failed to decode server received body from latin1")
+		assert.Equal(t, expectedSubstitutedUTF8, string(decodedBytes), "Server received body mismatch after decoding")
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timeout waiting for mock server to receive body")
+	}
+}
+
+// PRD-COMMENT: FR1.1 - File Type: .rest extension support
+// Corresponds to: Client's ability to parse and execute request files with the .rest extension, as an alternative to .http (http_syntax.md "File Structure", "File Extension").
+// This test verifies that a simple GET request defined in a .rest file is correctly executed.
+func TestExecuteFile_WithRestExtension(t *testing.T) {
+	// Create a temporary directory for test files
+	tempDir := t.TempDir()
+
+	// Channel to confirm server received the request
+	requestReceived := make(chan bool, 1)
+
+	// Setup mock server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		assert.Equal(t, "/get_test_rest_extension", r.URL.Path)
+		assert.Equal(t, "rest-extension-test-value", r.Header.Get("X-Test-Header-Rest"))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status": "ok from .rest"}`))
+		requestReceived <- true
+	}))
+	defer server.Close()
+
+	// Create a test .rest file
+	restContent := fmt.Sprintf(`### Test Request with .rest extension
+GET %s/get_test_rest_extension
+X-Test-Header-Rest: rest-extension-test-value
+`, server.URL)
+
+	restFile := filepath.Join(tempDir, "test_request.rest")
+	err := os.WriteFile(restFile, []byte(restContent), 0644)
+	require.NoError(t, err)
+
+	// Create client
+	client, err := rc.NewClient()
+	require.NoError(t, err)
+
+	// Execute the file
+	responses, err := client.ExecuteFile(context.Background(), restFile)
+	require.NoError(t, err)
+	require.Len(t, responses, 1)
+
+	response := responses[0]
+	assert.NoError(t, response.Error)
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+	assert.Contains(t, string(response.Body), `{"status": "ok from .rest"}`)
+
+	// Verify server received the request
+	select {
+	case <-requestReceived:
+		// All good
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timeout waiting for mock server to receive request")
+	}
+}
+
 // PRD-COMMENT: FR4.4 - Request Body: External File Not Found
 // Corresponds to: Client error handling when an external file referenced in a request body (e.g., via '<@ ./nonexistent.json') cannot be found (http_syntax.md "Request Body").
 // This test verifies that the client reports an appropriate error when attempting to process a request that references a non-existent external file.
