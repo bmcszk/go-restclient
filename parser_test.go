@@ -159,3 +159,96 @@ func TestParserExternalFileDirectives(t *testing.T) {
 		})
 	}
 }
+
+// PRD-COMMENT: FR1.3 - Request Naming
+// Corresponds to: Client's ability to parse request names specified via '### Name' (Syntax: docs/http_syntax.md#L218-L228)
+// and '# @name name' (Syntax: docs/http_syntax.md#L232-L246).
+// This test verifies various scenarios of request naming and ensures the correct name is assigned to the parsed request.
+func TestParseRequest_RequestNaming(t *testing.T) {
+	type requestNamingTestCase struct {
+		name            string
+		httpFileContent string
+		expectedNames   []string // Expected names for each request in the file
+	}
+
+	// Setup a mock server (needed for ExecuteFile)
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("mock response"))
+	}))
+	defer mockServer.Close()
+
+	testCases := []requestNamingTestCase{
+		{
+			name: "Simple ### Name",
+			httpFileContent: fmt.Sprintf("### Request Alpha\nGET %s/alpha", mockServer.URL),
+			expectedNames:   []string{"Request Alpha"},
+		},
+		{
+			name: "Simple # @name Name",
+			httpFileContent: fmt.Sprintf("# @name Request Beta\nGET %s/beta", mockServer.URL),
+			expectedNames:   []string{"Request Beta"},
+		},
+		{
+			name: "# @name with leading/trailing whitespace in directive",
+			httpFileContent: fmt.Sprintf("  #   @name   Request Gamma  \nGET %s/gamma", mockServer.URL),
+			expectedNames:   []string{"Request Gamma"},
+		},
+		{
+			name: "### Name with leading/trailing whitespace in name part",
+			httpFileContent: fmt.Sprintf("###    Request Delta   \nGET %s/delta", mockServer.URL),
+			expectedNames:   []string{"Request Delta"},
+		},
+		{
+			name: "Multiple requests with different naming styles",
+			httpFileContent: fmt.Sprintf("### First Request\nGET %s/first\n\n# @name Second Request\nGET %s/second\n\nGET %s/third\n### Fourth Request Named by Separator\nGET %s/fourth", mockServer.URL, mockServer.URL, mockServer.URL, mockServer.URL),
+			expectedNames:   []string{"First Request", "Second Request", "", "Fourth Request Named by Separator"},
+		},
+		{
+			name: "Request with both ### Name and # @name name (hash name directive takes precedence)",
+			httpFileContent: fmt.Sprintf("### Separator Name Epsilon\n# @name Directive Name Epsilon\nGET %s/epsilon", mockServer.URL),
+			expectedNames:   []string{"Directive Name Epsilon"}, // Parser prioritizes @name
+		},
+		{
+			name: "Request with # @name after ### Name (hash name directive takes precedence)",
+			httpFileContent: fmt.Sprintf("# @name Directive Name Zeta\n### Separator Name Zeta\nGET %s/zeta", mockServer.URL),
+			expectedNames:   []string{"Directive Name Zeta"}, // Parser prioritizes @name
+		},
+		{
+			name: "Request without explicit name",
+			httpFileContent: fmt.Sprintf("GET %s/no_name", mockServer.URL),
+			expectedNames:   []string{""},
+		},
+		{
+			name: "Empty # @name directive",
+			httpFileContent: fmt.Sprintf("# @name\nGET %s/empty_name_directive", mockServer.URL),
+			expectedNames:   []string{""},
+		},
+		{
+			name: "Empty ### Name separator",
+			httpFileContent: fmt.Sprintf("###\nGET %s/empty_name_separator", mockServer.URL),
+			expectedNames:   []string{""},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			httpFilePath := filepath.Join(tempDir, "test_naming.http")
+
+			err := os.WriteFile(httpFilePath, []byte(tc.httpFileContent), 0644)
+			require.NoError(t, err, "Failed to write .http file")
+
+			client := restclient.NewClient()
+			responses, err := client.ExecuteFile(httpFilePath)
+
+			require.NoError(t, err, "ExecuteFile failed for: %s", tc.name)
+			require.Len(t, responses, len(tc.expectedNames), "Number of responses does not match expected names for: %s", tc.name)
+
+			for i, resp := range responses {
+				require.NotNil(t, resp.Request, "Request object is nil for response %d in test: %s", i, tc.name)
+				assert.Equal(t, tc.expectedNames[i], resp.Request.Name, "Request name mismatch for request %d in test: %s", i, tc.name)
+			}
+		})
+	}
+}
