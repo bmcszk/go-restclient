@@ -4,6 +4,7 @@ package restclient_test
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -252,3 +253,135 @@ func TestParseRequest_RequestNaming(t *testing.T) {
 		})
 	}
 }
+
+// PRD-COMMENT: FR1.4 - Comments: // style
+// Corresponds to: Client's ability to correctly parse and ignore '//' style comments (Syntax: docs/http_syntax.md#L248-L255).
+// This test verifies that '//' comments are handled appropriately in various positions within a request file.
+func TestParseRequest_SlashStyleComments(t *testing.T) {
+	type slashCommentTestCase struct {
+		name                 string
+		httpFileContent      string
+		expectedRequestCount int
+		assertions           func(t *testing.T, responses []*restclient.Response, mockServerURL string)
+	}
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/comment_test_body" {
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err, "Failed to read request body in mock server")
+			expectedBody := "{\n  // This is part of the body\n  \"key\": \"value\"\n}"
+			assert.Equal(t, expectedBody, string(body), "Body with comment mismatch")
+		}
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write([]byte("mock response"))
+		require.NoError(t, err) // Added error check for Write
+	}))
+	defer mockServer.Close()
+
+	testCases := []slashCommentTestCase{
+		{
+			name: "forward slash comment on its own line",
+			httpFileContent: fmt.Sprintf("// This is a full line comment\nGET %s/test1", mockServer.URL),
+			expectedRequestCount: 1,
+			assertions: func(t *testing.T, responses []*restclient.Response, mockServerURL string) {
+				require.Len(t, responses, 1, "Expected 1 response")
+				require.NotNil(t, responses[0].Request, "Response request should not be nil")
+				assert.Equal(t, fmt.Sprintf("%s/test1", mockServerURL), responses[0].Request.URL)
+			},
+		},
+		{
+			name: "forward slash comment after a request line",
+			httpFileContent: fmt.Sprintf("GET %s/test2 // This comments the request line", mockServer.URL),
+			expectedRequestCount: 1,
+			assertions: func(t *testing.T, responses []*restclient.Response, mockServerURL string) {
+				require.Len(t, responses, 1, "Expected 1 response")
+				require.NotNil(t, responses[0].Request, "Response request should not be nil")
+				assert.Equal(t, fmt.Sprintf("%s/test2", mockServerURL), responses[0].Request.URL)
+			},
+		},
+		{
+			name: "forward slash comment after a header",
+			httpFileContent: fmt.Sprintf("GET %s/test3\nHeader-One: value1 // This comments the header", mockServer.URL),
+			expectedRequestCount: 1,
+			assertions: func(t *testing.T, responses []*restclient.Response, mockServerURL string) {
+				require.Len(t, responses, 1, "Expected 1 response")
+				require.NotNil(t, responses[0].Request, "Response request should not be nil")
+				assert.Equal(t, "value1", responses[0].Request.Headers.Get("Header-One"))
+			},
+		},
+		{
+			name: "forward slash comment within the request body (should be part of body)",
+			httpFileContent: fmt.Sprintf("POST %s/comment_test_body\nContent-Type: application/json\n\n{\n  // This is part of the body\n  \"key\": \"value\"\n}", mockServer.URL),
+			expectedRequestCount: 1,
+			assertions: func(t *testing.T, responses []*restclient.Response, mockServerURL string) {
+				require.Len(t, responses, 1, "Expected 1 response")
+				require.NotNil(t, responses[0].Request, "Response request should not be nil")
+				assert.Contains(t, responses[0].Request.RawBody, "// This is part of the body")
+			},
+		},
+		{
+			name: "forward slash comment before any request",
+			httpFileContent: fmt.Sprintf("// File level comment\n\nGET %s/test4", mockServer.URL),
+			expectedRequestCount: 1,
+			assertions: func(t *testing.T, responses []*restclient.Response, mockServerURL string) {
+				require.Len(t, responses, 1, "Expected 1 response")
+				require.NotNil(t, responses[0].Request, "Response request should not be nil")
+				assert.Equal(t, fmt.Sprintf("%s/test4", mockServerURL), responses[0].Request.URL)
+			},
+		},
+		{
+			name: "forward slash comment between requests",
+			httpFileContent: fmt.Sprintf("GET %s/test5a\n\n// Comment between requests\n\n###\nGET %s/test5b", mockServer.URL, mockServer.URL),
+			expectedRequestCount: 2,
+			assertions: func(t *testing.T, responses []*restclient.Response, mockServerURL string) {
+				require.Len(t, responses, 2, "Expected 2 responses")
+				require.NotNil(t, responses[0].Request, "Response 0 request should not be nil")
+				require.NotNil(t, responses[1].Request, "Response 1 request should not be nil")
+				assert.Equal(t, fmt.Sprintf("%s/test5a", mockServerURL), responses[0].Request.URL)
+				assert.Equal(t, fmt.Sprintf("%s/test5b", mockServerURL), responses[1].Request.URL)
+			},
+		},
+		{
+			name: "forward slash comment that looks like a directive",
+			httpFileContent: fmt.Sprintf("// @name ShouldBeIgnored\nGET %s/test6", mockServer.URL),
+			expectedRequestCount: 1,
+			assertions: func(t *testing.T, responses []*restclient.Response, mockServerURL string) {
+				require.Len(t, responses, 1, "Expected 1 response")
+				require.NotNil(t, responses[0].Request, "Response request should not be nil")
+				assert.Equal(t, "", responses[0].Request.Name, "Request name should be empty as // @name is a comment")
+				assert.Equal(t, fmt.Sprintf("%s/test6", mockServerURL), responses[0].Request.URL)
+			},
+		},
+		{
+			name: "Multiple forward slash comments",
+			httpFileContent: fmt.Sprintf("// Comment 1\nGET %s/test7\n// Comment 2\nHeader-Two: value2 // Comment 3", mockServer.URL),
+			expectedRequestCount: 1,
+			assertions: func(t *testing.T, responses []*restclient.Response, mockServerURL string) {
+				require.Len(t, responses, 1, "Expected 1 response")
+				require.NotNil(t, responses[0].Request, "Response request should not be nil")
+				assert.Equal(t, "value2", responses[0].Request.Headers.Get("Header-Two"))
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			httpFilePath := filepath.Join(tempDir, "test_comments.http")
+
+			err := os.WriteFile(httpFilePath, []byte(tc.httpFileContent), 0644)
+			require.NoError(t, err, "Failed to write .http file for tc: %s", tc.name)
+
+			client := restclient.NewClient()
+			responses, err := client.ExecuteFile(httpFilePath)
+
+			require.NoError(t, err, "ExecuteFile failed for: %s", tc.name)
+			require.Len(t, responses, tc.expectedRequestCount, "Number of responses mismatch for: %s", tc.name)
+
+			if tc.assertions != nil {
+				tc.assertions(t, responses, mockServer.URL)
+			}
+		})
+	}
+}
+
