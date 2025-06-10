@@ -47,6 +47,13 @@ This document maps test cases from the `go-restclient` project to the relevant s
 *   `parser_test.go/TestParseRequestFile_Imports/SCENARIO-IMPORT-004: Circular import - ignored -> Not Applicable (verifies absence of @import feature)`
 *   `parser_test.go/TestParseRequestFile_Imports/SCENARIO-IMPORT-005: Import not found - ignored -> Not Applicable (verifies absence of @import feature)`
 
+### TestParserExternalFileDirectives
+
+*   `parser_test.go/TestParserExternalFileDirectives/parse_external_file_with_encoding_directive -> 407-416`
+*   `parser_test.go/TestParserExternalFileDirectives/parse_external_file_with_invalid_encoding_directive -> 407-416`
+*   `parser_test.go/TestParserExternalFileDirectives/parse_external_file_without_encoding_directive -> 383-394`
+*   `parser_test.go/TestParserExternalFileDirectives/parse_external_file_with_variables_and_encoding -> 396-405, 407-416`
+
 
 ## client_cookies_redirects_test.go
 
@@ -129,6 +136,30 @@ This document maps test cases from the `go-restclient` project to the relevant s
 *   `client_execute_edgecases_test.go/TestExecuteFile_IgnoreEmptyBlocks_Client/SCENARIO-LIB-028-005: Only comments, then separator, then valid request -> 172-198, 200-210, 243-256`
 *   `client_execute_edgecases_test.go/TestExecuteFile_IgnoreEmptyBlocks_Client/SCENARIO-LIB-028-006: Valid request, separator with comments, then another valid request -> 172-198, 200-210, 243-256`
 *   `client_execute_edgecases_test.go/TestExecuteFile_IgnoreEmptyBlocks_Client/File with only variable definitions - ExecuteFile -> 258-274 (verifies error if only vars, no requests)`
+
+
+## client_execute_external_file_test.go
+
+### TestClientExecuteFileWithEncoding
+
+*   `client_execute_external_file_test.go/TestClientExecuteFileWithEncoding/Latin-1_encoded_file -> 407-416`
+*   `client_execute_external_file_test.go/TestClientExecuteFileWithEncoding/CP1252_(Windows-1252)_encoded_file -> 407-416`
+*   `client_execute_external_file_test.go/TestClientExecuteFileWithEncoding/ASCII_encoded_file -> 407-416`
+*   `client_execute_external_file_test.go/TestClientExecuteFileWithEncoding/UTF-8_encoded_file_(no_BOM) -> 407-416`
+*   `client_execute_external_file_test.go/TestClientExecuteFileWithEncoding/UTF-8_encoded_file_with_BOM -> 407-416`
+*   `client_execute_external_file_test.go/TestClientExecuteFileWithEncoding/Unsupported_encoding_specified -> 407-416`
+*   `client_execute_external_file_test.go/TestClientExecuteFileWithEncoding/Encoding_specified_but_file_not_found -> 407-416`
+*   `client_execute_external_file_test.go/TestClientExecuteFileWithEncoding/No_encoding_specified_defaults_to_UTF-8 -> 383-394`
+*   `client_execute_external_file_test.go/TestClientExecuteFileWithEncoding/External_file_with_variables_and_encoding -> 396-405, 407-416`
+
+### TestExecuteFile_ExternalFileWithEncoding
+
+*   `client_execute_external_file_test.go/TestExecuteFile_ExternalFileWithEncoding/Valid_Latin-1_encoded_file -> 407-416`
+*   `client_execute_external_file_test.go/TestExecuteFile_ExternalFileWithEncoding/Valid_CP1252_encoded_file -> 407-416`
+*   `client_execute_external_file_test.go/TestExecuteFile_ExternalFileWithEncoding/Valid_ASCII_encoded_file -> 407-416`
+*   `client_execute_external_file_test.go/TestExecuteFile_ExternalFileWithEncoding/Valid_UTF-8_encoded_file -> 407-416`
+*   `client_execute_external_file_test.go/TestExecuteFile_ExternalFileWithEncoding/Unsupported_encoding -> 407-416`
+*   `client_execute_external_file_test.go/TestExecuteFile_ExternalFileWithEncoding/File_not_found -> 407-416`
 
 
 ## client_execute_inplace_vars_test.go

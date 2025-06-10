@@ -43,7 +43,7 @@ This document maps requirements from `http_syntax.md` to existing tests in the c
 | FR4.3 | Support `multipart/form-data` bodies, including file uploads (Syntax: `docs/http_syntax.md#L440-L469`) | `parser_test.go/TestParseRequest_MultipartFormData`, `parser_test.go/TestParseRequest_MultipartFormDataWithFile`, `client_execute_test.go/TestExecuteFile_MultipartFormData`, `client_execute_test.go/TestExecuteFile_MultipartFileUpload` | `parser_test.go`, `client_execute_test.go` | Complete | Multipart form data and file uploads are tested. |
 | FR4.4 | Support File as Request Body (`< path/to/file`) for any content type (JSON, XML, plain text, binary) (Syntax: `docs/http_syntax.md#L383-L394`) | `parser_test.go/TestParseRequestFile_FileBody`, `client_execute_test.go/TestExecuteFile_FileBodyJSON`, `client_execute_test.go/TestExecuteFile_FileBodyText` | `parser_test.go`, `client_execute_test.go` | Complete | Covers reading body from external files for various content types. `docs/http_syntax.md` notes this works for XML and binary too. |
 | FR4.5 | Support Variable Substitution in External File (`<@ path/to/file`) (VS Code specific) (Syntax: `docs/http_syntax.md#L396-L405`) | `parser_test.go/TestParseRequestFile_FileBodyWithVariables` | `parser_test.go` | Complete | Tests parsing of `<@ file` syntax for variable substitution in external files. Execution with actual substitution may need client-side tests. |
-| FR4.6 | Support Specifying Encoding for External File (`<@encoding path/to/file`) (VS Code specific) (Syntax: `docs/http_syntax.md#L407-L416`) | Not found | - | Missing | No specific tests found for parsing or handling `<@encoding file` syntax. |
+| FR4.6 | Support Specifying Encoding for External File (`<@encoding path/to/file`) (VS Code specific) (Syntax: `docs/http_syntax.md#L407-L416`) | `parser_test.go/TestParserExternalFileDirectives`, `client_execute_external_file_test.go/TestClientExecuteFileWithEncoding`, `client_execute_external_file_test.go/TestExecuteFile_ExternalFileWithEncoding` | `parser_test.go`, `client_execute_external_file_test.go` | Complete | Covers parsing of the directive and client execution with various encodings (Latin-1, CP1252, ASCII, UTF-8). |
 | FR4.7 | Support Form Data on Multiple Lines (`application/x-www-form-urlencoded`) (VS Code specific) (Syntax: `docs/http_syntax.md#L427-L438`) | `parser_test.go/TestParseRequest_BodyContent` (subtest: Form urlencoded body multiline) | `parser_test.go` | Complete | Multi-line form data parsing is tested. |
 
 ## FR5: Authentication
@@ -97,10 +97,7 @@ This document maps requirements from `http_syntax.md` to existing tests in the c
 
 Based on the detailed mapping of functional requirements (FR1-FR10) against `docs/http_syntax.md` and existing tests, the following areas have been identified:
 
-1.  **Missing Test Coverage:**
-    *   **FR4.5.3:** VS Code specific: Specify encoding for external file (`<@encoding path/to/file`) (Syntax: `docs/http_syntax.md#L457-L460`). Currently, no tests cover this specific directive.
-
-2.  **Areas with Partial Coverage or Requiring Further Review:**
+1.  **Areas with Partial Coverage or Requiring Further Review:**
     *   **FR7.1:** Support defining Expected Responses (e.g., `.hresp` format) (Syntax: `docs/http_syntax.md#L529-L542`). While parsing of expected response components is tested, the note "Full validation logic might be split" suggests that end-to-end validation across all scenarios or deeper validation logic might warrant further review or enhanced testing beyond basic parsing.
 
 All other features detailed in `docs/http_syntax.md` (and covered in FR1-FR10) appear to have corresponding parser tests. The primary focus of this mapping has been on ensuring that the parser can correctly interpret the documented syntax. End-to-end client execution tests are a separate concern.
