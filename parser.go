@@ -299,17 +299,27 @@ func processFileLine(parserState *requestParserState, line string) error {
 }
 
 // ensureCurrentRequest creates a new request if one doesn't exist yet
-// isRequestLine determines if a line is an HTTP request line (e.g., GET https://example.com)
+// isRequestLine determines if a line is an HTTP request line (e.g., GET https://example.com or just https://example.com for a GET).
 func (p *requestParserState) isRequestLine(trimmedLine string) bool {
 	parts := strings.Fields(trimmedLine)
-	if len(parts) < 2 { // Need at least method + URL
+	if len(parts) == 0 {
 		return false
 	}
 
+	if len(parts) == 1 {
+		// Potential short-form GET if it looks like a URL.
+		// This check helps distinguish it from other single-word lines that are not URLs.
+		// More robust parsing of the URL itself happens later.
+		lineIsURL := strings.HasPrefix(parts[0], "http://") || strings.HasPrefix(parts[0], "https://")
+		if lineIsURL {
+			slog.Debug("isRequestLine: Single token line identified as potential short-form GET URL", "token", parts[0], "line", p.lineNumber)
+		}
+		return lineIsURL
+	}
+
+	// len(parts) >= 2, check if the first part is a valid HTTP method.
 	method := parts[0]
-	// Check if the method is a valid HTTP token (RFC 7230, Section 3.2.6)
-	// and the second part (URL) exists.
-	// The actual parsing and validation of the URL happens in handleRequestLine.
+	// The actual parsing and validation of the URL happens in handleRequestLine/parseRequestLineDetails.
 	return isValidHTTPToken(method)
 }
 
@@ -682,25 +692,40 @@ func (p *requestParserState) _setRawURLFromLine(requestLine, contextHint string)
 }
 
 // handleNonMethodRequestLine processes a request line where the first token is not a recognized HTTP method.
-// It updates the current request's URL based on whether a method was already set.
+// It updates the current request's URL and potentially method (for short-form GETs).
 func (p *requestParserState) handleNonMethodRequestLine(requestLine string, firstToken string) {
 	if p.currentRequest.Method == "" {
-		slog.Debug("First token not a method, and no method on currentRequest. Treating entire line as URL.",
-			"token", firstToken, "requestLine", requestLine, "line", p.lineNumber, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
-		p._setRawURLFromLine(requestLine, "entire line as URL, no method previously set")
+		// No method set on currentRequest yet.
+		// Check if the firstToken (which is the whole requestLine if it's a single token line)
+		// looks like a URL, implying a short-form GET.
+		if strings.HasPrefix(firstToken, "http://") || strings.HasPrefix(firstToken, "https://") {
+			slog.Debug("Interpreting as short-form GET request.",
+				"urlToken", firstToken, "line", p.lineNumber, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
+			p.currentRequest.Method = "GET"
+			p.currentRequest.HTTPVersion = "HTTP/1.1" // Default for short-form
+			p._setRawURLFromLine(firstToken, "short-form GET URL")
+		} else {
+			// First token is not a method, and not a URL. It's an orphaned line or unexpected content.
+			slog.Warn("First token not a method or URL, and no method on currentRequest. Treating as orphaned line.",
+				"token", firstToken, "requestLine", requestLine, "line", p.lineNumber, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
+			// Potentially set as body or log as error, for now, it's an orphaned line that might be ignored
+			// or become part of a body if subsequent lines suggest that.
+			// If it was truly intended as a URL but didn't start with http(s), it won't be parsed as such here.
+		}
 		return
 	}
 
 	// A method is already set on currentRequest.
 	if p.currentRequest.RawURLString == "" {
-		slog.Debug("Method already set, current line not a method, RawURLString is empty. Treating as URL.",
+		// Method is set, but URL is not. This line could be the URL part.
+		slog.Debug("Method already set, current line not a method, RawURLString is empty. Treating as URL part.",
 			"token", firstToken, "requestLine", requestLine, "currentMethod", p.currentRequest.Method, "line", p.lineNumber, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
 		p._setRawURLFromLine(requestLine, "URL part, method previously set")
 		return
 	}
 
-	// Method and RawURLString already set, but current line starts with non-method.
-	slog.Warn("Method and RawURLString already set, but current line starts with non-method. Ignoring.",
+	// Method and RawURLString already set, but current line starts with non-method. This is unexpected.
+	slog.Warn("Method and RawURLString already set, but current line starts with non-method. Ignoring line.",
 		"token", firstToken, "requestLine", requestLine, "currentMethod", p.currentRequest.Method, "currentRawURL", p.currentRequest.RawURLString, "line", p.lineNumber, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
 }
 

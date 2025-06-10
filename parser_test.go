@@ -385,3 +385,162 @@ func TestParseRequest_SlashStyleComments(t *testing.T) {
 	}
 }
 
+// PRD-COMMENT: FR1.6 - Short-form GET requests
+// Corresponds to: Client's ability to parse short-form GET requests (URL only) (Syntax: docs/http_syntax.md#L149-L155).
+// This test verifies that lines containing only a URL are correctly interpreted as GET requests.
+func TestParseRequest_ShortFormGET(t *testing.T) {
+	type shortFormGetTestCase struct {
+		name                 string
+		httpFileContent      string
+		expectedRequestCount int
+		assertions           func(t *testing.T, responses []*restclient.Response, mockServerURL string)
+	}
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write([]byte("mock response for " + r.URL.Path))
+		require.NoError(t, err)
+	}))
+	defer mockServer.Close()
+
+	testCases := []shortFormGetTestCase{
+		{
+			name:                 "simple short-form GET",
+			httpFileContent:      fmt.Sprintf("%s/simple", mockServer.URL),
+			expectedRequestCount: 1,
+			assertions: func(t *testing.T, responses []*restclient.Response, mockServerURL string) {
+				require.Len(t, responses, 1)
+				assert.Equal(t, "GET", responses[0].Request.Method)
+				assert.Equal(t, fmt.Sprintf("%s/simple", mockServerURL), responses[0].Request.URL.String())
+				assert.Equal(t, "HTTP/1.1", responses[0].Request.HTTPVersion)
+			},
+		},
+		{
+			name:                 "short-form GET with query parameters",
+			httpFileContent:      fmt.Sprintf("%s/query?param1=value1&param2=value2", mockServer.URL),
+			expectedRequestCount: 1,
+			assertions: func(t *testing.T, responses []*restclient.Response, mockServerURL string) {
+				require.Len(t, responses, 1)
+				assert.Equal(t, "GET", responses[0].Request.Method)
+				assert.Equal(t, fmt.Sprintf("%s/query?param1=value1&param2=value2", mockServerURL), responses[0].Request.URL.String())
+				assert.Equal(t, "HTTP/1.1", responses[0].Request.HTTPVersion)
+			},
+		},
+		{
+			name:                 "short-form GET with fragment",
+			httpFileContent:      fmt.Sprintf("%s/fragment#section1", mockServer.URL),
+			expectedRequestCount: 1,
+			assertions: func(t *testing.T, responses []*restclient.Response, mockServerURL string) {
+				require.Len(t, responses, 1)
+				assert.Equal(t, "GET", responses[0].Request.Method)
+				assert.Equal(t, fmt.Sprintf("%s/fragment#section1", mockServerURL), responses[0].Request.URL.String())
+				assert.Equal(t, "HTTP/1.1", responses[0].Request.HTTPVersion)
+			},
+		},
+		{
+			name: "short-form GET followed by full request",
+			httpFileContent: fmt.Sprintf("%s/short1\n###\nPOST %s/full1", mockServer.URL, mockServer.URL),
+			expectedRequestCount: 2,
+			assertions: func(t *testing.T, responses []*restclient.Response, mockServerURL string) {
+				require.Len(t, responses, 2)
+				assert.Equal(t, "GET", responses[0].Request.Method)
+				assert.Equal(t, fmt.Sprintf("%s/short1", mockServerURL), responses[0].Request.URL.String())
+				assert.Equal(t, "HTTP/1.1", responses[0].Request.HTTPVersion)
+				assert.Equal(t, "POST", responses[1].Request.Method)
+				assert.Equal(t, fmt.Sprintf("%s/full1", mockServerURL), responses[1].Request.URL.String())
+			},
+		},
+		{
+			name: "full request followed by short-form GET",
+			httpFileContent: fmt.Sprintf("PUT %s/full2\n###\n%s/short2", mockServer.URL, mockServer.URL),
+			expectedRequestCount: 2,
+			assertions: func(t *testing.T, responses []*restclient.Response, mockServerURL string) {
+				require.Len(t, responses, 2)
+				assert.Equal(t, "PUT", responses[0].Request.Method)
+				assert.Equal(t, fmt.Sprintf("%s/full2", mockServerURL), responses[0].Request.URL.String())
+				assert.Equal(t, "GET", responses[1].Request.Method)
+				assert.Equal(t, fmt.Sprintf("%s/short2", mockServerURL), responses[1].Request.URL.String())
+				assert.Equal(t, "HTTP/1.1", responses[1].Request.HTTPVersion)
+			},
+		},
+		{
+			name: "multiple short-form GETs",
+			httpFileContent: fmt.Sprintf("%s/multi1\n###\n%s/multi2", mockServer.URL, mockServer.URL),
+			expectedRequestCount: 2,
+			assertions: func(t *testing.T, responses []*restclient.Response, mockServerURL string) {
+				require.Len(t, responses, 2)
+				assert.Equal(t, "GET", responses[0].Request.Method)
+				assert.Equal(t, fmt.Sprintf("%s/multi1", mockServerURL), responses[0].Request.URL.String())
+				assert.Equal(t, "HTTP/1.1", responses[0].Request.HTTPVersion)
+				assert.Equal(t, "GET", responses[1].Request.Method)
+				assert.Equal(t, fmt.Sprintf("%s/multi2", mockServerURL), responses[1].Request.URL.String())
+				assert.Equal(t, "HTTP/1.1", responses[1].Request.HTTPVersion)
+			},
+		},
+		{
+			name:                 "line that is not a URL (should be ignored or treated as body if context allows)",
+			httpFileContent:      "JustSomeText",
+			expectedRequestCount: 0, // Expecting no valid requests to be parsed from this
+			assertions:           nil, // No specific assertions, just count
+		},
+		{
+			name:                 "URL without scheme (should not be short-form GET)",
+			httpFileContent:      "example.com/path",
+			expectedRequestCount: 0, // Not a valid short-form GET
+			assertions:           nil,
+		},
+		{
+			name: "short-form GET with preceding comment",
+			httpFileContent: fmt.Sprintf("# This is a comment\n%s/commented", mockServer.URL),
+			expectedRequestCount: 1,
+			assertions: func(t *testing.T, responses []*restclient.Response, mockServerURL string) {
+				require.Len(t, responses, 1)
+				assert.Equal(t, "GET", responses[0].Request.Method)
+				assert.Equal(t, fmt.Sprintf("%s/commented", mockServerURL), responses[0].Request.URL.String())
+			},
+		},
+		{
+			name: "short-form GET with trailing comment",
+			httpFileContent: fmt.Sprintf("%s/trailing # GET request", mockServer.URL),
+			expectedRequestCount: 1,
+			assertions: func(t *testing.T, responses []*restclient.Response, mockServerURL string) {
+				require.Len(t, responses, 1)
+				assert.Equal(t, "GET", responses[0].Request.Method)
+				assert.Equal(t, fmt.Sprintf("%s/trailing", mockServerURL), responses[0].Request.URL.String()) // Comment should be stripped by Fields
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			httpFilePath := filepath.Join(tempDir, "test_short_form_get.http")
+
+			err := os.WriteFile(httpFilePath, []byte(tc.httpFileContent), 0644)
+			require.NoError(t, err, "Failed to write .http file for tc: %s", tc.name)
+
+			client := restclient.NewClient()
+			responses, err := client.ExecuteFile(httpFilePath)
+
+			// For cases expected to parse 0 requests, ExecuteFile might return an error if no requests are found.
+			// Or it might return an empty slice of responses with no error. We handle both.
+			if tc.expectedRequestCount == 0 {
+				if err != nil {
+					// If an error is returned, check if it's the specific 'no requests found' error or similar.
+					// For now, we accept any error as indication of no valid requests if 0 are expected.
+					slog.Debug("ExecuteFile returned error as expected for zero request count case", "test_case", tc.name, "error", err)
+					assert.Empty(t, responses, "Responses should be empty when an error occurs for zero expected requests")
+				} else {
+					assert.Len(t, responses, 0, "Expected 0 responses, got %d for tc: %s", len(responses), tc.name)
+				}
+			} else {
+				require.NoError(t, err, "ExecuteFile failed for: %s", tc.name)
+				require.Len(t, responses, tc.expectedRequestCount, "Number of responses mismatch for: %s", tc.name)
+			}
+
+			if tc.assertions != nil {
+				tc.assertions(t, responses, mockServer.URL)
+			}
+		})
+	}
+}
