@@ -30,9 +30,15 @@ linters:
       lines: 100
       statements: 60
     revive:
+      enable-all-rules: false
       rules:
+      - name: add-constant
+        disabled: true
       - name: var-naming
         disabled: true
+      - name: line-length-limit
+        disabled: true
+        arguments: [120]
       - name: file-length-limit
         severity: warning
         disabled: false
