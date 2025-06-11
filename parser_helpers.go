@@ -50,8 +50,20 @@ func allValidHTTPTokenChars(s string) bool {
 
 // isValidHTTPTokenChar checks if a rune is a valid HTTP token character
 func isValidHTTPTokenChar(r rune) bool {
-	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') ||
-		r == '!' || r == '#' || r == '$' || r == '%' || r == '&' || r == '\'' ||
-		r == '*' || r == '+' || r == '-' || r == '.' || r == '^' || r == '_' ||
-		r == '`' || r == '|' || r == '~'
+	return isAlphaNumeric(r) || isSpecialHTTPTokenChar(r)
+}
+
+// isAlphaNumeric checks if character is alphanumeric
+func isAlphaNumeric(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
+}
+
+// isSpecialHTTPTokenChar checks if character is a special HTTP token character
+func isSpecialHTTPTokenChar(r rune) bool {
+	switch r {
+	case '!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~':
+		return true
+	default:
+		return false
+	}
 }
