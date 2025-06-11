@@ -30,25 +30,8 @@ func extractHrespDefines(hrespContent string) (map[string]string, string, error)
 			continue
 		}
 
-		// Line starts with "@", try to parse as a define
-		parts := strings.SplitN(trimmedLine[1:], "=", 2)
-		if len(parts) != 2 {
-			// Malformed define (e.g., "@foo" without "="), or just an "@" symbol.
-			// Treat as a regular line if it should be kept, or skip if @-lines not part of content.
-			// Current logic implies @-prefixed lines that are not valid defines are simply dropped.
-			continue
-		}
-
-		varName := strings.TrimSpace(parts[0])
-		varValue := strings.TrimSpace(parts[1])
-
-		if varName == "" {
-			// Variable name cannot be empty.
-			continue
-		}
-
-		defines[varName] = varValue
-		// Valid @define lines are not added to processedLines
+		// Process @define line
+		processDefineLineToMaps(trimmedLine, defines)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -56,6 +39,27 @@ func extractHrespDefines(hrespContent string) (map[string]string, string, error)
 	}
 
 	return defines, strings.Join(processedLines, "\n"), nil
+}
+
+// processDefineLineToMaps processes a @define line and adds it to the defines map
+func processDefineLineToMaps(trimmedLine string, defines map[string]string) {
+	// Line starts with "@", try to parse as a define
+	parts := strings.SplitN(trimmedLine[1:], "=", 2)
+	if len(parts) != 2 {
+		// Malformed define (e.g., "@foo" without "="), or just an "@" symbol.
+		// Current logic implies @-prefixed lines that are not valid defines are simply dropped.
+		return
+	}
+
+	varName := strings.TrimSpace(parts[0])
+	varValue := strings.TrimSpace(parts[1])
+
+	if varName == "" {
+		// Variable name cannot be empty.
+		return
+	}
+
+	defines[varName] = varValue
 }
 
 // resolveAndSubstitute performs variable substitution in a given string content using multiple sources.

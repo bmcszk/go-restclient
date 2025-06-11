@@ -137,19 +137,30 @@ func resolveVariablesInText(
 			// These are stored with an '@' prefix in the map, so we must prepend it for lookup.
 			fileScopedVarNameToTry := "@" + varName
 			if val, ok := fileScopedVars[fileScopedVarNameToTry]; ok {
-				slog.Debug("resolveVariablesInText: Found in fileScopedVars", "varNameLookup", fileScopedVarNameToTry, "value", val)
+				slog.Debug(
+				"resolveVariablesInText: Found in fileScopedVars",
+				"varNameLookup", fileScopedVarNameToTry, "value", val)
 				// Check if the resolved file-scoped variable's value is itself a dynamic system variable placeholder
 				if isDynamicSystemVariablePlaceholder(val, requestScopedSystemVars) {
-					slog.Debug("resolveVariablesInText: File-scoped var value is a dynamic system variable placeholder. Evaluating and caching.", "varNameLookup", fileScopedVarNameToTry, "placeholderValue", val)
+					slog.Debug(
+					"resolveVariablesInText: File-scoped var value is a dynamic system "+
+						"variable placeholder. Evaluating and caching.",
+					"varNameLookup", fileScopedVarNameToTry, "placeholderValue", val)
 					// Pass clientProgrammaticVars and dotEnvVars to substituteDynamicSystemVariables
 					evaluatedVal := substituteDynamicSystemVariables(val, dotEnvVars, clientProgrammaticVars)
 					fileScopedVars[fileScopedVarNameToTry] = evaluatedVal // Cache the evaluated value
-					slog.Debug("resolveVariablesInText: Cached evaluated dynamic system variable from file-scoped var", "varNameLookup", fileScopedVarNameToTry, "evaluatedValue", evaluatedVal)
+					slog.Debug(
+					"resolveVariablesInText: Cached evaluated dynamic system variable "+
+						"from file-scoped var",
+					"varNameLookup", fileScopedVarNameToTry, "evaluatedValue", evaluatedVal)
 					return evaluatedVal
 				}
 				return val // Return the original value if not a dynamic placeholder needing evaluation
 			} else {
-				slog.Debug("resolveVariablesInText: Not found in fileScopedVars", "varNameLookup", fileScopedVarNameToTry, "originalVarNameFromPlaceholder", varName)
+				slog.Debug(
+					"resolveVariablesInText: Not found in fileScopedVars",
+					"varNameLookup", fileScopedVarNameToTry,
+					"originalVarNameFromPlaceholder", varName)
 			}
 
 			// The block for fileScopedVars lookup (originally here as step 2) has been moved up
@@ -260,7 +271,8 @@ func isDynamicSystemVariablePlaceholder(value string, requestScopedSystemVars ma
 
 	dynamicRegexes := []*regexp.Regexp{
 		reRandomInt, reRandomDotInteger, reRandomFloat, reRandomDotFloat,
-		reRandomHex, reRandomDotHexadecimal, reRandomAlphaNumeric, reRandomDotAlphabetic,
+		reRandomHex, reRandomDotHexadecimal, reRandomAlphaNumeric,
+		reRandomDotAlphabetic,
 		reRandomDotAlphanumeric, reRandomString, reRandomPassword,
 		reDotEnv, reProcessEnv, reDateTime, reAadToken,
 	}
@@ -594,7 +606,9 @@ func substituteDynamicSystemVariables(text string, activeDotEnvVars map[string]s
 			}
 			return "" // Variable not found in .env, return empty string
 		}
-		slog.Warn("Failed to parse URL-encoded $dotenv, returning original match", "match", match, "parts_len", len(parts))
+		slog.Warn(
+			"Failed to parse URL-encoded $dotenv, returning original match",
+			"match", match, "parts_len", len(parts))
 		return match
 	})
 
@@ -625,7 +639,9 @@ func substituteDynamicSystemVariables(text string, activeDotEnvVars map[string]s
 			}
 			return match // Variable not found, return original placeholder
 		}
-		slog.Warn("Failed to parse URL-encoded $processEnv, returning original match", "match", match, "parts_len", len(parts))
+		slog.Warn(
+			"Failed to parse URL-encoded $processEnv, returning original match",
+			"match", match, "parts_len", len(parts))
 		return match
 	})
 
@@ -636,24 +652,34 @@ func substituteDynamicSystemVariables(text string, activeDotEnvVars map[string]s
 // substituteRandomVariables handles the substitution of $random.* variables.
 func substituteRandomVariables(text string, programmaticVars map[string]any) string {
 	// Integer types
-	text = reRandomInt.ReplaceAllStringFunc(text, _substituteRandomIntFunc(reRandomInt, defaultRandomMinInt, defaultRandomMaxInt))
-	text = reRandomDotInteger.ReplaceAllStringFunc(text, _substituteRandomIntFunc(reRandomDotInteger, defaultRandomMinInt, defaultRandomMaxInt))
+	text = reRandomInt.ReplaceAllStringFunc(text,
+		_substituteRandomIntFunc(reRandomInt, defaultRandomMinInt, defaultRandomMaxInt))
+	text = reRandomDotInteger.ReplaceAllStringFunc(text,
+		_substituteRandomIntFunc(reRandomDotInteger, defaultRandomMinInt, defaultRandomMaxInt))
 
 	// Float types
-	text = reRandomFloat.ReplaceAllStringFunc(text, _substituteRandomFloatFunc(reRandomFloat, defaultRandomMinFloat, defaultRandomMaxFloat))
-	text = reRandomDotFloat.ReplaceAllStringFunc(text, _substituteRandomFloatFunc(reRandomDotFloat, defaultRandomMinFloat, defaultRandomMaxFloat))
+	text = reRandomFloat.ReplaceAllStringFunc(text,
+		_substituteRandomFloatFunc(reRandomFloat, defaultRandomMinFloat, defaultRandomMaxFloat))
+	text = reRandomDotFloat.ReplaceAllStringFunc(text,
+		_substituteRandomFloatFunc(reRandomDotFloat, defaultRandomMinFloat, defaultRandomMaxFloat))
 
 	// Boolean
 	text = strings.ReplaceAll(text, "{{$randomBoolean}}", strconv.FormatBool(rand.Intn(2) == 0))
 
 	// Hexadecimal
 	text = reRandomHex.ReplaceAllStringFunc(text, _substituteRandomHexHelper(reRandomHex, defaultRandomHexLength))
-	text = reRandomDotHexadecimal.ReplaceAllStringFunc(text, _substituteRandomHexHelper(reRandomDotHexadecimal, defaultRandomHexLength))
+	text = reRandomDotHexadecimal.ReplaceAllStringFunc(text,
+		_substituteRandomHexHelper(reRandomDotHexadecimal, defaultRandomHexLength))
 
 	// Alphabetic / Alphanumeric
-	text = reRandomDotAlphabetic.ReplaceAllStringFunc(text, _substituteRandomLengthCharsetFunc(reRandomDotAlphabetic, charsetAlphabetic))
-	text = reRandomAlphaNumeric.ReplaceAllStringFunc(text, _substituteRandomLengthCharsetFunc(reRandomAlphaNumeric, charsetAlphaNumericWithExtra)) // Uses underscore
-	text = reRandomDotAlphanumeric.ReplaceAllStringFunc(text, _substituteRandomLengthCharsetFunc(reRandomDotAlphanumeric, charsetAlphaNumeric))    // No underscore
+	text = reRandomDotAlphabetic.ReplaceAllStringFunc(text,
+		_substituteRandomLengthCharsetFunc(reRandomDotAlphabetic, charsetAlphabetic))
+	// Uses underscore
+	text = reRandomAlphaNumeric.ReplaceAllStringFunc(text,
+		_substituteRandomLengthCharsetFunc(reRandomAlphaNumeric, charsetAlphaNumericWithExtra))
+	// No underscore
+	text = reRandomDotAlphanumeric.ReplaceAllStringFunc(text,
+		_substituteRandomLengthCharsetFunc(reRandomDotAlphanumeric, charsetAlphaNumeric))
 
 	// General Random String
 	text = reRandomString.ReplaceAllStringFunc(text, _substituteRandomLengthCharsetFunc(reRandomString, charsetFull))

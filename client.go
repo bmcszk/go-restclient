@@ -173,29 +173,9 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 
 	for i, restClientReq := range parsedFile.Requests {
 		response, err := c.executeRequestWithVariables(ctx, restClientReq, parsedFile, osEnvGetter, i)
-		if err != nil {
-			multiErr = multierror.Append(multiErr, err)
-			// For body processing errors (like external file not found), skip this request entirely
-			if response != nil && response.Error != nil &&
-				(strings.Contains(err.Error(), "error processing body for request") ||
-					strings.Contains(err.Error(), "failed to read external file")) {
-				continue // Skip adding this response to the results
-			}
-			// Ensure we have a response for other types of errors
-			if response == nil {
-				response = &Response{Request: restClientReq, Error: errors.New("request processing failed")}
-			}
-		}
-		// Handle error wrapping for logging
-		if response != nil && response.Error != nil {
-			urlForError := restClientReq.RawURLString
-			if restClientReq.URL != nil {
-				urlForError = restClientReq.URL.String()
-			}
-			wrappedErr := fmt.Errorf(
-				"request %d (%s %s) processing resulted in error: %w",
-				i+1, restClientReq.Method, urlForError, response.Error)
-			multiErr = multierror.Append(multiErr, wrappedErr)
+		response, shouldSkip := c.handleRequestExecutionError(response, err, restClientReq, i, &multiErr)
+		if shouldSkip {
+			continue
 		}
 		if response != nil {
 			responses = append(responses, response)
@@ -203,6 +183,44 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 	}
 
 	return responses, multiErr.ErrorOrNil()
+}
+
+// handleRequestExecutionError processes errors from request execution and manages error wrapping
+// Returns the processed response and a boolean indicating if the request should be skipped
+func (c *Client) handleRequestExecutionError(
+	response *Response,
+	err error,
+	restClientReq *Request,
+	index int,
+	multiErr **multierror.Error,
+) (*Response, bool) {
+	if err != nil {
+		*multiErr = multierror.Append(*multiErr, err)
+		// For body processing errors (like external file not found), skip this request entirely
+		if response != nil && response.Error != nil &&
+			(strings.Contains(err.Error(), "error processing body for request") ||
+				strings.Contains(err.Error(), "failed to read external file")) {
+			return nil, true // Skip adding this response to the results
+		}
+		// Ensure we have a response for other types of errors
+		if response == nil {
+			response = &Response{Request: restClientReq, Error: errors.New("request processing failed")}
+		}
+	}
+	
+	// Handle error wrapping for logging
+	if response != nil && response.Error != nil {
+		urlForError := restClientReq.RawURLString
+		if restClientReq.URL != nil {
+			urlForError = restClientReq.URL.String()
+		}
+		wrappedErr := fmt.Errorf(
+			"request %d (%s %s) processing resulted in error: %w",
+			index+1, restClientReq.Method, urlForError, response.Error)
+		*multiErr = multierror.Append(*multiErr, wrappedErr)
+	}
+	
+	return response, false
 }
 
 // End of function resolveVariablesInText
@@ -232,7 +250,7 @@ func (*Client) generateRequestScopedSystemVariables() map[string]string {
 // the request's initial URL (if parsed),
 // and the request's RawURLString (if initial URL parsing was deferred).
 // It returns the resolved URL or an error.
-func (c *Client) _resolveRequestURL(baseURLStr string, initialRequestURL *url.URL, rawRequestURLStr string) (*url.URL, error) {
+func (*Client) _resolveRequestURL(baseURLStr string, initialRequestURL *url.URL, rawRequestURLStr string) (*url.URL, error) {
 
 	var currentRequestURL *url.URL
 

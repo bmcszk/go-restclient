@@ -77,7 +77,8 @@ func parseNameFromAtNameDirective(commentContent string) (nameValue string, isAt
 
 // requestParserState holds the state during the parsing of a request file.
 type requestParserState struct {
-	nextRequestName         string // Stores the name for the *next* request, captured from '### name' or 'METHOD URL ### name'
+	// Stores the name for the *next* request, captured from '### name' or 'METHOD URL ### name'
+	nextRequestName         string
 	filePath                string
 	client                  *Client
 	requestScopedSystemVars map[string]string
@@ -148,7 +149,9 @@ func parseRequestFile(filePath string, client *Client, importStack []string) (*P
 	// Check for circular imports to prevent infinite recursion
 	for _, importedPath := range importStack {
 		if importedPath == absFilePath {
-			return nil, fmt.Errorf("circular import detected: '%s' already in import stack %v", absFilePath, importStack)
+			return nil, fmt.Errorf(
+				"circular import detected: '%s' already in import stack %v",
+				absFilePath, importStack)
 		}
 	}
 
@@ -182,7 +185,9 @@ func parseRequestFile(filePath string, client *Client, importStack []string) (*P
 
 	// Pass absFilePath for context, and newImportStack for recursion tracking
 	reader := bufio.NewReader(file)
-	parsedFile, err := parseRequests(reader, absFilePath, client, requestScopedSystemVarsForFileParse, osEnvGetter, dotEnvVarsForParser, newImportStack)
+	parsedFile, err := parseRequests(
+		reader, absFilePath, client, requestScopedSystemVarsForFileParse,
+		osEnvGetter, dotEnvVarsForParser, newImportStack)
 	if err != nil {
 		return nil, err // Error already wrapped by parseRequests or is a direct parsing error
 	}
@@ -211,7 +216,10 @@ func loadEnvironmentSpecificVariables(originalFilePath string, client *Client, p
 	publicEnvFilePath := filepath.Join(fileDir, "http-client.env.json")
 	publicEnvVars, err := loadEnvironmentFile(publicEnvFilePath, client.selectedEnvironmentName)
 	if err != nil {
-		slog.Warn("Error loading public environment file", "file", publicEnvFilePath, "environment", client.selectedEnvironmentName, "error", err)
+		slog.Warn(
+			"Error loading public environment file",
+			"file", publicEnvFilePath, "environment", client.selectedEnvironmentName,
+			"error", err)
 	}
 	for k, v := range publicEnvVars {
 		mergedEnvVars[k] = v
@@ -221,7 +229,10 @@ func loadEnvironmentSpecificVariables(originalFilePath string, client *Client, p
 	privateEnvFilePath := filepath.Join(fileDir, "http-client.private.env.json")
 	privateEnvVars, err := loadEnvironmentFile(privateEnvFilePath, client.selectedEnvironmentName)
 	if err != nil {
-		slog.Warn("Error loading private environment file", "file", privateEnvFilePath, "environment", client.selectedEnvironmentName, "error", err)
+		slog.Warn(
+			"Error loading private environment file",
+			"file", privateEnvFilePath, "environment", client.selectedEnvironmentName,
+			"error", err)
 	}
 	for k, v := range privateEnvVars { // Override with private vars
 		mergedEnvVars[k] = v
