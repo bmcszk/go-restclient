@@ -757,14 +757,19 @@ func (p *requestParserState) handleNonMethodRequestLine(requestLine string, firs
 	if p.currentRequest.RawURLString == "" {
 		// Method is set, but URL is not. This line could be the URL part.
 		slog.Debug("Method already set, current line not a method, RawURLString is empty. Treating as URL part.",
-			"token", firstToken, "requestLine", requestLine, "currentMethod", p.currentRequest.Method, "line", p.lineNumber, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
+			"token", firstToken, "requestLine", requestLine,
+			"currentMethod", p.currentRequest.Method, "line", p.lineNumber,
+			"requestPtr", fmt.Sprintf("%p", p.currentRequest))
 		p._setRawURLFromLine(requestLine, "URL part, method previously set")
 		return
 	}
 
 	// Method and RawURLString already set, but current line starts with non-method. This is unexpected.
 	slog.Warn("Method and RawURLString already set, but current line starts with non-method. Ignoring line.",
-		"token", firstToken, "requestLine", requestLine, "currentMethod", p.currentRequest.Method, "currentRawURL", p.currentRequest.RawURLString, "line", p.lineNumber, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
+		"token", firstToken, "requestLine", requestLine,
+		"currentMethod", p.currentRequest.Method,
+		"currentRawURL", p.currentRequest.RawURLString, "line", p.lineNumber,
+		"requestPtr", fmt.Sprintf("%p", p.currentRequest))
 }
 
 // processSameLineSeparator handles same-line request separators (### on the same line as request)
@@ -808,7 +813,11 @@ func (p *requestParserState) parseRequestLineDetails(originalRequestLine string)
 			p.ensureCurrentRequest() // Prepare for the request that might be named by nextRequestName
 			return true
 		}
-		slog.Warn("parseRequestLineDetails: Empty request line after processing potential separator", "originalRequestLine", originalRequestLine, "line", p.lineNumber, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
+		slog.Warn(
+			"parseRequestLineDetails: Empty request line after processing "+
+				"potential separator",
+			"originalRequestLine", originalRequestLine, "line", p.lineNumber,
+			"requestPtr", fmt.Sprintf("%p", p.currentRequest))
 		return false
 	}
 
@@ -839,7 +848,10 @@ func (p *requestParserState) parseRequestLineDetails(originalRequestLine string)
 	p.currentRequest.Method = methodCandidate
 
 	if len(parts) < 2 {
-		slog.Warn("parseRequestLineDetails: Method found, but no URL part.", "method", methodCandidate, "line", p.lineNumber, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
+		slog.Warn(
+			"parseRequestLineDetails: Method found, but no URL part.",
+			"method", methodCandidate, "line", p.lineNumber,
+			"requestPtr", fmt.Sprintf("%p", p.currentRequest))
 		// Even if there's no URL, if a separator follows, we finalize this incomplete request.
 		if finalizedBySeparator {
 			p.finalizeCurrentRequest()
@@ -864,8 +876,12 @@ func (p *requestParserState) parseRequestLineDetails(originalRequestLine string)
 		// No variables, try to parse URL now
 		parsedURL, err := url.Parse(urlStr)
 		if err != nil {
-			slog.Warn("parseRequestLineDetails: Failed to parse RawURLString (no variables)", "rawURL", urlStr, "error", err, "line", p.lineNumber, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
-			// p.currentRequest.URL remains nil or as set by url.Parse on error (which is typically nil for parse errors)
+			slog.Warn(
+				"parseRequestLineDetails: Failed to parse RawURLString (no variables)",
+				"rawURL", urlStr, "error", err, "line", p.lineNumber,
+				"requestPtr", fmt.Sprintf("%p", p.currentRequest))
+			// p.currentRequest.URL remains nil or as set by url.Parse on error
+			// (which is typically nil for parse errors)
 		} else {
 			p.currentRequest.URL = parsedURL
 		}
@@ -887,7 +903,9 @@ func (p *requestParserState) parseRequestLineDetails(originalRequestLine string)
 func parseExpectedStatusLine(line string, lineNumber int, resp *ExpectedResponse) error {
 	parts := strings.Fields(line)
 	if len(parts) < 2 { // Must have at least HTTP_VERSION STATUS_CODE [STATUS_TEXT]
-		return fmt.Errorf("line %d: invalid status line: '%s'. Expected HTTP_VERSION STATUS_CODE [STATUS_TEXT]", lineNumber, line)
+		return fmt.Errorf(
+			"line %d: invalid status line: '%s'. Expected HTTP_VERSION STATUS_CODE [STATUS_TEXT]",
+			lineNumber, line)
 	}
 	// parts[0] is HTTP Version, parts[1] is StatusCode, rest is StatusText
 	statusCodeInt, err := parseInt(parts[1])
@@ -976,7 +994,8 @@ func parseExpectedResponses(reader io.Reader, filePath string) ([]*ExpectedRespo
 		}
 
 		// Regular Comments (#)
-		if strings.HasPrefix(trimmedLine, commentPrefix) || strings.HasPrefix(trimmedLine, "@") { // commentPrefix is "#"
+		// commentPrefix is "#"
+		if strings.HasPrefix(trimmedLine, commentPrefix) || strings.HasPrefix(trimmedLine, "@") {
 			continue // Move to next line
 		}
 
@@ -986,7 +1005,8 @@ func parseExpectedResponses(reader io.Reader, filePath string) ([]*ExpectedRespo
 
 		if processedLine == "" && !parsingBody {
 			// This condition signifies the start of the body or an ignored blank line between responses
-			if (currentExpectedResponse.Status != nil && *currentExpectedResponse.Status != "") || currentExpectedResponse.StatusCode != nil {
+			if (currentExpectedResponse.Status != nil && *currentExpectedResponse.Status != "") ||
+				currentExpectedResponse.StatusCode != nil {
 				parsingBody = true
 			}
 			continue
@@ -997,7 +1017,9 @@ func parseExpectedResponses(reader io.Reader, filePath string) ([]*ExpectedRespo
 		} else {
 			// Not parsingBody, line is not empty, not separator, not comment.
 			// Must be a status line or a header.
-			if err := processExpectedStatusOrHeaderLine(processedLine, lineNumber, currentExpectedResponse); err != nil {
+			err := processExpectedStatusOrHeaderLine(
+				processedLine, lineNumber, currentExpectedResponse)
+			if err != nil {
 				return nil, err
 			}
 		}
@@ -1014,7 +1036,9 @@ func parseExpectedResponses(reader io.Reader, filePath string) ([]*ExpectedRespo
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading expected response file %s (last processed line %d): %w", filePath, lineNumber, err)
+		return nil, fmt.Errorf(
+		"error reading expected response file %s (last processed line %d): %w",
+		filePath, lineNumber, err)
 	}
 
 	// REQ-LIB-028: Ignore any block between separators that doesn't have a response.

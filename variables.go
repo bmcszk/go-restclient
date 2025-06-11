@@ -244,38 +244,55 @@ func _applyBaseURLIfNeeded(rawURL string, clientBaseURL string) string {
 // It returns true if the value is a system variable placeholder (e.g., "{{$randomInt}}", "{{$dotenv VAR}}")
 // AND is not already pre-evaluated in requestScopedSystemVars (like "$uuid").
 func isDynamicSystemVariablePlaceholder(value string, requestScopedSystemVars map[string]string) bool {
-	if !strings.HasPrefix(value, "{{") || !strings.HasSuffix(value, "}}") {
-		// Check for $... without {{}} for direct system var names like $uuid
-		if strings.HasPrefix(value, "$") {
-			if _, ok := requestScopedSystemVars[value]; ok {
-				slog.Debug(
+	if !isPlaceholderPattern(value) {
+		return isDirectSystemVarKey(value, requestScopedSystemVars)
+	}
+
+	innerDirective := strings.TrimSpace(value[2 : len(value)-2])
+	if !strings.HasPrefix(innerDirective, "$") {
+		return false
+	}
+
+	if isPreEvaluatedSystemVar(innerDirective, requestScopedSystemVars, value) {
+		return false
+	}
+
+	return matchesDynamicPattern(value)
+}
+
+// isPlaceholderPattern checks if value is in {{...}} format
+func isPlaceholderPattern(value string) bool {
+	return strings.HasPrefix(value, "{{") && strings.HasSuffix(value, "}}")
+}
+
+// isDirectSystemVarKey checks for direct system var keys like $uuid
+func isDirectSystemVarKey(value string, requestScopedSystemVars map[string]string) bool {
+	if strings.HasPrefix(value, "$") {
+		if _, ok := requestScopedSystemVars[value]; ok {
+			slog.Debug(
 				"isDynamicSystemVariablePlaceholder: Direct value is a "+
 					"pre-evaluated system variable key",
 				"value", value)
-				return false // It's a key like $uuid, not a placeholder like {{$uuid}}
-			}
+			return false // It's a key like $uuid, not a placeholder like {{$uuid}}
 		}
-		return false // Not a {{...}} placeholder pattern
 	}
+	return false
+}
 
-	// Extract the potential system variable name/directive from within {{...}}
-	// e.g., "$randomInt 10 20" from "{{$randomInt 10 20}}"
-	innerDirective := strings.TrimSpace(value[2 : len(value)-2])
-
-	if !strings.HasPrefix(innerDirective, "$") {
-		return false // Inner part doesn't start with $, so not a system variable placeholder
-	}
-
-	// Check if this exact inner directive is already a pre-evaluated simple
-	// system variable (like $uuid, $timestamp, or no-arg $randomInt)
+// isPreEvaluatedSystemVar checks if directive is already pre-evaluated
+func isPreEvaluatedSystemVar(innerDirective string, requestScopedSystemVars map[string]string, value string) bool {
 	if _, ok := requestScopedSystemVars[innerDirective]; ok {
 		slog.Debug(
 			"isDynamicSystemVariablePlaceholder: Placeholder's inner directive "+
 				"is a pre-evaluated system variable",
 			"value", value, "innerDirective", innerDirective)
-		return false
+		return true
 	}
+	return false
+}
 
+// matchesDynamicPattern checks if value matches dynamic system variable patterns
+func matchesDynamicPattern(value string) bool {
 	dynamicRegexes := []*regexp.Regexp{
 		reRandomInt, reRandomDotInteger, reRandomFloat, reRandomDotFloat,
 		reRandomHex, reRandomDotHexadecimal, reRandomAlphaNumeric,

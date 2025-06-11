@@ -26,7 +26,8 @@ type Request struct {
 	HTTPVersion  string   // e.g., "HTTP/1.1"
 	Headers      http.Header
 	Body         io.Reader                     // For streaming body content after processing
-	RawBody      string                        // Store the raw body string as read from the file, before variable substitution
+	// Store the raw body string as read from the file, before variable substitution
+	RawBody      string
 	GetBody      func() (io.ReadCloser, error) // For http.Request.GetBody compatibility
 
 	// ActiveVariables are variables resolved at the time of request execution,
@@ -71,7 +72,8 @@ type ParsedFile struct {
 	// EnvironmentVariables are key-value pairs loaded from an associated environment file (e.g., http-client.env.json).
 	// These are used as a base for variable substitution.
 	EnvironmentVariables map[string]string
-	// GlobalVariables are key-value pairs accumulated during the execution of requests in this file (or imported files).
+	// GlobalVariables are key-value pairs accumulated during the execution of
+	// requests in this file (or imported files).
 	// These are set by `client.global.set()` in response handler scripts and are available to subsequent requests.
 	GlobalVariables map[string]string
 	// FileVariables are key-value pairs defined directly within the .http file using the `@name = value` syntax.

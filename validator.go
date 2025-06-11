@@ -17,7 +17,8 @@ var ( //nolint:gochecknoglobals
 	anyGuidPlaceholderFinder      = regexp.MustCompile(`\{\{\$anyGuid\}\}`)
 	anyTimestampPlaceholderFinder = regexp.MustCompile(`\{\{\$anyTimestamp\}\}`)
 	anyDatetimePlaceholderFinder  = regexp.MustCompile(`\{\{\$anyDatetime\s+(.*?)\}\}`) // Captures format arg
-	anyDatetimeNoArgFinder        = regexp.MustCompile(`\{\{\$anyDatetime\}\}`)         // For {{$anyDatetime}} without args
+	// For {{$anyDatetime}} without args
+	anyDatetimeNoArgFinder        = regexp.MustCompile(`\{\{\$anyDatetime\}\}`)
 	anyPlaceholderFinder          = regexp.MustCompile(`\{\{\$any\}\}`)
 )
 
@@ -28,7 +29,8 @@ const timestampRegexPattern = `\d+`
 const rfc1123RegexPattern = `[A-Za-z]{3},\s\d{2}\s[A-Za-z]{3}\s\d{4}\s\d{2}:\d{2}:\d{2}\s[A-Z]{3}`
 
 // Regex for a common ISO8601/RFC3339 form: e.g., 2006-01-02T15:04:05Z or 2006-01-02T15:04:05+07:00
-const iso8601RegexPattern = `\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|([+-]\d{2}:\d{2}))` // Added optional milliseconds
+// Added optional milliseconds
+const iso8601RegexPattern = `\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|([+-]\d{2}:\d{2}))`
 const genericDatetimeRegexPattern = `[\w\d\s.:\-,+/TZ()]+`
 const nonMatchingRegexPattern = `\z.\A` // Valid but never matches
 const anyRegexPattern = `(?s).*?`       // Matches any char (incl newline), non-greedy, no outer group
@@ -67,7 +69,9 @@ func (c *Client) ValidateResponses(responseFilePath string, actualResponses ...*
 
 	expectedResponses, parseErr := parseExpectedResponses(strings.NewReader(substitutedContent), responseFilePath)
 	if parseErr != nil {
-		errs = multierror.Append(errs, fmt.Errorf("failed to parse expected response file '%s' after variable substitution: %w", responseFilePath, parseErr))
+		errs = multierror.Append(errs, fmt.Errorf(
+			"failed to parse expected response file '%s' after variable substitution: %w",
+			responseFilePath, parseErr))
 	}
 
 	// Determine effective counts for actual and expected responses.
@@ -79,7 +83,9 @@ func (c *Client) ValidateResponses(responseFilePath string, actualResponses ...*
 
 	// Check for count mismatch.
 	if effectiveNumActual != effectiveNumExpected {
-		errs = multierror.Append(errs, fmt.Errorf("mismatch in number of responses: got %d actual, but expected %d from file '%s'", effectiveNumActual, effectiveNumExpected, responseFilePath))
+		errs = multierror.Append(errs, fmt.Errorf(
+			"mismatch in number of responses: got %d actual, but expected %d from file '%s'",
+			effectiveNumActual, effectiveNumExpected, responseFilePath))
 	}
 
 	if parseErr != nil {
@@ -96,7 +102,9 @@ func (c *Client) ValidateResponses(responseFilePath string, actualResponses ...*
 		expected := expectedResponses[i]
 
 		if actual == nil {
-			errs = multierror.Append(errs, fmt.Errorf("validation for response #%d ('%s'): actual response is nil", i+1, responseFilePath))
+			errs = multierror.Append(errs, fmt.Errorf(
+				"validation for response #%d ('%s'): actual response is nil",
+				i+1, responseFilePath))
 			continue
 		}
 
