@@ -177,15 +177,27 @@ Content-Type: application/json
 // TODO: Add tests for variable substitution within external files (<@ syntax).
 
 func TestClientExecuteFileWithEncoding(t *testing.T) {
-	type encodingTestCase struct {
-		name             string
-		encodingName     string // e.g., "latin1", "cp1252"
-		contentToWrite   string // Raw string content to be encoded
-		expectedUTF8Body string // Expected body received by server (should be UTF-8)
-		encoder          transform.Transformer
-	}
+	testCases := getEncodingTestCases()
 
-	testCases := []encodingTestCase{
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			runEncodingTestCase(t, tc)
+		})
+	}
+}
+
+// encodingTestCase represents a test case for encoding
+type encodingTestCase struct {
+	name             string
+	encodingName     string // e.g., "latin1", "cp1252"
+	contentToWrite   string // Raw string content to be encoded
+	expectedUTF8Body string // Expected body received by server (should be UTF-8)
+	encoder          transform.Transformer
+}
+
+// getEncodingTestCases returns the test cases for encoding tests
+func getEncodingTestCases() []encodingTestCase {
+	return []encodingTestCase{
 		{
 			name:             "Latin-1 encoded file",
 			encodingName:     "latin1",
@@ -215,61 +227,86 @@ func TestClientExecuteFileWithEncoding(t *testing.T) {
 			encoder:          nil, // Will be handled as UTF-8 by client
 		},
 	}
+}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			tempDir, err := os.MkdirTemp("", "client_enc_test_*")
-			require.NoError(t, err, "Failed to create temp dir")
-			defer os.RemoveAll(tempDir)
+// runEncodingTestCase executes a single encoding test case
+func runEncodingTestCase(t *testing.T, tc encodingTestCase) {
+	tempDir := setupTempDir(t)
+	defer os.RemoveAll(tempDir)
 
-			// Create the encoded data file
-			encodedDataFilePath := filepath.Join(tempDir, "encoded_body.txt")
-			var fileBytes []byte
-			if tc.encoder != nil {
-				fileBytes, _, err = transform.Bytes(tc.encoder, []byte(tc.contentToWrite))
-				require.NoError(t, err, "Failed to encode contentToWrite")
-			} else {
-				fileBytes = []byte(tc.contentToWrite) // For UTF-8 or ASCII
-			}
-			require.NoError(t, os.WriteFile(encodedDataFilePath, fileBytes, 0644),
-				"Failed to write encoded data file")
+	_ = createEncodedDataFile(t, tempDir, tc)
+	bodyReceived := make(chan []byte, 1)
+	mockServer := setupMockServer(t, bodyReceived)
+	defer mockServer.Close()
 
-			// Setup mock server to check received body
-			bodyReceived := make(chan []byte, 1)
-			mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				defer r.Body.Close()
-				body, err := io.ReadAll(r.Body)
-				if err != nil {
-					t.Logf("Mock server failed to read body: %v", err)
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-				bodyReceived <- body
-				w.WriteHeader(http.StatusOK)
-				_, _ = w.Write([]byte("mock response"))
-			}))
-			defer mockServer.Close()
+	httpFilePath := createHTTPFile(t, tempDir, mockServer.URL, tc.encodingName)
+	executeAndVerify(t, httpFilePath, tc.expectedUTF8Body, bodyReceived)
+}
 
-			// Create the .http file
-			httpFilePath := filepath.Join(tempDir, "request.http")
-			httpFileContent := fmt.Sprintf("POST %s\nContent-Type: text/plain\n\n<@%s encoded_body.txt", mockServer.URL, tc.encodingName)
-			require.NoError(t, os.WriteFile(httpFilePath, []byte(httpFileContent), 0644),
-				"Failed to write .http file")
+// setupTempDir creates a temporary directory for test files
+func setupTempDir(t *testing.T) string {
+	tempDir, err := os.MkdirTemp("", "client_enc_test_*")
+	require.NoError(t, err, "Failed to create temp dir")
+	return tempDir
+}
 
-			client, err := rc.NewClient()
-			require.NoError(t, err)
-			responses, err := client.ExecuteFile(context.Background(), httpFilePath)
-			require.NoError(t, err, "ExecuteFile failed")
-			require.Len(t, responses, 1, "Expected one response")
-			assert.Equal(t, http.StatusOK, responses[0].StatusCode, "Expected status OK")
+// createEncodedDataFile creates the encoded data file for testing
+func createEncodedDataFile(t *testing.T, tempDir string, tc encodingTestCase) string {
+	encodedDataFilePath := filepath.Join(tempDir, "encoded_body.txt")
+	var fileBytes []byte
+	var err error
 
-			select {
-			case received := <-bodyReceived:
-				assert.Equal(t, tc.expectedUTF8Body, string(received), "Mismatch in body received by server")
-			case <-time.After(2 * time.Second): // Timeout for receiving body
-				t.Fatal("Timeout waiting for mock server to receive body")
-			}
-		})
+	if tc.encoder != nil {
+		fileBytes, _, err = transform.Bytes(tc.encoder, []byte(tc.contentToWrite))
+		require.NoError(t, err, "Failed to encode contentToWrite")
+	} else {
+		fileBytes = []byte(tc.contentToWrite) // For UTF-8 or ASCII
+	}
+
+	require.NoError(t, os.WriteFile(encodedDataFilePath, fileBytes, 0644),
+		"Failed to write encoded data file")
+	return encodedDataFilePath
+}
+
+// setupMockServer creates a mock server for testing
+func setupMockServer(t *testing.T, bodyReceived chan []byte) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Logf("Mock server failed to read body: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		bodyReceived <- body
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("mock response"))
+	}))
+}
+
+// createHTTPFile creates the .http file for testing
+func createHTTPFile(t *testing.T, tempDir, serverURL, encodingName string) string {
+	httpFilePath := filepath.Join(tempDir, "request.http")
+	httpFileContent := fmt.Sprintf("POST %s\nContent-Type: text/plain\n\n<@%s encoded_body.txt", serverURL, encodingName)
+	require.NoError(t, os.WriteFile(httpFilePath, []byte(httpFileContent), 0644),
+		"Failed to write .http file")
+	return httpFilePath
+}
+
+// executeAndVerify executes the test and verifies the results
+func executeAndVerify(t *testing.T, httpFilePath, expectedUTF8Body string, bodyReceived chan []byte) {
+	client, err := rc.NewClient()
+	require.NoError(t, err)
+	responses, err := client.ExecuteFile(context.Background(), httpFilePath)
+	require.NoError(t, err, "ExecuteFile failed")
+	require.Len(t, responses, 1, "Expected one response")
+	assert.Equal(t, http.StatusOK, responses[0].StatusCode, "Expected status OK")
+
+	select {
+	case received := <-bodyReceived:
+		assert.Equal(t, expectedUTF8Body, string(received), "Mismatch in body received by server")
+	case <-time.After(2 * time.Second): // Timeout for receiving body
+		t.Fatal("Timeout waiting for mock server to receive body")
 	}
 }
 

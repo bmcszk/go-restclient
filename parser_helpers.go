@@ -1,10 +1,69 @@
 package restclient
 
 import (
+	"fmt"
 	"strings"
+	"unicode"
 )
 
 // Helper functions extracted from parser.go to reduce file size
+
+// isPotentialRequestLine checks if a line could be a request line
+func isPotentialRequestLine(line string) bool {
+	parts := strings.Fields(line)
+	if len(parts) == 0 {
+		return false
+	}
+	methodToken := strings.ToUpper(parts[0])
+	validMethods := map[string]bool{
+		"GET": true, "POST": true, "PUT": true, "DELETE": true, "PATCH": true,
+		"HEAD": true, "OPTIONS": true, "TRACE": true, "CONNECT": true,
+	}
+	return validMethods[methodToken]
+}
+
+// parseNameFromAtNameDirective checks if the commentContent is a well-formed @name directive
+// and extracts the name value if present.
+// It returns the extracted name (trimmed, or empty if no value) and a boolean indicating
+// if the commentContent was indeed a recognized @name directive pattern.
+func parseNameFromAtNameDirective(commentContent string) (nameValue string, isAtNamePattern bool) {
+	if !strings.HasPrefix(commentContent, "@name") {
+		return "", false // Not an @name pattern at all
+	}
+
+	// It starts with "@name". Now check if it's a valid form.
+	// Valid forms: "@name" (no value), or "@name<whitespace>value"
+
+	// Case 1: Exactly "@name"
+	if len(commentContent) == len("@name") {
+		return "", true // It's the @name pattern, value is empty.
+	}
+
+	// Case 2: Must be "@name" followed by whitespace to be our pattern.
+	if !unicode.IsSpace(rune(commentContent[len("@name")])) {
+		// e.g., "@nametag". This is not the "@name <value>" pattern.
+		return "", false
+	}
+
+	// It's "@name" followed by whitespace. This is a recognized @name pattern.
+	// Extract the potential value.
+	// commentContent[len("@name"):] will get the part after "@name", including leading spaces.
+	valuePart := commentContent[len("@name"):]
+	// First, trim leading/trailing whitespace from the raw value part.
+	trimmedValue := strings.TrimSpace(valuePart)
+	// Then, normalize internal whitespace sequences (tabs, multiple spaces) to single spaces.
+	// strings.Fields splits by any whitespace and removes empty strings resulting from multiple spaces.
+	// strings.Join then puts them back with single spaces.
+	normalizedName := strings.Join(strings.Fields(trimmedValue), " ")
+	return normalizedName, true
+}
+
+// parseInt is a helper function to convert string to int.
+func parseInt(s string) (int, error) {
+	var n int
+	_, err := fmt.Sscan(s, &n)
+	return n, err
+}
 
 // extractURLAndVersion splits a URL string that may contain HTTP version.
 // Returns the URL and HTTP version (if present).

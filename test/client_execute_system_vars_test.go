@@ -419,12 +419,36 @@ func validateRandomIntMalformedArgs(t *testing.T, urlStr, header, body string) {
 // Corresponds to: Client's ability to substitute the {{$randomInt}} system variable with a random integer. Supports optional MIN and MAX arguments. If no args, defaults to a wide range. If MIN > MAX, or args are malformed, the literal placeholder is used. (http_syntax.md "System Variables").
 // This test suite uses various .http files (e.g., 'system_var_randomint_valid_args.http', 'system_var_randomint_no_args.http') to verify behavior with valid arguments, no arguments, swapped arguments (min > max), and malformed arguments, checking substitution in URLs, headers, and bodies.
 func TestExecuteFile_WithRandomIntSystemVariable(t *testing.T) {
-	// Given common setup for all subtests
-	var interceptedRequest struct {
-		URL    string
-		Header string
-		Body   string
+	interceptedRequest, server, client := setupRandomIntTest()
+	defer server.Close()
+
+	tests := getRandomIntTestCases()
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			runRandomIntTestCase(t, tc, client, server.URL, interceptedRequest)
+		})
 	}
+}
+
+// randomIntTestCase represents a test case for random int system variables
+type randomIntTestCase struct {
+	name               string
+	httpFilePath       string
+	validate           func(t *testing.T, url, header, body string)
+	expectErrorInParse bool
+}
+
+// randomIntRequestData holds request data intercepted by mock server for random int tests
+type randomIntRequestData struct {
+	URL    string
+	Header string
+	Body   string
+}
+
+// setupRandomIntTest sets up the test environment for random int tests
+func setupRandomIntTest() (*randomIntRequestData, *httptest.Server, *rc.Client) {
+	var interceptedRequest randomIntRequestData
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
 		interceptedRequest.URL = r.URL.String()
 		bodyBytes, _ := io.ReadAll(r.Body)
@@ -433,15 +457,13 @@ func TestExecuteFile_WithRandomIntSystemVariable(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprint(w, "ok")
 	})
-	defer server.Close()
 	client, _ := rc.NewClient()
+	return &interceptedRequest, server, client
+}
 
-	tests := []struct {
-		name               string
-		httpFilePath       string
-		validate           func(t *testing.T, url, header, body string)
-		expectErrorInParse bool
-	}{
+// getRandomIntTestCases returns test cases for random int system variables
+func getRandomIntTestCases() []randomIntTestCase {
+	return []randomIntTestCase{
 		{ // SCENARIO-LIB-015-001
 			name:         "valid min max args",
 			httpFilePath: "testdata/http_request_files/system_var_randomint_valid_args.http",
@@ -464,34 +486,39 @@ func TestExecuteFile_WithRandomIntSystemVariable(t *testing.T) {
 			expectErrorInParse: false,
 		},
 	}
+}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			// Given specific setup for this subtest
-			requestFilePath := createTestFileFromTemplate(t, tc.httpFilePath, struct{ ServerURL string }{ServerURL: server.URL})
+// runRandomIntTestCase executes a single random int test case
+func runRandomIntTestCase(t *testing.T, tc randomIntTestCase, client *rc.Client, serverURL string, interceptedRequest *randomIntRequestData) {
+	requestFilePath := createTestFileFromTemplate(t, tc.httpFilePath, struct{ ServerURL string }{ServerURL: serverURL})
 
-			// When
-			responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
 
-			// Then
-			if tc.expectErrorInParse {
-				require.Error(t, err, "Expected an error during ExecuteFile for %s", tc.name)
-				return
-			}
-			require.NoError(t, err, "ExecuteFile should not return an error for %s", tc.name)
-			require.Len(t, responses, 1, "Expected 1 response for %s", tc.name)
-			resp := responses[0]
-			assert.NoError(t, resp.Error, "Response error should be nil for %s", tc.name)
-			assert.Equal(t, http.StatusOK, resp.StatusCode, "Expected status OK for %s", tc.name)
-
-			actualURL := interceptedRequest.URL
-			if strings.Contains(actualURL, "%") {
-				decodedURL, decodeErr := url.PathUnescape(actualURL)
-				if decodeErr == nil {
-					actualURL = decodedURL
-				}
-			}
-			tc.validate(t, actualURL, interceptedRequest.Header, interceptedRequest.Body)
-		})
+	if tc.expectErrorInParse {
+		require.Error(t, err, "Expected an error during ExecuteFile for %s", tc.name)
+		return
 	}
+
+	validateRandomIntResponse(t, tc, responses, interceptedRequest)
+}
+
+// validateRandomIntResponse validates the response from random int test
+func validateRandomIntResponse(t *testing.T, tc randomIntTestCase, responses []*rc.Response, interceptedRequest *randomIntRequestData) {
+	require.Len(t, responses, 1, "Expected 1 response for %s", tc.name)
+	resp := responses[0]
+	assert.NoError(t, resp.Error, "Response error should be nil for %s", tc.name)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "Expected status OK for %s", tc.name)
+
+	actualURL := decodeURLIfNeeded(interceptedRequest.URL)
+	tc.validate(t, actualURL, interceptedRequest.Header, interceptedRequest.Body)
+}
+
+// decodeURLIfNeeded decodes URL if it contains percent encoding
+func decodeURLIfNeeded(rawURL string) string {
+	if strings.Contains(rawURL, "%") {
+		if decodedURL, err := url.PathUnescape(rawURL); err == nil {
+			return decodedURL
+		}
+	}
+	return rawURL
 }
