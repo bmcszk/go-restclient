@@ -21,8 +21,12 @@ import (
 )
 
 // PRD-COMMENT: FR1.3.1 - System Variables: {{$guid}} and {{$uuid}}
-// Corresponds to: Client's ability to substitute {{$guid}} and {{$uuid}} system variables with a unique, request-scoped UUID (http_syntax.md "System Variables").
-// This test uses 'testdata/http_request_files/system_var_guid.http' to verify that these variables are correctly generated and substituted in URLs, headers, and bodies. It also confirms that multiple instances of {{$guid}} or {{$uuid}} within the same request resolve to the *same* generated UUID for that request.
+// Corresponds to: Client's ability to substitute {{$guid}} and {{$uuid}} system variables
+// with a unique, request-scoped UUID (http_syntax.md "System Variables").
+// This test uses 'testdata/http_request_files/system_var_guid.http' to verify that these variables
+// are correctly generated and substituted in URLs, headers, and bodies. It also confirms that
+// multiple instances of {{$guid}} or {{$uuid}} within the same request resolve to the *same*
+// generated UUID for that request.
 func TestExecuteFile_WithGuidSystemVariable(t *testing.T) {
 	// Given
 	var interceptedRequest struct {
@@ -41,7 +45,8 @@ func TestExecuteFile_WithGuidSystemVariable(t *testing.T) {
 	defer server.Close()
 
 	client, _ := rc.NewClient()
-	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_guid.http", struct{ ServerURL string }{ServerURL: server.URL})
+	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_guid.http",
+		struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
 	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
@@ -97,8 +102,12 @@ func TestExecuteFile_WithGuidSystemVariable(t *testing.T) {
 }
 
 // PRD-COMMENT: FR1.3.3 - System Variables: {{$isoTimestamp}}
-// Corresponds to: Client's ability to substitute the {{$isoTimestamp}} system variable with the current UTC timestamp in ISO 8601 format (YYYY-MM-DDTHH:mm:ss.sssZ) (http_syntax.md "System Variables").
-// This test uses 'testdata/http_request_files/system_var_iso_timestamp.http' to verify correct substitution in URLs, headers, and bodies, and checks that multiple instances resolve to the same request-scoped timestamp.
+// Corresponds to: Client's ability to substitute the {{$isoTimestamp}} system variable
+// with the current UTC timestamp in ISO 8601 format (YYYY-MM-DDTHH:mm:ss.sssZ)
+// (http_syntax.md "System Variables").
+// This test uses 'testdata/http_request_files/system_var_iso_timestamp.http' to verify correct
+// substitution in URLs, headers, and bodies, and checks that multiple instances resolve to
+// the same request-scoped timestamp.
 func TestExecuteFile_WithIsoTimestampSystemVariable(t *testing.T) {
 	// Given
 	var interceptedRequest struct {
@@ -115,7 +124,8 @@ func TestExecuteFile_WithIsoTimestampSystemVariable(t *testing.T) {
 	defer server.Close()
 
 	client, _ := rc.NewClient()
-	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_iso_timestamp.http", struct{ ServerURL string }{ServerURL: server.URL})
+	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_iso_timestamp.http",
+		struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
 	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
@@ -189,8 +199,13 @@ func setupDetailedMockServerInterceptor(t *testing.T) (*httptest.Server, *detail
 }
 
 // PRD-COMMENT: FR1.3.4 - System Variables: {{$datetime "format" [offset]}}
-// Corresponds to: Client's ability to substitute the {{$datetime}} system variable with the current timestamp formatted according to a Go layout string, optionally with a timezone offset (http_syntax.md "System Variables").
-// This test uses 'testdata/http_request_files/system_var_datetime.http' to verify various datetime formats (RFC3339, custom, with local/UTC/specific offsets) in URLs, headers, and bodies. It ensures multiple instances resolve to the same request-scoped timestamp (respecting their individual formatting and offsets).
+// Corresponds to: Client's ability to substitute the {{$datetime}} system variable with the
+// current timestamp formatted according to a Go layout string, optionally with a timezone
+// offset (http_syntax.md "System Variables").
+// This test uses 'testdata/http_request_files/system_var_datetime.http' to verify various
+// datetime formats (RFC3339, custom, with local/UTC/specific offsets) in URLs, headers, and bodies.
+// It ensures multiple instances resolve to the same request-scoped timestamp (respecting their
+// individual formatting and offsets).
 func TestExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
 	// Given
 	server, interceptedRequest := setupDetailedMockServerInterceptor(t)
@@ -228,7 +243,8 @@ func TestExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
 			ts, err := strconv.ParseInt(valueStr, 10, 64)
 			require.NoError(t, err, "Failed to parse timestamp from %s: %s", headerName, valueStr)
 			parsedTime := time.Unix(ts, 0)
-			assert.WithinDuration(t, now, parsedTime, threshold, "%s timestamp %s not within threshold of current time %s", headerName, parsedTime, now)
+			assert.WithinDuration(t, now, parsedTime, threshold,
+				"%s timestamp %s not within threshold of current time %s", headerName, parsedTime, now)
 		} else {
 			var layout string
 			switch formatKeyword {
@@ -240,8 +256,10 @@ func TestExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
 				t.Fatalf("Unhandled format keyword: %s for %s", formatKeyword, headerName)
 			}
 			parsedTime, err := time.Parse(layout, valueStr)
-			require.NoError(t, err, "Failed to parse datetime string from %s ('%s') with layout '%s'", headerName, valueStr, layout)
-			assert.WithinDuration(t, now, parsedTime, threshold, "%s datetime %s not within threshold of current time %s", headerName, parsedTime, now)
+			require.NoError(t, err, "Failed to parse datetime string from %s ('%s') with layout '%s'",
+				headerName, valueStr, layout)
+			assert.WithinDuration(t, now, parsedTime, threshold,
+				"%s datetime %s not within threshold of current time %s", headerName, parsedTime, now)
 			if isUTC {
 				assert.Equal(t, time.UTC, parsedTime.Location(), "%s expected to be UTC", headerName)
 			} else {
@@ -249,7 +267,8 @@ func TestExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
 				_, localOffset := now.In(time.Local).Zone()
 				// Get offset for parsedTime
 				_, parsedOffset := parsedTime.Zone()
-				assert.Equal(t, localOffset, parsedOffset, "%s expected to have local time offset, got %d, want %d", headerName, parsedOffset, localOffset)
+				assert.Equal(t, localOffset, parsedOffset,
+				"%s expected to have local time offset, got %d, want %d", headerName, parsedOffset, localOffset)
 			}
 		}
 	}
@@ -262,10 +281,13 @@ func TestExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
 
 	checkDateTimeStr(t, interceptedRequest.Headers["X-Localdatetime-Rfc1123"], "rfc1123", false, "X-LocalDatetime-RFC1123")
 	checkDateTimeStr(t, interceptedRequest.Headers["X-Localdatetime-Iso8601"], "iso8601", false, "X-LocalDatetime-ISO8601")
-	checkDateTimeStr(t, interceptedRequest.Headers["X-Localdatetime-Timestamp"], "timestamp", false, "X-LocalDatetime-Timestamp")
-	checkDateTimeStr(t, interceptedRequest.Headers["X-Localdatetime-Default"], "iso8601", false, "X-LocalDatetime-Default (ISO8601)")
+	checkDateTimeStr(t, interceptedRequest.Headers["X-Localdatetime-Timestamp"],
+		"timestamp", false, "X-LocalDatetime-Timestamp")
+	checkDateTimeStr(t, interceptedRequest.Headers["X-Localdatetime-Default"],
+		"iso8601", false, "X-LocalDatetime-Default (ISO8601)")
 
-	assert.Equal(t, "{{$datetime \"invalidFormat\"}}", interceptedRequest.Headers["X-Datetime-Invalid"], "X-Datetime-Invalid should remain unresolved")
+	assert.Equal(t, "{{$datetime \"invalidFormat\"}}", interceptedRequest.Headers["X-Datetime-Invalid"],
+		"X-Datetime-Invalid should remain unresolved")
 
 	// Check Body
 	var bodyJSON map[string]string
@@ -282,12 +304,16 @@ func TestExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
 	checkDateTimeStr(t, bodyJSON["local_timestamp"], "timestamp", false, "body.local_timestamp")
 	checkDateTimeStr(t, bodyJSON["local_default_iso"], "iso8601", false, "body.local_default_iso (ISO8601)")
 
-	assert.Equal(t, "{{$datetime \"invalidFormat\"}}", bodyJSON["invalid_format_test"], "body.invalid_format_test should remain unresolved")
+	assert.Equal(t, "{{$datetime \"invalidFormat\"}}", bodyJSON["invalid_format_test"],
+		"body.invalid_format_test should remain unresolved")
 }
 
 // PRD-COMMENT: FR1.3.2 - System Variables: {{$timestamp}}
-// Corresponds to: Client's ability to substitute the {{$timestamp}} system variable with the current Unix timestamp (seconds since epoch) (http_syntax.md "System Variables").
-// This test uses 'testdata/http_request_files/system_var_timestamp.http' to verify correct substitution in URLs, headers, and bodies. It ensures multiple instances resolve to the same request-scoped timestamp.
+// Corresponds to: Client's ability to substitute the {{$timestamp}} system variable with
+// the current Unix timestamp (seconds since epoch) (http_syntax.md "System Variables").
+// This test uses 'testdata/http_request_files/system_var_timestamp.http' to verify correct
+// substitution in URLs, headers, and bodies. It ensures multiple instances resolve to
+// the same request-scoped timestamp.
 func TestExecuteFile_WithTimestampSystemVariable(t *testing.T) {
 	// Given
 	var interceptedRequest struct {
@@ -308,7 +334,8 @@ func TestExecuteFile_WithTimestampSystemVariable(t *testing.T) {
 
 	client, _ := rc.NewClient()
 	beforeTime := time.Now().UTC().Unix()
-	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_timestamp.http", struct{ ServerURL string }{ServerURL: server.URL})
+	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_timestamp.http",
+		struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
 	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
@@ -372,7 +399,8 @@ func validateRandomIntValidMinMaxArgs(t *testing.T, url, header, body string) {
 	var bodyJSON map[string]int
 	err = json.Unmarshal([]byte(body), &bodyJSON)
 	require.NoError(t, err, "Failed to unmarshal body")
-	assert.True(t, bodyJSON["value"] >= 100 && bodyJSON["value"] <= 105, "Body random int %d out of range [100,105]", bodyJSON["value"])
+	assert.True(t, bodyJSON["value"] >= 100 && bodyJSON["value"] <= 105,
+		"Body random int %d out of range [100,105]", bodyJSON["value"])
 }
 
 func validateRandomIntNoArgs(t *testing.T, url, header, body string) {
@@ -389,19 +417,23 @@ func validateRandomIntNoArgs(t *testing.T, url, header, body string) {
 	var bodyJSON map[string]int
 	err = json.Unmarshal([]byte(body), &bodyJSON)
 	require.NoError(t, err, "Failed to unmarshal body (no args)")
-	assert.True(t, bodyJSON["value"] >= 0 && bodyJSON["value"] <= 1000, "Body random int (no args) %d out of range [0,1000]", bodyJSON["value"])
+	assert.True(t, bodyJSON["value"] >= 0 && bodyJSON["value"] <= 1000,
+		"Body random int (no args) %d out of range [0,1000]", bodyJSON["value"])
 }
 
 func validateRandomIntSwappedMinMaxArgs(t *testing.T, url, header, body string) {
 	t.Helper()
 	urlParts := strings.Split(url, "/")
 	require.Len(t, urlParts, 4, "URL path should have 4 parts for swapped args test")
-	assert.Equal(t, "{{$randomInt 30 25}}", urlParts[2], "URL part1 for swapped_min_max_args should be the unresolved placeholder")
-	assert.Equal(t, "{{$randomInt 30 25}}", urlParts[3], "URL part2 for swapped_min_max_args should be the unresolved placeholder")
+	assert.Equal(t, "{{$randomInt 30 25}}", urlParts[2],
+		"URL part1 for swapped_min_max_args should be the unresolved placeholder")
+	assert.Equal(t, "{{$randomInt 30 25}}", urlParts[3],
+		"URL part2 for swapped_min_max_args should be the unresolved placeholder")
 	var bodyJSON map[string]string
 	err := json.Unmarshal([]byte(body), &bodyJSON)
 	require.NoError(t, err, "Failed to unmarshal body (swapped)")
-	assert.Equal(t, "{{$randomInt 30 25}}", bodyJSON["value"], "Body for swapped_min_max_args should be the unresolved placeholder")
+	assert.Equal(t, "{{$randomInt 30 25}}", bodyJSON["value"],
+		"Body for swapped_min_max_args should be the unresolved placeholder")
 }
 
 func validateRandomIntMalformedArgs(t *testing.T, urlStr, header, body string) {
@@ -416,8 +448,13 @@ func validateRandomIntMalformedArgs(t *testing.T, urlStr, header, body string) {
 }
 
 // PRD-COMMENT: FR1.3.5 - System Variables: {{$randomInt [MIN MAX]}}
-// Corresponds to: Client's ability to substitute the {{$randomInt}} system variable with a random integer. Supports optional MIN and MAX arguments. If no args, defaults to a wide range. If MIN > MAX, or args are malformed, the literal placeholder is used. (http_syntax.md "System Variables").
-// This test suite uses various .http files (e.g., 'system_var_randomint_valid_args.http', 'system_var_randomint_no_args.http') to verify behavior with valid arguments, no arguments, swapped arguments (min > max), and malformed arguments, checking substitution in URLs, headers, and bodies.
+// Corresponds to: Client's ability to substitute the {{$randomInt}} system variable with
+// a random integer. Supports optional MIN and MAX arguments. If no args, defaults to a wide range.
+// If MIN > MAX, or args are malformed, the literal placeholder is used.
+// (http_syntax.md "System Variables").
+// This test suite uses various .http files (e.g., 'system_var_randomint_valid_args.http',
+// 'system_var_randomint_no_args.http') to verify behavior with valid arguments, no arguments,
+// swapped arguments (min > max), and malformed arguments, checking substitution in URLs, headers, and bodies.
 func TestExecuteFile_WithRandomIntSystemVariable(t *testing.T) {
 	interceptedRequest, server, client := setupRandomIntTest()
 	defer server.Close()
@@ -489,7 +526,8 @@ func getRandomIntTestCases() []randomIntTestCase {
 }
 
 // runRandomIntTestCase executes a single random int test case
-func runRandomIntTestCase(t *testing.T, tc randomIntTestCase, client *rc.Client, serverURL string, interceptedRequest *randomIntRequestData) {
+func runRandomIntTestCase(t *testing.T, tc randomIntTestCase, client *rc.Client, serverURL string,
+	interceptedRequest *randomIntRequestData) {
 	requestFilePath := createTestFileFromTemplate(t, tc.httpFilePath, struct{ ServerURL string }{ServerURL: serverURL})
 
 	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
@@ -503,7 +541,8 @@ func runRandomIntTestCase(t *testing.T, tc randomIntTestCase, client *rc.Client,
 }
 
 // validateRandomIntResponse validates the response from random int test
-func validateRandomIntResponse(t *testing.T, tc randomIntTestCase, responses []*rc.Response, interceptedRequest *randomIntRequestData) {
+func validateRandomIntResponse(t *testing.T, tc randomIntTestCase, responses []*rc.Response,
+	interceptedRequest *randomIntRequestData) {
 	require.Len(t, responses, 1, "Expected 1 response for %s", tc.name)
 	resp := responses[0]
 	assert.NoError(t, resp.Error, "Response error should be nil for %s", tc.name)

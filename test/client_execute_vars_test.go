@@ -25,8 +25,10 @@ import (
 )
 
 // PRD-COMMENT: FR1.1 - Custom Variables: Basic Definition and Substitution
-// Corresponds to: Client's ability to define and substitute custom variables within an .http file (e.g., @name = value) (http_syntax.md "Custom Variables").
-// This test uses 'testdata/http_request_files/custom_variables.http' to verify substitution of custom variables in URLs, headers, and bodies.
+// Corresponds to: Client's ability to define and substitute custom variables within an .http file
+// (e.g., @name = value) (http_syntax.md "Custom Variables").
+// This test uses 'testdata/http_request_files/custom_variables.http' to verify substitution
+// of custom variables in URLs, headers, and bodies.
 func TestExecuteFile_WithCustomVariables(t *testing.T) {
 	// Given
 	var requestCount int32
@@ -56,7 +58,8 @@ func TestExecuteFile_WithCustomVariables(t *testing.T) {
 	defer server.Close()
 
 	client, _ := rc.NewClient()
-	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/custom_variables.http", struct{ ServerURL string }{ServerURL: server.URL})
+	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/custom_variables.http",
+		struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
 	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
@@ -86,10 +89,15 @@ func TestExecuteFile_WithCustomVariables(t *testing.T) {
 }
 
 // PRD-COMMENT: FR1.3.6 - System Variables: {{$processEnv.VAR_NAME}}
-// Corresponds to: Client's ability to substitute the {{$processEnv.VAR_NAME}} system variable with the value of an OS environment variable (http_syntax.md "System Variables").
-// This test uses 'testdata/http_request_files/system_var_process_env.http' and sets OS environment variables to verify their substitution in URLs, headers, and bodies. It also checks behavior for undefined environment variables.
+// Corresponds to: Client's ability to substitute the {{$processEnv.VAR_NAME}} system variable
+// with the value of an OS environment variable (http_syntax.md "System Variables").
+// This test uses 'testdata/http_request_files/system_var_process_env.http' and sets OS environment
+// variables to verify their substitution in URLs, headers, and bodies. It also checks behavior
+// for undefined environment variables.
 func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
-	//t.Skip("Skipping due to bug in {{$processEnv VAR}} substitution (MEMORY d1edb831-da89-4cde-93ad-a9129eb7b8aa): placeholder not replaced with OS environment variable value. See task TBD for fix.")
+	//t.Skip("Skipping due to bug in {{$processEnv VAR}} substitution
+	//   (MEMORY d1edb831-da89-4cde-93ad-a9129eb7b8aa): placeholder not replaced with
+	//   OS environment variable value. See task TBD for fix.")
 	// Given
 	const testEnvVarName = "GO_RESTCLIENT_TEST_VAR"
 	const testEnvVarValue = "test_env_value_123"
@@ -147,7 +155,8 @@ func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
 	// SCENARIO-LIB-019-001
 	expectedURL := fmt.Sprintf("/path-%s/data", testEnvVarValue)
 	assert.Equal(t, expectedURL, interceptedRequest.URL, "URL should contain substituted env variable")
-	assert.Equal(t, testEnvVarValue, interceptedRequest.Header, "X-Env-Value header should contain substituted env variable")
+	assert.Equal(t, testEnvVarValue, interceptedRequest.Header,
+		"X-Env-Value header should contain substituted env variable")
 
 	var bodyJSON map[string]string
 	err = json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON)
@@ -160,10 +169,12 @@ func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
 	// SCENARIO-LIB-019-002
 	undefinedPayload, ok := bodyJSON["undefined_payload"]
 	require.True(t, ok, "undefined_payload not found in body")
-	assert.Equal(t, fmt.Sprintf("{{$processEnv %s}}", undefinedEnvVarName), undefinedPayload, "Body undefined_payload should be the unresolved placeholder")
+	assert.Equal(t, fmt.Sprintf("{{$processEnv %s}}", undefinedEnvVarName), undefinedPayload,
+		"Body undefined_payload should be the unresolved placeholder")
 
 	// Check Cache-Control header for unresolved placeholder
-	assert.Equal(t, "{{$processEnv UNDEFINED_CACHE_VAR_SHOULD_BE_EMPTY}}", interceptedRequest.CacheControlHeader, "Cache-Control header should be the unresolved placeholder")
+	assert.Equal(t, "{{$processEnv UNDEFINED_CACHE_VAR_SHOULD_BE_EMPTY}}", interceptedRequest.CacheControlHeader,
+		"Cache-Control header should be the unresolved placeholder")
 }
 
 type dotEnvInterceptedRequestData struct {
@@ -183,7 +194,8 @@ type dotEnvTestCase struct {
 	expectErrorInResp   bool
 }
 
-func runDotEnvScenarioTest(t *testing.T, client *rc.Client, serverURL string, tempDir string, tc dotEnvTestCase, interceptedData *dotEnvInterceptedRequestData) {
+func runDotEnvScenarioTest(t *testing.T, client *rc.Client, serverURL string, tempDir string,
+	tc dotEnvTestCase, interceptedData *dotEnvInterceptedRequestData) {
 	t.Helper()
 
 	// Given: Setup .env file for the current scenario
@@ -229,7 +241,8 @@ func runDotEnvScenarioTest(t *testing.T, client *rc.Client, serverURL string, te
 	if len(tc.expectedBodyPayload) > 0 {
 		var bodyJSON map[string]string
 		err = json.Unmarshal([]byte(interceptedData.Body), &bodyJSON)
-		require.NoError(t, err, "Failed to unmarshal request body JSON for scenario: %s. Body: %s", tc.name, interceptedData.Body)
+		require.NoError(t, err, "Failed to unmarshal request body JSON for scenario: %s. Body: %s",
+			tc.name, interceptedData.Body)
 		for key, expectedValue := range tc.expectedBodyPayload {
 			actualValue, ok := bodyJSON[key]
 			assert.True(t, ok, "Expected key '%s' not found in body for scenario: %s", key, tc.name)
@@ -239,10 +252,15 @@ func runDotEnvScenarioTest(t *testing.T, client *rc.Client, serverURL string, te
 }
 
 // PRD-COMMENT: FR1.3.7 - System Variables: {{$dotenv.VAR_NAME}}
-// Corresponds to: Client's ability to substitute the {{$dotenv.VAR_NAME}} system variable with values from a .env file located in the same directory as the .http file (http_syntax.md "System Variables").
-// This test uses 'testdata/http_request_files/system_var_dotenv.http' and a dynamically created '.env' file to verify substitution in URLs, headers, and bodies. It also checks behavior for variables not present in the .env file.
+// Corresponds to: Client's ability to substitute the {{$dotenv.VAR_NAME}} system variable
+// with values from a .env file located in the same directory as the .http file
+// (http_syntax.md "System Variables").
+// This test uses 'testdata/http_request_files/system_var_dotenv.http' and a dynamically created
+// '.env' file to verify substitution in URLs, headers, and bodies. It also checks behavior
+// for variables not present in the .env file.
 func TestExecuteFile_WithDotEnvSystemVariable(t *testing.T) {
-	var currentInterceptedData dotEnvInterceptedRequestData // Use a single instance, reset/captured by mock server per call
+	// Use a single instance, reset/captured by mock server per call
+	var currentInterceptedData dotEnvInterceptedRequestData
 
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
 		currentInterceptedData.URL = r.URL.String() // Capture relative URL path and query
@@ -306,8 +324,12 @@ User-Agent: test-client
 }
 
 // PRD-COMMENT: FR1.5 - Programmatic Variable Injection
-// Corresponds to: Client's ability to accept and substitute variables passed programmatically during the ExecuteFile call, which can override variables defined in the .http file or environment files (http_syntax.md "Variable Precedence").
-// This test uses 'testdata/http_request_files/programmatic_vars.http' and injects variables via `WithVariables` and `ExecuteFile` options to verify their substitution and precedence over file-defined variables.
+// Corresponds to: Client's ability to accept and substitute variables passed programmatically
+// during the ExecuteFile call, which can override variables defined in the .http file or
+// environment files (http_syntax.md "Variable Precedence").
+// This test uses 'testdata/http_request_files/programmatic_vars.http' and injects variables
+// via `WithVariables` and `ExecuteFile` options to verify their substitution and precedence
+// over file-defined variables.
 func TestExecuteFile_WithProgrammaticVariables(t *testing.T) {
 	// Given
 	var interceptedRequest struct {
@@ -362,7 +384,8 @@ func TestExecuteFile_WithProgrammaticVariables(t *testing.T) {
 	require.NoError(t, err, "Failed to unmarshal request body JSON")
 
 	assert.Equal(t, "dataFromProgrammatic", bodyJSON["field"], "Body field 'field' mismatch")
-	assert.Equal(t, "overridden_by_programmatic", bodyJSON["overridden_file_var"], "Body field 'overridden_file_var' mismatch")
+	assert.Equal(t, "overridden_by_programmatic", bodyJSON["overridden_file_var"],
+		"Body field 'overridden_file_var' mismatch")
 	assert.Equal(t, "programmatic_wins_over_env", bodyJSON["env_var_check"], "Body field 'env_var_check' mismatch")
 	assert.Equal(t, "file_only", bodyJSON["file_only_check"], "Body field 'file_only_check' mismatch")
 
@@ -374,8 +397,11 @@ func TestExecuteFile_WithProgrammaticVariables(t *testing.T) {
 }
 
 // PRD-COMMENT: FR1.3.4.1 - System Variables: {{$localDatetime "format"}}
-// Corresponds to: Client's ability to substitute the {{$localDatetime}} system variable with the current timestamp in the system's local timezone, formatted according to a Go layout string (http_syntax.md "System Variables").
-// This test uses 'testdata/http_request_files/system_var_local_datetime.http' to verify correct formatting and substitution in URLs, headers, and bodies.
+// Corresponds to: Client's ability to substitute the {{$localDatetime}} system variable
+// with the current timestamp in the system's local timezone, formatted according to a Go layout
+// string (http_syntax.md "System Variables").
+// This test uses 'testdata/http_request_files/system_var_local_datetime.http' to verify
+// correct formatting and substitution in URLs, headers, and bodies.
 func TestExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
 	// Given
 	var interceptedRequest struct {
@@ -398,7 +424,8 @@ func TestExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
 	// Capture current time to compare against, allowing for slight delay
 	beforeTime := time.Now().UTC().Unix()
 
-	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_timestamp.http", struct{ ServerURL string }{ServerURL: server.URL})
+	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_timestamp.http",
+		struct{ ServerURL string }{ServerURL: server.URL})
 
 	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
 	require.NoError(t, err, "ExecuteFile should not return an error for $timestamp processing")
@@ -519,9 +546,12 @@ func assertServerCapturedConsistencyValues(t *testing.T, capturedVals *capturedC
 
 	assert.Equal(t, capturedVals.PathUUID, capturedVals.HeaderUUID, "Path UUID and Header UUID should be the same")
 	assert.Equal(t, capturedVals.PathUUID, capturedVals.BodyUUID, "Path UUID and Body UUID should be the same")
-	assert.Equal(t, capturedVals.PathUUID, capturedVals.BodyAnotherUUID, "Path UUID and Body Another UUID should be the same")
-	assert.Equal(t, capturedVals.HeaderTimestamp, capturedVals.BodyTimestamp, "Header Timestamp and Body Timestamp should be the same")
-	assert.Equal(t, capturedVals.HeaderRandomInt, capturedVals.BodyRandomInt, "Header RandomInt and Body RandomInt should be the same")
+	assert.Equal(t, capturedVals.PathUUID, capturedVals.BodyAnotherUUID,
+		"Path UUID and Body Another UUID should be the same")
+	assert.Equal(t, capturedVals.HeaderTimestamp, capturedVals.BodyTimestamp,
+		"Header Timestamp and Body Timestamp should be the same")
+	assert.Equal(t, capturedVals.HeaderRandomInt, capturedVals.BodyRandomInt,
+		"Header RandomInt and Body RandomInt should be the same")
 }
 
 func assertRequestObjectConsistency(t *testing.T, parsedReq *rc.Request, capturedVals *capturedConsistencyValues) {
@@ -544,8 +574,11 @@ func assertRequestObjectConsistency(t *testing.T, parsedReq *rc.Request, capture
 }
 
 // PRD-COMMENT: FR1.6 - Variable Function Consistency (Internal)
-// Corresponds to: Ensuring internal consistency between how variables are resolved by the dedicated variable substitution functions and how they are resolved during a full ExecuteFile operation. This is more of an internal consistency check than a direct user-facing feature test.
-// This test compares the output of `SubstituteVariablesInString` with the actual substituted values observed in a request made via `ExecuteFile`, using 'testdata/http_request_files/variable_consistency.http'.
+// Corresponds to: Ensuring internal consistency between how variables are resolved by the
+// dedicated variable substitution functions and how they are resolved during a full ExecuteFile
+// operation. This is more of an internal consistency check than a direct user-facing feature test.
+// This test compares the output of `SubstituteVariablesInString` with the actual substituted
+// values observed in a request made via `ExecuteFile`, using 'testdata/http_request_files/variable_consistency.http'.
 func TestExecuteFile_VariableFunctionConsistency(t *testing.T) {
 	var capturedVals capturedConsistencyValues
 	server := setupConsistencyTestServer(t, &capturedVals)
@@ -588,7 +621,8 @@ type httpClientEnvTestCase struct {
 	executeFileErrorContains string
 	expectResponseError      bool
 	responseErrorContains    string
-	responseAssertions       func(t *testing.T, resp *rc.Response, interceptedReq *interceptedRequestData, serverURL string)
+	responseAssertions func(t *testing.T, resp *rc.Response,
+		interceptedReq *interceptedRequestData, serverURL string)
 }
 
 // runHttpClientEnvSubtest executes a single sub-test for TestExecuteFile_WithHttpClientEnvJson.
@@ -671,8 +705,12 @@ func runHttpClientEnvSubtest(t *testing.T, tc httpClientEnvTestCase) {
 }
 
 // PRD-COMMENT: FR1.4 - Environment Configuration Files: http-client.env.json
-// Corresponds to: Client's ability to load and substitute variables from `http-client.env.json` and `http-client.private.env.json` files, respecting environment-specific configurations (e.g., "dev", "prod") (http_syntax.md "Environment Configuration Files").
-// This test suite uses various .http files and dynamically created `http-client.env.json` / `http-client.private.env.json` files to verify variable loading, substitution, environment selection, and precedence for different scenarios (Task T4).
+// Corresponds to: Client's ability to load and substitute variables from `http-client.env.json`
+// and `http-client.private.env.json` files, respecting environment-specific configurations
+// (e.g., "dev", "prod") (http_syntax.md "Environment Configuration Files").
+// This test suite uses various .http files and dynamically created `http-client.env.json` /
+// `http-client.private.env.json` files to verify variable loading, substitution, environment
+// selection, and precedence for different scenarios (Task T4).
 func TestExecuteFile_WithHttpClientEnvJson(t *testing.T) {
 	tests := []httpClientEnvTestCase{
 		{
@@ -686,7 +724,8 @@ func TestExecuteFile_WithHttpClientEnvJson(t *testing.T) {
 			responseErrorContains:    "unsupported protocol scheme \"\"",
 			responseAssertions: func(t *testing.T, resp *rc.Response, interceptedReq *interceptedRequestData, serverURL string) {
 				t.Helper()
-				assert.True(t, strings.Contains(resp.Request.RawURLString, "{{host}}"), "RawURLString should still contain {{host}}")
+				assert.True(t, strings.Contains(resp.Request.RawURLString, "{{host}}"),
+				"RawURLString should still contain {{host}}")
 			},
 		},
 		{
@@ -737,8 +776,10 @@ func assertRandomInteger(t *testing.T, bodyJSON map[string]string) {
 	assert.GreaterOrEqual(t, randIntNegativeValue, -5, "randIntNegative should be >= -5")
 	assert.LessOrEqual(t, randIntNegativeValue, 5, "randIntNegative should be <= 5")
 
-	assert.Equal(t, "{{$random.integer 10 1}}", bodyJSON["randIntInvalidRange"], "randIntInvalidRange should remain unsubstituted")
-	assert.Equal(t, "{{$random.integer 10 abc}}", bodyJSON["randIntInvalidArgs"], "randIntInvalidArgs should remain unsubstituted")
+	assert.Equal(t, "{{$random.integer 10 1}}", bodyJSON["randIntInvalidRange"],
+		"randIntInvalidRange should remain unsubstituted")
+	assert.Equal(t, "{{$random.integer 10 abc}}", bodyJSON["randIntInvalidArgs"],
+		"randIntInvalidArgs should remain unsubstituted")
 }
 
 // Helper for TestExecuteFile_WithExtendedRandomSystemVariables: asserts $random.float behavior
@@ -754,7 +795,8 @@ func assertRandomFloat(t *testing.T, bodyJSON map[string]string) {
 	assert.GreaterOrEqual(t, randFloatNegativeValue, -1.5, "randFloatNegative should be >= -1.5")
 	assert.LessOrEqual(t, randFloatNegativeValue, 0.5, "randFloatNegative should be <= 0.5")
 
-	assert.Equal(t, "{{$random.float 5.0 1.0}}", bodyJSON["randFloatInvalidRange"], "randFloatInvalidRange should remain unsubstituted")
+	assert.Equal(t, "{{$random.float 5.0 1.0}}", bodyJSON["randFloatInvalidRange"],
+		"randFloatInvalidRange should remain unsubstituted")
 }
 
 // Helper for TestExecuteFile_WithExtendedRandomSystemVariables: asserts $random.alphabetic behavior
@@ -766,7 +808,8 @@ func assertRandomAlphabetic(t *testing.T, bodyJSON map[string]string) {
 		assert.True(t, (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z'), "randAlphabetic char not in alphabet: %c", r)
 	}
 	assert.Equal(t, "", bodyJSON["randAlphabeticZero"], "randAlphabeticZero should be empty")
-	assert.Equal(t, "{{$random.alphabetic abc}}", bodyJSON["randAlphabeticInvalid"], "randAlphabeticInvalid should remain unsubstituted")
+	assert.Equal(t, "{{$random.alphabetic abc}}", bodyJSON["randAlphabeticInvalid"],
+		"randAlphabeticInvalid should remain unsubstituted")
 }
 
 // Helper for TestExecuteFile_WithExtendedRandomSystemVariables: asserts $random.alphanumeric behavior
@@ -803,8 +846,13 @@ func assertRandomEmail(t *testing.T, bodyJSON map[string]string) {
 }
 
 // PRD-COMMENT: FR1.3.8 - System Variables: {{$random.*}}
-// Corresponds to: Client's ability to substitute extended random system variables like {{$random.integer MIN MAX}}, {{$random.float MIN MAX}}, {{$random.alphabetic LENGTH}}, {{$random.alphanumeric LENGTH}}, {{$random.hexadecimal LENGTH}}, {{$random.email}} (http_syntax.md "System Variables - Extended Random").
-// This test uses 'testdata/http_request_files/system_var_extended_random.http' to verify the generation and substitution of these extended random variables, including handling of arguments and invalid inputs.
+// Corresponds to: Client's ability to substitute extended random system variables like
+// {{$random.integer MIN MAX}}, {{$random.float MIN MAX}}, {{$random.alphabetic LENGTH}},
+// {{$random.alphanumeric LENGTH}}, {{$random.hexadecimal LENGTH}}, {{$random.email}}
+// (http_syntax.md "System Variables - Extended Random").
+// This test uses 'testdata/http_request_files/system_var_extended_random.http' to verify
+// the generation and substitution of these extended random variables, including handling
+// of arguments and invalid inputs.
 func TestExecuteFile_WithExtendedRandomSystemVariables(t *testing.T) {
 	// Given
 	var interceptedRequest struct {
@@ -818,7 +866,8 @@ func TestExecuteFile_WithExtendedRandomSystemVariables(t *testing.T) {
 	defer server.Close()
 
 	client, _ := rc.NewClient()
-	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_extended_random.http", struct{ ServerURL string }{ServerURL: server.URL})
+	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_extended_random.http",
+		struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
 	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
