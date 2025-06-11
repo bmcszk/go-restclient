@@ -1,1 +1,0 @@
-/home/blaze/work/halucination/windsurf/rules/ai_tool_usage_code_editing.md

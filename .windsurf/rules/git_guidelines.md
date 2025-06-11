@@ -1,1 +1,0 @@
-/home/blaze/work/halucination/windsurf/rules/git_guidelines.md
