@@ -248,7 +248,10 @@ func isDynamicSystemVariablePlaceholder(value string, requestScopedSystemVars ma
 		// Check for $... without {{}} for direct system var names like $uuid
 		if strings.HasPrefix(value, "$") {
 			if _, ok := requestScopedSystemVars[value]; ok {
-				slog.Debug("isDynamicSystemVariablePlaceholder: Direct value is a pre-evaluated system variable key", "value", value)
+				slog.Debug(
+				"isDynamicSystemVariablePlaceholder: Direct value is a "+
+					"pre-evaluated system variable key",
+				"value", value)
 				return false // It's a key like $uuid, not a placeholder like {{$uuid}}
 			}
 		}
@@ -263,9 +266,13 @@ func isDynamicSystemVariablePlaceholder(value string, requestScopedSystemVars ma
 		return false // Inner part doesn't start with $, so not a system variable placeholder
 	}
 
-	// Check if this exact inner directive is already a pre-evaluated simple system variable (like $uuid, $timestamp, or no-arg $randomInt)
+	// Check if this exact inner directive is already a pre-evaluated simple
+	// system variable (like $uuid, $timestamp, or no-arg $randomInt)
 	if _, ok := requestScopedSystemVars[innerDirective]; ok {
-		slog.Debug("isDynamicSystemVariablePlaceholder: Placeholder's inner directive is a pre-evaluated system variable", "value", value, "innerDirective", innerDirective)
+		slog.Debug(
+			"isDynamicSystemVariablePlaceholder: Placeholder's inner directive "+
+				"is a pre-evaluated system variable",
+			"value", value, "innerDirective", innerDirective)
 		return false
 	}
 
@@ -279,11 +286,18 @@ func isDynamicSystemVariablePlaceholder(value string, requestScopedSystemVars ma
 
 	for _, re := range dynamicRegexes {
 		if re.MatchString(value) {
-			slog.Debug("isDynamicSystemVariablePlaceholder: Placeholder matches a dynamic system variable pattern", "value", value, "regex", re.String())
+			slog.Debug(
+				"isDynamicSystemVariablePlaceholder: Placeholder matches a "+
+					"dynamic system variable pattern",
+				"value", value, "regex", re.String())
 			return true
 		}
 	}
-	slog.Debug("isDynamicSystemVariablePlaceholder: Placeholder does not match any known dynamic pattern or is not a dynamic system variable requiring further evaluation", "value", value)
+	slog.Debug(
+		"isDynamicSystemVariablePlaceholder: Placeholder does not match any "+
+			"known dynamic pattern or is not a dynamic system variable "+
+			"requiring further evaluation",
+		"value", value)
 	return false
 }
 
@@ -303,19 +317,29 @@ func randomStringFromCharset(length int, charset string) string {
 
 // substituteRequestVariables handles the substitution of variables in the request's URL and headers.
 // It returns the final parsed URL or an error if substitution/parsing fails.
-func substituteRequestVariables(rcRequest *Request, parsedFile *ParsedFile, requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool), programmaticVars map[string]any, currentDotEnvVars map[string]string, clientBaseURL string) (*url.URL, error) {
+func substituteRequestVariables(
+	rcRequest *Request,
+	parsedFile *ParsedFile,
+	requestScopedSystemVars map[string]string,
+	osEnvGetter func(string) (string, bool),
+	programmaticVars map[string]any,
+	currentDotEnvVars map[string]string,
+	clientBaseURL string,
+) (*url.URL, error) {
 
 	var fileScopedVars map[string]string // Declare fileScopedVars at function scope
 	var envVarsFromFile map[string]string
 	var globalVarsFromFile map[string]string
 
 	if parsedFile != nil {
-		// Create a mutable copy for this request's substitution pass, to prevent modifying the original ParsedFile.FileVariables
+		// Create a mutable copy for this request's substitution pass, to prevent
+		// modifying the original ParsedFile.FileVariables
 		fileScopedVars = make(map[string]string, len(parsedFile.FileVariables))
 		for k, v := range parsedFile.FileVariables {
 			fileScopedVars[k] = v
 		}
-		envVarsFromFile = parsedFile.EnvironmentVariables // These are typically not modified by substitution, so direct assignment is fine
+		// These are typically not modified by substitution, so direct assignment is fine
+		envVarsFromFile = parsedFile.EnvironmentVariables
 		globalVarsFromFile = parsedFile.GlobalVariables   // Same for these
 	} else {
 		// For direct execution without a file context (e.g. client.Execute called directly or URL substitution in executeRequest)

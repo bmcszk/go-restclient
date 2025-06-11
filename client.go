@@ -250,7 +250,11 @@ func (*Client) generateRequestScopedSystemVariables() map[string]string {
 // the request's initial URL (if parsed),
 // and the request's RawURLString (if initial URL parsing was deferred).
 // It returns the resolved URL or an error.
-func (*Client) _resolveRequestURL(baseURLStr string, initialRequestURL *url.URL, rawRequestURLStr string) (*url.URL, error) {
+func (*Client) _resolveRequestURL(
+	baseURLStr string,
+	initialRequestURL *url.URL,
+	rawRequestURLStr string,
+) (*url.URL, error) {
 
 	var currentRequestURL *url.URL
 

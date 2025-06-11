@@ -244,7 +244,10 @@ func loadEnvironmentSpecificVariables(originalFilePath string, client *Client, p
 		if parsedFile.EnvironmentVariables == nil { // Ensure it's initialized
 			parsedFile.EnvironmentVariables = make(map[string]string)
 		}
-		slog.Debug("No environment variables loaded for selected environment", "environment", client.selectedEnvironmentName, "public_file", publicEnvFilePath, "private_file", privateEnvFilePath)
+		slog.Debug(
+			"No environment variables loaded for selected environment",
+			"environment", client.selectedEnvironmentName,
+			"public_file", publicEnvFilePath, "private_file", privateEnvFilePath)
 	}
 }
 
@@ -261,7 +264,11 @@ func parseRequests(reader *bufio.Reader, filePath string, client *Client,
 		osEnvGetter:             osEnvGetter,
 		dotEnvVars:              dotEnvVars,
 		importStack:             importStack,
-		parsedFile:              &ParsedFile{Requests: make([]*Request, 0), FileVariables: make(map[string]string), FilePath: filePath},
+		parsedFile: &ParsedFile{
+			Requests: make([]*Request, 0),
+			FileVariables: make(map[string]string),
+			FilePath: filePath,
+		},
 		currentFileVariables:    make(map[string]string),
 		lineNumber:              0,
 	}
@@ -311,7 +318,8 @@ func processFileLine(parserState *requestParserState, line string) error {
 }
 
 // ensureCurrentRequest creates a new request if one doesn't exist yet
-// isRequestLine determines if a line is an HTTP request line (e.g., GET https://example.com or just https://example.com for a GET).
+// isRequestLine determines if a line is an HTTP request line
+// (e.g., GET https://example.com or just https://example.com for a GET).
 func (p *requestParserState) isRequestLine(trimmedLine string) bool {
 	parts := strings.Fields(trimmedLine)
 	if len(parts) == 0 {
@@ -324,7 +332,9 @@ func (p *requestParserState) isRequestLine(trimmedLine string) bool {
 		// More robust parsing of the URL itself happens later.
 		lineIsURL := strings.HasPrefix(parts[0], "http://") || strings.HasPrefix(parts[0], "https://")
 		if lineIsURL {
-			slog.Debug("isRequestLine: Single token line identified as potential short-form GET URL", "token", parts[0], "line", p.lineNumber)
+			slog.Debug(
+				"isRequestLine: Single token line identified as potential short-form GET URL",
+				"token", parts[0], "line", p.lineNumber)
 		}
 		return lineIsURL
 	}
@@ -355,7 +365,6 @@ func (p *requestParserState) processLine(lineType lineType, trimmedLine, origina
 // handleContent processes general content lines that could be request lines, headers, or body content
 func (p *requestParserState) handleContent(trimmedLine, originalLine string) error {
 	// If we are already in the body parsing state, all non-empty, non-comment lines are body content.
-	// A new request can only start after a '###' separator (which would have reset parsingBody to false in finalizeCurrentRequest)
 	if p.parsingBody {
 		p.handleBodyContent(originalLine)
 		return nil
@@ -366,27 +375,40 @@ func (p *requestParserState) handleContent(trimmedLine, originalLine string) err
 		return p.handleRequestLine(trimmedLine)
 	}
 
-	// Not a request line, and not parsing body (implicitly true here).
-	// If it contains a colon, it's a header.
+	// Handle header-like lines
 	if strings.Contains(trimmedLine, ":") {
-		// Ensure we have a current request to attach this header to.
-		if p.currentRequest == nil || p.currentRequest.Method == "" {
-			slog.Warn("Parser: Encountered header-like line without an active request context or before a request line", "line", trimmedLine, "lineNumber", p.lineNumber)
-			return nil // Or return an error: fmt.Errorf("line %d: header found outside of request block: %s", p.lineNumber, trimmedLine)
-		}
-		return p.handleHeader(trimmedLine)
+		return p.handlePotentialHeaderLine(trimmedLine)
 	}
 
-	// Not parsing body, not a request line, and not a header.
-	// This is an "orphaned" line.
+	// Handle orphaned content
+	return p.handleOrphanedContent(originalLine)
+}
+
+// handlePotentialHeaderLine processes lines that look like headers
+func (p *requestParserState) handlePotentialHeaderLine(trimmedLine string) error {
+	// Ensure we have a current request to attach this header to.
+	if p.currentRequest == nil || p.currentRequest.Method == "" {
+		slog.Warn(
+			"Parser: Encountered header-like line without an active request "+
+				"context or before a request line",
+			"line", trimmedLine, "lineNumber", p.lineNumber)
+		return nil
+	}
+	return p.handleHeader(trimmedLine)
+}
+
+// handleOrphanedContent processes lines that don't fit other categories
+func (p *requestParserState) handleOrphanedContent(originalLine string) error {
 	// If there's no current request context, it's likely an error or ignorable.
 	if p.currentRequest == nil || p.currentRequest.Method == "" {
-		slog.Warn("Parser: Encountered orphaned line without an active request context", "line", originalLine, "lineNumber", p.lineNumber)
-		return nil // Or an error: fmt.Errorf("line %d: orphaned content outside of request block: %s", p.lineNumber, originalLine)
+		slog.Warn(
+			"Parser: Encountered orphaned line without an active request context",
+			"line", originalLine, "lineNumber", p.lineNumber)
+		return nil
 	}
 
-	// If there is a request context, treat as body content (e.g. single-line body without preceding empty line).
-	p.parsingBody = true // Explicitly switch to body parsing if we decide this is body content.
+	// If there is a request context, treat as body content
+	p.parsingBody = true
 	p.handleBodyContent(originalLine)
 	return nil
 }
@@ -473,7 +495,8 @@ func (p *requestParserState) handleEmptyLine() error {
 // handleRequestLine processes a potential HTTP request line (METHOD URL HTTP/Version).
 func (p *requestParserState) handleRequestLine(trimmedLine string) error {
 
-	if p.justSawEmptyLineSeparator && p.currentRequest != nil && p.currentRequest.Method != "" && isPotentialRequestLine(trimmedLine) {
+	if p.justSawEmptyLineSeparator && p.currentRequest != nil &&
+		p.currentRequest.Method != "" && isPotentialRequestLine(trimmedLine) {
 		p.finalizeCurrentRequest()
 		// ensureCurrentRequest() will be called by subsequent logic if needed, preparing for the new request.
 	}
@@ -483,7 +506,8 @@ func (p *requestParserState) handleRequestLine(trimmedLine string) error {
 		p.finalizeCurrentRequest() // Finalize the previous request
 
 		// Reset parser state fields that are per-request, but p.currentRequest itself is now nil.
-		// p.ensureCurrentRequest() will be called by the next line processor (e.g. handleComment, or this function again if it's not ###)
+		// p.ensureCurrentRequest() will be called by the next line processor
+		// (e.g. handleComment, or this function again if it's not ###)
 		// or when a new request line is actually encountered.
 
 		// FR1.3: Support for request naming via ### Request Name
@@ -503,7 +527,8 @@ func (p *requestParserState) handleRequestLine(trimmedLine string) error {
 
 	// Apply stored nextRequestName if available and current request has no name yet.
 	// @name directive would have already set p.currentRequest.Name directly.
-	if !finalizedBySeparatorInLine && p.currentRequest != nil && p.currentRequest.Method != "" && p.nextRequestName != "" {
+	if !finalizedBySeparatorInLine && p.currentRequest != nil &&
+		p.currentRequest.Method != "" && p.nextRequestName != "" {
 		if p.currentRequest.Name == "" { // Only apply if no name is set yet (e.g. by @name)
 			p.currentRequest.Name = p.nextRequestName
 		}
@@ -719,7 +744,8 @@ func (p *requestParserState) handleNonMethodRequestLine(requestLine string, firs
 		} else {
 			// First token is not a method, and not a URL. It's an orphaned line or unexpected content.
 			slog.Warn("First token not a method or URL, and no method on currentRequest. Treating as orphaned line.",
-				"token", firstToken, "requestLine", requestLine, "line", p.lineNumber, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
+				"token", firstToken, "requestLine", requestLine,
+				"line", p.lineNumber, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
 			// Potentially set as body or log as error, for now, it's an orphaned line that might be ignored
 			// or become part of a body if subsequent lines suggest that.
 			// If it was truly intended as a URL but didn't start with http(s), it won't be parsed as such here.
