@@ -204,51 +204,54 @@ func parseRequestFile(filePath string, client *Client, importStack []string) (*P
 // originalFilePath is the path originally passed to parseRequestFile, used for resolving .env.json files.
 func loadEnvironmentSpecificVariables(originalFilePath string, client *Client, parsedFile *ParsedFile) {
 	if client == nil || client.selectedEnvironmentName == "" || parsedFile == nil {
-		return // Nothing to do if client, environment, or parsedFile is not set
+		return
 	}
 
-	mergedEnvVars := make(map[string]string)
-	// Use the originalFilePath to determine the directory for http-client.env.json files,
-	// consistent with original logic.
 	fileDir := filepath.Dir(originalFilePath)
-
-	// Load public environment file: http-client.env.json
-	publicEnvFilePath := filepath.Join(fileDir, "http-client.env.json")
-	publicEnvVars, err := loadEnvironmentFile(publicEnvFilePath, client.selectedEnvironmentName)
-	if err != nil {
-		slog.Warn(
-			"Error loading public environment file",
-			"file", publicEnvFilePath, "environment", client.selectedEnvironmentName,
-			"error", err)
-	}
-	for k, v := range publicEnvVars {
-		mergedEnvVars[k] = v
-	}
-
-	// Load private environment file: http-client.private.env.json
-	privateEnvFilePath := filepath.Join(fileDir, "http-client.private.env.json")
-	privateEnvVars, err := loadEnvironmentFile(privateEnvFilePath, client.selectedEnvironmentName)
-	if err != nil {
-		slog.Warn(
-			"Error loading private environment file",
-			"file", privateEnvFilePath, "environment", client.selectedEnvironmentName,
-			"error", err)
-	}
-	for k, v := range privateEnvVars { // Override with private vars
-		mergedEnvVars[k] = v
-	}
+	mergedEnvVars := loadEnvironmentFiles(fileDir, client.selectedEnvironmentName)
 
 	if len(mergedEnvVars) > 0 {
 		parsedFile.EnvironmentVariables = mergedEnvVars
 	} else {
-		if parsedFile.EnvironmentVariables == nil { // Ensure it's initialized
-			parsedFile.EnvironmentVariables = make(map[string]string)
-		}
-		slog.Debug(
-			"No environment variables loaded for selected environment",
-			"environment", client.selectedEnvironmentName,
-			"public_file", publicEnvFilePath, "private_file", privateEnvFilePath)
+		ensureEnvironmentVariablesInitialized(parsedFile, client.selectedEnvironmentName, fileDir)
 	}
+}
+
+// loadEnvironmentFiles loads variables from both public and private environment files
+func loadEnvironmentFiles(fileDir, selectedEnvName string) map[string]string {
+	mergedEnvVars := make(map[string]string)
+
+	// Load from http-client.env.json (public environment variables)
+	publicEnvFile := filepath.Join(fileDir, "http-client.env.json")
+	if publicVars, err := loadEnvironmentFile(publicEnvFile, selectedEnvName); err == nil && publicVars != nil {
+		for k, v := range publicVars {
+			mergedEnvVars[k] = v
+		}
+		slog.Debug("Loaded environment variables from public file",
+			"environment", selectedEnvName, "file", publicEnvFile, "varCount", len(publicVars))
+	}
+
+	// Load from http-client.private.env.json (private environment variables)
+	// Private variables override public ones if they have the same key
+	privateEnvFile := filepath.Join(fileDir, "http-client.private.env.json")
+	if privateVars, err := loadEnvironmentFile(privateEnvFile, selectedEnvName); err == nil && privateVars != nil {
+		for k, v := range privateVars {
+			mergedEnvVars[k] = v
+		}
+		slog.Debug("Loaded environment variables from private file",
+			"environment", selectedEnvName, "file", privateEnvFile, "varCount", len(privateVars))
+	}
+
+	return mergedEnvVars
+}
+
+// ensureEnvironmentVariablesInitialized ensures the EnvironmentVariables map is initialized
+func ensureEnvironmentVariablesInitialized(parsedFile *ParsedFile, selectedEnvName, fileDir string) {
+	if parsedFile.EnvironmentVariables == nil {
+		parsedFile.EnvironmentVariables = make(map[string]string)
+	}
+	slog.Debug("No environment-specific variables found for selected environment",
+		"environment", selectedEnvName, "searchDir", fileDir)
 }
 
 // parseRequests reads HTTP requests from a reader and parses them into a ParsedFile struct.

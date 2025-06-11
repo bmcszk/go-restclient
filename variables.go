@@ -343,7 +343,6 @@ func substituteRequestVariables(
 	currentDotEnvVars map[string]string,
 	clientBaseURL string,
 ) (*url.URL, error) {
-
 	var fileScopedVars map[string]string // Declare fileScopedVars at function scope
 	var envVarsFromFile map[string]string
 	var globalVarsFromFile map[string]string
@@ -359,7 +358,8 @@ func substituteRequestVariables(
 		envVarsFromFile = parsedFile.EnvironmentVariables
 		globalVarsFromFile = parsedFile.GlobalVariables   // Same for these
 	} else {
-		// For direct execution without a file context (e.g. client.Execute called directly or URL substitution in executeRequest)
+		// For direct execution without a file context (e.g. client.Execute called directly
+		// or URL substitution in executeRequest)
 		fileScopedVars = make(map[string]string)     // Ensure not nil
 		envVarsFromFile = make(map[string]string)    // Ensure not nil
 		globalVarsFromFile = make(map[string]string) // Ensure not nil
@@ -394,7 +394,9 @@ func substituteRequestVariables(
 
 	finalParsedURL, parseErr := url.Parse(substitutedRawURL)
 	if parseErr != nil {
-		return nil, fmt.Errorf("failed to parse URL after variable substitution: %s (original: %s): %w", substitutedRawURL, rcRequest.RawURLString, parseErr)
+		return nil, fmt.Errorf(
+			"failed to parse URL after variable substitution: %s (original: %s): %w",
+			substitutedRawURL, rcRequest.RawURLString, parseErr)
 	}
 	// rcRequest.URL = finalParsedURL // Assign here as it's successfully parsed - redundant, caller should assign
 
@@ -434,29 +436,33 @@ func _parseLength(match string, re *regexp.Regexp, defaultLength int) (int, bool
 }
 
 // _parseRangeInt extracts optional min and max integer arguments.
-func _parseRangeInt(match string, re *regexp.Regexp, defaultMin, defaultMax int) (int, int, bool) {
+func _parseRangeInt(match string, re *regexp.Regexp, defaultMin, defaultMax int) (minVal, maxVal int, ok bool) {
 	parts := re.FindStringSubmatch(match)
 	if len(parts) == 3 && parts[1] != "" && parts[2] != "" {
-		min, errMin := strconv.Atoi(parts[1])
-		max, errMax := strconv.Atoi(parts[2])
-		if errMin != nil || errMax != nil || min > max {
+		minVal, errMin := strconv.Atoi(parts[1])
+		maxVal, errMax := strconv.Atoi(parts[2])
+		if errMin != nil || errMax != nil || minVal > maxVal {
 			return 0, 0, false // Invalid range
 		}
-		return min, max, true
+		return minVal, maxVal, true
 	}
 	return defaultMin, defaultMax, true
 }
 
 // _parseRangeFloat extracts optional min and max float arguments.
-func _parseRangeFloat(match string, re *regexp.Regexp, defaultMin, defaultMax float64) (float64, float64, bool) {
+func _parseRangeFloat(
+	match string,
+	re *regexp.Regexp,
+	defaultMin, defaultMax float64,
+) (minVal, maxVal float64, ok bool) {
 	parts := re.FindStringSubmatch(match)
 	if len(parts) == 3 && parts[1] != "" && parts[2] != "" {
-		min, errMin := strconv.ParseFloat(parts[1], 64)
-		max, errMax := strconv.ParseFloat(parts[2], 64)
-		if errMin != nil || errMax != nil || min > max {
+		minVal, errMin := strconv.ParseFloat(parts[1], 64)
+		maxVal, errMax := strconv.ParseFloat(parts[2], 64)
+		if errMin != nil || errMax != nil || minVal > maxVal {
 			return 0, 0, false // Invalid range
 		}
-		return min, max, true
+		return minVal, maxVal, true
 	}
 	return defaultMin, defaultMax, true
 }
@@ -464,26 +470,27 @@ func _parseRangeFloat(match string, re *regexp.Regexp, defaultMin, defaultMax fl
 // _substituteRandomIntFunc returns a function for ReplaceAllStringFunc to generate random integers.
 func _substituteRandomIntFunc(re *regexp.Regexp, defaultMin, defaultMax int) func(string) string {
 	return func(match string) string {
-		min, max, ok := _parseRangeInt(match, re, defaultMin, defaultMax)
+		minVal, maxVal, ok := _parseRangeInt(match, re, defaultMin, defaultMax)
 		if !ok {
 			return match // Malformed range
 		}
-		return strconv.Itoa(rand.Intn(max-min+1) + min)
+		return strconv.Itoa(rand.Intn(maxVal-minVal+1) + minVal)
 	}
 }
 
 // _substituteRandomFloatFunc returns a function for ReplaceAllStringFunc to generate random floats.
 func _substituteRandomFloatFunc(re *regexp.Regexp, defaultMin, defaultMax float64) func(string) string {
 	return func(match string) string {
-		min, max, ok := _parseRangeFloat(match, re, defaultMin, defaultMax)
+		minVal, maxVal, ok := _parseRangeFloat(match, re, defaultMin, defaultMax)
 		if !ok {
 			return match // Malformed range
 		}
-		return fmt.Sprintf("%f", min+rand.Float64()*(max-min))
+		return fmt.Sprintf("%f", minVal+rand.Float64()*(maxVal-minVal))
 	}
 }
 
-// _substituteRandomLengthCharsetFunc returns a function for ReplaceAllStringFunc to generate random strings from a charset.
+// _substituteRandomLengthCharsetFunc returns a function for ReplaceAllStringFunc to generate
+// random strings from a charset.
 func _substituteRandomLengthCharsetFunc(re *regexp.Regexp, charset string) func(string) string {
 	return func(match string) string {
 		length, ok := _parseLength(match, re, defaultRandomLength)
@@ -504,190 +511,204 @@ func _substituteRandomLengthCharsetFunc(re *regexp.Regexp, charset string) func(
 func _substituteRandomHexHelper(re *regexp.Regexp, defaultLength int) func(string) string {
 	return func(match string) string {
 		length, ok := _parseLength(match, re, defaultLength)
-		if !ok { // Invalid length format
+		if !ok || length < 0 {
 			return match
 		}
 		if length == 0 {
 			return ""
 		}
-		if length < 0 {
-			return match
-		}
-
-		// Each byte becomes two hex characters.
-		// For odd length, we need one extra byte and then truncate.
-		byteCount := length/2 + length%2
-		b := make([]byte, byteCount)
-		if _, err := crypto_rand.Read(b); err != nil {
-			slog.Error("Failed to generate random bytes for hex string", "error", err)
-			return match // Error generating random bytes
-		}
-		hexStr := fmt.Sprintf("%x", b)
-		return hexStr[:length] // Truncate if original length was odd
+		return generateRandomHexString(length, match)
 	}
+}
+
+// generateRandomHexString generates a hex string of the specified length
+func generateRandomHexString(length int, fallbackMatch string) string {
+	byteCount := length/2 + length%2
+	b := make([]byte, byteCount)
+	if _, err := crypto_rand.Read(b); err != nil {
+		slog.Error("Failed to generate random bytes for hex string", "error", err)
+		return fallbackMatch
+	}
+	hexStr := fmt.Sprintf("%x", b)
+	return hexStr[:length]
 }
 
 // _substituteDateTimeVariables handles the substitution of $datetime and $localDatetime variables.
 func _substituteDateTimeVariables(text string) string {
-	// REQ-LIB-029 & REQ-LIB-030: Datetime variables ($datetime, $localDatetime)
 	reDateTimeRelated := regexp.MustCompile(`{{\$(datetime|localDatetime)((?:\s*(?:\"[^\"]*\"|[^\"\s}]+))*)\s*}}`)
-	text = reDateTimeRelated.ReplaceAllStringFunc(text, func(match string) string {
-		captures := reDateTimeRelated.FindStringSubmatch(match)
-		if len(captures) < 3 { // Should have full match, type, and args part
-			slog.Warn("Could not parse datetime/localDatetime variable, captures unexpected", "match", match, "capturesCount", len(captures))
-			return match // Safety return
-		}
-		varType := captures[1] // "datetime" or "localDatetime"
-		argsStr := strings.TrimSpace(captures[2])
-
-		var formatStr string
-		// var offsetStr string // TODO: Implement offset parsing in a subsequent step
-
-		// Regex to parse arguments: captures quoted strings or unquoted non-space sequences
-		argPartsRegex := regexp.MustCompile(`(?:\"([^\"]*)\"|([^\"\s}]+))`)
-		parsedArgsMatches := argPartsRegex.FindAllStringSubmatch(argsStr, -1)
-
-		parsedArgs := []string{}
-		for _, m := range parsedArgsMatches {
-			if m[1] != "" { // Quoted argument
-				parsedArgs = append(parsedArgs, m[1])
-			} else if m[2] != "" { // Unquoted argument
-				parsedArgs = append(parsedArgs, m[2])
-			}
-		}
-
-		if len(parsedArgs) > 0 {
-			formatStr = parsedArgs[0]
-		} else {
-			// Default format if none provided, as per common expectations (e.g., ISO8601)
-			formatStr = "iso8601"
-		}
-		// "[DEBUG_DATETIME] Determined formatStr", "varType", varType, "argsStr", argsStr, "parsedFormatStr", formatStr, "originalMatch", match)
-		// if len(parsedArgs) > 1 {
-		// offsetStr = parsedArgs[1] // TODO: Implement offset parsing
-		// }
-
-		var now time.Time
-		if varType == "datetime" {
-			now = time.Now().UTC()
-		} else { // localDatetime
-			now = time.Now() // System's local time zone
-		}
-
-		// TODO: Implement offset application using offsetStr and 'now' in a subsequent step
-
-		var resultStr string
-		switch strings.ToLower(formatStr) {
-		case "rfc1123":
-			resultStr = now.Format(time.RFC1123)
-		case "iso8601":
-			resultStr = now.Format(time.RFC3339)
-		case "timestamp":
-			resultStr = strconv.FormatInt(now.Unix(), 10)
-		default:
-			// TODO: Implement custom Java format string translation to Go layout in a subsequent step
-			// slog.Warn("Unsupported or custom datetime format, returning original match for now", "format", formatStr, "variableType", varType, "originalMatch", match)
-			return match
-		}
-
-		return resultStr
-	})
-	return text
+	return reDateTimeRelated.ReplaceAllStringFunc(text, processDateTimeMatch)
 }
 
-// substituteDynamicSystemVariables handles system variables that require argument parsing or dynamic evaluation at substitution time.
+// processDateTimeMatch processes a single datetime variable match
+func processDateTimeMatch(match string) string {
+	reDateTimeRelated := regexp.MustCompile(`{{\$(datetime|localDatetime)((?:\s*(?:\"[^\"]*\"|[^\"\s}]+))*)\s*}}`)
+	captures := reDateTimeRelated.FindStringSubmatch(match)
+	if len(captures) < 3 {
+		slog.Warn("Could not parse datetime/localDatetime variable, captures unexpected",
+			"match", match, "capturesCount", len(captures))
+		return match
+	}
+
+	varType := captures[1]
+	argsStr := strings.TrimSpace(captures[2])
+	formatStr := extractFormatString(argsStr)
+	now := getTimeForType(varType)
+
+	return formatTimeString(now, formatStr, match)
+}
+
+// extractFormatString extracts the format string from datetime arguments
+func extractFormatString(argsStr string) string {
+	argPartsRegex := regexp.MustCompile(`(?:\"([^\"]*)\"|([^\"\s}]+))`)
+	parsedArgsMatches := argPartsRegex.FindAllStringSubmatch(argsStr, -1)
+
+	for _, m := range parsedArgsMatches {
+		if m[1] != "" {
+			return m[1] // Quoted argument
+		}
+		if m[2] != "" {
+			return m[2] // Unquoted argument
+		}
+	}
+	return "iso8601" // Default format
+}
+
+// getTimeForType returns the appropriate time based on the variable type
+func getTimeForType(varType string) time.Time {
+	if varType == "datetime" {
+		return time.Now().UTC()
+	}
+	return time.Now() // localDatetime
+}
+
+// formatTimeString formats the time according to the specified format
+func formatTimeString(now time.Time, formatStr, originalMatch string) string {
+	switch strings.ToLower(formatStr) {
+	case "rfc1123":
+		return now.Format(time.RFC1123)
+	case "iso8601":
+		return now.Format(time.RFC3339)
+	case "timestamp":
+		return strconv.FormatInt(now.Unix(), 10)
+	default:
+		return originalMatch // Unsupported format
+	}
+}
+
+// substituteDynamicSystemVariables handles system variables that require argument
+// parsing or dynamic evaluation at substitution time.
 // These are typically {{$processEnv VAR}}, {{$dotenv VAR}}, and {{$randomInt MIN MAX}}.
 // This also handles JetBrains HTTP client syntax variables like {{$random.integer MIN MAX}},
 // {{$random.alphabetic LENGTH}}, etc.
 // Other simple system variables like {{$uuid}} or {{$timestamp}}
 // should have been pre-resolved and substituted by resolveVariablesInText via the
 // requestScopedSystemVars map.
-func substituteDynamicSystemVariables(text string, activeDotEnvVars map[string]string, programmaticVars map[string]any) string {
-	// "[DEBUG_DYN_VARS_INPUT]", "inputText", text)
-	originalTextForLogging := text // Keep a copy for logging. Used if we add more complex types with logging.
-	_ = originalTextForLogging     // Avoid unused variable error if no logging exists below.
-
+func substituteDynamicSystemVariables(
+	text string,
+	activeDotEnvVars map[string]string,
+	programmaticVars map[string]any,
+) string {
 	text = substituteRandomVariables(text, programmaticVars)
+	text = substituteSystemEnvVariables(text)
+	text = substituteDotEnvVariables(text, activeDotEnvVars)
+	text = substituteProcessEnvVariables(text)
+	text = _substituteDateTimeVariables(text)
+	return text
+}
 
-	// Handle {{$env.VAR_NAME}}
+// substituteSystemEnvVariables handles {{$env.VAR_NAME}} placeholders
+func substituteSystemEnvVariables(text string) string {
 	reSystemEnvVar := regexp.MustCompile(`{{\$env\.([A-Za-z_][A-Za-z0-9_]*?)}}`)
-	text = reSystemEnvVar.ReplaceAllStringFunc(text, func(match string) string {
+	return reSystemEnvVar.ReplaceAllStringFunc(text, func(match string) string {
 		parts := reSystemEnvVar.FindStringSubmatch(match)
 		if len(parts) == 2 {
-			varName := parts[1]
-			value := os.Getenv(varName)
-			return value
+			return os.Getenv(parts[1])
 		}
 		slog.Warn("Failed to parse $env.VAR_NAME, returning original match", "match", match, "parts_len", len(parts))
 		return match
 	})
+}
 
-	// REQ-LIB-011: $dotenv MY_VARIABLE_NAME
-	text = reDotEnv.ReplaceAllStringFunc(text, func(match string) string {
+// substituteDotEnvVariables handles {{$dotenv VAR}} placeholders
+func substituteDotEnvVariables(text string, activeDotEnvVars map[string]string) string {
+	text = reDotEnv.ReplaceAllStringFunc(text, dotEnvReplacer(activeDotEnvVars))
+	text = substituteDotEnvEncoded(text, activeDotEnvVars)
+	return text
+}
+
+// dotEnvReplacer returns a replacement function for dotenv variables
+func dotEnvReplacer(activeDotEnvVars map[string]string) func(string) string {
+	return func(match string) string {
 		parts := reDotEnv.FindStringSubmatch(match)
 		if len(parts) == 2 {
 			varName := parts[1]
 			if val, ok := activeDotEnvVars[varName]; ok {
 				return val
 			}
-			return "" // Variable not found in .env, return empty string
+			return ""
 		}
 		slog.Warn("Failed to parse $dotenv, returning original match", "match", match, "parts_len", len(parts))
-		return match // Should not happen with a valid regex, but good for safety
-	})
+		return match
+	}
+}
 
-	// Also handle URL encoded version
+// substituteDotEnvEncoded handles URL-encoded dotenv variables
+func substituteDotEnvEncoded(text string, activeDotEnvVars map[string]string) string {
 	reDotEnvEncoded := regexp.MustCompile(`%7B%7B\$dotenv\s+([a-zA-Z_][a-zA-Z0-9_]*)%7D%7D`)
-	text = reDotEnvEncoded.ReplaceAllStringFunc(text, func(match string) string {
+	return reDotEnvEncoded.ReplaceAllStringFunc(text, func(match string) string {
 		parts := reDotEnvEncoded.FindStringSubmatch(match)
 		if len(parts) == 2 {
 			varName := parts[1]
 			if val, ok := activeDotEnvVars[varName]; ok {
 				return val
 			}
-			return "" // Variable not found in .env, return empty string
+			return ""
 		}
-		slog.Warn(
-			"Failed to parse URL-encoded $dotenv, returning original match",
+		slog.Warn("Failed to parse URL-encoded $dotenv, returning original match",
 			"match", match, "parts_len", len(parts))
 		return match
 	})
+}
 
-	// REQ-LIB-012: $processEnv MY_ENV_VAR
-	// First, try with double braces
-	// reProcessEnv is now a package-level variable
-	text = reProcessEnv.ReplaceAllStringFunc(text, func(match string) string {
+// substituteProcessEnvVariables handles {{$processEnv VAR}} placeholders
+func substituteProcessEnvVariables(text string) string {
+	text = reProcessEnv.ReplaceAllStringFunc(text, processEnvReplacer())
+	text = substituteProcessEnvEncoded(text)
+	return text
+}
+
+// processEnvReplacer returns a replacement function for process env variables
+func processEnvReplacer() func(string) string {
+	return func(match string) string {
 		parts := reProcessEnv.FindStringSubmatch(match)
 		if len(parts) == 2 {
 			varName := parts[1]
 			if val, ok := os.LookupEnv(varName); ok {
 				return val
 			}
-			return match // Variable not found, return original placeholder
+			return match
 		}
 		slog.Warn("Failed to parse $processEnv, returning original match", "match", match, "parts_len", len(parts))
 		return match
-	})
+	}
+}
 
-	// Also handle URL encoded version
+// substituteProcessEnvEncoded handles URL-encoded process env variables
+func substituteProcessEnvEncoded(text string) string {
 	reProcessEnvEncoded := regexp.MustCompile(`%7B%7B\$processEnv\s+([A-Za-z_][A-Za-z0-9_]*)%7D%7D`)
-	text = reProcessEnvEncoded.ReplaceAllStringFunc(text, func(match string) string {
+	return reProcessEnvEncoded.ReplaceAllStringFunc(text, func(match string) string {
 		parts := reProcessEnvEncoded.FindStringSubmatch(match)
 		if len(parts) == 2 {
 			varName := parts[1]
 			if val, ok := os.LookupEnv(varName); ok {
 				return val
 			}
-			return match // Variable not found, return original placeholder
+			return match
 		}
-		slog.Warn(
-			"Failed to parse URL-encoded $processEnv, returning original match",
+		slog.Warn("Failed to parse URL-encoded $processEnv, returning original match",
 			"match", match, "parts_len", len(parts))
 		return match
 	})
-
-	text = _substituteDateTimeVariables(text)
-	return text
 }
 
 // substituteRandomVariables handles the substitution of $random.* variables.
@@ -773,31 +794,40 @@ func substituteRandomVariables(text string, programmaticVars map[string]any) str
 // _substituteRandomPasswordFunc handles the substitution of $randomPassword.* variables.
 // It now accepts programmaticVars to allow charset overrides.
 func _substituteRandomPasswordFunc(match string, programmaticVars map[string]any) string {
-	parts := reRandomPassword.FindStringSubmatch(match) // Use the global regex
-	length := defaultRandomPasswordLength
-	if len(parts) >= 2 && parts[1] != "" { // parts[0] is full match, parts[1] is optional length
-		parsedLen, err := strconv.Atoi(parts[1])
-		if err != nil || parsedLen < 0 { // Allow 0 for empty string
-			return match // Malformed length
-		}
-		length = parsedLen
+	length := parsePasswordLength(match)
+	if length < 0 {
+		return match // Malformed length
 	}
-
 	if length == 0 {
 		return ""
 	}
 
-	// Check for programmatic override for password character set
+	charset := getPasswordCharset(programmaticVars)
+	return randomStringFromCharset(length, charset)
+}
+
+// parsePasswordLength extracts and validates the length parameter from a password match
+func parsePasswordLength(match string) int {
+	parts := reRandomPassword.FindStringSubmatch(match)
+	length := defaultRandomPasswordLength
+	if len(parts) >= 2 && parts[1] != "" {
+		parsedLen, err := strconv.Atoi(parts[1])
+		if err != nil || parsedLen < 0 {
+			return -1 // Invalid length
+		}
+		length = parsedLen
+	}
+	return length
+}
+
+// getPasswordCharset determines the charset to use for password generation
+func getPasswordCharset(programmaticVars map[string]any) string {
 	if psVars, ok := programmaticVars["password"]; ok {
 		if psMap, ok := psVars.(map[string]string); ok {
 			if charset, ok := psMap["charset"]; ok && charset != "" {
-				return randomStringFromCharset(length, charset)
+				return charset
 			}
 		}
 	}
-
-	// Default password generation logic (complex charset)
-	// Ensure it's cryptographically secure if this is for actual passwords
-	// For now, using the full charset as a default placeholder
-	return randomStringFromCharset(length, charsetFull)
+	return charsetFull
 }

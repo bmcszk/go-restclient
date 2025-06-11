@@ -110,12 +110,16 @@ func (c *Client) ValidateResponses(responseFilePath string, actualResponses ...*
 
 		// Validate Status Code
 		if expected.StatusCode != nil && (actual.StatusCode != *expected.StatusCode) {
-			errs = multierror.Append(errs, fmt.Errorf("validation for response #%d ('%s'): status code mismatch: expected %d, got %d", i+1, responseFilePath, *expected.StatusCode, actual.StatusCode))
+			errs = multierror.Append(errs, fmt.Errorf(
+				"validation for response #%d ('%s'): status code mismatch: expected %d, got %d",
+				i+1, responseFilePath, *expected.StatusCode, actual.StatusCode))
 		}
 
 		// Validate Status String
 		if expected.Status != nil && *expected.Status != "" && (actual.Status != *expected.Status) {
-			errs = multierror.Append(errs, fmt.Errorf("validation for response #%d ('%s'): status string mismatch: expected '%s', got '%s'", i+1, responseFilePath, *expected.Status, actual.Status))
+			errs = multierror.Append(errs, fmt.Errorf(
+				"validation for response #%d ('%s'): status string mismatch: expected '%s', got '%s'",
+				i+1, responseFilePath, *expected.Status, actual.Status))
 		}
 
 		// Validate Headers (Exact Match for specified keys)
@@ -123,7 +127,9 @@ func (c *Client) ValidateResponses(responseFilePath string, actualResponses ...*
 			for key, expectedValues := range expected.Headers {
 				actualValues, ok := actual.Headers[key]
 				if !ok {
-					errs = multierror.Append(errs, fmt.Errorf("validation for response #%d ('%s'): expected header '%s' not found", i+1, responseFilePath, key))
+					errs = multierror.Append(errs, fmt.Errorf(
+					"validation for response #%d ('%s'): expected header '%s' not found",
+					i+1, responseFilePath, key))
 					continue
 				}
 				for _, ev := range expectedValues {
@@ -135,7 +141,10 @@ func (c *Client) ValidateResponses(responseFilePath string, actualResponses ...*
 						}
 					}
 					if !found {
-						errs = multierror.Append(errs, fmt.Errorf("validation for response #%d ('%s'): expected value '%s' for header '%s' not found in actual values %v", i+1, responseFilePath, ev, key, actualValues))
+						errs = multierror.Append(errs, fmt.Errorf(
+							"validation for response #%d ('%s'): expected value '%s' for "+
+								"header '%s' not found in actual values %v",
+							i+1, responseFilePath, ev, key, actualValues))
 					}
 				}
 			}
@@ -160,9 +169,12 @@ type placeholderInfo struct {
 	name         string         // e.g., "regexp", "anyGuid"
 	finder       *regexp.Regexp // Regex to find the placeholder itself, e.g., "{{$anyGuid}}" or "{{$regexp ...}}"
 	pattern      string         // Regex pattern to insert for this placeholder, e.g., guidRegexPattern (if no arg)
-	hasArgument  bool           // True if the placeholder takes an argument (e.g., {{$regexp `pattern`}} or {{$anyDatetime "format"}})
-	isArgPattern bool           // True if the argument itself is the regex pattern to use (e.g., for {{$regexp `pattern`}})
-	// For placeholders like {{$anyDatetime "format"}}, specific logic is needed to derive the pattern from the argument.
+	// True if the placeholder takes an argument (e.g., {{$regexp `pattern`}} or {{$anyDatetime "format"}})
+	hasArgument  bool
+	// True if the argument itself is the regex pattern to use (e.g., for {{$regexp `pattern`}})
+	isArgPattern bool
+	// For placeholders like {{$anyDatetime "format"}}, specific logic is needed
+	// to derive the pattern from the argument.
 }
 
 // buildRegexFromExpectedBody constructs a complete regular expression string
@@ -178,8 +190,10 @@ func buildRegexFromExpectedBody(normalizedExpectedBody string) string {
 		{name: "regexp", finder: regexpPlaceholderFinder, hasArgument: true, isArgPattern: true},
 		{name: "anyGuid", finder: anyGuidPlaceholderFinder, pattern: guidRegexPattern},
 		{name: "anyTimestamp", finder: anyTimestampPlaceholderFinder, pattern: timestampRegexPattern},
-		{name: "anyDatetimeWithArg", finder: anyDatetimePlaceholderFinder, hasArgument: true},        // Special handling for arg
-		{name: "anyDatetimeNoArg", finder: anyDatetimeNoArgFinder, pattern: nonMatchingRegexPattern}, // {{$anyDatetime}} with no arg is invalid
+		// Special handling for arg
+		{name: "anyDatetimeWithArg", finder: anyDatetimePlaceholderFinder, hasArgument: true},
+		// {{$anyDatetime}} with no arg is invalid
+		{name: "anyDatetimeNoArg", finder: anyDatetimeNoArgFinder, pattern: nonMatchingRegexPattern},
 		{name: "any", finder: anyPlaceholderFinder, pattern: anyRegexPattern},
 	}
 
@@ -212,7 +226,8 @@ func buildRegexFromExpectedBody(normalizedExpectedBody string) string {
 
 		placeholderArg := ""
 		// Ensure group for argument exists and placeholder expects an argument
-		if bestPlaceholder.hasArgument && len(earliestMatchIndices) >= 4 && earliestMatchIndices[2] != -1 && earliestMatchIndices[3] != -1 {
+		if bestPlaceholder.hasArgument && len(earliestMatchIndices) >= 4 &&
+		earliestMatchIndices[2] != -1 && earliestMatchIndices[3] != -1 {
 			placeholderArg = remainingExpectedBody[earliestMatchIndices[2]:earliestMatchIndices[3]]
 		}
 

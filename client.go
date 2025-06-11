@@ -196,19 +196,38 @@ func (c *Client) handleRequestExecutionError(
 ) (*Response, bool) {
 	if err != nil {
 		*multiErr = multierror.Append(*multiErr, err)
-		// For body processing errors (like external file not found), skip this request entirely
-		if response != nil && response.Error != nil &&
-			(strings.Contains(err.Error(), "error processing body for request") ||
-				strings.Contains(err.Error(), "failed to read external file")) {
-			return nil, true // Skip adding this response to the results
+		if shouldSkipRequest(response, err) {
+			return nil, true
 		}
-		// Ensure we have a response for other types of errors
-		if response == nil {
-			response = &Response{Request: restClientReq, Error: errors.New("request processing failed")}
-		}
+		response = ensureResponseExists(response, restClientReq)
 	}
 	
-	// Handle error wrapping for logging
+	c.wrapResponseError(response, restClientReq, index, multiErr)
+	return response, false
+}
+
+// shouldSkipRequest determines if a request should be skipped based on error type
+func shouldSkipRequest(response *Response, err error) bool {
+	return response != nil && response.Error != nil &&
+		(strings.Contains(err.Error(), "error processing body for request") ||
+			strings.Contains(err.Error(), "failed to read external file"))
+}
+
+// ensureResponseExists creates a response if none exists
+func ensureResponseExists(response *Response, restClientReq *Request) *Response {
+	if response == nil {
+		return &Response{Request: restClientReq, Error: errors.New("request processing failed")}
+	}
+	return response
+}
+
+// wrapResponseError wraps response errors for logging
+func (*Client) wrapResponseError(
+	response *Response,
+	restClientReq *Request,
+	index int,
+	multiErr **multierror.Error,
+) {
 	if response != nil && response.Error != nil {
 		urlForError := restClientReq.RawURLString
 		if restClientReq.URL != nil {
@@ -219,8 +238,6 @@ func (c *Client) handleRequestExecutionError(
 			index+1, restClientReq.Method, urlForError, response.Error)
 		*multiErr = multierror.Append(*multiErr, wrappedErr)
 	}
-	
-	return response, false
 }
 
 // End of function resolveVariablesInText
@@ -255,45 +272,65 @@ func (*Client) _resolveRequestURL(
 	initialRequestURL *url.URL,
 	rawRequestURLStr string,
 ) (*url.URL, error) {
+	currentRequestURL, err := determineCurrentRequestURL(initialRequestURL, rawRequestURLStr)
+	if err != nil {
+		return nil, err
+	}
 
-	var currentRequestURL *url.URL
+	freshRequestURL, err := sanitizeRequestURL(currentRequestURL)
+	if err != nil {
+		return nil, err
+	}
 
+	return resolveWithBaseURL(freshRequestURL, baseURLStr)
+}
+
+// determineCurrentRequestURL determines which URL to use for processing
+func determineCurrentRequestURL(initialRequestURL *url.URL, rawRequestURLStr string) (*url.URL, error) {
 	if initialRequestURL != nil {
-		currentRequestURL = initialRequestURL
-	} else if rawRequestURLStr != "" {
-		// If initialRequestURL was nil (e.g., deferred parsing due to variables),
-		// try to parse the rawRequestURLStr. This string should have had variables expanded by now.
+		return initialRequestURL, nil
+	}
+	if rawRequestURLStr != "" {
 		parsedRawURL, err := url.Parse(rawRequestURLStr)
 		if err != nil {
 			return nil, fmt.Errorf(
-			"failed to parse rawRequestURLString '%s' after variable expansion: %w",
-			rawRequestURLStr, err)
+				"failed to parse rawRequestURLString '%s' after variable expansion: %w",
+				rawRequestURLStr, err)
 		}
-		currentRequestURL = parsedRawURL
-	} else {
-		// Both initialRequestURL is nil and rawRequestURLStr is empty. This is an error.
-		return nil, errors.New("request URL is unexpectedly nil and rawRequestURLString is empty")
+		return parsedRawURL, nil
 	}
+	return nil, errors.New("request URL is unexpectedly nil and rawRequestURLString is empty")
+}
 
-	// Sanitize the currentRequestURL (which could be from initialRequestURL or parsed rawRequestURLStr)
-	// This re-parsing ensures we work with a 'fresh' copy and validates its structure.
+// sanitizeRequestURL re-parses a URL to ensure it's valid
+func sanitizeRequestURL(currentRequestURL *url.URL) (*url.URL, error) {
 	currentRequestURLStr := currentRequestURL.String()
 	freshRequestURL, err := url.Parse(currentRequestURLStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to re-parse current requestURL string '%s': %w", currentRequestURLStr, err)
 	}
+	return freshRequestURL, nil
+}
 
-	// If freshRequestURL is absolute, use it directly
+// resolveWithBaseURL resolves a request URL against a base URL
+func resolveWithBaseURL(freshRequestURL *url.URL, baseURLStr string) (*url.URL, error) {
 	if freshRequestURL.IsAbs() {
 		return freshRequestURL, nil
 	}
-
-	// If no BaseURL, return freshRequestURL as is
 	if baseURLStr == "" {
 		return freshRequestURL, nil
 	}
 
-	// Parse and sanitize the base URL
+	freshBase, err := parseAndSanitizeBaseURL(baseURLStr)
+	if err != nil {
+		return nil, err
+	}
+
+	return handleSpecialPathJoining(freshRequestURL, freshBase)
+}
+
+// parseAndSanitizeBaseURL parses and sanitizes a base URL
+func parseAndSanitizeBaseURL(baseURLStr string) (*url.URL, error) {
 	base, err := url.Parse(baseURLStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid BaseURL %s: %w", baseURLStr, err)
@@ -304,8 +341,11 @@ func (*Client) _resolveRequestURL(
 	if err != nil {
 		return nil, fmt.Errorf("failed to re-parse base URL string '%s': %w", baseStr, err)
 	}
+	return freshBase, nil
+}
 
-	// Handle special path joining for absolute paths
+// handleSpecialPathJoining handles special cases for URL path joining
+func handleSpecialPathJoining(freshRequestURL, freshBase *url.URL) (*url.URL, error) {
 	if strings.HasPrefix(freshRequestURL.Path, "/") && freshBase.Path != "" && freshBase.Path != "/" {
 		finalResolvedURL := joinURLPaths(freshBase, freshRequestURL)
 		if finalResolvedURL == nil {
@@ -313,8 +353,6 @@ func (*Client) _resolveRequestURL(
 		}
 		return finalResolvedURL, nil
 	}
-
-	// Default behavior for other cases
 	return freshBase.ResolveReference(freshRequestURL), nil
 }
 
@@ -325,21 +363,38 @@ func (*Client) _resolveRequestURL(
 func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Response, error) {
 	if rcRequest == nil {
 		slog.Error("executeRequest: called with nil rcRequest", "rcRequest_addr", fmt.Sprintf("%p", rcRequest))
-		// For a nil request, we can't even populate a Response struct meaningfully.
 		return nil, errors.New("cannot execute a nil request")
 	}
 
-	// Initialize a response object upfront to hold results or errors
-	clientResponse := &Response{
-		Request: rcRequest, // Link the request early
+	clientResponse := &Response{Request: rcRequest}
+
+	if err := c.prepareRequestURL(rcRequest); err != nil {
+		return nil, err
 	}
 
-	// If rcRequest.URL is nil but RawURLString is present, it means the URL hasn't been parsed yet,
-	// likely because it contained variables. Perform substitution now.
-	if rcRequest.URL == nil && rcRequest.RawURLString != "" {
+	httpReq, err := c.createHTTPRequest(ctx, rcRequest)
+	if err != nil {
+		clientResponse.Error = err
+		return clientResponse, nil
+	}
 
-		// For currentDotEnvVars, in a direct executeRequest call, there's no specific .env file context.
-		// $dotenv substitutions will fall back to OS env vars if not found in ProgrammaticVars.
+	httpResp, duration, doErr := c.executeHTTPRequest(httpReq, rcRequest)
+	clientResponse.Duration = duration
+
+	if doErr != nil {
+		return c.handleHTTPError(clientResponse, httpResp, doErr, httpReq), nil
+	}
+
+	defer func() { _ = httpResp.Body.Close() }()
+	bodyBytes, readErr := io.ReadAll(httpResp.Body)
+	c._populateResponseDetails(clientResponse, httpResp, bodyBytes, readErr)
+
+	return clientResponse, nil
+}
+
+// prepareRequestURL handles URL preparation and variable substitution
+func (c *Client) prepareRequestURL(rcRequest *Request) error {
+	if rcRequest.URL == nil && rcRequest.RawURLString != "" {
 		substitutedAndParsedURL, subsErr := substituteRequestVariables(
 			rcRequest,
 			nil, // parsedFile - no file context for direct executeRequest
@@ -352,92 +407,95 @@ func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Respo
 		if subsErr != nil {
 			err := fmt.Errorf("variable substitution failed in executeRequest for '%s': %w", rcRequest.Name, subsErr)
 			slog.Error("executeRequest: Variable substitution error", "error", err, "requestName", rcRequest.Name)
-			return nil, err // Critical pre-execution failure, similar to _resolveRequestURL failure
+			return err
 		}
 		rcRequest.URL = substitutedAndParsedURL
 	}
 
-	// Resolve the request URL. If rcRequest.URL is already parsed
-	// (e.g., from the substitution step above or programmatic setup),
-	// _resolveRequestURL will use it. Otherwise, it might re-parse RawURLString
-	// if URL is still nil (though less likely now)
-	// or primarily handle BaseURL resolution against the now-populated rcRequest.URL.
 	var err error
 	rcRequest.URL, err = c._resolveRequestURL(c.BaseURL, rcRequest.URL, rcRequest.RawURLString)
-	if err != nil {
-		// An error from _resolveRequestURL implies a bad BaseURL or nil rcRequest.URL.
-		// Per original logic for bad BaseURL, return nil for *Response.
-		return nil, err
-	}
+	return err
+}
 
+// createHTTPRequest creates an HTTP request with headers
+func (c *Client) createHTTPRequest(ctx context.Context, rcRequest *Request) (*http.Request, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, rcRequest.Method, rcRequest.URL.String(), rcRequest.Body)
 	if err != nil {
-		clientResponse.Error = fmt.Errorf("failed to create http request: %w", err)
-		return clientResponse, nil
+		return nil, fmt.Errorf("failed to create http request: %w", err)
 	}
 
+	c.setRequestHeaders(httpReq, rcRequest)
+	return httpReq, nil
+}
+
+// setRequestHeaders sets default and request-specific headers
+func (c *Client) setRequestHeaders(httpReq *http.Request, rcRequest *Request) {
+	c.addDefaultHeaders(httpReq)
+	c.addRequestHeaders(httpReq, rcRequest)
+	c.setHostHeader(httpReq)
+}
+
+// addDefaultHeaders adds client default headers to the request
+func (c *Client) addDefaultHeaders(httpReq *http.Request) {
 	for key, values := range c.DefaultHeaders {
 		for _, value := range values {
 			httpReq.Header.Add(key, value)
 		}
 	}
+}
+
+// addRequestHeaders adds request-specific headers
+func (*Client) addRequestHeaders(httpReq *http.Request, rcRequest *Request) {
 	for key, values := range rcRequest.Headers {
-		httpReq.Header.Del(key) // Uses canonicalKey internally
+		httpReq.Header.Del(key)
 		for _, value := range values {
-			httpReq.Header.Add(key, value) // Uses canonicalKey internally
+			httpReq.Header.Add(key, value)
 		}
 	}
+}
 
+// setHostHeader sets the Host header if not already set
+func (*Client) setHostHeader(httpReq *http.Request) {
 	if httpReq.Header.Get("Host") == "" && httpReq.URL.Host != "" {
 		httpReq.Host = httpReq.URL.Host
 	}
+}
 
+// executeHTTPRequest executes the HTTP request and returns response, duration, and error
+func (c *Client) executeHTTPRequest(httpReq *http.Request, rcRequest *Request) (*http.Response, time.Duration, error) {
 	startTime := time.Now()
 	var httpResp *http.Response
-	var doErr error // Use a new variable for errors from .Do()
+	var doErr error
 
 	if rcRequest.NoCookieJar {
-		// If NoCookieJar is true, use a client without a cookie jar for this request.
-		// Create a shallow copy of the original client to keep other settings (Transport, Timeout, etc.)
-		// but explicitly set Jar to nil.
-		tempClient := *c.httpClient // Shallow copy
+		tempClient := *c.httpClient
 		tempClient.Jar = nil
 		httpResp, doErr = tempClient.Do(httpReq)
 	} else {
-		// Default behavior: use the client's configured httpClient (which might have a jar)
 		httpResp, doErr = c.httpClient.Do(httpReq)
 	}
+
 	duration := time.Since(startTime)
-	clientResponse.Duration = duration // Set duration regardless of http error
+	return httpResp, duration, doErr
+}
 
-	// Handle HTTP client errors (e.g., network issues, DNS resolution failures) from the .Do() call
-	if doErr != nil {
-		clientResponse.Error = fmt.Errorf("failed to execute HTTP request: %w", doErr)
-		// No body to read if httpResp is nil, but capture details like status
-		// if httpResp is partially populated (e.g. timeout before body)
-		if httpResp != nil {
-			// Attempt to populate details even if there was an error during .Do()
-			// For example, a timeout might occur after headers are received but before body is fully read.
-			// _populateResponseDetails will handle a nil bodyBytes if readErr is also passed.
-			var bodyBytes []byte // Will be nil
-			// Pass doErr as readErr so _populateResponseDetails knows the body read failed or was incomplete.
-			c._populateResponseDetails(clientResponse, httpResp, bodyBytes, doErr)
-			if httpResp.Body != nil {
-				_ = httpResp.Body.Close() // Attempt to close body if it exists
-			}
+// handleHTTPError handles HTTP execution errors
+func (c *Client) handleHTTPError(
+	clientResponse *Response,
+	httpResp *http.Response,
+	doErr error,
+	httpReq *http.Request,
+) *Response {
+	clientResponse.Error = fmt.Errorf("failed to execute HTTP request: %w", doErr)
+	if httpResp != nil {
+		var bodyBytes []byte
+		c._populateResponseDetails(clientResponse, httpResp, bodyBytes, doErr)
+		if httpResp.Body != nil {
+			_ = httpResp.Body.Close()
 		}
-		slog.Error("HTTP request execution failed", "error", doErr, "url", httpReq.URL.String())
-		return clientResponse, nil // Return response with error and any populated details
 	}
-
-	// Success path: ensure body is closed after reading.
-	// httpResp and httpResp.Body are guaranteed non-nil here if err is nil.
-	defer func() { _ = httpResp.Body.Close() }()
-
-	bodyBytes, readErr := io.ReadAll(httpResp.Body)
-	c._populateResponseDetails(clientResponse, httpResp, bodyBytes, readErr)
-
-	return clientResponse, nil
+	slog.Error("HTTP request execution failed", "error", doErr, "url", httpReq.URL.String())
+	return clientResponse
 }
 
 // _populateResponseDetails copies relevant information from an *http.Response and body to our *Response.
@@ -446,40 +504,56 @@ func (*Client) _populateResponseDetails(resp *Response, httpResp *http.Response,
 		return
 	}
 
+	populateBasicResponseData(resp, httpResp)
+	populateBodyData(resp, bodyBytes, bodyReadErr)
+	populateTLSData(resp, httpResp)
+}
+
+// populateBasicResponseData sets basic response fields
+func populateBasicResponseData(resp *Response, httpResp *http.Response) {
 	resp.Status = httpResp.Status
 	resp.StatusCode = httpResp.StatusCode
 	resp.Proto = httpResp.Proto
 	resp.Headers = httpResp.Header
-	resp.Size = httpResp.ContentLength // This might be -1 if chunked, actual size is len(bodyBytes)
+	resp.Size = httpResp.ContentLength
+}
 
+// populateBodyData handles body data and errors
+func populateBodyData(resp *Response, bodyBytes []byte, bodyReadErr error) {
 	if bodyReadErr != nil {
 		readErrWrapped := fmt.Errorf("failed to read response body: %w", bodyReadErr)
 		resp.Error = multierror.Append(resp.Error, readErrWrapped).ErrorOrNil()
 	} else {
 		resp.Body = bodyBytes
 		resp.BodyString = string(bodyBytes)
-		// Update size if not set or if chunked and body was read
-	if resp.Size == -1 || (resp.Size == 0 && len(bodyBytes) > 0) {
+		if resp.Size == -1 || (resp.Size == 0 && len(bodyBytes) > 0) {
 			resp.Size = int64(len(bodyBytes))
 		}
 	}
+}
 
+// populateTLSData handles TLS-related response data
+func populateTLSData(resp *Response, httpResp *http.Response) {
 	if httpResp.TLS != nil {
 		resp.IsTLS = true
-		switch httpResp.TLS.Version {
-		case tls.VersionTLS10:
-			resp.TLSVersion = "TLS 1.0"
-		case tls.VersionTLS11:
-			resp.TLSVersion = "TLS 1.1"
-		case tls.VersionTLS12:
-			resp.TLSVersion = "TLS 1.2"
-		case tls.VersionTLS13:
-			resp.TLSVersion = "TLS 1.3"
-		default:
-			resp.TLSVersion = fmt.Sprintf("TLS unknown (0x%04x)", httpResp.TLS.Version)
-		}
+		resp.TLSVersion = getTLSVersionString(httpResp.TLS.Version)
 		resp.TLSCipherSuite = tls.CipherSuiteName(httpResp.TLS.CipherSuite)
-		// TODO: Add more TLS details like server name, peer certificates if needed
+	}
+}
+
+// getTLSVersionString converts TLS version to string
+func getTLSVersionString(version uint16) string {
+	switch version {
+	case tls.VersionTLS10:
+		return "TLS 1.0"
+	case tls.VersionTLS11:
+		return "TLS 1.1"
+	case tls.VersionTLS12:
+		return "TLS 1.2"
+	case tls.VersionTLS13:
+		return "TLS 1.3"
+	default:
+		return fmt.Sprintf("TLS unknown (0x%04x)", version)
 	}
 }
 
@@ -635,7 +709,6 @@ func (c *Client) substituteRequestURLAndHeaders(
 	requestScopedSystemVars map[string]string,
 	osEnvGetter func(string) (string, bool),
 ) error {
-
 	finalParsedURL, subsErr := substituteRequestVariables(
 		restClientReq,
 		parsedFile,
