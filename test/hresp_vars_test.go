@@ -150,7 +150,8 @@ func TestExtractHrespDefines(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tt.expectedDefines, defines)
-				assert.Equal(t, strings.ReplaceAll(tt.expectedRemaining, "\r\n", "\n"), strings.ReplaceAll(remaining, "\r\n", "\n"))
+				assert.Equal(t, strings.ReplaceAll(tt.expectedRemaining, "\r\n", "\n"),
+				strings.ReplaceAll(remaining, "\r\n", "\n"))
 			}
 		})
 	}

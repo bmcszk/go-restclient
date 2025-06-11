@@ -233,9 +233,23 @@ func TestExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
 	validateDatetimeBody(t, interceptedRequest)
 }
 
-// checkDateTimeStr is a helper function to validate datetime strings
-func checkDateTimeStr(t *testing.T, valueStr string, formatKeyword string, isUTC bool,
+// checkDateTimeStrUTC validates datetime strings expecting UTC timezone
+func checkDateTimeStrUTC(t *testing.T, valueStr string, formatKeyword string,
 	headerName string, now time.Time, threshold time.Duration) {
+	t.Helper()
+	checkDateTimeStrWithTimezone(t, valueStr, formatKeyword, headerName, now, threshold, time.UTC)
+}
+
+// checkDateTimeStrLocal validates datetime strings expecting local timezone
+func checkDateTimeStrLocal(t *testing.T, valueStr string, formatKeyword string,
+	headerName string, now time.Time, threshold time.Duration) {
+	t.Helper()
+	checkDateTimeStrWithTimezone(t, valueStr, formatKeyword, headerName, now, threshold, time.Local)
+}
+
+// checkDateTimeStrWithTimezone is the core validation function
+func checkDateTimeStrWithTimezone(t *testing.T, valueStr string, formatKeyword string,
+	headerName string, now time.Time, threshold time.Duration, expectedLocation *time.Location) {
 	t.Helper()
 	if formatKeyword == "timestamp" {
 		ts, err := strconv.ParseInt(valueStr, 10, 64)
@@ -260,7 +274,8 @@ func checkDateTimeStr(t *testing.T, valueStr string, formatKeyword string, isUTC
 		headerName, valueStr, layout)
 	assert.WithinDuration(t, now, parsedTime, threshold,
 		"%s datetime %s not within threshold of current time %s", headerName, parsedTime, now)
-	if isUTC {
+	
+	if expectedLocation == time.UTC {
 		assert.Equal(t, time.UTC, parsedTime.Location(), "%s expected to be UTC", headerName)
 	} else {
 		// Get offset for time.Local
@@ -278,23 +293,23 @@ func validateDatetimeHeaders(t *testing.T, interceptedRequest *detailedIntercept
 	threshold := 5 * time.Second
 
 	// Check Headers
-	checkDateTimeStr(t, interceptedRequest.Headers["X-Datetime-Rfc1123"], "rfc1123", true,
+	checkDateTimeStrUTC(t, interceptedRequest.Headers["X-Datetime-Rfc1123"], "rfc1123",
 		"X-Datetime-RFC1123", now, threshold)
-	checkDateTimeStr(t, interceptedRequest.Headers["X-Datetime-Iso8601"], "iso8601", true,
+	checkDateTimeStrUTC(t, interceptedRequest.Headers["X-Datetime-Iso8601"], "iso8601",
 		"X-Datetime-ISO8601", now, threshold)
-	checkDateTimeStr(t, interceptedRequest.Headers["X-Datetime-Timestamp"], "timestamp", true,
+	checkDateTimeStrUTC(t, interceptedRequest.Headers["X-Datetime-Timestamp"], "timestamp",
 		"X-Datetime-Timestamp", now, threshold)
-	checkDateTimeStr(t, interceptedRequest.Headers["X-Datetime-Default"], "iso8601", true,
+	checkDateTimeStrUTC(t, interceptedRequest.Headers["X-Datetime-Default"], "iso8601",
 		"X-Datetime-Default (ISO8601)", now, threshold)
 
-	checkDateTimeStr(t, interceptedRequest.Headers["X-Localdatetime-Rfc1123"], "rfc1123", false,
+	checkDateTimeStrLocal(t, interceptedRequest.Headers["X-Localdatetime-Rfc1123"], "rfc1123",
 		"X-LocalDatetime-RFC1123", now, threshold)
-	checkDateTimeStr(t, interceptedRequest.Headers["X-Localdatetime-Iso8601"], "iso8601", false,
+	checkDateTimeStrLocal(t, interceptedRequest.Headers["X-Localdatetime-Iso8601"], "iso8601",
 		"X-LocalDatetime-ISO8601", now, threshold)
-	checkDateTimeStr(t, interceptedRequest.Headers["X-Localdatetime-Timestamp"],
-		"timestamp", false, "X-LocalDatetime-Timestamp", now, threshold)
-	checkDateTimeStr(t, interceptedRequest.Headers["X-Localdatetime-Default"],
-		"iso8601", false, "X-LocalDatetime-Default (ISO8601)", now, threshold)
+	checkDateTimeStrLocal(t, interceptedRequest.Headers["X-Localdatetime-Timestamp"],
+		"timestamp", "X-LocalDatetime-Timestamp", now, threshold)
+	checkDateTimeStrLocal(t, interceptedRequest.Headers["X-Localdatetime-Default"],
+		"iso8601", "X-LocalDatetime-Default (ISO8601)", now, threshold)
 
 	assert.Equal(t, "{{$datetime \"invalidFormat\"}}", interceptedRequest.Headers["X-Datetime-Invalid"],
 		"X-Datetime-Invalid should remain unresolved")
@@ -310,15 +325,15 @@ func validateDatetimeBody(t *testing.T, interceptedRequest *detailedInterceptedR
 	err := json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON)
 	require.NoError(t, err, "Failed to unmarshal request body JSON")
 
-	checkDateTimeStr(t, bodyJSON["utc_rfc1123"], "rfc1123", true, "body.utc_rfc1123", now, threshold)
-	checkDateTimeStr(t, bodyJSON["utc_iso8601"], "iso8601", true, "body.utc_iso8601", now, threshold)
-	checkDateTimeStr(t, bodyJSON["utc_timestamp"], "timestamp", true, "body.utc_timestamp", now, threshold)
-	checkDateTimeStr(t, bodyJSON["utc_default_iso"], "iso8601", true, "body.utc_default_iso (ISO8601)", now, threshold)
+	checkDateTimeStrUTC(t, bodyJSON["utc_rfc1123"], "rfc1123", "body.utc_rfc1123", now, threshold)
+	checkDateTimeStrUTC(t, bodyJSON["utc_iso8601"], "iso8601", "body.utc_iso8601", now, threshold)
+	checkDateTimeStrUTC(t, bodyJSON["utc_timestamp"], "timestamp", "body.utc_timestamp", now, threshold)
+	checkDateTimeStrUTC(t, bodyJSON["utc_default_iso"], "iso8601", "body.utc_default_iso (ISO8601)", now, threshold)
 
-	checkDateTimeStr(t, bodyJSON["local_rfc1123"], "rfc1123", false, "body.local_rfc1123", now, threshold)
-	checkDateTimeStr(t, bodyJSON["local_iso8601"], "iso8601", false, "body.local_iso8601", now, threshold)
-	checkDateTimeStr(t, bodyJSON["local_timestamp"], "timestamp", false, "body.local_timestamp", now, threshold)
-	checkDateTimeStr(t, bodyJSON["local_default_iso"], "iso8601", false,
+	checkDateTimeStrLocal(t, bodyJSON["local_rfc1123"], "rfc1123", "body.local_rfc1123", now, threshold)
+	checkDateTimeStrLocal(t, bodyJSON["local_iso8601"], "iso8601", "body.local_iso8601", now, threshold)
+	checkDateTimeStrLocal(t, bodyJSON["local_timestamp"], "timestamp", "body.local_timestamp", now, threshold)
+	checkDateTimeStrLocal(t, bodyJSON["local_default_iso"], "iso8601",
 		"body.local_default_iso (ISO8601)", now, threshold)
 
 	assert.Equal(t, "{{$datetime \"invalidFormat\"}}", bodyJSON["invalid_format_test"],

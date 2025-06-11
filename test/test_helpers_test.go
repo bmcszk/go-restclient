@@ -20,25 +20,38 @@ func intPtr(i int) *int {
 // and if each of the expected error substrings is present in one of the actual errors.
 func assertMultierrorContains(t *testing.T, err error, expectedErrCount int, expectedErrTexts []string) {
 	t.Helper()
-	require.Error(t, err, "Expected an error, but got nil")
+	merr := validateMultierrorFormat(t, err)
+	assert.Len(t, merr.Errors, expectedErrCount, "Mismatch in expected number of errors")
+	validateExpectedErrorTexts(t, merr.Errors, expectedErrTexts)
+}
 
+func validateMultierrorFormat(t *testing.T, err error) *multierror.Error {
+	t.Helper()
+	require.Error(t, err, "Expected an error, but got nil")
 	merr, ok := err.(*multierror.Error)
 	require.True(t, ok, "Expected a *multierror.Error, but got %T", err)
+	return merr
+}
 
-	assert.Len(t, merr.Errors, expectedErrCount, "Mismatch in expected number of errors")
+func validateExpectedErrorTexts(t *testing.T, actualErrors []error, expectedErrTexts []string) {
+	t.Helper()
+	if len(expectedErrTexts) == 0 {
+		return
+	}
+	for _, expectedText := range expectedErrTexts {
+		assertErrorTextExists(t, actualErrors, expectedText)
+	}
+}
 
-	if len(expectedErrTexts) > 0 {
-		for _, expectedText := range expectedErrTexts {
-			found := false
-			for _, actualErr := range merr.Errors {
-				if strings.Contains(actualErr.Error(), expectedText) {
-					found = true
-					break
-				}
-			}
-			assert.True(t, found, "Expected error text '%s' not found in %v", expectedText, merr.Errors)
+func assertErrorTextExists(t *testing.T, actualErrors []error, expectedText string) {
+	t.Helper()
+	for _, actualErr := range actualErrors {
+		if strings.Contains(actualErr.Error(), expectedText) {
+			return
 		}
 	}
+	assert.Fail(t, "Expected error text not found",
+		"Expected error text '%s' not found in %v", expectedText, actualErrors)
 }
 
 // ExtractHrespDefines parses raw .hresp content to find @name=value definitions at the beginning of lines.
@@ -56,32 +69,7 @@ func ExtractHrespDefines(hrespContent string) (map[string]string, string, error)
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		trimmedLine := strings.TrimSpace(line)
-
-		if !strings.HasPrefix(trimmedLine, "@") {
-			processedLines = append(processedLines, line)
-			continue
-		}
-
-		// Line starts with "@", try to parse as a define
-		parts := strings.SplitN(trimmedLine[1:], "=", 2)
-		if len(parts) != 2 {
-			// Malformed define (e.g., "@foo" without "="), or just an "@" symbol.
-			// Treat as a regular line if it should be kept, or skip if @-lines not part of content.
-			// Current logic implies @-prefixed lines that are not valid defines are simply dropped.
-			continue
-		}
-
-		varName := strings.TrimSpace(parts[0])
-		varValue := strings.TrimSpace(parts[1])
-
-		if varName == "" {
-			// Variable name cannot be empty.
-			continue
-		}
-
-		defines[varName] = varValue
-		// Valid @define lines are not added to processedLines
+		processLine(line, defines, &processedLines)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -89,6 +77,39 @@ func ExtractHrespDefines(hrespContent string) (map[string]string, string, error)
 	}
 
 	return defines, strings.Join(processedLines, "\n"), nil
+}
+
+func processLine(line string, defines map[string]string, processedLines *[]string) {
+	trimmedLine := strings.TrimSpace(line)
+
+	if !strings.HasPrefix(trimmedLine, "@") {
+		*processedLines = append(*processedLines, line)
+		return
+	}
+
+	if !tryParseDefine(trimmedLine, defines) {
+		// Malformed define lines are dropped
+		return
+	}
+	// Valid @define lines are not added to processedLines
+}
+
+func tryParseDefine(trimmedLine string, defines map[string]string) bool {
+	// Line starts with "@", try to parse as a define
+	parts := strings.SplitN(trimmedLine[1:], "=", 2)
+	if len(parts) != 2 {
+		return false
+	}
+
+	varName := strings.TrimSpace(parts[0])
+	varValue := strings.TrimSpace(parts[1])
+
+	if varName == "" {
+		return false
+	}
+
+	defines[varName] = varValue
+	return true
 }
 
 // Ptr returns a pointer to the given value.

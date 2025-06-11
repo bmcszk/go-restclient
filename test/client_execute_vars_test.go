@@ -493,39 +493,50 @@ type capturedConsistencyValues struct {
 func setupConsistencyTestServer(t *testing.T, capturedVals *capturedConsistencyValues) *httptest.Server {
 	t.Helper()
 	return startMockServer(func(w http.ResponseWriter, r *http.Request) {
-		pathParts := strings.Split(r.URL.Path, "/")
-		if len(pathParts) == 3 && pathParts[1] == "test-uuid" {
-			capturedVals.PathUUID = pathParts[2]
-		} else {
-			t.Logf("Unexpected path format in setupConsistencyTestServer: %s", r.URL.Path)
-		}
-
-		capturedVals.HeaderUUID = r.Header.Get("X-Request-UUID")
-		capturedVals.HeaderTimestamp = r.Header.Get("X-Request-Timestamp")
-		capturedVals.HeaderRandomInt = r.Header.Get("X-Request-RandomInt")
-
-		bodyBytes, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-		var bodyJSON map[string]any
-		err = json.Unmarshal(bodyBytes, &bodyJSON)
-		require.NoError(t, err)
-
-		if id, ok := bodyJSON["id"].(string); ok {
-			capturedVals.BodyUUID = id
-		}
-		if anotherID, ok := bodyJSON["another_id"].(string); ok {
-			capturedVals.BodyAnotherUUID = anotherID
-		}
-		if ts, ok := bodyJSON["timestamp"].(string); ok {
-			capturedVals.BodyTimestamp = ts
-		}
-		if ri, ok := bodyJSON["randomInt"].(string); ok {
-			capturedVals.BodyRandomInt = ri
-		}
-
+		capturePathValues(t, r, capturedVals)
+		captureHeaderValues(r, capturedVals)
+		captureBodyValues(t, r, capturedVals)
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprint(w, "ok")
 	})
+}
+
+func capturePathValues(t *testing.T, r *http.Request, capturedVals *capturedConsistencyValues) {
+	t.Helper()
+	pathParts := strings.Split(r.URL.Path, "/")
+	if len(pathParts) == 3 && pathParts[1] == "test-uuid" {
+		capturedVals.PathUUID = pathParts[2]
+	} else {
+		t.Logf("Unexpected path format in setupConsistencyTestServer: %s", r.URL.Path)
+	}
+}
+
+func captureHeaderValues(r *http.Request, capturedVals *capturedConsistencyValues) {
+	capturedVals.HeaderUUID = r.Header.Get("X-Request-UUID")
+	capturedVals.HeaderTimestamp = r.Header.Get("X-Request-Timestamp")
+	capturedVals.HeaderRandomInt = r.Header.Get("X-Request-RandomInt")
+}
+
+func captureBodyValues(t *testing.T, r *http.Request, capturedVals *capturedConsistencyValues) {
+	t.Helper()
+	bodyBytes, err := io.ReadAll(r.Body)
+	require.NoError(t, err)
+	var bodyJSON map[string]any
+	err = json.Unmarshal(bodyBytes, &bodyJSON)
+	require.NoError(t, err)
+
+	if id, ok := bodyJSON["id"].(string); ok {
+		capturedVals.BodyUUID = id
+	}
+	if anotherID, ok := bodyJSON["another_id"].(string); ok {
+		capturedVals.BodyAnotherUUID = anotherID
+	}
+	if ts, ok := bodyJSON["timestamp"].(string); ok {
+		capturedVals.BodyTimestamp = ts
+	}
+	if ri, ok := bodyJSON["randomInt"].(string); ok {
+		capturedVals.BodyRandomInt = ri
+	}
 }
 
 func assertServerCapturedConsistencyValues(t *testing.T, capturedVals *capturedConsistencyValues) {
@@ -570,8 +581,10 @@ func assertRequestObjectConsistency(t *testing.T, parsedReq *rc.Request, capture
 
 	assert.Equal(t, capturedVals.PathUUID, clientReqBodyJSON["id"], "Client request body UUID mismatch")
 	assert.Equal(t, capturedVals.PathUUID, clientReqBodyJSON["another_id"], "Client request body Another UUID mismatch")
-	assert.Equal(t, capturedVals.HeaderTimestamp, clientReqBodyJSON["timestamp"], "Client request body Timestamp mismatch")
-	assert.Equal(t, capturedVals.HeaderRandomInt, clientReqBodyJSON["randomInt"], "Client request body RandomInt mismatch")
+	assert.Equal(t, capturedVals.HeaderTimestamp, clientReqBodyJSON["timestamp"],
+		"Client request body Timestamp mismatch")
+	assert.Equal(t, capturedVals.HeaderRandomInt, clientReqBodyJSON["randomInt"],
+		"Client request body RandomInt mismatch")
 }
 
 // PRD-COMMENT: FR1.6 - Variable Function Consistency (Internal)
@@ -632,7 +645,29 @@ func runHttpClientEnvSubtest(t *testing.T, tc httpClientEnvTestCase) {
 
 	// Given
 	var interceptedReq interceptedRequestData
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mockServer := setupHttpClientEnvMockServer(&interceptedReq)
+	defer mockServer.Close()
+
+	tempDir := t.TempDir()
+	setupEnvFiles(t, tc, tempDir, mockServer.URL)
+	httpFilePath := setupRequestFile(t, tc, tempDir)
+	client := createClientWithEnv(t, tc)
+
+	// When
+	responses, execErr := client.ExecuteFile(context.Background(), httpFilePath)
+
+	// Then
+	validateExecutionResult(t, tc, execErr)
+	resp := validateResponseCount(t, responses)
+	validateResponseError(t, tc, resp)
+
+	if tc.responseAssertions != nil {
+		tc.responseAssertions(t, resp, &interceptedReq, mockServer.URL)
+	}
+}
+
+func setupHttpClientEnvMockServer(interceptedReq *interceptedRequestData) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		interceptedReq.Path = r.URL.Path
 		interceptedReq.Host = r.Host
 		bodyBytes, _ := io.ReadAll(r.Body)
@@ -641,14 +676,14 @@ func runHttpClientEnvSubtest(t *testing.T, tc httpClientEnvTestCase) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprint(w, "ok")
 	}))
-	defer mockServer.Close()
+}
 
-	tempDir := t.TempDir()
-
+func setupEnvFiles(t *testing.T, tc httpClientEnvTestCase, tempDir, serverURL string) {
+	t.Helper()
 	if tc.envFileTemplatePath != "" {
 		envContentBytes, err := os.ReadFile(tc.envFileTemplatePath)
 		require.NoError(t, err)
-		envContent := strings.ReplaceAll(string(envContentBytes), "{{SERVER_URL}}", mockServer.URL)
+		envContent := strings.ReplaceAll(string(envContentBytes), "{{SERVER_URL}}", serverURL)
 		err = os.WriteFile(filepath.Join(tempDir, "http-client.env.json"), []byte(envContent), 0600)
 		require.NoError(t, err)
 	}
@@ -659,25 +694,33 @@ func runHttpClientEnvSubtest(t *testing.T, tc httpClientEnvTestCase) {
 		err = os.WriteFile(filepath.Join(tempDir, "http-client.private.env.json"), privateEnvContentBytes, 0600)
 		require.NoError(t, err)
 	}
+}
 
+func setupRequestFile(t *testing.T, tc httpClientEnvTestCase, tempDir string) string {
+	t.Helper()
 	requestFileContentBytes, err := os.ReadFile(tc.requestFilePath)
 	require.NoError(t, err)
 	httpFilePath := filepath.Join(tempDir, "request.http")
 	err = os.WriteFile(httpFilePath, requestFileContentBytes, 0600)
 	require.NoError(t, err)
+	return httpFilePath
+}
 
+func createClientWithEnv(t *testing.T, tc httpClientEnvTestCase) *rc.Client {
+	t.Helper()
 	var client *rc.Client
+	var err error
 	if tc.selectedEnv != "" {
 		client, err = rc.NewClient(rc.WithEnvironment(tc.selectedEnv))
 	} else {
 		client, err = rc.NewClient()
 	}
 	require.NoError(t, err)
+	return client
+}
 
-	// When
-	responses, execErr := client.ExecuteFile(context.Background(), httpFilePath)
-
-	// Then
+func validateExecutionResult(t *testing.T, tc httpClientEnvTestCase, execErr error) {
+	t.Helper()
 	if tc.expectExecuteFileError {
 		require.Error(t, execErr)
 		if tc.executeFileErrorContains != "" {
@@ -686,11 +729,18 @@ func runHttpClientEnvSubtest(t *testing.T, tc httpClientEnvTestCase) {
 	} else {
 		require.NoError(t, execErr)
 	}
+}
 
+func validateResponseCount(t *testing.T, responses []*rc.Response) *rc.Response {
+	t.Helper()
 	require.Len(t, responses, 1, "Expected 1 response")
 	resp := responses[0]
 	require.NotNil(t, resp)
+	return resp
+}
 
+func validateResponseError(t *testing.T, tc httpClientEnvTestCase, resp *rc.Response) {
+	t.Helper()
 	if tc.expectResponseError {
 		assert.Error(t, resp.Error)
 		if tc.responseErrorContains != "" {
@@ -698,10 +748,6 @@ func runHttpClientEnvSubtest(t *testing.T, tc httpClientEnvTestCase) {
 		}
 	} else {
 		assert.NoError(t, resp.Error)
-	}
-
-	if tc.responseAssertions != nil {
-		tc.responseAssertions(t, resp, &interceptedReq, mockServer.URL)
 	}
 }
 
@@ -723,7 +769,8 @@ func TestExecuteFile_WithHttpClientEnvJson(t *testing.T) {
 			executeFileErrorContains: "unsupported protocol scheme \"\"",
 			expectResponseError:      true,
 			responseErrorContains:    "unsupported protocol scheme \"\"",
-			responseAssertions: func(t *testing.T, resp *rc.Response, interceptedReq *interceptedRequestData, serverURL string) {
+			responseAssertions: func(t *testing.T, resp *rc.Response,
+				interceptedReq *interceptedRequestData, serverURL string) {
 				t.Helper()
 				assert.True(t, strings.Contains(resp.Request.RawURLString, "{{host}}"),
 				"RawURLString should still contain {{host}}")
@@ -737,7 +784,8 @@ func TestExecuteFile_WithHttpClientEnvJson(t *testing.T) {
 			selectedEnv:            "dev",
 			expectExecuteFileError: false,
 			expectResponseError:    false,
-			responseAssertions: func(t *testing.T, resp *rc.Response, interceptedReq *interceptedRequestData, serverURL string) {
+			responseAssertions: func(t *testing.T, resp *rc.Response,
+				interceptedReq *interceptedRequestData, serverURL string) {
 				t.Helper()
 				assert.Equal(t, http.StatusOK, resp.StatusCode)
 				parsedServerURL, pErr := url.Parse(serverURL)
