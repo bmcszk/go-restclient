@@ -384,8 +384,10 @@ Content-Type: text/plain
 }
 
 // PRD-COMMENT: FR4.5 / FR4.6 - Request Body: External File with Variables and Encoding (<@encoding)
-// Corresponds to: Client's ability to process request bodies from external files with specified character encoding and variable substitution.
-// This test verifies that variables are substituted into an encoded external file, and the resulting content is correctly sent to the server.
+// Corresponds to: Client's ability to process request bodies from external files with 
+// specified character encoding and variable substitution.
+// This test verifies that variables are substituted into an encoded external file, and 
+// the resulting content is correctly sent to the server.
 func TestExecuteFile_ExternalFileWithVariablesAndEncoding(t *testing.T) {
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
@@ -466,7 +468,8 @@ Content-Type: text/plain; charset=iso-8859-1
 }
 
 // PRD-COMMENT: FR1.1 - File Type: .rest extension support
-// Corresponds to: Client's ability to parse and execute request files with the .rest extension, as an alternative to .http (http_syntax.md "File Structure", "File Extension").
+// Corresponds to: Client's ability to parse and execute request files with the .rest 
+// extension, as an alternative to .http (http_syntax.md "File Structure", "File Extension").
 // This test verifies that a simple GET request defined in a .rest file is correctly executed.
 func TestExecuteFile_WithRestExtension(t *testing.T) {
 	// Create a temporary directory for test files
@@ -520,8 +523,10 @@ X-Test-Header-Rest: rest-extension-test-value
 }
 
 // PRD-COMMENT: FR4.4 - Request Body: External File Not Found
-// Corresponds to: Client error handling when an external file referenced in a request body (e.g., via '<@ ./nonexistent.json') cannot be found (http_syntax.md "Request Body").
-// This test verifies that the client reports an appropriate error when attempting to process a request that references a non-existent external file.
+// Corresponds to: Client error handling when an external file referenced in a request 
+// body (e.g., via '<@ ./nonexistent.json') cannot be found (http_syntax.md "Request Body").
+// This test verifies that the client reports an appropriate error when attempting to 
+// process a request that references a non-existent external file.
 func TestExecuteFile_ExternalFileNotFound(t *testing.T) {
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()

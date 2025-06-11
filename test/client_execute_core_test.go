@@ -50,8 +50,12 @@ func TestExecuteFile_SingleRequest(t *testing.T) {
 }
 
 // PRD-COMMENT: FR10.2 - Client Core Execution: Multiple Requests
-// Corresponds to: Client capability to parse and execute multiple sequential HTTP requests from a single .http file (http_syntax.md "Request Separation").
-// This test verifies that the client can execute all requests in 'testdata/http_request_files/multiple_requests.http', collect all responses, and optionally validate them against 'testdata/http_response_files/client_multiple_requests_expected.hresp'.
+// Corresponds to: Client capability to parse and execute multiple sequential HTTP requests 
+// from a single .http file (http_syntax.md "Request Separation").
+// This test verifies that the client can execute all requests in 
+// 'testdata/http_request_files/multiple_requests.http', collect all responses, and 
+// optionally validate them against 
+// 'testdata/http_response_files/client_multiple_requests_expected.hresp'.
 func TestExecuteFile_MultipleRequests(t *testing.T) {
 	// Given
 	var requestCounter int
@@ -105,8 +109,12 @@ func TestExecuteFile_MultipleRequests(t *testing.T) {
 }
 
 // PRD-COMMENT: FR10.3 - Client Core Execution: Request Execution Error Handling
-// Corresponds to: Client error handling for individual request failures during execution of a multi-request file (http_syntax.md).
-// This test verifies that if a request in 'testdata/http_request_files/request_with_error.http' fails (e.g., network error), the client reports the error for that specific request but continues to process subsequent requests. The overall operation should also report an aggregated error.
+// Corresponds to: Client error handling for individual request failures during execution 
+// of a multi-request file (http_syntax.md).
+// This test verifies that if a request in 
+// 'testdata/http_request_files/request_with_error.http' fails (e.g., network error), the 
+// client reports the error for that specific request but continues to process subsequent 
+// requests. The overall operation should also report an aggregated error.
 func TestExecuteFile_RequestWithError(t *testing.T) {
 	// Given
 	server2 := startMockServer(func(w http.ResponseWriter, r *http.Request) {
@@ -142,8 +150,12 @@ func TestExecuteFile_RequestWithError(t *testing.T) {
 }
 
 // PRD-COMMENT: FR10.4 - Client Core Execution: File Parse Error Handling
-// Corresponds to: Client error handling when a .http file has parsing issues, such as no valid requests found (http_syntax.md).
-// This test verifies that the client reports a suitable error if the provided file 'testdata/http_request_files/parse_error.http' (which is expected to be empty or syntactically invalid to the point of yielding no requests) cannot be successfully parsed into executable requests.
+// Corresponds to: Client error handling when a .http file has parsing issues, such as 
+// no valid requests found (http_syntax.md).
+// This test verifies that the client reports a suitable error if the provided file 
+// 'testdata/http_request_files/parse_error.http' (which is expected to be empty or 
+// syntactically invalid to the point of yielding no requests) cannot be successfully 
+// parsed into executable requests.
 func TestExecuteFile_ParseError(t *testing.T) {
 	// Given
 	client, _ := rc.NewClient()
@@ -158,8 +170,11 @@ func TestExecuteFile_ParseError(t *testing.T) {
 }
 
 // PRD-COMMENT: FR10.5 - Client Core Execution: Empty Request File
-// Corresponds to: Client behavior when processing a .http file that syntactically parses but contains no actual HTTP requests (http_syntax.md).
-// This test uses 'testdata/http_request_files/no_requests.http' to verify that the client correctly identifies that no requests are present and returns an appropriate error or empty response set.
+// Corresponds to: Client behavior when processing a .http file that syntactically 
+// parses but contains no actual HTTP requests (http_syntax.md).
+// This test uses 'testdata/http_request_files/no_requests.http' to verify that the 
+// client correctly identifies that no requests are present and returns an appropriate 
+// error or empty response set.
 func TestExecuteFile_NoRequestsInFile(t *testing.T) {
 	// Given
 	client, _ := rc.NewClient()
@@ -174,8 +189,11 @@ func TestExecuteFile_NoRequestsInFile(t *testing.T) {
 }
 
 // PRD-COMMENT: FR10.6 - Client Core Execution: Mixed Validity Parse Error
-// Corresponds to: Client behavior when a .http file contains a mix of valid requests followed by content that causes a parsing error (http_syntax.md).
-// This test uses 'testdata/http_request_files/valid_then_invalid_syntax.http' to ensure the client executes valid requests up to the point of the parse error and then reports the parsing error, potentially halting further execution from that file.
+// Corresponds to: Client behavior when a .http file contains a mix of valid requests 
+// followed by content that causes a parsing error (http_syntax.md).
+// This test uses 'testdata/http_request_files/valid_then_invalid_syntax.http' to ensure 
+// the client executes valid requests up to the point of the parse error and then reports 
+// the parsing error, potentially halting further execution from that file.
 func TestExecuteFile_ValidThenInvalidSyntax(t *testing.T) {
 	// Given
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
@@ -222,8 +240,11 @@ func TestExecuteFile_ValidThenInvalidSyntax(t *testing.T) {
 }
 
 // PRD-COMMENT: FR10.7 - Client Core Execution: Multiple Execution Errors
-// Corresponds to: Client's ability to handle and aggregate multiple errors if several requests within a single file fail during execution (http_syntax.md).
-// This test uses 'testdata/http_request_files/multiple_errors.http' (containing requests designed to fail) to verify that each failing request's error is captured in its respective response object and that an aggregated error is returned by ExecuteFile.
+// Corresponds to: Client's ability to handle and aggregate multiple errors if several 
+// requests within a single file fail during execution (http_syntax.md).
+// This test uses 'testdata/http_request_files/multiple_errors.http' (containing requests 
+// designed to fail) to verify that each failing request's error is captured in its 
+// respective response object and that an aggregated error is returned by ExecuteFile.
 func TestExecuteFile_MultipleErrors(t *testing.T) {
 	// Given
 	client, _ := rc.NewClient()

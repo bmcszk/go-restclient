@@ -16,8 +16,11 @@ import (
 )
 
 // PRD-COMMENT: FR11.1 - Client Execution: Invalid HTTP Method Handling
-// Corresponds to: Client robustness in handling syntactically incorrect HTTP methods within a .http file (http_syntax.md, implicitly by defining valid methods).
-// This test verifies that the client correctly identifies an invalid HTTP method in 'testdata/http_request_files/invalid_method.http', reports an error for that request, and handles the overall execution flow appropriately (e.g., by aggregating errors).
+// Corresponds to: Client robustness in handling syntactically incorrect HTTP methods 
+// within a .http file (http_syntax.md, implicitly by defining valid methods).
+// This test verifies that the client correctly identifies an invalid HTTP method in 
+// 'testdata/http_request_files/invalid_method.http', reports an error for that request, 
+// and handles the overall execution flow appropriately (e.g., by aggregating errors).
 func TestExecuteFile_InvalidMethodInFile(t *testing.T) {
 	// Given
 	client, _ := rc.NewClient()
@@ -30,14 +33,17 @@ func TestExecuteFile_InvalidMethodInFile(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "1 error occurred:")
 	assert.Contains(t, err.Error(), "unsupported protocol scheme")
-	assert.Contains(t, err.Error(), "request 1 (INVALIDMETHOD /test) processing resulted in error")
+	assert.Contains(t, err.Error(), 
+		"request 1 (INVALIDMETHOD /test) processing resulted in error")
 
 	require.Len(t, responses, 1)
 
 	resp1 := responses[0]
 	assert.Error(t, resp1.Error, "Expected an error for invalid method/scheme")
-	assert.Contains(t, resp1.Error.Error(), "unsupported protocol scheme", "Error message should indicate unsupported protocol scheme")
-	assert.Contains(t, resp1.Error.Error(), "Invalidmethod", "Error message should contain the problematic method string as used")
+	assert.Contains(t, resp1.Error.Error(), "unsupported protocol scheme", 
+		"Error message should indicate unsupported protocol scheme")
+	assert.Contains(t, resp1.Error.Error(), "Invalidmethod", 
+		"Error message should contain the problematic method string as used")
 }
 
 // executeFileTestCase defines a test case for TestExecuteFile_IgnoreEmptyBlocks_Client
@@ -51,18 +57,23 @@ type executeFileTestCase struct {
 	responseValidators             []func(t *testing.T, resp *rc.Response)
 }
 
-func assertSuccessfulExecutionAndValidateResponses(t *testing.T, tcName string, execErr error, actualResponses []*rc.Response, expectedResponseCount int, responseValidators []func(t *testing.T, resp *rc.Response)) {
+func assertSuccessfulExecutionAndValidateResponses(t *testing.T, tcName string, execErr error, 
+	actualResponses []*rc.Response, expectedResponseCount int, 
+	responseValidators []func(t *testing.T, resp *rc.Response)) {
 	t.Helper()
 	assert.NoError(t, execErr, "Did not expect an error for test: %s", tcName)
-	require.Len(t, actualResponses, expectedResponseCount, "Number of responses mismatch for test: %s", tcName)
+	require.Len(t, actualResponses, expectedResponseCount, 
+		"Number of responses mismatch for test: %s", tcName)
 	if len(responseValidators) != expectedResponseCount {
-		t.Fatalf("Mismatch between expected responses (%d) and number of validators (%d) for test: %s", expectedResponseCount, len(responseValidators), tcName)
+		t.Fatalf("Mismatch between expected responses (%d) and number of validators (%d) for test: %s", 
+			expectedResponseCount, len(responseValidators), tcName)
 	}
 	for i, validator := range responseValidators {
 		if i < len(actualResponses) {
 			validator(t, actualResponses[i])
 		} else {
-			t.Errorf("Validator index %d out of bounds for responses (len %d) in test: %s", i, len(actualResponses), tcName)
+			t.Errorf("Validator index %d out of bounds for responses (len %d) in test: %s", 
+				i, len(actualResponses), tcName)
 		}
 	}
 }

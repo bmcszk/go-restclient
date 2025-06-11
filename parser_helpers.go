@@ -308,7 +308,8 @@ func (s *responseParserState) processContentLine(originalLine, trimmedLine strin
 	}
 
 	// Skip empty lines when we haven't parsed a status line yet
-	if trimmedLine == "" && (s.currentExpectedResponse.Status == nil || *s.currentExpectedResponse.Status == "") && s.currentExpectedResponse.StatusCode == nil {
+	if trimmedLine == "" && (s.currentExpectedResponse.Status == nil || 
+		*s.currentExpectedResponse.Status == "") && s.currentExpectedResponse.StatusCode == nil {
 		return nil
 	}
 
