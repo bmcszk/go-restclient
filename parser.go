@@ -141,61 +141,92 @@ func loadEnvironmentFile(filePath string, selectedEnvName string) (map[string]st
 // A .env file in the same directory as `filePath` will also be loaded and used for resolving
 // `@variable` definitions if present.
 func parseRequestFile(filePath string, client *Client, importStack []string) (*ParsedFile, error) {
-	absFilePath, err := filepath.Abs(filePath)
+	absFilePath, newImportStack, err := prepareParsingContext(filePath, importStack)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get absolute path for %s: %w", filePath, err)
+		return nil, err
 	}
 
-	// Check for circular imports to prevent infinite recursion
-	for _, importedPath := range importStack {
-		if importedPath == absFilePath {
-			return nil, fmt.Errorf(
-				"circular import detected: '%s' already in import stack %v",
-				absFilePath, importStack)
-		}
-	}
-
-	// Add current file to import stack to track import hierarchy
-	newImportStack := append(importStack, absFilePath)
-
-	file, err := os.Open(absFilePath) // Use absolute path
+	file, err := os.Open(absFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open request file %s: %w", absFilePath, err)
 	}
 	defer func() { _ = file.Close() }()
 
-	// Load .env file from the same directory as the request file for @var resolution time
-	dotEnvVarsForParser := make(map[string]string)
-	envFilePath := filepath.Join(filepath.Dir(filePath), ".env")
-	if _, statErr := os.Stat(envFilePath); statErr == nil {
-		loadedVars, loadErr := godotenv.Read(envFilePath)
-		if loadErr == nil {
-			dotEnvVarsForParser = loadedVars
-		}
-	}
-	osEnvGetter := func(key string) (string, bool) { return os.LookupEnv(key) }
+	parsingVars := setupParsingVariables(filePath, client)
 
-	// Generate request-scoped system variables once for this file parsing pass
-	var requestScopedSystemVarsForFileParse map[string]string
-	if client != nil {
-		requestScopedSystemVarsForFileParse = client.generateRequestScopedSystemVariables()
-	} else {
-		requestScopedSystemVarsForFileParse = make(map[string]string)
-	}
-
-	// Pass absFilePath for context, and newImportStack for recursion tracking
 	reader := bufio.NewReader(file)
 	parsedFile, err := parseRequests(
-		reader, absFilePath, client, requestScopedSystemVarsForFileParse,
-		osEnvGetter, dotEnvVarsForParser, newImportStack)
+		reader, absFilePath, client, parsingVars.requestScopedSystemVars,
+		parsingVars.osEnvGetter, parsingVars.dotEnvVars, newImportStack)
 	if err != nil {
-		return nil, err // Error already wrapped by parseRequests or is a direct parsing error
+		return nil, err
 	}
 
-	// Load http-client.env.json for environment-specific variables (Task T4)
-	loadEnvironmentSpecificVariables(filePath, client, parsedFile) // Pass original filePath
-
+	loadEnvironmentSpecificVariables(filePath, client, parsedFile)
 	return parsedFile, nil
+}
+
+// parsingVariables holds variables needed for parsing
+type parsingVariables struct {
+	dotEnvVars               map[string]string
+	osEnvGetter              func(string) (string, bool)
+	requestScopedSystemVars  map[string]string
+}
+
+// prepareParsingContext prepares the file path and import stack for parsing
+func prepareParsingContext(filePath string, importStack []string) (string, []string, error) {
+	absFilePath, err := filepath.Abs(filePath)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to get absolute path for %s: %w", filePath, err)
+	}
+
+	if err := checkCircularImports(absFilePath, importStack); err != nil {
+		return "", nil, err
+	}
+
+	newImportStack := append(importStack, absFilePath)
+	return absFilePath, newImportStack, nil
+}
+
+// checkCircularImports checks for circular import patterns
+func checkCircularImports(absFilePath string, importStack []string) error {
+	for _, importedPath := range importStack {
+		if importedPath == absFilePath {
+			return fmt.Errorf(
+				"circular import detected: '%s' already in import stack %v",
+				absFilePath, importStack)
+		}
+	}
+	return nil
+}
+
+// setupParsingVariables sets up all variables needed for parsing
+func setupParsingVariables(filePath string, client *Client) parsingVariables {
+	return parsingVariables{
+		dotEnvVars:              loadDotEnvForParsing(filePath),
+		osEnvGetter:             func(key string) (string, bool) { return os.LookupEnv(key) },
+		requestScopedSystemVars: generateRequestScopedVarsForParsing(client),
+	}
+}
+
+// loadDotEnvForParsing loads .env variables for parsing
+func loadDotEnvForParsing(filePath string) map[string]string {
+	dotEnvVars := make(map[string]string)
+	envFilePath := filepath.Join(filepath.Dir(filePath), ".env")
+	if _, statErr := os.Stat(envFilePath); statErr == nil {
+		if loadedVars, loadErr := godotenv.Read(envFilePath); loadErr == nil {
+			dotEnvVars = loadedVars
+		}
+	}
+	return dotEnvVars
+}
+
+// generateRequestScopedVarsForParsing generates request-scoped system variables
+func generateRequestScopedVarsForParsing(client *Client) map[string]string {
+	if client != nil {
+		return client.generateRequestScopedSystemVariables()
+	}
+	return make(map[string]string)
 }
 
 // loadEnvironmentSpecificVariables loads environment-specific variables from
@@ -220,8 +251,15 @@ func loadEnvironmentSpecificVariables(originalFilePath string, client *Client, p
 // loadEnvironmentFiles loads variables from both public and private environment files
 func loadEnvironmentFiles(fileDir, selectedEnvName string) map[string]string {
 	mergedEnvVars := make(map[string]string)
+	
+	loadPublicEnvFile(fileDir, selectedEnvName, mergedEnvVars)
+	loadPrivateEnvFile(fileDir, selectedEnvName, mergedEnvVars)
+	
+	return mergedEnvVars
+}
 
-	// Load from http-client.env.json (public environment variables)
+// loadPublicEnvFile loads variables from http-client.env.json
+func loadPublicEnvFile(fileDir, selectedEnvName string, mergedEnvVars map[string]string) {
 	publicEnvFile := filepath.Join(fileDir, "http-client.env.json")
 	if publicVars, err := loadEnvironmentFile(publicEnvFile, selectedEnvName); err == nil && publicVars != nil {
 		for k, v := range publicVars {
@@ -230,9 +268,10 @@ func loadEnvironmentFiles(fileDir, selectedEnvName string) map[string]string {
 		slog.Debug("Loaded environment variables from public file",
 			"environment", selectedEnvName, "file", publicEnvFile, "varCount", len(publicVars))
 	}
+}
 
-	// Load from http-client.private.env.json (private environment variables)
-	// Private variables override public ones if they have the same key
+// loadPrivateEnvFile loads variables from http-client.private.env.json (overrides public ones)
+func loadPrivateEnvFile(fileDir, selectedEnvName string, mergedEnvVars map[string]string) {
 	privateEnvFile := filepath.Join(fileDir, "http-client.private.env.json")
 	if privateVars, err := loadEnvironmentFile(privateEnvFile, selectedEnvName); err == nil && privateVars != nil {
 		for k, v := range privateVars {
@@ -241,8 +280,6 @@ func loadEnvironmentFiles(fileDir, selectedEnvName string) map[string]string {
 		slog.Debug("Loaded environment variables from private file",
 			"environment", selectedEnvName, "file", privateEnvFile, "varCount", len(privateVars))
 	}
-
-	return mergedEnvVars
 }
 
 // ensureEnvironmentVariablesInitialized ensures the EnvironmentVariables map is initialized
@@ -259,8 +296,21 @@ func ensureEnvironmentVariablesInitialized(parsedFile *ParsedFile, selectedEnvNa
 func parseRequests(reader *bufio.Reader, filePath string, client *Client,
 	requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool),
 	dotEnvVars map[string]string, importStack []string) (*ParsedFile, error) {
-	// Initialize parser state
-	parserState := &requestParserState{
+	parserState := initializeParserState(filePath, client, requestScopedSystemVars, 
+		osEnvGetter, dotEnvVars, importStack)
+	
+	if err := processFileLines(reader, parserState); err != nil {
+		return nil, err
+	}
+	
+	finalizeParseResults(parserState)
+	return parserState.parsedFile, nil
+}
+
+// initializeParserState creates and initializes the parser state
+func initializeParserState(filePath string, client *Client, requestScopedSystemVars map[string]string,
+	osEnvGetter func(string) (string, bool), dotEnvVars map[string]string, importStack []string) *requestParserState {
+	return &requestParserState{
 		filePath:                filePath,
 		client:                  client,
 		requestScopedSystemVars: requestScopedSystemVars,
@@ -275,35 +325,61 @@ func parseRequests(reader *bufio.Reader, filePath string, client *Client,
 		currentFileVariables:    make(map[string]string),
 		lineNumber:              0,
 	}
-	// Process each line in the file
+}
+
+// processFileLines reads and processes all lines from the reader
+func processFileLines(reader *bufio.Reader, parserState *requestParserState) error {
 	for {
 		line, err := reader.ReadString('\n')
-		// Handle errors except EOF
-		if err != nil && err != io.EOF {
-			return nil, fmt.Errorf("error reading request file: %w", err)
+		if readErr := handleReadError(err); readErr != nil {
+			return readErr
 		}
-		// Process this line if not empty
-		if line != "" {
-			parserState.lineNumber++
-			if err := processFileLine(parserState, line); err != nil {
-				return nil, err
-			}
+		
+		if processErr := processLineIfNeeded(line, parserState); processErr != nil {
+			return processErr
 		}
-		// Break at EOF
+		
 		if err == io.EOF {
 			break
 		}
 	}
-	// Finalize the last request if there is one
+	return nil
+}
+
+// processLineIfNeeded processes a line if it should be processed
+func processLineIfNeeded(line string, parserState *requestParserState) error {
+	if shouldProcessLine(line, parserState) {
+		return processFileLine(parserState, line)
+	}
+	return nil
+}
+
+// handleReadError checks for read errors excluding EOF
+func handleReadError(err error) error {
+	if err != nil && err != io.EOF {
+		return fmt.Errorf("error reading request file: %w", err)
+	}
+	return nil
+}
+
+// shouldProcessLine determines if a line should be processed
+func shouldProcessLine(line string, parserState *requestParserState) bool {
+	if line != "" {
+		parserState.lineNumber++
+		return true
+	}
+	return false
+}
+
+// finalizeParseResults completes the parsing process
+func finalizeParseResults(parserState *requestParserState) {
 	if parserState.currentRequest != nil {
 		parserState.finalizeCurrentRequest()
 	}
-	// Ensure all file variables are copied to the parsed file
+	
 	for k, v := range parserState.currentFileVariables {
 		parserState.parsedFile.FileVariables[k] = v
 	}
-	// Return the ParsedFile
-	return parserState.parsedFile, nil
 }
 
 // processFileLine handles the processing of a single line from the request file
@@ -430,54 +506,83 @@ func (p *requestParserState) ensureCurrentRequest() {
 // handleComment processes a comment line and extracts special directives (e.g., @name).
 // Supports both # and // style comments (FR1.4)
 func (p *requestParserState) handleComment(trimmedLine string) error {
-	var commentContent string
+	commentContent := p.extractCommentContent(trimmedLine)
+	
+	if p.isCommentedSeparator(commentContent) {
+		return nil
+	}
 
-	// FR1.4: Support for both # and // style comments
+	p.ensureCurrentRequest() // Comments might have directives that require a request context
+	return p.processCommentDirectives(commentContent)
+}
+
+// extractCommentContent extracts the content from comment lines
+func (*requestParserState) extractCommentContent(trimmedLine string) string {
+	var commentContent string
 	if strings.HasPrefix(trimmedLine, commentPrefix) {
 		commentContent = strings.TrimPrefix(trimmedLine, commentPrefix)
 	} else if strings.HasPrefix(trimmedLine, slashCommentPrefix) {
 		commentContent = strings.TrimPrefix(trimmedLine, slashCommentPrefix)
 	}
+	return strings.TrimSpace(commentContent)
+}
 
-	commentContent = strings.TrimSpace(commentContent)
+// isCommentedSeparator checks if the comment contains a request separator
+func (*requestParserState) isCommentedSeparator(commentContent string) bool {
+	return strings.HasPrefix(commentContent, requestSeparator)
+}
 
-	// Check for request separator in the comment content
-	if strings.HasPrefix(commentContent, requestSeparator) {
-		// This is a commented-out separator, don't process it.
+// processCommentDirectives processes various comment directives
+func (p *requestParserState) processCommentDirectives(commentContent string) error {
+	if p.handleNameDirective(commentContent) {
 		return nil
 	}
-
-	p.ensureCurrentRequest() // Comments might have directives that require a request context
-
-	// Process directives
-	parsedName, isNameDirective := parseNameFromAtNameDirective(commentContent)
-	if isNameDirective {
-		if parsedName != "" {
-			p.currentRequest.Name = parsedName // Apply directly
-		}
-		return nil // @name directive was recognized and handled (even if name was empty)
+	if p.handleNoRedirectDirective(commentContent) {
+		return nil
 	}
+	if p.handleNoCookieJarDirective(commentContent) {
+		return nil
+	}
+	if p.handleTimeoutDirective(commentContent) {
+		return nil
+	}
+	return nil // Other comment content - no special handling needed
+}
 
-	// Handle @no-redirect directive
+// handleNameDirective processes @name directives
+func (p *requestParserState) handleNameDirective(commentContent string) bool {
+	parsedName, isNameDirective := parseNameFromAtNameDirective(commentContent)
+	if isNameDirective && parsedName != "" {
+		p.currentRequest.Name = parsedName
+	}
+	return isNameDirective
+}
+
+// handleNoRedirectDirective processes @no-redirect directives
+func (p *requestParserState) handleNoRedirectDirective(commentContent string) bool {
 	if strings.HasPrefix(commentContent, "@no-redirect") {
 		p.currentRequest.NoRedirect = true
-		return nil
+		return true
 	}
+	return false
+}
 
-	// Handle @no-cookie-jar directive
+// handleNoCookieJarDirective processes @no-cookie-jar directives
+func (p *requestParserState) handleNoCookieJarDirective(commentContent string) bool {
 	if strings.HasPrefix(commentContent, "@no-cookie-jar") {
 		p.currentRequest.NoCookieJar = true
-		return nil
+		return true
 	}
+	return false
+}
 
-	// Handle @timeout directive with milliseconds value
+// handleTimeoutDirective processes @timeout directives
+func (p *requestParserState) handleTimeoutDirective(commentContent string) bool {
 	if strings.HasPrefix(commentContent, "@timeout ") {
 		p.processTimeoutDirective(commentContent)
-		return nil
+		return true
 	}
-
-	// Other comment content - no special handling needed
-	return nil
+	return false
 }
 
 // handleEmptyLine processes an empty line, which can be used to separate headers from body
@@ -497,7 +602,6 @@ func (p *requestParserState) handleEmptyLine() error {
 
 // handleRequestLine processes a potential HTTP request line (METHOD URL HTTP/Version).
 func (p *requestParserState) handleRequestLine(trimmedLine string) error {
-
 	if p.justSawEmptyLineSeparator && p.currentRequest != nil &&
 		p.currentRequest.Method != "" && isPotentialRequestLine(trimmedLine) {
 		p.finalizeCurrentRequest()
@@ -663,8 +767,7 @@ func (p *requestParserState) finalizeCurrentRequest() {
 
 	// A request is only considered valid and added if it has both a method and a URL.
 	// Body, headers, etc., are optional.
-	if p.currentRequest.Method == "" || p.currentRequest.RawURLString == "" {
-	} else {
+	if p.currentRequest.Method != "" && p.currentRequest.RawURLString != "" {
 		// Set the request body from collected lines (only if external file is not used)
 		if p.currentRequest.ExternalFilePath == "" {
 			rawBody := strings.Join(p.bodyLines, "\n") // Use \n as per HTTP spec for line endings in body
@@ -802,7 +905,6 @@ func (p *requestParserState) processSameLineSeparator(requestLine string) (proce
 // It returns true if the request was finalized due to a same-line separator, otherwise false.
 // originalLine is used for logging/error context.
 func (p *requestParserState) parseRequestLineDetails(originalRequestLine string) (finalizedBySeparator bool) {
-
 	requestLine, finalizedBySeparator := p.processSameLineSeparator(originalRequestLine)
 
 	parts := strings.Fields(requestLine)

@@ -156,12 +156,11 @@ func resolveVariablesInText(
 					return evaluatedVal
 				}
 				return val // Return the original value if not a dynamic placeholder needing evaluation
-			} else {
-				slog.Debug(
-					"resolveVariablesInText: Not found in fileScopedVars",
-					"varNameLookup", fileScopedVarNameToTry,
-					"originalVarNameFromPlaceholder", varName)
 			}
+			slog.Debug(
+				"resolveVariablesInText: Not found in fileScopedVars",
+				"varNameLookup", fileScopedVarNameToTry,
+				"originalVarNameFromPlaceholder", varName)
 
 			// The block for fileScopedVars lookup (originally here as step 2) has been moved up
 			// and consolidated to correctly handle the '@' prefix for file-scoped variable names.
@@ -333,6 +332,13 @@ func randomStringFromCharset(length int, charset string) string {
 }
 
 // substituteRequestVariables handles the substitution of variables in the request's URL and headers.
+// variableMaps holds the different types of variable maps
+type variableMaps struct {
+	fileScopedVars     map[string]string
+	envVarsFromFile    map[string]string
+	globalVarsFromFile map[string]string
+}
+
 // It returns the final parsed URL or an error if substitution/parsing fails.
 func substituteRequestVariables(
 	rcRequest *Request,
@@ -343,49 +349,63 @@ func substituteRequestVariables(
 	currentDotEnvVars map[string]string,
 	clientBaseURL string,
 ) (*url.URL, error) {
-	var fileScopedVars map[string]string // Declare fileScopedVars at function scope
-	var envVarsFromFile map[string]string
-	var globalVarsFromFile map[string]string
+	fileScopedVars, envVarsFromFile, globalVarsFromFile := initializeVariableMaps(parsedFile)
+	mergeRequestActiveVariables(rcRequest, fileScopedVars)
+	
+	varMaps := variableMaps{
+		fileScopedVars:     fileScopedVars,
+		envVarsFromFile:    envVarsFromFile,
+		globalVarsFromFile: globalVarsFromFile,
+	}
+	
+	finalParsedURL, err := processURLSubstitution(rcRequest, varMaps,
+		requestScopedSystemVars, osEnvGetter, programmaticVars, currentDotEnvVars, clientBaseURL)
+	if err != nil {
+		return nil, err
+	}
+	
+	processHeaderSubstitution(rcRequest, varMaps,
+		requestScopedSystemVars, osEnvGetter, programmaticVars, currentDotEnvVars)
+	
+	return finalParsedURL, nil
+}
 
+// initializeVariableMaps sets up the variable maps based on parsed file context
+func initializeVariableMaps(parsedFile *ParsedFile) (fileScopedVars, envVarsFromFile, globalVarsFromFile map[string]string) {
 	if parsedFile != nil {
-		// Create a mutable copy for this request's substitution pass, to prevent
-		// modifying the original ParsedFile.FileVariables
 		fileScopedVars = make(map[string]string, len(parsedFile.FileVariables))
 		for k, v := range parsedFile.FileVariables {
 			fileScopedVars[k] = v
 		}
-		// These are typically not modified by substitution, so direct assignment is fine
 		envVarsFromFile = parsedFile.EnvironmentVariables
-		globalVarsFromFile = parsedFile.GlobalVariables   // Same for these
+		globalVarsFromFile = parsedFile.GlobalVariables
 	} else {
-		// For direct execution without a file context (e.g. client.Execute called directly
-		// or URL substitution in executeRequest)
-		fileScopedVars = make(map[string]string)     // Ensure not nil
-		envVarsFromFile = make(map[string]string)    // Ensure not nil
-		globalVarsFromFile = make(map[string]string) // Ensure not nil
+		fileScopedVars = make(map[string]string)
+		envVarsFromFile = make(map[string]string)
+		globalVarsFromFile = make(map[string]string)
 	}
+	
+	return fileScopedVars, envVarsFromFile, globalVarsFromFile
+}
 
-	// Merge request-specific variables (@name=value defined in the request block)
-	// These override file-scoped variables for the current request.
+// mergeRequestActiveVariables merges request-specific variables into file-scoped vars
+func mergeRequestActiveVariables(rcRequest *Request, fileScopedVars map[string]string) {
 	if rcRequest != nil && rcRequest.ActiveVariables != nil {
 		for k, v := range rcRequest.ActiveVariables {
 			fileScopedVars[k] = v
 		}
 	}
+}
 
+// processURLSubstitution handles URL variable substitution and parsing
+func processURLSubstitution(rcRequest *Request, varMaps variableMaps,
+	requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool),
+	programmaticVars map[string]any, currentDotEnvVars map[string]string, clientBaseURL string) (*url.URL, error) {
 	substitutedRawURL := resolveVariablesInText(
-		rcRequest.RawURLString,  // text
-		programmaticVars,        // clientProgrammaticVars
-		fileScopedVars,          // fileScopedVars (from @name=value in file, or empty if no file)
-		envVarsFromFile,         // environmentVars (from http-client.env.json for selected env)
-		globalVarsFromFile,      // globalVars (from http-client.private.env.json)
-		requestScopedSystemVars, // requestScopedSystemVars (e.g. {{$uuid}}, {{$timestamp}})
-		osEnvGetter,             // osEnvGetter
-		currentDotEnvVars,       // dotEnvVars (from .env file in request's dir, or client's current if no file)
-	)
+		rcRequest.RawURLString, programmaticVars, varMaps.fileScopedVars, varMaps.envVarsFromFile, 
+		varMaps.globalVarsFromFile, requestScopedSystemVars, osEnvGetter, currentDotEnvVars)
 	substitutedRawURL = substituteDynamicSystemVariables(substitutedRawURL, currentDotEnvVars, programmaticVars)
 
-	// Handle empty URLs after variable substitution - this is a common cause of failures
 	if strings.TrimSpace(substitutedRawURL) == "" {
 		return nil, fmt.Errorf("URL is empty after variable substitution (original: %s)", rcRequest.RawURLString)
 	}
@@ -398,28 +418,28 @@ func substituteRequestVariables(
 			"failed to parse URL after variable substitution: %s (original: %s): %w",
 			substitutedRawURL, rcRequest.RawURLString, parseErr)
 	}
-	// rcRequest.URL = finalParsedURL // Assign here as it's successfully parsed - redundant, caller should assign
-
-	if rcRequest.Headers != nil {
-		for key, values := range rcRequest.Headers {
-			newValues := make([]string, len(values))
-			for j, val := range values {
-				resolvedVal := resolveVariablesInText(
-					val,
-					programmaticVars,
-					fileScopedVars, // Use the common map that includes file and request-scoped vars, and allows caching
-					envVarsFromFile,
-					globalVarsFromFile,
-					requestScopedSystemVars,
-					osEnvGetter,
-					currentDotEnvVars,
-				)
-				newValues[j] = substituteDynamicSystemVariables(resolvedVal, currentDotEnvVars, programmaticVars)
-			}
-			rcRequest.Headers[key] = newValues
-		}
-	}
+	
 	return finalParsedURL, nil
+}
+
+// processHeaderSubstitution handles header variable substitution
+func processHeaderSubstitution(rcRequest *Request, varMaps variableMaps,
+	requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool),
+	programmaticVars map[string]any, currentDotEnvVars map[string]string) {
+	if rcRequest.Headers == nil {
+		return
+	}
+	
+	for key, values := range rcRequest.Headers {
+		newValues := make([]string, len(values))
+		for j, val := range values {
+			resolvedVal := resolveVariablesInText(val, programmaticVars, varMaps.fileScopedVars,
+				varMaps.envVarsFromFile, varMaps.globalVarsFromFile, requestScopedSystemVars, 
+				osEnvGetter, currentDotEnvVars)
+			newValues[j] = substituteDynamicSystemVariables(resolvedVal, currentDotEnvVars, programmaticVars)
+		}
+		rcRequest.Headers[key] = newValues
+	}
 }
 
 // _parseLength extracts an optional length argument from a regex match.
