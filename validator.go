@@ -50,15 +50,18 @@ const anyRegexPattern = `(?s).*?`       // Matches any char (incl newline), non-
 // .hresp parsing are also returned.
 func (c *Client) ValidateResponses(responseFilePath string, actualResponses ...*Response) error {
 	expectedResponses, errs, parseErr := c.loadAndParseExpectedResponses(responseFilePath)
-	if parseErr != nil || errs != nil {
-		return errs.ErrorOrNil()
+	
+	// If there was a critical error (file not found, etc.), return immediately
+	if parseErr != nil && errs == nil {
+		return parseErr
+	}
+	
+	// Continue with validation even if parsing failed, but use empty expected responses
+	if parseErr != nil {
+		expectedResponses = nil
 	}
 
 	errs = c.validateResponseCounts(responseFilePath, actualResponses, expectedResponses, errs)
-	if errs != nil {
-		return errs.ErrorOrNil()
-	}
-
 	errs = c.validateResponsePairs(responseFilePath, actualResponses, expectedResponses, errs)
 	return errs.ErrorOrNil()
 }
@@ -110,8 +113,18 @@ func (*Client) validateResponseCounts(responseFilePath string, actualResponses [
 func (c *Client) validateResponsePairs(responseFilePath string, actualResponses []*Response,
 	expectedResponses []*ExpectedResponse, errs *multierror.Error) *multierror.Error {
 	effectiveNumActual := countNonNilActuals(actualResponses)
+	effectiveNumExpected := 0
+	if expectedResponses != nil {
+		effectiveNumExpected = len(expectedResponses)
+	}
 
-	for i := 0; i < effectiveNumActual; i++ {
+	// Only validate pairs where both actual and expected responses exist
+	maxPairs := effectiveNumActual
+	if effectiveNumExpected < maxPairs {
+		maxPairs = effectiveNumExpected
+	}
+
+	for i := 0; i < maxPairs; i++ {
 		actual := actualResponses[i]
 		expected := expectedResponses[i]
 
