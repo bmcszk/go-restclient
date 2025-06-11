@@ -90,62 +90,12 @@ func runCookieJarSubtest(t *testing.T, tc cookieJarTestCase, serverVars map[stri
 // It uses dynamically created 'testdata/cookies_redirects/with_cookie_jar.http' and 
 // 'testdata/cookies_redirects/without_cookie_jar.http' files.
 func TestCookieJarHandling(t *testing.T) {
-	// Given: A test server that sets cookies
-	var cookieCheck bool // This variable is modified by the HTTP handler
-	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/set-cookie":
-			http.SetCookie(w, &http.Cookie{Name: "test-cookie", Value: "test-value"})
-			w.WriteHeader(http.StatusOK)
-			return
-		case "/check-cookie":
-			cookie, err := r.Cookie("test-cookie")
-			if err == nil && cookie.Value == "test-value" {
-				cookieCheck = true
-			}
-			w.WriteHeader(http.StatusOK)
-			return
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
+	var cookieCheck bool
+	testServer := setupCookieTestServer(&cookieCheck)
 	defer testServer.Close()
 
-	// Common setup: Create test files and parse server URL
-	withCookieJarFilePath := "testdata/cookies_redirects/with_cookie_jar.http"
-	withoutCookieJarFilePath := "testdata/cookies_redirects/without_cookie_jar.http"
-	require.NoError(t, createTestDirectories("testdata/cookies_redirects"))
-
-	withCookieJarContent := "### Set Cookie Request\nGET {{scheme}}://{{host}}:{{port}}/set-cookie\n\n" +
-		"### Check Cookie Request\nGET {{scheme}}://{{host}}:{{port}}/check-cookie\n"
-	require.NoError(t, writeTestFile(withCookieJarFilePath, withCookieJarContent))
-
-	withoutCookieJarContent := "### Set Cookie Request\nGET {{scheme}}://{{host}}:{{port}}/set-cookie\n\n" +
-		"### Check Cookie Request\n// @no-cookie-jar\nGET {{scheme}}://{{host}}:{{port}}/check-cookie\n"
-	require.NoError(t, writeTestFile(withoutCookieJarFilePath, withoutCookieJarContent))
-
-	parsedURL, err := url.Parse(testServer.URL)
-	require.NoError(t, err, "Failed to parse testServer.URL")
-	serverVars := map[string]any{
-		"scheme": parsedURL.Scheme,
-		"host":   parsedURL.Hostname(),
-		"port":   parsedURL.Port(),
-	}
-
-	tests := []cookieJarTestCase{
-		{
-			name:                       "default_behavior_with_cookie_jar",
-			httpFilePath:               withCookieJarFilePath,
-			expectedCookieCheckValue:   true,
-			isNoCookieJarDirectiveTest: false,
-		},
-		{
-			name:                       "directive_no_cookie_jar",
-			httpFilePath:               withoutCookieJarFilePath,
-			expectedCookieCheckValue:   false,
-			isNoCookieJarDirectiveTest: true,
-		},
-	}
+	filePaths, serverVars := setupCookieTestFiles(t, testServer.URL)
+	tests := getCookieJarTestCases(filePaths)
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -154,12 +104,88 @@ func TestCookieJarHandling(t *testing.T) {
 	}
 }
 
+// setupCookieTestServer creates a test server for cookie jar testing
+func setupCookieTestServer(cookieCheck *bool) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/set-cookie":
+			http.SetCookie(w, &http.Cookie{Name: "test-cookie", Value: "test-value"})
+			w.WriteHeader(http.StatusOK)
+			return
+		case "/check-cookie":
+			cookie, err := r.Cookie("test-cookie")
+			if err == nil && cookie.Value == "test-value" {
+				*cookieCheck = true
+			}
+			w.WriteHeader(http.StatusOK)
+			return
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+}
+
+// cookieTestFilePaths holds test file paths
+type cookieTestFilePaths struct {
+	withCookieJar    string
+	withoutCookieJar string
+}
+
+// setupCookieTestFiles creates test files and returns file paths and server variables
+func setupCookieTestFiles(t *testing.T, serverURL string) (cookieTestFilePaths, map[string]any) {
+	filePaths := cookieTestFilePaths{
+		withCookieJar:    "testdata/cookies_redirects/with_cookie_jar.http",
+		withoutCookieJar: "testdata/cookies_redirects/without_cookie_jar.http",
+	}
+	
+	require.NoError(t, createTestDirectories("testdata/cookies_redirects"))
+
+	withCookieJarContent := "### Set Cookie Request\nGET {{scheme}}://{{host}}:{{port}}/set-cookie\n\n" +
+		"### Check Cookie Request\nGET {{scheme}}://{{host}}:{{port}}/check-cookie\n"
+	require.NoError(t, writeTestFile(filePaths.withCookieJar, withCookieJarContent))
+
+	withoutCookieJarContent := "### Set Cookie Request\nGET {{scheme}}://{{host}}:{{port}}/set-cookie\n\n" +
+		"### Check Cookie Request\n// @no-cookie-jar\nGET {{scheme}}://{{host}}:{{port}}/check-cookie\n"
+	require.NoError(t, writeTestFile(filePaths.withoutCookieJar, withoutCookieJarContent))
+
+	parsedURL, err := url.Parse(serverURL)
+	require.NoError(t, err, "Failed to parse testServer.URL")
+	serverVars := map[string]any{
+		"scheme": parsedURL.Scheme,
+		"host":   parsedURL.Hostname(),
+		"port":   parsedURL.Port(),
+	}
+	
+	return filePaths, serverVars
+}
+
+// getCookieJarTestCases returns test cases for cookie jar testing
+func getCookieJarTestCases(filePaths cookieTestFilePaths) []cookieJarTestCase {
+	return []cookieJarTestCase{
+		{
+			name:                       "default_behavior_with_cookie_jar",
+			httpFilePath:               filePaths.withCookieJar,
+			expectedCookieCheckValue:   true,
+			isNoCookieJarDirectiveTest: false,
+		},
+		{
+			name:                       "directive_no_cookie_jar",
+			httpFilePath:               filePaths.withoutCookieJar,
+			expectedCookieCheckValue:   false,
+			isNoCookieJarDirectiveTest: true,
+		},
+	}
+}
+
 // PRD-COMMENT: FR9.2 - Client Execution: Redirect Handling
-// Corresponds to: Client execution behavior regarding HTTP redirects and the '@no-redirect' request setting (http_syntax.md "Request Settings", "@no-redirect").
+// Corresponds to: Client execution behavior regarding HTTP redirects and the '@no-redirect' 
+// request setting (http_syntax.md "Request Settings", "@no-redirect").
 // This test verifies the client's redirect handling. It checks:
 // 1. Default behavior: The client automatically follows HTTP redirects (e.g., 302 Found).
-// 2. '@no-redirect' directive: When a request includes the '@no-redirect' setting, the client does not automatically follow redirects and instead returns the redirect response itself.
-// It uses dynamically created 'testdata/cookies_redirects/with_redirect.http' and 'testdata/cookies_redirects/without_redirect.http' files.
+// 2. '@no-redirect' directive: When a request includes the '@no-redirect' setting, the client 
+//    does not automatically follow redirects and instead returns the redirect response itself.
+// It uses dynamically created 'testdata/cookies_redirects/with_redirect.http' and 
+// 'testdata/cookies_redirects/without_redirect.http' files.
 func TestRedirectHandling(t *testing.T) {
 	// Given: A test server that performs redirects
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

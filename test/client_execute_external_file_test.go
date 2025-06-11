@@ -21,8 +21,12 @@ import (
 )
 
 // PRD-COMMENT: FR4.1 - Request Body: External File with Variables (<@)
-// Corresponds to: Client's ability to process request bodies specified via '<@ filepath' where 'filepath' points to an external file whose content is subject to variable substitution (http_syntax.md "Request Body", "External File with Variables (<@ filepath)").
-// This test verifies that variables defined in the .http file or programmatically are correctly substituted into the content of the external file ('test_vars.json') before it's used as the request body.
+// Corresponds to: Client's ability to process request bodies specified via '<@ filepath' where 
+// 'filepath' points to an external file whose content is subject to variable substitution 
+// (http_syntax.md "Request Body", "External File with Variables (<@ filepath)").
+// This test verifies that variables defined in the .http file or programmatically are correctly 
+// substituted into the content of the external file ('test_vars.json') before it's used as the 
+// request body.
 func TestExecuteFile_ExternalFileWithVariables(t *testing.T) {
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
@@ -103,8 +107,11 @@ Content-Type: application/json
 }
 
 // PRD-COMMENT: FR4.2 - Request Body: External File Static (<)
-// Corresponds to: Client's ability to process request bodies specified via '< filepath' where 'filepath' points to an external file whose content is included statically, without variable substitution (http_syntax.md "Request Body", "External File Static (< filepath)").
-// This test verifies that the content of the external file ('test_static.json') is used as the request body verbatim, with any variable-like syntax within it preserved literally.
+// Corresponds to: Client's ability to process request bodies specified via '< filepath' where 
+// 'filepath' points to an external file whose content is included statically, without variable 
+// substitution (http_syntax.md "Request Body", "External File Static (< filepath)").
+// This test verifies that the content of the external file ('test_static.json') is used as the 
+// request body verbatim, with any variable-like syntax within it preserved literally.
 func TestExecuteFile_ExternalFileWithoutVariables(t *testing.T) {
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
@@ -172,7 +179,9 @@ Content-Type: application/json
 }
 
 // PRD-COMMENT: FR4.3 - Request Body: External File with Encoding (<@|encoding)
-// Corresponds to: Client's ability to process request bodies from external files with a specified character encoding using '<@|encoding filepath' (http_syntax.md "Request Body", "External File with Encoding (<@|encoding filepath)")
+// Corresponds to: Client's ability to process request bodies from external files with a 
+// specified character encoding using '<@|encoding filepath' (http_syntax.md "Request Body", 
+// "External File with Encoding (<@|encoding filepath)")
 
 // TODO: Add tests for variable substitution within external files (<@ syntax).
 
@@ -201,7 +210,8 @@ func getEncodingTestCases() []encodingTestCase {
 		{
 			name:             "Latin-1 encoded file",
 			encodingName:     "latin1",
-			contentToWrite:   "H\u00e4llo W\u00f6rld! \u00d1ice to meet you. ?", // Simulating content where € was replaced by ? as it's not in Latin-1.
+			contentToWrite:   "H\u00e4llo W\u00f6rld! \u00d1ice to meet you. ?", 
+			// Simulating content where € was replaced by ? as it's not in Latin-1.
 			expectedUTF8Body: "Hällo Wörld! Ñice to meet you. ?", // How charmap.ISO8859_1 handles €
 			encoder:          charmap.ISO8859_1.NewEncoder(),
 		},
@@ -287,7 +297,9 @@ func setupMockServer(t *testing.T, bodyReceived chan []byte) *httptest.Server {
 // createHTTPFile creates the .http file for testing
 func createHTTPFile(t *testing.T, tempDir, serverURL, encodingName string) string {
 	httpFilePath := filepath.Join(tempDir, "request.http")
-	httpFileContent := fmt.Sprintf("POST %s\nContent-Type: text/plain\n\n<@%s encoded_body.txt", serverURL, encodingName)
+	httpFileContent := fmt.Sprintf(
+		"POST %s\nContent-Type: text/plain\n\n<@%s encoded_body.txt", 
+		serverURL, encodingName)
 	require.NoError(t, os.WriteFile(httpFilePath, []byte(httpFileContent), 0644),
 		"Failed to write .http file")
 	return httpFilePath
@@ -311,8 +323,11 @@ func executeAndVerify(t *testing.T, httpFilePath, expectedUTF8Body string, bodyR
 }
 
 // PRD-COMMENT: FR4.3 - Request Body: External File with Encoding (<@|encoding)
-// Corresponds to: Client's ability to process request bodies from external files with a specified character encoding using '<@|encoding filepath' (http_syntax.md "Request Body", "External File with Encoding (<@|encoding filepath)").
-// This test verifies that an external file ('test_encoded.txt') with a specific encoding (e.g., latin1) is correctly read and used as the request body.
+// Corresponds to: Client's ability to process request bodies from external files with a 
+// specified character encoding using '<@|encoding filepath' (http_syntax.md "Request Body", 
+// "External File with Encoding (<@|encoding filepath)").
+// This test verifies that an external file ('test_encoded.txt') with a specific encoding 
+// (e.g., latin1) is correctly read and used as the request body.
 func TestExecuteFile_ExternalFileWithEncoding(t *testing.T) {
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
