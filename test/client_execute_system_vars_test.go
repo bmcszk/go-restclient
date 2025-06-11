@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest" // Added for mock server
 	"net/url"           // Added for TestExecuteFile_WithRandomIntSystemVariable
-	"os"                // Added for TestExecuteFile_WithDatetimeSystemVariables
 	"strconv"
 	"strings"
 	"testing"
@@ -98,7 +97,8 @@ func TestExecuteFile_WithGuidSystemVariable(t *testing.T) {
 	assert.Equal(t, guidFromURL, guidFromBody1, "GUID from URL and body1 should be the same")
 	// For this test, the .http file uses {{$guid}} twice in the body for different fields.
 	// These should now resolve to the same request-scoped GUID.
-	assert.Equal(t, guidFromBody1, guidFromBody2, "GUIDs from body (transactionId and correlationId) should be the same")
+	assert.Equal(t, guidFromBody1, guidFromBody2,
+		"GUIDs from body (transactionId and correlationId) should be the same")
 }
 
 // PRD-COMMENT: FR1.3.3 - System Variables: {{$isoTimestamp}}
@@ -217,11 +217,6 @@ func TestExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
 		struct{ ServerURL string }{ServerURL: server.URL},
 	)
 
-	// Log the content of the generated temporary file for debugging
-	tempFileContent, errRead := os.ReadFile(requestFilePath)
-	require.NoError(t, errRead, "Failed to read temporary file for debugging: %s", requestFilePath)
-	t.Logf("[DEBUG_TEST] Content of temporary file '%s':\n%s", requestFilePath, string(tempFileContent))
-
 	// When
 	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
 
@@ -233,76 +228,98 @@ func TestExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
 	assert.NoError(t, resp.Error)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	now := time.Now()
-	threshold := 5 * time.Second // Allow 5s difference for timestamp checks
+	// Validate datetime values in headers and body
+	validateDatetimeHeaders(t, interceptedRequest)
+	validateDatetimeBody(t, interceptedRequest)
+}
 
-	// Helper to check datetime strings
-	checkDateTimeStr := func(t *testing.T, valueStr string, formatKeyword string, isUTC bool, headerName string) {
-		t.Helper()
-		if formatKeyword == "timestamp" {
-			ts, err := strconv.ParseInt(valueStr, 10, 64)
-			require.NoError(t, err, "Failed to parse timestamp from %s: %s", headerName, valueStr)
-			parsedTime := time.Unix(ts, 0)
-			assert.WithinDuration(t, now, parsedTime, threshold,
-				"%s timestamp %s not within threshold of current time %s", headerName, parsedTime, now)
-		} else {
-			var layout string
-			switch formatKeyword {
-			case "rfc1123":
-				layout = time.RFC1123
-			case "iso8601":
-				layout = time.RFC3339 // Go's RFC3339 is ISO8601 compliant
-			default:
-				t.Fatalf("Unhandled format keyword: %s for %s", formatKeyword, headerName)
-			}
-			parsedTime, err := time.Parse(layout, valueStr)
-			require.NoError(t, err, "Failed to parse datetime string from %s ('%s') with layout '%s'",
-				headerName, valueStr, layout)
-			assert.WithinDuration(t, now, parsedTime, threshold,
-				"%s datetime %s not within threshold of current time %s", headerName, parsedTime, now)
-			if isUTC {
-				assert.Equal(t, time.UTC, parsedTime.Location(), "%s expected to be UTC", headerName)
-			} else {
-				// Get offset for time.Local
-				_, localOffset := now.In(time.Local).Zone()
-				// Get offset for parsedTime
-				_, parsedOffset := parsedTime.Zone()
-				assert.Equal(t, localOffset, parsedOffset,
-				"%s expected to have local time offset, got %d, want %d", headerName, parsedOffset, localOffset)
-			}
-		}
+// checkDateTimeStr is a helper function to validate datetime strings
+func checkDateTimeStr(t *testing.T, valueStr string, formatKeyword string, isUTC bool,
+	headerName string, now time.Time, threshold time.Duration) {
+	t.Helper()
+	if formatKeyword == "timestamp" {
+		ts, err := strconv.ParseInt(valueStr, 10, 64)
+		require.NoError(t, err, "Failed to parse timestamp from %s: %s", headerName, valueStr)
+		parsedTime := time.Unix(ts, 0)
+		assert.WithinDuration(t, now, parsedTime, threshold,
+			"%s timestamp %s not within threshold of current time %s", headerName, parsedTime, now)
+		return
 	}
 
-	// Check Headers
-	checkDateTimeStr(t, interceptedRequest.Headers["X-Datetime-Rfc1123"], "rfc1123", true, "X-Datetime-RFC1123")
-	checkDateTimeStr(t, interceptedRequest.Headers["X-Datetime-Iso8601"], "iso8601", true, "X-Datetime-ISO8601")
-	checkDateTimeStr(t, interceptedRequest.Headers["X-Datetime-Timestamp"], "timestamp", true, "X-Datetime-Timestamp")
-	checkDateTimeStr(t, interceptedRequest.Headers["X-Datetime-Default"], "iso8601", true, "X-Datetime-Default (ISO8601)")
+	var layout string
+	switch formatKeyword {
+	case "rfc1123":
+		layout = time.RFC1123
+	case "iso8601":
+		layout = time.RFC3339 // Go's RFC3339 is ISO8601 compliant
+	default:
+		t.Fatalf("Unhandled format keyword: %s for %s", formatKeyword, headerName)
+	}
+	parsedTime, err := time.Parse(layout, valueStr)
+	require.NoError(t, err, "Failed to parse datetime string from %s ('%s') with layout '%s'",
+		headerName, valueStr, layout)
+	assert.WithinDuration(t, now, parsedTime, threshold,
+		"%s datetime %s not within threshold of current time %s", headerName, parsedTime, now)
+	if isUTC {
+		assert.Equal(t, time.UTC, parsedTime.Location(), "%s expected to be UTC", headerName)
+	} else {
+		// Get offset for time.Local
+		_, localOffset := now.In(time.Local).Zone()
+		// Get offset for parsedTime
+		_, parsedOffset := parsedTime.Zone()
+		assert.Equal(t, localOffset, parsedOffset,
+			"%s expected to have local time offset, got %d, want %d", headerName, parsedOffset, localOffset)
+	}
+}
 
-	checkDateTimeStr(t, interceptedRequest.Headers["X-Localdatetime-Rfc1123"], "rfc1123", false, "X-LocalDatetime-RFC1123")
-	checkDateTimeStr(t, interceptedRequest.Headers["X-Localdatetime-Iso8601"], "iso8601", false, "X-LocalDatetime-ISO8601")
+func validateDatetimeHeaders(t *testing.T, interceptedRequest *detailedInterceptedRequestData) {
+	t.Helper()
+	now := time.Now()
+	threshold := 5 * time.Second
+
+	// Check Headers
+	checkDateTimeStr(t, interceptedRequest.Headers["X-Datetime-Rfc1123"], "rfc1123", true,
+		"X-Datetime-RFC1123", now, threshold)
+	checkDateTimeStr(t, interceptedRequest.Headers["X-Datetime-Iso8601"], "iso8601", true,
+		"X-Datetime-ISO8601", now, threshold)
+	checkDateTimeStr(t, interceptedRequest.Headers["X-Datetime-Timestamp"], "timestamp", true,
+		"X-Datetime-Timestamp", now, threshold)
+	checkDateTimeStr(t, interceptedRequest.Headers["X-Datetime-Default"], "iso8601", true,
+		"X-Datetime-Default (ISO8601)", now, threshold)
+
+	checkDateTimeStr(t, interceptedRequest.Headers["X-Localdatetime-Rfc1123"], "rfc1123", false,
+		"X-LocalDatetime-RFC1123", now, threshold)
+	checkDateTimeStr(t, interceptedRequest.Headers["X-Localdatetime-Iso8601"], "iso8601", false,
+		"X-LocalDatetime-ISO8601", now, threshold)
 	checkDateTimeStr(t, interceptedRequest.Headers["X-Localdatetime-Timestamp"],
-		"timestamp", false, "X-LocalDatetime-Timestamp")
+		"timestamp", false, "X-LocalDatetime-Timestamp", now, threshold)
 	checkDateTimeStr(t, interceptedRequest.Headers["X-Localdatetime-Default"],
-		"iso8601", false, "X-LocalDatetime-Default (ISO8601)")
+		"iso8601", false, "X-LocalDatetime-Default (ISO8601)", now, threshold)
 
 	assert.Equal(t, "{{$datetime \"invalidFormat\"}}", interceptedRequest.Headers["X-Datetime-Invalid"],
 		"X-Datetime-Invalid should remain unresolved")
+}
+
+func validateDatetimeBody(t *testing.T, interceptedRequest *detailedInterceptedRequestData) {
+	t.Helper()
+	now := time.Now()
+	threshold := 5 * time.Second
 
 	// Check Body
 	var bodyJSON map[string]string
-	err = json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON)
+	err := json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON)
 	require.NoError(t, err, "Failed to unmarshal request body JSON")
 
-	checkDateTimeStr(t, bodyJSON["utc_rfc1123"], "rfc1123", true, "body.utc_rfc1123")
-	checkDateTimeStr(t, bodyJSON["utc_iso8601"], "iso8601", true, "body.utc_iso8601")
-	checkDateTimeStr(t, bodyJSON["utc_timestamp"], "timestamp", true, "body.utc_timestamp")
-	checkDateTimeStr(t, bodyJSON["utc_default_iso"], "iso8601", true, "body.utc_default_iso (ISO8601)")
+	checkDateTimeStr(t, bodyJSON["utc_rfc1123"], "rfc1123", true, "body.utc_rfc1123", now, threshold)
+	checkDateTimeStr(t, bodyJSON["utc_iso8601"], "iso8601", true, "body.utc_iso8601", now, threshold)
+	checkDateTimeStr(t, bodyJSON["utc_timestamp"], "timestamp", true, "body.utc_timestamp", now, threshold)
+	checkDateTimeStr(t, bodyJSON["utc_default_iso"], "iso8601", true, "body.utc_default_iso (ISO8601)", now, threshold)
 
-	checkDateTimeStr(t, bodyJSON["local_rfc1123"], "rfc1123", false, "body.local_rfc1123")
-	checkDateTimeStr(t, bodyJSON["local_iso8601"], "iso8601", false, "body.local_iso8601")
-	checkDateTimeStr(t, bodyJSON["local_timestamp"], "timestamp", false, "body.local_timestamp")
-	checkDateTimeStr(t, bodyJSON["local_default_iso"], "iso8601", false, "body.local_default_iso (ISO8601)")
+	checkDateTimeStr(t, bodyJSON["local_rfc1123"], "rfc1123", false, "body.local_rfc1123", now, threshold)
+	checkDateTimeStr(t, bodyJSON["local_iso8601"], "iso8601", false, "body.local_iso8601", now, threshold)
+	checkDateTimeStr(t, bodyJSON["local_timestamp"], "timestamp", false, "body.local_timestamp", now, threshold)
+	checkDateTimeStr(t, bodyJSON["local_default_iso"], "iso8601", false,
+		"body.local_default_iso (ISO8601)", now, threshold)
 
 	assert.Equal(t, "{{$datetime \"invalidFormat\"}}", bodyJSON["invalid_format_test"],
 		"body.invalid_format_test should remain unresolved")
@@ -385,9 +402,9 @@ func TestExecuteFile_WithTimestampSystemVariable(t *testing.T) {
 	assert.Equal(t, timestampFromBody1, timestampFromBody2)
 }
 
-func validateRandomIntValidMinMaxArgs(t *testing.T, url, header, body string) {
+func validateRandomIntValidMinMaxArgs(t *testing.T, reqURL, header, body string) {
 	t.Helper()
-	urlParts := strings.Split(url, "/")
+	urlParts := strings.Split(reqURL, "/")
 	valURL, err := strconv.Atoi(urlParts[len(urlParts)-2])
 	require.NoError(t, err, "Random int from URL should be valid int")
 	assert.True(t, valURL >= 10 && valURL <= 20, "URL random int %d out of range [10,20]", valURL)
@@ -403,16 +420,17 @@ func validateRandomIntValidMinMaxArgs(t *testing.T, url, header, body string) {
 		"Body random int %d out of range [100,105]", bodyJSON["value"])
 }
 
-func validateRandomIntNoArgs(t *testing.T, url, header, body string) {
+func validateRandomIntNoArgs(t *testing.T, reqURL, header, body string) {
 	t.Helper()
-	urlParts := strings.Split(url, "/")
+	urlParts := strings.Split(reqURL, "/")
 	valURL, err := strconv.Atoi(urlParts[len(urlParts)-2])
 	require.NoError(t, err, "Random int from URL (no args) should be valid int")
 	assert.True(t, valURL >= 0 && valURL <= 1000, "URL random int (no args) %d out of range [0,1000]", valURL)
 
 	valHeader, err := strconv.Atoi(header)
 	require.NoError(t, err, "Random int from Header (no args) should be valid int")
-	assert.True(t, valHeader >= 0 && valHeader <= 1000, "Header random int (no args) %d out of range [0,1000]", valHeader)
+	assert.True(t, valHeader >= 0 && valHeader <= 1000,
+		"Header random int (no args) %d out of range [0,1000]", valHeader)
 
 	var bodyJSON map[string]int
 	err = json.Unmarshal([]byte(body), &bodyJSON)
@@ -421,9 +439,9 @@ func validateRandomIntNoArgs(t *testing.T, url, header, body string) {
 		"Body random int (no args) %d out of range [0,1000]", bodyJSON["value"])
 }
 
-func validateRandomIntSwappedMinMaxArgs(t *testing.T, url, header, body string) {
+func validateRandomIntSwappedMinMaxArgs(t *testing.T, reqURL, _ /* header */, body string) {
 	t.Helper()
-	urlParts := strings.Split(url, "/")
+	urlParts := strings.Split(reqURL, "/")
 	require.Len(t, urlParts, 4, "URL path should have 4 parts for swapped args test")
 	assert.Equal(t, "{{$randomInt 30 25}}", urlParts[2],
 		"URL part1 for swapped_min_max_args should be the unresolved placeholder")
@@ -528,6 +546,7 @@ func getRandomIntTestCases() []randomIntTestCase {
 // runRandomIntTestCase executes a single random int test case
 func runRandomIntTestCase(t *testing.T, tc randomIntTestCase, client *rc.Client, serverURL string,
 	interceptedRequest *randomIntRequestData) {
+	t.Helper()
 	requestFilePath := createTestFileFromTemplate(t, tc.httpFilePath, struct{ ServerURL string }{ServerURL: serverURL})
 
 	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
@@ -543,6 +562,7 @@ func runRandomIntTestCase(t *testing.T, tc randomIntTestCase, client *rc.Client,
 // validateRandomIntResponse validates the response from random int test
 func validateRandomIntResponse(t *testing.T, tc randomIntTestCase, responses []*rc.Response,
 	interceptedRequest *randomIntRequestData) {
+	t.Helper()
 	require.Len(t, responses, 1, "Expected 1 response for %s", tc.name)
 	resp := responses[0]
 	assert.NoError(t, resp.Error, "Response error should be nil for %s", tc.name)

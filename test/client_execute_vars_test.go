@@ -95,7 +95,7 @@ func TestExecuteFile_WithCustomVariables(t *testing.T) {
 // variables to verify their substitution in URLs, headers, and bodies. It also checks behavior
 // for undefined environment variables.
 func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
-	//t.Skip("Skipping due to bug in {{$processEnv VAR}} substitution
+	// t.Skip("Skipping due to bug in {{$processEnv VAR}} substitution
 	//   (MEMORY d1edb831-da89-4cde-93ad-a9129eb7b8aa): placeholder not replaced with
 	//   OS environment variable value. See task TBD for fix.")
 	// Given
@@ -246,7 +246,8 @@ func runDotEnvScenarioTest(t *testing.T, client *rc.Client, serverURL string, te
 		for key, expectedValue := range tc.expectedBodyPayload {
 			actualValue, ok := bodyJSON[key]
 			assert.True(t, ok, "Expected key '%s' not found in body for scenario: %s", key, tc.name)
-			assert.Equal(t, expectedValue, actualValue, "Body payload for key '%s' mismatch for scenario: %s", key, tc.name)
+			assert.Equal(t, expectedValue, actualValue,
+				"Body payload for key '%s' mismatch for scenario: %s", key, tc.name)
 		}
 	}
 }

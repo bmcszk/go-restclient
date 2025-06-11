@@ -702,7 +702,8 @@ func TestExecuteFile_InPlace_VariableDefinedByAnotherInPlaceVariable(t *testing.
 
 // PRD-COMMENT: FR3.1, FR3.8, FR1.4 - In-Place Variables: Referencing .env Variables via {{$dotenv}}
 // Corresponds to: Client's ability to define an in-place variable using a variable from a .env file,
-// accessed via '{{$dotenv VAR_NAME}}' (http_syntax.md "In-place Variables", "Environment Variables", ".env File Support").
+// accessed via '{{$dotenv VAR_NAME}}' (http_syntax.md "In-place Variables",
+// "Environment Variables", ".env File Support").
 // This test uses 'testdata/execute_inplace_vars/variable_defined_by_dotenv_os_variable/request.http'
 // and its associated '.env' file to verify that '@my_var' is correctly assigned the value of
 // 'DOTENV_VAR' from the .env file.
@@ -754,7 +755,8 @@ func TestExecuteFile_InPlace_VariableDefinedByDotEnvOsVariable(t *testing.T) {
 	// Main assertion: check the captured URL path
 	expectedPath := testEnvVarValue + "/data" // As per original test logic
 	assert.Equal(t, expectedPath, capturedURLPath,
-		"The URL path should be correctly substituted with the OS environment variable via {{$env.VAR_NAME}} in-place var")
+		"The URL path should be correctly substituted with the OS environment variable "+
+			"via {{$env.VAR_NAME}} in-place var")
 
 	// Verify ParsedFile.FileVariables
 	// parseRequestFile call removed. Assertions on internal FileVariables will be removed.
@@ -766,7 +768,8 @@ func TestExecuteFile_InPlace_VariableDefinedByDotEnvOsVariable(t *testing.T) {
 // specifically when only a name is provided (e.g., '@myvar' without '= value')
 // (http_syntax.md "In-place Variables", implicitly by defining correct syntax).
 // This test uses 'testdata/execute_inplace_vars/malformed_name_only/request.http' to verify that
-// such malformed definitions are ignored or handled gracefully without causing execution failure for other valid requests.
+// such malformed definitions are ignored or handled gracefully without causing
+// execution failure for other valid requests.
 func TestExecuteFile_InPlace_Malformed_NameOnlyNoEqualsNoValue(t *testing.T) {
 	// Given: an .http file with a malformed in-place variable (name only, no equals, no value)
 	requestFilePath := "testdata/execute_inplace_vars/malformed_name_only_no_equals_no_value/request.http"
@@ -815,11 +818,13 @@ func TestExecuteFile_InPlace_Malformed_NoNameEqualsValue(t *testing.T) {
 // While {{$dotenv}} is primarily for OS/file environment variables, this tests if defining
 // `@my_api_key = {{$dotenv DOTENV_VAR_FOR_SYSTEM_TEST}}` correctly pulls from a .env file.
 // (http_syntax.md "In-place Variables", "Environment Variables", ".env File Support").
-// It uses 'testdata/execute_inplace_vars/inplace_variable_defined_by_dotenv_system_variable/request.http' and its .env file.
+// It uses 'testdata/execute_inplace_vars/inplace_variable_defined_by_dotenv_system_variable/
+// request.http' and its .env file.
 func TestExecuteFile_InPlace_VariableDefinedByDotEnvSystemVariable(t *testing.T) {
 	// Given: an .http file using {{$dotenv VAR_NAME}} for an in-place variable,
 	// and a .env file defining VAR_NAME in the same directory as the .http file.
-	const requestFilePath = "testdata/execute_inplace_vars/inplace_variable_defined_by_dotenv_system_variable/request.http"
+	const requestFilePath = "testdata/execute_inplace_vars/" +
+		"inplace_variable_defined_by_dotenv_system_variable/request.http"
 	// The .env file is: testdata/execute_inplace_vars/inplace_variable_defined_by_dotenv_system_variable/.env
 	// with DOTENV_VAR_FOR_SYSTEM_TEST=actual_dotenv_value
 
@@ -845,7 +850,8 @@ func TestExecuteFile_InPlace_VariableDefinedByDotEnvSystemVariable(t *testing.T)
 	require.Len(t, responses, 1, "Expected one response")
 	require.Nil(t, responses[0].Error, "Response error should be nil")
 	assert.Equal(t, http.StatusOK, responses[0].StatusCode, "Expected HTTP 200 OK")
-	assert.Equal(t, "/"+expectedSubstitutedValue, capturedURLPath, "Expected path to be substituted with .env value via {{$dotenv}}")
+	assert.Equal(t, "/"+expectedSubstitutedValue, capturedURLPath,
+		"Expected path to be substituted with .env value via {{$dotenv}}")
 
 	// Verify ParsedFile.FileVariables to confirm parser behavior with {{$dotenv}}
 	// parseRequestFile call removed. Assertions on internal FileVariables will be removed.
@@ -853,7 +859,9 @@ func TestExecuteFile_InPlace_VariableDefinedByDotEnvSystemVariable(t *testing.T)
 }
 
 // PRD-COMMENT: FR3.1, FR3.6, FR1.3 - In-Place Variables: Referencing {{$randomInt}}
-// Corresponds to: Client's ability to define an in-place variable using the '{{$randomInt MIN MAX}}' system variable (http_syntax.md "In-place Variables", "System Variables").
+// Corresponds to: Client's ability to define an in-place variable using the
+// '{{$randomInt MIN MAX}}' system variable (http_syntax.md "In-place Variables",
+// "System Variables").
 // This test uses 'testdata/execute_inplace_vars/inplace_variable_defined_by_random_int/request.http'
 // to verify that '@my_random_port' is correctly assigned a random integer within the specified range.
 func TestExecuteFile_InPlace_VariableDefinedByRandomInt(t *testing.T) {

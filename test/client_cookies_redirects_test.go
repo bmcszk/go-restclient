@@ -133,6 +133,7 @@ type cookieTestFilePaths struct {
 
 // setupCookieTestFiles creates test files and returns file paths and server variables
 func setupCookieTestFiles(t *testing.T, serverURL string) (cookieTestFilePaths, map[string]any) {
+	t.Helper()
 	filePaths := cookieTestFilePaths{
 		withCookieJar:    "testdata/cookies_redirects/with_cookie_jar.http",
 		withoutCookieJar: "testdata/cookies_redirects/without_cookie_jar.http",
@@ -248,7 +249,7 @@ func TestRedirectHandling(t *testing.T) {
 	// For the @no-redirect test, create a client with a custom CheckRedirect function
 	// that prevents following redirects, and with server variables
 	customRedirectHTTPClient := &http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			return http.ErrUseLastResponse // Don't follow redirects
 		},
 	}

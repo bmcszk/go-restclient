@@ -117,7 +117,7 @@ func TestExecuteFile_MultipleRequests(t *testing.T) {
 // requests. The overall operation should also report an aggregated error.
 func TestExecuteFile_RequestWithError(t *testing.T) {
 	// Given
-	server2 := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+	server2 := startMockServer(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprint(w, "good response")
 	})
@@ -289,7 +289,7 @@ func TestExecuteFile_MultipleErrors(t *testing.T) {
 // object.
 func TestExecuteFile_CapturesResponseHeaders(t *testing.T) {
 	// Given
-	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+	server := startMockServer(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.Header().Add("X-Custom-Header", "value1")
 		w.Header().Add("X-Custom-Header", "value2")

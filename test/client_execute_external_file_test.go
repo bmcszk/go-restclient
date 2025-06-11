@@ -241,6 +241,7 @@ func getEncodingTestCases() []encodingTestCase {
 
 // runEncodingTestCase executes a single encoding test case
 func runEncodingTestCase(t *testing.T, tc encodingTestCase) {
+	t.Helper()
 	tempDir := setupTempDir(t)
 	defer os.RemoveAll(tempDir)
 
@@ -255,6 +256,7 @@ func runEncodingTestCase(t *testing.T, tc encodingTestCase) {
 
 // setupTempDir creates a temporary directory for test files
 func setupTempDir(t *testing.T) string {
+	t.Helper()
 	tempDir, err := os.MkdirTemp("", "client_enc_test_*")
 	require.NoError(t, err, "Failed to create temp dir")
 	return tempDir
@@ -262,6 +264,7 @@ func setupTempDir(t *testing.T) string {
 
 // createEncodedDataFile creates the encoded data file for testing
 func createEncodedDataFile(t *testing.T, tempDir string, tc encodingTestCase) string {
+	t.Helper()
 	encodedDataFilePath := filepath.Join(tempDir, "encoded_body.txt")
 	var fileBytes []byte
 	var err error
@@ -280,6 +283,7 @@ func createEncodedDataFile(t *testing.T, tempDir string, tc encodingTestCase) st
 
 // setupMockServer creates a mock server for testing
 func setupMockServer(t *testing.T, bodyReceived chan []byte) *httptest.Server {
+	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 		body, err := io.ReadAll(r.Body)
@@ -296,6 +300,7 @@ func setupMockServer(t *testing.T, bodyReceived chan []byte) *httptest.Server {
 
 // createHTTPFile creates the .http file for testing
 func createHTTPFile(t *testing.T, tempDir, serverURL, encodingName string) string {
+	t.Helper()
 	httpFilePath := filepath.Join(tempDir, "request.http")
 	httpFileContent := fmt.Sprintf(
 		"POST %s\nContent-Type: text/plain\n\n<@%s encoded_body.txt", 
@@ -307,6 +312,7 @@ func createHTTPFile(t *testing.T, tempDir, serverURL, encodingName string) strin
 
 // executeAndVerify executes the test and verifies the results
 func executeAndVerify(t *testing.T, httpFilePath, expectedUTF8Body string, bodyReceived chan []byte) {
+	t.Helper()
 	client, err := rc.NewClient()
 	require.NoError(t, err)
 	responses, err := client.ExecuteFile(context.Background(), httpFilePath)

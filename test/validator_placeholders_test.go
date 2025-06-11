@@ -19,20 +19,35 @@ func TestValidateResponses_BodyRegexpPlaceholder(t *testing.T) {
 	}{
 		{
 			name:             "SCENARIO-LIB-022-001: simple regexp match",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"id": "123"}`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}},
+				BodyString: `{"id": "123"}`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_regexp_simple_match.hresp",
 			expectedErrCount: 0,
 		},
 		{
 			name:             "SCENARIO-LIB-022-002: simple regexp no match",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"status": "FAILED"}`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}},
+				BodyString: `{"status": "FAILED"}`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_regexp_simple_no_match.hresp",
 			expectedErrCount: 1,
-			expectedErrTexts: []string{"body mismatch (regexp/placeholder evaluation failed)", "Compiled Regex: ^\\{\"status\": \"(SUCCESS)\"\\}$"},
+			expectedErrTexts: []string{
+				"body mismatch (regexp/placeholder evaluation failed)",
+				"Compiled Regex: ^\\{\"status\": \"(SUCCESS)\"\\}$",
+			},
 		},
 		{
 			name:             "SCENARIO-LIB-022-003: multiple regexp match",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"userId": "U-abc", "transactionId": "T-12345"}`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}},
+				BodyString: `{"userId": "U-abc", "transactionId": "T-12345"}`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_regexp_multiple_match.hresp",
 			expectedErrCount: 0,
 		},
@@ -80,20 +95,31 @@ func TestValidateResponses_BodyAnyGuidPlaceholder(t *testing.T) {
 	}{
 		{
 			name:             "SCENARIO-LIB-023-001: valid GUID match",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"correlationId": "123e4567-e89b-12d3-a456-426614174000"}`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}},
+				BodyString: `{"correlationId": "123e4567-e89b-12d3-a456-426614174000"}`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_anyguid_match.hresp",
 			expectedErrCount: 0,
 		},
 		{
 			name:             "SCENARIO-LIB-023-002: not a GUID",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"id": "not-a-guid"}`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}},
+				BodyString: `{"id": "not-a-guid"}`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_anyguid_no_match.hresp",
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"body mismatch (regexp/placeholder evaluation failed)"},
 		},
 		{
 			name:             "SCENARIO-LIB-023-003: GUID in larger text",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", BodyString: `Session started with ID: 123e4567-e89b-12d3-a456-426614174000. Please use this for subsequent requests.`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				BodyString: `Session started with ID: 123e4567-e89b-12d3-a456-426614174000. Please use this for subsequent requests.`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_anyguid_larger_text.hresp",
 			expectedErrCount: 0,
 		},
@@ -128,20 +154,32 @@ func TestValidateResponses_BodyAnyTimestampPlaceholder(t *testing.T) {
 	}{
 		{
 			name:             "SCENARIO-LIB-024-001: valid integer timestamp match",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"createdAt": "1678886400"}`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}},
+				BodyString: `{"createdAt": "1678886400"}`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_anytimestamp_match.hresp",
 			expectedErrCount: 0,
 		},
 		{
 			name:             "SCENARIO-LIB-024-002: not an integer timestamp (string)",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"timestamp": "not-a-timestamp"}`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}},
+				BodyString: `{"timestamp": "not-a-timestamp"}`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_anytimestamp_no_match.hresp",
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"body mismatch (regexp/placeholder evaluation failed)"},
 		},
 		{
 			name:             "SCENARIO-LIB-024-003: not an integer timestamp (float)",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"eventTime": "1678886400.5"}`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}},
+				BodyString: `{"eventTime": "1678886400.5"}`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_anytimestamp_float.hresp",
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"body mismatch (regexp/placeholder evaluation failed)"},
@@ -177,58 +215,94 @@ func TestValidateResponses_BodyAnyDatetimePlaceholder(t *testing.T) {
 	}{
 		{
 			name:             "SCENARIO-LIB-025-001: rfc1123 match",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"lastModified": "Tue, 15 Mar 2023 12:00:00 GMT"}`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}},
+				BodyString: `{"lastModified": "Tue, 15 Mar 2023 12:00:00 GMT"}`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_anydatetime_rfc1123_match.hresp",
 			expectedErrCount: 0,
 		},
 		{
 			name:             "SCENARIO-LIB-025-002: iso8601 match (RFC3339)",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"eventTime": "2023-03-15T12:00:00Z"}`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}},
+				BodyString: `{"eventTime": "2023-03-15T12:00:00Z"}`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_anydatetime_iso8601_match.hresp",
 			expectedErrCount: 0,
 		},
 		{
 			name:             "SCENARIO-LIB-025-002b: iso8601 match with offset",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"eventTime": "2023-03-15T12:00:00+01:00"}`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}},
+				BodyString: `{"eventTime": "2023-03-15T12:00:00+01:00"}`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_anydatetime_iso8601_match.hresp",
 			expectedErrCount: 0,
 		},
 		{
 			name:             "SCENARIO-LIB-025-002c: iso8601 match with milliseconds and Z",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"eventTime": "2023-03-15T12:00:00.123Z"}`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}},
+				BodyString: `{"eventTime": "2023-03-15T12:00:00.123Z"}`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_anydatetime_iso8601_match.hresp",
 			expectedErrCount: 0,
 		},
 		{
 			name:             "SCENARIO-LIB-025-003: custom Go layout match",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"date": "2023-03-15"}`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}},
+				BodyString: `{"date": "2023-03-15"}`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_anydatetime_custom_match.hresp",
 			expectedErrCount: 0,
 		},
 		{
 			name:             "SCENARIO-LIB-025-004: format mismatch (rfc1123 expected, actual is YYYY-MM-DD)",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"timestamp": "2023-03-15"}`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}},
+				BodyString: `{"timestamp": "2023-03-15"}`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_anydatetime_format_mismatch.hresp",
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"body mismatch (regexp/placeholder evaluation failed)"},
 		},
 		{
 			name:             "SCENARIO-LIB-025-005: invalid format keyword",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"time": "12:34:56"}`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}},
+				BodyString: `{"time": "12:34:56"}`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_anydatetime_invalid_keyword.hresp",
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"body mismatch (regexp/placeholder evaluation failed)", "(\\z.\\A)"},
 		},
 		{
 			name:             "SCENARIO-LIB-025-006: missing format argument",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"time": "12:34:56"}`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}},
+				BodyString: `{"time": "12:34:56"}`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_anydatetime_missing_format.hresp",
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"body mismatch (regexp/placeholder evaluation failed)", "(\\z.\\A)"},
 		},
 		{
 			name:             "custom format empty string literal \"\" - should fail",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"date": ""}`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}},
+				BodyString: `{"date": ""}`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_anydatetime_custom_empty_format.hresp",
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"body mismatch (regexp/placeholder evaluation failed)", "(\\z.\\A)"},
