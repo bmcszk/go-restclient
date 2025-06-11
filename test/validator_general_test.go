@@ -21,7 +21,8 @@ type validateResponsesWithSampleFileTestCase struct {
 	expectedErrTexts   []string
 }
 
-func runValidateResponsesWithSampleFileSubtest(t *testing.T, tc validateResponsesWithSampleFileTestCase, baseActual *rc.Response) {
+func runValidateResponsesWithSampleFileSubtest(t *testing.T,
+	tc validateResponsesWithSampleFileTestCase, baseActual *rc.Response) {
 	t.Helper()
 	// Given: A modified actual response based on baseActual and tc.actualModifier
 	actual := &rc.Response{
@@ -90,7 +91,7 @@ func getValidateResponsesWithSampleFileTestCases(sampleFilePath string) []valida
 	return []validateResponsesWithSampleFileTestCase{
 		{
 			name:               "perfect match with sample1.http",
-			actualModifier:     func(actual *rc.Response) {},
+			actualModifier:     func(_ *rc.Response) {},
 			expectedFileSource: sampleFilePath,
 			expectedErrCount:   0,
 		},
@@ -119,7 +120,9 @@ func getValidateResponsesWithSampleFileTestCases(sampleFilePath string) []valida
 			},
 			expectedFileSource: sampleFilePath,
 			expectedErrCount:   1,
-			expectedErrTexts:   []string{"expected value 'application/json; charset=utf-8' for header 'Content-Type' not found"},
+			expectedErrTexts: []string{
+				"expected value 'application/json; charset=utf-8' for header 'Content-Type' not found",
+			},
 		},
 		{
 			name: "missing expected header Date",
@@ -142,25 +145,26 @@ func getValidateResponsesWithSampleFileTestCases(sampleFilePath string) []valida
 		},
 		{
 			name:               "BodyContains logic not triggered by exact file match (positive case)",
-			actualModifier:     func(actual *rc.Response) {},
+			actualModifier:     func(_ *rc.Response) {},
 			expectedFileSource: sampleFilePath,
 			expectedErrCount:   0,
 		},
 		{
 			name:               "BodyContains logic not triggered, exact body mismatch from file",
-			actualModifier:     func(actual *rc.Response) {},
+			actualModifier:     func(_ *rc.Response) {},
 			expectedFileSource: "testdata/http_response_files/validator_withsample_bodycontains_exactmismatch.hresp",
 			expectedErrCount:   1,
 			expectedErrTexts:   []string{"body mismatch"},
 		},
 		{
 			name:               "BodyNotContains logic not triggered by exact file match (positive case)",
-			actualModifier:     func(actual *rc.Response) {},
+			actualModifier:     func(_ *rc.Response) {},
 			expectedFileSource: sampleFilePath,
 			expectedErrCount:   0,
 		},
 		{
-			name:               "BodyNotContains logic not triggered, exact body mismatch from file (actual contains something unwanted by this hypothetical check)",
+			name: "BodyNotContains logic not triggered, exact body mismatch from file " +
+				"(actual contains something unwanted by this hypothetical check)",
 			actualModifier:     func(actual *rc.Response) {
 				newBody := "{\"title\": \"delectus aut autem\"}"
 				actual.BodyString = newBody
@@ -213,8 +217,11 @@ func TestValidateResponses_PartialExpected(t *testing.T) {
 			expectedErrCount: 0,
 		},
 		{
-			name:             "SCENARIO-LIB-009-005-003 Corrected: File has status code and empty body - actual body mismatch",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200", BodyString: "non-empty body", Body: []byte("non-empty body")},
+			name: "SCENARIO-LIB-009-005-003 Corrected: File has status code and " +
+				"empty body - actual body mismatch",
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200", BodyString: "non-empty body", Body: []byte("non-empty body"),
+			},
 			expectedFilePath: "testdata/http_response_files/validator_partial_status_code_mismatch.hresp",
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"body mismatch"},
@@ -230,10 +237,14 @@ func TestValidateResponses_PartialExpected(t *testing.T) {
 			},
 			expectedFilePath: "testdata/http_response_files/validator_partial_status_code_mismatch.hresp",
 			expectedErrCount: 2,
-			expectedErrTexts: []string{"status code mismatch: expected 200, got 404", "status string mismatch: expected '200', got '404'"},
+			expectedErrTexts: []string{
+				"status code mismatch: expected 200, got 404",
+				"status string mismatch: expected '200', got '404'",
+			},
 		},
 		{
-			name: "SCENARIO-LIB-009-006 Equiv: Expected file has only specific headers (and status, empty body) - match",
+			name: "SCENARIO-LIB-009-006 Equiv: Expected file has only specific headers " +
+				"(and status, empty body) - match",
 			actualResponse: &rc.Response{
 				StatusCode: 200,
 				Status:     "200",

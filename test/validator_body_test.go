@@ -28,7 +28,8 @@ func TestValidateResponses_Body_ExactMatch(t *testing.T) {
 		{
 			name:             "mismatching body",
 			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", BodyString: body2},
-			expectedFilePath: "testdata/http_response_files/validator_body_exact_match_ok.hresp", // file has `body1` equivalent
+			// file has `body1` equivalent
+			expectedFilePath: "testdata/http_response_files/validator_body_exact_match_ok.hresp",
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"body mismatch"}, // Diff will be part of the message
 		},
@@ -56,7 +57,8 @@ func TestValidateResponses_Body_ExactMatch(t *testing.T) {
 		// {
 		// 	name:                "file has no body, actual has body",
 		// 	actualResponse:      &rc.Response{StatusCode: 200, Status: "200 OK", BodyString: body1},
-		// 	expectedFilePath:    "testdata/http_response_files/validator_body_exact_no_body_exp.hresp", // No body in file
+		// No body in file
+		// 	expectedFilePath:    "testdata/http_response_files/validator_body_exact_no_body_exp.hresp",
 		// 	expectedErrCount:    1,
 		// 	expectedErrTexts:    []string{"body mismatch"},
 		// },
@@ -150,9 +152,11 @@ func TestValidateResponses_BodyNotContains(t *testing.T) {
 			expectedErrCount: 0,
 		},
 		{
-			name:             "BodyNotContains logic not triggered, actual contains something, file expects different exact body",
+			name: "BodyNotContains logic not triggered, actual contains something, " +
+				"file expects different exact body",
 			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", BodyString: "Hello Universe"},
-			expectedFilePath: "testdata/http_response_files/validator_bodynotcontains_exact_mismatch.hresp", // Exact body mismatch
+			// Exact body mismatch
+			expectedFilePath: "testdata/http_response_files/validator_bodynotcontains_exact_mismatch.hresp",
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"body mismatch"},
 		},

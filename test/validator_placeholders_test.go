@@ -118,7 +118,8 @@ func TestValidateResponses_BodyAnyGuidPlaceholder(t *testing.T) {
 			name:             "SCENARIO-LIB-023-003: GUID in larger text",
 			actualResponse: &rc.Response{
 				StatusCode: 200, Status: "200 OK",
-				BodyString: `Session started with ID: 123e4567-e89b-12d3-a456-426614174000. Please use this for subsequent requests.`,
+				BodyString: `Session started with ID: 123e4567-e89b-12d3-a456-426614174000. ` +
+				`Please use this for subsequent requests.`,
 			},
 			expectedFilePath: "testdata/http_response_files/validator_body_anyguid_larger_text.hresp",
 			expectedErrCount: 0,
@@ -338,38 +339,63 @@ func TestValidateResponses_BodyAnyPlaceholder(t *testing.T) {
 	}{
 		{
 			name:             "SCENARIO-LIB-026-001: $any matching a simple string",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"key": "some value"}`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}},
+				BodyString: `{"key": "some value"}`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_any_simple_match.hresp",
 			expectedErrCount: 0,
 		},
 		{
 			name:             "SCENARIO-LIB-026-002: $any matching special characters and spaces",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"text/plain"}}, BodyString: `Value: !@#$%^&*()_+{}[];':\",./<>?         end`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"text/plain"}},
+				BodyString: `Value: !@#$%^&*()_+{}[];':\",./<>?         end`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_any_special_chars_match.hresp",
 			expectedErrCount: 0,
 		},
 		{
 			name:             "SCENARIO-LIB-026-003: $any matching an empty string segment",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"prefix": "", "data": "", "suffix": ""}`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}},
+				BodyString: `{"prefix": "", "data": "", "suffix": ""}`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_any_empty_segment_match.hresp",
 			expectedErrCount: 0,
 		},
 		{
 			name:             "SCENARIO-LIB-026-004: $any matching a multi-line string",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"text/plain"}}, BodyString: "Start:\nThis is line 1.\nThis is line 2.\nAnd line 3.\nEnd."},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"text/plain"}},
+				BodyString: "Start:\nThis is line 1.\nThis is line 2.\nAnd line 3.\nEnd.",
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_any_multiline_match.hresp",
 			expectedErrCount: 0,
 		},
 		{
 			name:             "SCENARIO-LIB-026-005: multiple $any placeholders",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"field1": "value1", "field2": "constant", "field3": "value3"}`},
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}},
+				BodyString: `{"field1": "value1", "field2": "constant", "field3": "value3"}`,
+			},
 			expectedFilePath: "testdata/http_response_files/validator_body_any_multiple_placeholders_match.hresp",
 			expectedErrCount: 0,
 		},
 		{
 			name:             "$any fails if preceding literal doesn't match",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}, BodyString: `{"wrong_key": "some value"}`},
-			expectedFilePath: "testdata/http_response_files/validator_body_any_simple_match.hresp", // Expects {"key": ...}
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}},
+				BodyString: `{"wrong_key": "some value"}`,
+			},
+			// Expects {"key": ...}
+			expectedFilePath: "testdata/http_response_files/validator_body_any_simple_match.hresp",
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"body mismatch"},
 		},

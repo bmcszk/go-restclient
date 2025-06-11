@@ -1,7 +1,7 @@
 package restclient
 
 import (
-	crypto_rand "crypto/rand"
+	cryptorand "crypto/rand"
 	"fmt"
 	"log/slog"
 	"math/rand"
@@ -87,120 +87,15 @@ func resolveVariablesInText(
 		re := regexp.MustCompile(`{{\s*(.*?)\s*}}`)
 
 		currentText = re.ReplaceAllStringFunc(previousText, func(match string) string {
-			directive := strings.TrimSpace(match[2 : len(match)-2])
-
-			var varName string
-			var fallbackValue string
-			var hasFallback bool
-
-			if strings.Contains(directive, "|") {
-				parts := strings.SplitN(directive, "|", 2)
-				varName = strings.TrimSpace(parts[0])
-				fallbackValue = strings.TrimSpace(parts[1])
-				hasFallback = true
-			} else {
-				varName = directive
-			}
-
-			// 1. Request-scoped System Variables (if varName starts with $)
-			// These are simple, pre-generated variables like $uuid, $timestamp, $randomInt (no-args).
-			if strings.HasPrefix(varName, "$") {
-				if val, ok := requestScopedSystemVars[varName]; ok {
-					slog.Debug(
-					"resolveVariablesInText: Found system var in requestScopedSystemVars",
-					"varName", varName, "value", val)
-					return val
-				}
-				slog.Debug(
-				"resolveVariablesInText: System var not in requestScopedSystemVars, "+
-					"returning original match for later dynamic processing",
-				"varName", varName, "match", match)
-				return match // Preserve for substituteDynamicSystemVariables if it's like {{$dotenv NAME}}
-			}
-
-			// Precedence for {{variableName}} placeholders:
-
-			// 1. Client programmatic variables (clientProgrammaticVars)
-			if clientProgrammaticVars != nil {
-				slog.Debug(
-				"resolveVariablesInText: Checking clientProgrammaticVars",
-				"varName", varName, "found", clientProgrammaticVars[varName] != nil)
-				if val, ok := clientProgrammaticVars[varName]; ok {
-					slog.Debug(
-					"resolveVariablesInText: Found in clientProgrammaticVars",
-					"varName", varName, "value", val)
-					return fmt.Sprintf("%v", val)
-				}
-			}
-
-			// 2. File-scoped variables (e.g., @name from .rest file)
-			// These are stored with an '@' prefix in the map, so we must prepend it for lookup.
-			fileScopedVarNameToTry := "@" + varName
-			if val, ok := fileScopedVars[fileScopedVarNameToTry]; ok {
-				slog.Debug(
-				"resolveVariablesInText: Found in fileScopedVars",
-				"varNameLookup", fileScopedVarNameToTry, "value", val)
-				// Check if the resolved file-scoped variable's value is itself a dynamic system variable placeholder
-				if isDynamicSystemVariablePlaceholder(val, requestScopedSystemVars) {
-					slog.Debug(
-					"resolveVariablesInText: File-scoped var value is a dynamic system "+
-						"variable placeholder. Evaluating and caching.",
-					"varNameLookup", fileScopedVarNameToTry, "placeholderValue", val)
-					// Pass clientProgrammaticVars and dotEnvVars to substituteDynamicSystemVariables
-					evaluatedVal := substituteDynamicSystemVariables(val, dotEnvVars, clientProgrammaticVars)
-					fileScopedVars[fileScopedVarNameToTry] = evaluatedVal // Cache the evaluated value
-					slog.Debug(
-					"resolveVariablesInText: Cached evaluated dynamic system variable "+
-						"from file-scoped var",
-					"varNameLookup", fileScopedVarNameToTry, "evaluatedValue", evaluatedVal)
-					return evaluatedVal
-				}
-				return val // Return the original value if not a dynamic placeholder needing evaluation
-			}
-			slog.Debug(
-				"resolveVariablesInText: Not found in fileScopedVars",
-				"varNameLookup", fileScopedVarNameToTry,
-				"originalVarNameFromPlaceholder", varName)
-
-			// The block for fileScopedVars lookup (originally here as step 2) has been moved up
-			// and consolidated to correctly handle the '@' prefix for file-scoped variable names.
-			// See lines around 101-109 for the correct implementation.
-
-			// 3. Try environment-specific variables (from http-client.env.json)
-			if environmentVars != nil {
-				if val, ok := environmentVars[varName]; ok {
-					return val
-				}
-			}
-
-			// 4. Try global variables (from http-client.private.env.json)
-			if globalVars != nil {
-				if val, ok := globalVars[varName]; ok {
-					return val
-				}
-			}
-
-			// 5. Try OS environment variables
-			if osEnvGetter != nil {
-				if val, ok := osEnvGetter(varName); ok {
-					return val
-				}
-			}
-
-			// 6. Try .env file variables
-			if dotEnvVars != nil {
-				if val, ok := dotEnvVars[varName]; ok {
-					return val
-				}
-			}
-
-			// 7. Use fallback value if provided in the placeholder itself
-			if hasFallback {
-				return fallbackValue
-			}
-
-			// No resolution found, and no fallback in placeholder. Default to empty string.
-			return ""
+			return resolveVariablePlaceholder(match, variableResolverContext{
+				clientProgrammaticVars:    clientProgrammaticVars,
+				fileScopedVars:            fileScopedVars,
+				environmentVars:           environmentVars,
+				globalVars:                globalVars,
+				requestScopedSystemVars:   requestScopedSystemVars,
+				osEnvGetter:               osEnvGetter,
+				dotEnvVars:                dotEnvVars,
+			})
 		}) // End of ReplaceAllStringFunc
 
 		if currentText == previousText {
@@ -210,6 +105,174 @@ func resolveVariablesInText(
 		// The currentText will be returned as is, potentially with unresolved variables.
 	} // End of for loop
 	return currentText
+}
+
+// variableResolverContext holds all the variable sources for resolution.
+type variableResolverContext struct {
+	clientProgrammaticVars  map[string]any
+	fileScopedVars          map[string]string
+	environmentVars         map[string]string
+	globalVars              map[string]string
+	requestScopedSystemVars map[string]string
+	osEnvGetter             func(string) (string, bool)
+	dotEnvVars              map[string]string
+}
+
+// resolveVariablePlaceholder resolves a single variable placeholder.
+func resolveVariablePlaceholder(match string, ctx variableResolverContext) string {
+	directive := strings.TrimSpace(match[2 : len(match)-2])
+	varName, fallbackValue, hasFallback := parseVariableDirective(directive)
+
+	// Handle system variables first
+	if strings.HasPrefix(varName, "$") {
+		return resolveSystemVariable(varName, match, ctx.requestScopedSystemVars)
+	}
+
+	// Resolve regular variables with precedence
+	if resolved := resolveRegularVariable(varName, ctx); resolved != "" {
+		return resolved
+	}
+
+	// Use fallback if available
+	if hasFallback {
+		return fallbackValue
+	}
+
+	// Default to empty string
+	return ""
+}
+
+// parseVariableDirective parses a variable directive and extracts the variable name and fallback.
+func parseVariableDirective(directive string) (varName, fallbackValue string, hasFallback bool) {
+	if strings.Contains(directive, "|") {
+		parts := strings.SplitN(directive, "|", 2)
+		return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), true
+	}
+	return directive, "", false
+}
+
+// resolveSystemVariable handles system variables that start with $.
+func resolveSystemVariable(varName, match string, requestScopedSystemVars map[string]string) string {
+	if val, ok := requestScopedSystemVars[varName]; ok {
+		slog.Debug(
+			"resolveVariablesInText: Found system var in requestScopedSystemVars",
+			"varName", varName, "value", val)
+		return val
+	}
+	slog.Debug(
+		"resolveVariablesInText: System var not in requestScopedSystemVars, "+
+			"returning original match for later dynamic processing",
+		"varName", varName, "match", match)
+	return match // Preserve for substituteDynamicSystemVariables
+}
+
+// resolveRegularVariable resolves regular variables using the precedence order.
+func resolveRegularVariable(varName string, ctx variableResolverContext) string {
+	// Try high-priority sources first
+	if resolved := resolveHighPriorityVariables(varName, ctx); resolved != "" {
+		return resolved
+	}
+
+	// Try low-priority sources
+	return resolveLowPriorityVariables(varName, ctx)
+}
+
+// resolveHighPriorityVariables resolves from programmatic and file-scoped variables.
+func resolveHighPriorityVariables(varName string, ctx variableResolverContext) string {
+	// 1. Client programmatic variables
+	if resolved := resolveProgrammaticVariable(varName, ctx.clientProgrammaticVars); resolved != "" {
+		return resolved
+	}
+
+	// 2. File-scoped variables
+	if resolved := resolveFileScopedVariable(varName, ctx); resolved != "" {
+		return resolved
+	}
+
+	return ""
+}
+
+// resolveLowPriorityVariables resolves from environment and system variables.
+func resolveLowPriorityVariables(varName string, ctx variableResolverContext) string {
+	// 3. Environment-specific variables
+	if resolved := resolveFromMap(varName, ctx.environmentVars); resolved != "" {
+		return resolved
+	}
+
+	// 4. Global variables
+	if resolved := resolveFromMap(varName, ctx.globalVars); resolved != "" {
+		return resolved
+	}
+
+	// 5. OS environment variables
+	if ctx.osEnvGetter != nil {
+		if val, ok := ctx.osEnvGetter(varName); ok {
+			return val
+		}
+	}
+
+	// 6. .env file variables
+	return resolveFromMap(varName, ctx.dotEnvVars)
+}
+
+// resolveProgrammaticVariable resolves from client programmatic variables.
+func resolveProgrammaticVariable(varName string, clientProgrammaticVars map[string]any) string {
+	if clientProgrammaticVars != nil {
+		slog.Debug(
+			"resolveVariablesInText: Checking clientProgrammaticVars",
+			"varName", varName, "found", clientProgrammaticVars[varName] != nil)
+		if val, ok := clientProgrammaticVars[varName]; ok {
+			slog.Debug(
+				"resolveVariablesInText: Found in clientProgrammaticVars",
+				"varName", varName, "value", val)
+			return fmt.Sprintf("%v", val)
+		}
+	}
+	return ""
+}
+
+// resolveFileScopedVariable resolves from file-scoped variables with dynamic evaluation.
+func resolveFileScopedVariable(varName string, ctx variableResolverContext) string {
+	fileScopedVarNameToTry := "@" + varName
+	val, ok := ctx.fileScopedVars[fileScopedVarNameToTry]
+	if !ok {
+		slog.Debug(
+			"resolveVariablesInText: Not found in fileScopedVars",
+			"varNameLookup", fileScopedVarNameToTry,
+			"originalVarNameFromPlaceholder", varName)
+		return ""
+	}
+
+	slog.Debug(
+		"resolveVariablesInText: Found in fileScopedVars",
+		"varNameLookup", fileScopedVarNameToTry, "value", val)
+
+	// Check if the resolved file-scoped variable's value is itself a dynamic system variable placeholder
+	if isDynamicSystemVariablePlaceholder(val, ctx.requestScopedSystemVars) {
+		slog.Debug(
+			"resolveVariablesInText: File-scoped var value is a dynamic system "+
+				"variable placeholder. Evaluating and caching.",
+			"varNameLookup", fileScopedVarNameToTry, "placeholderValue", val)
+		// Pass clientProgrammaticVars and dotEnvVars to substituteDynamicSystemVariables
+		evaluatedVal := substituteDynamicSystemVariables(val, ctx.dotEnvVars, ctx.clientProgrammaticVars)
+		ctx.fileScopedVars[fileScopedVarNameToTry] = evaluatedVal // Cache the evaluated value
+		slog.Debug(
+			"resolveVariablesInText: Cached evaluated dynamic system variable "+
+				"from file-scoped var",
+			"varNameLookup", fileScopedVarNameToTry, "evaluatedValue", evaluatedVal)
+		return evaluatedVal
+	}
+	return val // Return the original value if not a dynamic placeholder needing evaluation
+}
+
+// resolveFromMap resolves a variable from a simple string map.
+func resolveFromMap(varName string, varMap map[string]string) string {
+	if varMap != nil {
+		if val, ok := varMap[varName]; ok {
+			return val
+		}
+	}
+	return ""
 }
 
 // _applyBaseURLIfNeeded attempts to prepend a base URL to a raw URL string
@@ -546,7 +609,7 @@ func _substituteRandomHexHelper(re *regexp.Regexp, defaultLength int) func(strin
 func generateRandomHexString(length int, fallbackMatch string) string {
 	byteCount := length/2 + length%2
 	b := make([]byte, byteCount)
-	if _, err := crypto_rand.Read(b); err != nil {
+	if _, err := cryptorand.Read(b); err != nil {
 		slog.Error("Failed to generate random bytes for hex string", "error", err)
 		return fallbackMatch
 	}

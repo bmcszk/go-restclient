@@ -49,54 +49,68 @@ const anyRegexPattern = `(?s).*?`       // Matches any char (incl newline), non-
 // if all validations pass. Errors during file reading, @define extraction, variable substitution, or
 // .hresp parsing are also returned.
 func (c *Client) ValidateResponses(responseFilePath string, actualResponses ...*Response) error {
+	expectedResponses, errs, parseErr := c.loadAndParseExpectedResponses(responseFilePath)
+	if parseErr != nil || errs != nil {
+		return errs.ErrorOrNil()
+	}
+
+	errs = c.validateResponseCounts(responseFilePath, actualResponses, expectedResponses, errs)
+	if errs != nil {
+		return errs.ErrorOrNil()
+	}
+
+	errs = c.validateResponsePairs(responseFilePath, actualResponses, expectedResponses, errs)
+	return errs.ErrorOrNil()
+}
+
+func (c *Client) loadAndParseExpectedResponses(
+	responseFilePath string) ([]*ExpectedResponse, *multierror.Error, error) {
 	var errs *multierror.Error
 
-	// Attempt to parse the expected responses from the file.
 	hrespFileContent, err := os.ReadFile(responseFilePath)
 	if err != nil {
-		return fmt.Errorf("failed to read expected response file %s: %w", responseFilePath, err)
+		return nil, nil, fmt.Errorf("failed to read expected response file %s: %w", responseFilePath, err)
 	}
 
 	fileVars, contentWithoutDefines, err := extractHrespDefines(string(hrespFileContent))
 	if err != nil {
-		return fmt.Errorf("failed to extract @defines from %s: %w", responseFilePath, err)
+		return nil, nil, fmt.Errorf("failed to extract @defines from %s: %w", responseFilePath, err)
 	}
 
 	substitutedContent := resolveAndSubstitute(contentWithoutDefines, fileVars, c)
-	if err != nil {
-		return fmt.Errorf("failed to substitute variables in %s: %w", responseFilePath, err)
-	}
 
 	expectedResponses, parseErr := parseExpectedResponses(strings.NewReader(substitutedContent), responseFilePath)
 	if parseErr != nil {
 		errs = multierror.Append(errs, fmt.Errorf(
 			"failed to parse expected response file '%s' after variable substitution: %w",
 			responseFilePath, parseErr))
+		return nil, errs, parseErr
 	}
 
-	// Determine effective counts for actual and expected responses.
+	return expectedResponses, nil, nil
+}
+
+func (*Client) validateResponseCounts(responseFilePath string, actualResponses []*Response,
+	expectedResponses []*ExpectedResponse, errs *multierror.Error) *multierror.Error {
 	effectiveNumActual := countNonNilActuals(actualResponses)
 	effectiveNumExpected := 0
 	if expectedResponses != nil {
 		effectiveNumExpected = len(expectedResponses)
 	}
 
-	// Check for count mismatch.
 	if effectiveNumActual != effectiveNumExpected {
 		errs = multierror.Append(errs, fmt.Errorf(
 			"mismatch in number of responses: got %d actual, but expected %d from file '%s'",
 			effectiveNumActual, effectiveNumExpected, responseFilePath))
 	}
 
-	if parseErr != nil {
-		return errs.ErrorOrNil()
-	}
+	return errs
+}
 
-	if effectiveNumActual != effectiveNumExpected {
-		return errs.ErrorOrNil()
-	}
+func (c *Client) validateResponsePairs(responseFilePath string, actualResponses []*Response,
+	expectedResponses []*ExpectedResponse, errs *multierror.Error) *multierror.Error {
+	effectiveNumActual := countNonNilActuals(actualResponses)
 
-	// If we reach here, parsing succeeded and counts match. Proceed to validate pairs.
 	for i := 0; i < effectiveNumActual; i++ {
 		actual := actualResponses[i]
 		expected := expectedResponses[i]
@@ -108,58 +122,94 @@ func (c *Client) ValidateResponses(responseFilePath string, actualResponses ...*
 			continue
 		}
 
-		// Validate Status Code
-		if expected.StatusCode != nil && (actual.StatusCode != *expected.StatusCode) {
-			errs = multierror.Append(errs, fmt.Errorf(
-				"validation for response #%d ('%s'): status code mismatch: expected %d, got %d",
-				i+1, responseFilePath, *expected.StatusCode, actual.StatusCode))
-		}
-
-		// Validate Status String
-		if expected.Status != nil && *expected.Status != "" && (actual.Status != *expected.Status) {
-			errs = multierror.Append(errs, fmt.Errorf(
-				"validation for response #%d ('%s'): status string mismatch: expected '%s', got '%s'",
-				i+1, responseFilePath, *expected.Status, actual.Status))
-		}
-
-		// Validate Headers (Exact Match for specified keys)
-		if expected.Headers != nil {
-			for key, expectedValues := range expected.Headers {
-				actualValues, ok := actual.Headers[key]
-				if !ok {
-					errs = multierror.Append(errs, fmt.Errorf(
-					"validation for response #%d ('%s'): expected header '%s' not found",
-					i+1, responseFilePath, key))
-					continue
-				}
-				for _, ev := range expectedValues {
-					found := false
-					for _, av := range actualValues {
-						if av == ev {
-							found = true
-							break
-						}
-					}
-					if !found {
-						errs = multierror.Append(errs, fmt.Errorf(
-							"validation for response #%d ('%s'): expected value '%s' for "+
-								"header '%s' not found in actual values %v",
-							i+1, responseFilePath, ev, key, actualValues))
-					}
-				}
-			}
-		}
-
-		// Validate Body
-		if expected.Body != nil {
-			bodyErr := compareBodies(responseFilePath, i+1, *expected.Body, actual.BodyString)
-			if bodyErr != nil {
-				errs = multierror.Append(errs, bodyErr)
-			}
-		}
+		errs = c.validateSingleResponse(responseFilePath, i+1, actual, expected, errs)
 	}
 
-	return errs.ErrorOrNil()
+	return errs
+}
+
+func (c *Client) validateSingleResponse(responseFilePath string, responseIndex int,
+	actual *Response, expected *ExpectedResponse, errs *multierror.Error) *multierror.Error {
+	errs = c.validateStatusCode(responseFilePath, responseIndex, actual, expected, errs)
+	errs = c.validateStatusString(responseFilePath, responseIndex, actual, expected, errs)
+	errs = c.validateHeaders(responseFilePath, responseIndex, actual, expected, errs)
+	errs = c.validateBody(responseFilePath, responseIndex, actual, expected, errs)
+	return errs
+}
+
+func (*Client) validateStatusCode(responseFilePath string, responseIndex int,
+	actual *Response, expected *ExpectedResponse, errs *multierror.Error) *multierror.Error {
+	if expected.StatusCode != nil && (actual.StatusCode != *expected.StatusCode) {
+		errs = multierror.Append(errs, fmt.Errorf(
+			"validation for response #%d ('%s'): status code mismatch: expected %d, got %d",
+			responseIndex, responseFilePath, *expected.StatusCode, actual.StatusCode))
+	}
+	return errs
+}
+
+func (*Client) validateStatusString(responseFilePath string, responseIndex int,
+	actual *Response, expected *ExpectedResponse, errs *multierror.Error) *multierror.Error {
+	if expected.Status != nil && *expected.Status != "" && (actual.Status != *expected.Status) {
+		errs = multierror.Append(errs, fmt.Errorf(
+			"validation for response #%d ('%s'): status string mismatch: expected '%s', got '%s'",
+			responseIndex, responseFilePath, *expected.Status, actual.Status))
+	}
+	return errs
+}
+
+func (c *Client) validateHeaders(responseFilePath string, responseIndex int,
+	actual *Response, expected *ExpectedResponse, errs *multierror.Error) *multierror.Error {
+	if expected.Headers == nil {
+		return errs
+	}
+
+	for key, expectedValues := range expected.Headers {
+		actualValues, ok := actual.Headers[key]
+		if !ok {
+			errs = multierror.Append(errs, fmt.Errorf(
+			"validation for response #%d ('%s'): expected header '%s' not found",
+			responseIndex, responseFilePath, key))
+			continue
+		}
+
+		errs = c.validateHeaderValues(responseFilePath, responseIndex, key, expectedValues, actualValues, errs)
+	}
+
+	return errs
+}
+
+func (*Client) validateHeaderValues(responseFilePath string, responseIndex int, key string,
+	expectedValues, actualValues []string, errs *multierror.Error) *multierror.Error {
+	for _, ev := range expectedValues {
+		if !isHeaderValuePresent(ev, actualValues) {
+			errs = multierror.Append(errs, fmt.Errorf(
+				"validation for response #%d ('%s'): expected value '%s' for "+
+					"header '%s' not found in actual values %v",
+				responseIndex, responseFilePath, ev, key, actualValues))
+		}
+	}
+	return errs
+}
+
+// isHeaderValuePresent checks if an expected header value is present in the actual values.
+func isHeaderValuePresent(expectedValue string, actualValues []string) bool {
+	for _, av := range actualValues {
+		if av == expectedValue {
+			return true
+		}
+	}
+	return false
+}
+
+func (*Client) validateBody(responseFilePath string, responseIndex int,
+	actual *Response, expected *ExpectedResponse, errs *multierror.Error) *multierror.Error {
+	if expected.Body != nil {
+		bodyErr := compareBodies(responseFilePath, responseIndex, *expected.Body, actual.BodyString)
+		if bodyErr != nil {
+			errs = multierror.Append(errs, bodyErr)
+		}
+	}
+	return errs
 }
 
 // compareBodies compares the expected body string with the actual body string,
@@ -181,88 +231,123 @@ type placeholderInfo struct {
 // from an expected body string containing placeholders.
 func buildRegexFromExpectedBody(normalizedExpectedBody string) string {
 	var finalRegexPattern strings.Builder
-	finalRegexPattern.WriteString("^")
+	_, _ = finalRegexPattern.WriteString("^")
 
 	remainingExpectedBody := normalizedExpectedBody
-
-	// Define all known placeholders
-	placeholders := []placeholderInfo{
-		{name: "regexp", finder: regexpPlaceholderFinder, hasArgument: true, isArgPattern: true},
-		{name: "anyGuid", finder: anyGuidPlaceholderFinder, pattern: guidRegexPattern},
-		{name: "anyTimestamp", finder: anyTimestampPlaceholderFinder, pattern: timestampRegexPattern},
-		// Special handling for arg
-		{name: "anyDatetimeWithArg", finder: anyDatetimePlaceholderFinder, hasArgument: true},
-		// {{$anyDatetime}} with no arg is invalid
-		{name: "anyDatetimeNoArg", finder: anyDatetimeNoArgFinder, pattern: nonMatchingRegexPattern},
-		{name: "any", finder: anyPlaceholderFinder, pattern: anyRegexPattern},
-	}
+	placeholders := getKnownPlaceholders()
 
 	for len(remainingExpectedBody) > 0 {
-		earliestMatchIndices := []int(nil)
-		var bestPlaceholder placeholderInfo
-		currentMatchPos := len(remainingExpectedBody) + 1 // Initialize with a value greater than any possible index
+		earliestMatchIndices, bestPlaceholder := findEarliestPlaceholder(remainingExpectedBody, placeholders)
 
-		// Find the earliest occurrence of any known placeholder
-		for _, ph := range placeholders {
-			matchIndices := ph.finder.FindStringSubmatchIndex(remainingExpectedBody)
-			if matchIndices != nil && matchIndices[0] < currentMatchPos {
-				currentMatchPos = matchIndices[0]
-				earliestMatchIndices = matchIndices
-				bestPlaceholder = ph
-			}
-		}
-
-		if earliestMatchIndices == nil { // No more placeholders found
-			finalRegexPattern.WriteString(regexp.QuoteMeta(remainingExpectedBody))
+		if earliestMatchIndices == nil {
+			_, _ = finalRegexPattern.WriteString(regexp.QuoteMeta(remainingExpectedBody))
 			break
 		}
 
-		// Append the literal part before the placeholder
-		literalPart := remainingExpectedBody[:earliestMatchIndices[0]]
-		finalRegexPattern.WriteString(regexp.QuoteMeta(literalPart))
-
-		// Append the regex for the placeholder
-		finalRegexPattern.WriteString("(") // Group each placeholder's pattern
-
-		placeholderArg := ""
-		// Ensure group for argument exists and placeholder expects an argument
-		if bestPlaceholder.hasArgument && len(earliestMatchIndices) >= 4 &&
-		earliestMatchIndices[2] != -1 && earliestMatchIndices[3] != -1 {
-			placeholderArg = remainingExpectedBody[earliestMatchIndices[2]:earliestMatchIndices[3]]
-		}
-
-		switch bestPlaceholder.name {
-		case "regexp":
-			userPattern := placeholderArg
-			// Strip backticks if present
-			if len(userPattern) >= 2 && userPattern[0] == '`' && userPattern[len(userPattern)-1] == '`' {
-				userPattern = userPattern[1 : len(userPattern)-1]
-			}
-			finalRegexPattern.WriteString(userPattern)
-		case "anyDatetimeWithArg":
-			formatArg := strings.TrimSpace(placeholderArg)
-			selectedPattern := nonMatchingRegexPattern // Default to non-matching if format is unknown/invalid
-			if formatArg == "rfc1123" {
-				selectedPattern = rfc1123RegexPattern
-			} else if formatArg == "iso8601" {
-				selectedPattern = iso8601RegexPattern
-			} else if len(formatArg) >= 2 && formatArg[0] == '"' && formatArg[len(formatArg)-1] == '"' {
-				customLayout := formatArg[1 : len(formatArg)-1]
-				if customLayout != "" {
-					selectedPattern = genericDatetimeRegexPattern
-				}
-			}
-			finalRegexPattern.WriteString(selectedPattern)
-		default: // For anyGuid, anyTimestamp, anyDatetimeNoArg, any
-			finalRegexPattern.WriteString(bestPlaceholder.pattern)
-		}
-
-		finalRegexPattern.WriteString(")")
+		appendLiteralPart(&finalRegexPattern, remainingExpectedBody, earliestMatchIndices)
+		appendPlaceholderPattern(&finalRegexPattern, remainingExpectedBody, earliestMatchIndices, bestPlaceholder)
 		remainingExpectedBody = remainingExpectedBody[earliestMatchIndices[1]:]
 	}
 
-	finalRegexPattern.WriteString("$")
+	_, _ = finalRegexPattern.WriteString("$")
 	return finalRegexPattern.String()
+}
+
+// getKnownPlaceholders returns all known placeholder definitions.
+func getKnownPlaceholders() []placeholderInfo {
+	return []placeholderInfo{
+		{name: "regexp", finder: regexpPlaceholderFinder, hasArgument: true, isArgPattern: true},
+		{name: "anyGuid", finder: anyGuidPlaceholderFinder, pattern: guidRegexPattern},
+		{name: "anyTimestamp", finder: anyTimestampPlaceholderFinder, pattern: timestampRegexPattern},
+		{name: "anyDatetimeWithArg", finder: anyDatetimePlaceholderFinder, hasArgument: true},
+		{name: "anyDatetimeNoArg", finder: anyDatetimeNoArgFinder, pattern: nonMatchingRegexPattern},
+		{name: "any", finder: anyPlaceholderFinder, pattern: anyRegexPattern},
+	}
+}
+
+// findEarliestPlaceholder finds the earliest occurring placeholder in the text.
+func findEarliestPlaceholder(text string, placeholders []placeholderInfo) ([]int, placeholderInfo) {
+	var earliestMatchIndices []int
+	var bestPlaceholder placeholderInfo
+	currentMatchPos := len(text) + 1
+
+	for _, ph := range placeholders {
+		matchIndices := ph.finder.FindStringSubmatchIndex(text)
+		if matchIndices != nil && matchIndices[0] < currentMatchPos {
+			currentMatchPos = matchIndices[0]
+			earliestMatchIndices = matchIndices
+			bestPlaceholder = ph
+		}
+	}
+
+	return earliestMatchIndices, bestPlaceholder
+}
+
+// appendLiteralPart appends the literal text before a placeholder to the regex pattern.
+func appendLiteralPart(finalRegexPattern *strings.Builder, text string, matchIndices []int) {
+	literalPart := text[:matchIndices[0]]
+	_, _ = finalRegexPattern.WriteString(regexp.QuoteMeta(literalPart))
+}
+
+// appendPlaceholderPattern appends the regex pattern for a placeholder to the final regex.
+func appendPlaceholderPattern(finalRegexPattern *strings.Builder, text string,
+	matchIndices []int, placeholder placeholderInfo) {
+	_, _ = finalRegexPattern.WriteString("(")
+
+	placeholderArg := extractPlaceholderArgument(text, matchIndices, placeholder)
+	pattern := getPlaceholderPattern(placeholder, placeholderArg)
+	_, _ = finalRegexPattern.WriteString(pattern)
+
+	_, _ = finalRegexPattern.WriteString(")")
+}
+
+// extractPlaceholderArgument extracts the argument from a placeholder match.
+func extractPlaceholderArgument(text string, matchIndices []int, placeholder placeholderInfo) string {
+	if !placeholder.hasArgument || len(matchIndices) < 4 ||
+		matchIndices[2] == -1 || matchIndices[3] == -1 {
+		return ""
+	}
+	return text[matchIndices[2]:matchIndices[3]]
+}
+
+// getPlaceholderPattern returns the regex pattern for a specific placeholder.
+func getPlaceholderPattern(placeholder placeholderInfo, arg string) string {
+	switch placeholder.name {
+	case "regexp":
+		return processRegexpPlaceholder(arg)
+	case "anyDatetimeWithArg":
+		return processDatetimePlaceholder(arg)
+	default:
+		return placeholder.pattern
+	}
+}
+
+// processRegexpPlaceholder processes a {{$regexp}} placeholder argument.
+func processRegexpPlaceholder(userPattern string) string {
+	// Strip backticks if present
+	if len(userPattern) >= 2 && userPattern[0] == '`' && userPattern[len(userPattern)-1] == '`' {
+		userPattern = userPattern[1 : len(userPattern)-1]
+	}
+	return userPattern
+}
+
+// processDatetimePlaceholder processes a {{$anyDatetime}} placeholder argument.
+func processDatetimePlaceholder(formatArg string) string {
+	formatArg = strings.TrimSpace(formatArg)
+	
+	if formatArg == "rfc1123" {
+		return rfc1123RegexPattern
+	}
+	if formatArg == "iso8601" {
+		return iso8601RegexPattern
+	}
+	if len(formatArg) >= 2 && formatArg[0] == '"' && formatArg[len(formatArg)-1] == '"' {
+		customLayout := formatArg[1 : len(formatArg)-1]
+		if customLayout != "" {
+			return genericDatetimeRegexPattern
+		}
+	}
+	return nonMatchingRegexPattern
 }
 
 // compareBodies compares the expected body string with the actual body string,
@@ -283,7 +368,8 @@ func compareBodies(responseFilePath string, responseIndex int, expectedBody, act
 				Context:  3,
 			}
 			diffText, _ := difflib.GetUnifiedDiffString(diff)
-			return fmt.Errorf("validation for response #%d ('%s'): body mismatch:\\n%s", responseIndex, responseFilePath, diffText)
+			return fmt.Errorf("validation for response #%d ('%s'): body mismatch:\\n%s",
+			responseIndex, responseFilePath, diffText)
 		}
 		return nil
 	}
@@ -293,7 +379,9 @@ func compareBodies(responseFilePath string, responseIndex int, expectedBody, act
 
 	compiledRegex, err := regexp.Compile(regexPatternString)
 	if err != nil {
-		return fmt.Errorf("validation for response #%d ('%s'): failed to compile master regex from expected body: %w. Pattern: %s", responseIndex, responseFilePath, err, regexPatternString)
+		return fmt.Errorf(
+			"validation for response #%d ('%s'): failed to compile master regex from expected body: %w. Pattern: %s",
+			responseIndex, responseFilePath, err, regexPatternString)
 	}
 
 	if !compiledRegex.MatchString(normalizedActualBody) {
@@ -305,7 +393,10 @@ func compareBodies(responseFilePath string, responseIndex int, expectedBody, act
 			Context:  3,
 		}
 		diffText, _ := difflib.GetUnifiedDiffString(diff)
-		return fmt.Errorf("validation for response #%d ('%s'): body mismatch (regexp/placeholder evaluation failed):\\n%s\\nCompiled Regex: %s", responseIndex, responseFilePath, diffText, regexPatternString)
+		return fmt.Errorf(
+			"validation for response #%d ('%s'): body mismatch "+
+				"(regexp/placeholder evaluation failed):\\n%s\\nCompiled Regex: %s",
+			responseIndex, responseFilePath, diffText, regexPatternString)
 	}
 
 	return nil

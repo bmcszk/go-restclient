@@ -770,7 +770,7 @@ func TestExecuteFile_WithHttpClientEnvJson(t *testing.T) {
 			expectResponseError:      true,
 			responseErrorContains:    "unsupported protocol scheme \"\"",
 			responseAssertions: func(t *testing.T, resp *rc.Response,
-				interceptedReq *interceptedRequestData, serverURL string) {
+				_ *interceptedRequestData, _ string) {
 				t.Helper()
 				assert.True(t, strings.Contains(resp.Request.RawURLString, "{{host}}"),
 				"RawURLString should still contain {{host}}")

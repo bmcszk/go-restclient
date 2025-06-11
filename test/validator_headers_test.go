@@ -18,62 +18,99 @@ func TestValidateResponses_Headers(t *testing.T) {
 		expectedErrTexts []string
 	}{
 		{
-			name:             "matching headers",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}, "X-Request-Id": {"123"}}},
+			name: "matching headers",
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}, "X-Request-Id": {"123"}},
+			},
 			expectedFilePath: "testdata/http_response_files/validator_headerscontain_key_missing.hresp",
 			expectedErrCount: 0,
 		},
 		{
-			name:             "mismatching header value",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"text/html"}}},
-			expectedFilePath: "testdata/http_response_files/validator_headerscontain_key_missing.hresp", // Expects application/json
+			name: "mismatching header value",
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"text/html"}},
+			},
+			// Expects application/json
+			expectedFilePath: "testdata/http_response_files/validator_headerscontain_key_missing.hresp",
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"expected value 'application/json' for header 'Content-Type' not found"},
 		},
 		{
-			name:             "missing expected header",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"X-Other": {"value"}}},
-			expectedFilePath: "testdata/http_response_files/validator_headers_missing_exp.hresp", // Expects X-Custom-Header
+			name: "missing expected header",
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK", Headers: http.Header{"X-Other": {"value"}},
+			},
+			// Expects X-Custom-Header
+			expectedFilePath: "testdata/http_response_files/validator_headers_missing_exp.hresp",
 			expectedErrCount: 1,
-			expectedErrTexts: []string{"expected header 'X-Custom-Header' not found"}, // Adjusted error message
+			// Adjusted error message
+			expectedErrTexts: []string{"expected header 'X-Custom-Header' not found"},
 		},
 		{
-			name:             "extra actual header (should be ignored)",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}, "X-Extra": {"ignored"}}},
+			name: "extra actual header (should be ignored)",
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json"}, "X-Extra": {"ignored"}},
+			},
 			expectedFilePath: "testdata/http_response_files/validator_headerscontain_key_missing.hresp",
 			expectedErrCount: 0,
 		},
 		{
-			name:             "matching multi-value headers (order preserved)",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Accept": {"application/json", "text/xml"}}},
+			name: "matching multi-value headers (order preserved)",
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Accept": {"application/json", "text/xml"}},
+			},
 			expectedFilePath: "testdata/http_response_files/validator_headers_multival_match.hresp",
 			expectedErrCount: 0,
 		},
 		{
-			name:             "mismatching multi-value headers (different order)",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Accept": {"application/json", "text/xml"}}},
-			expectedFilePath: "testdata/http_response_files/validator_headers_multival_mismatch_order.hresp", // Expects xml then json
-			expectedErrCount: 0,                                                                              // Should now pass as order is not strictly enforced for all values
-			// expectedErrTexts: []string{"header 'Accept' value mismatch: expected [text/xml application/json], got [application/json text/xml]"},
+			name: "mismatching multi-value headers (different order)",
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Accept": {"application/json", "text/xml"}},
+			},
+			// Expects xml then json
+			expectedFilePath: "testdata/http_response_files/validator_headers_multival_mismatch_order.hresp",
+			// Should now pass as order is not strictly enforced for all values
+			expectedErrCount: 0,
+			// expectedErrTexts: []string{"header 'Accept' value mismatch: expected [text/xml application/json],
+			//                               got [application/json text/xml]"},
 		},
 		{
-			name:             "mismatching multi-value headers (different value)",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Accept": {"application/json", "application/pdf"}}},
-			expectedFilePath: "testdata/http_response_files/validator_headers_multival_match.hresp", // Expects json then text/plain
+			name: "mismatching multi-value headers (different value)",
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Accept": {"application/json", "application/pdf"}},
+			},
+			// Expects json then text/plain
+			expectedFilePath: "testdata/http_response_files/validator_headers_multival_match.hresp",
 			expectedErrCount: 1,
-			expectedErrTexts: []string{"expected value 'text/xml' for header 'Accept' not found"}, // Adjusted for current logic
+			// Adjusted for current logic
+			expectedErrTexts: []string{"expected value 'text/xml' for header 'Accept' not found"},
 		},
 		{
-			name:             "subset of multi-value headers (actual has more values)",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Accept": {"application/json", "text/xml", "application/pdf"}}},
-			expectedFilePath: "testdata/http_response_files/validator_headers_multival_subset.hresp", // Expects only application/json
-			expectedErrCount: 0,                                                                      // Should now pass as expected ["application/json"] is found in actual
-			// expectedErrTexts: []string{"header 'Accept' value mismatch: expected [application/json], got [application/json text/xml application/pdf]"},
+			name: "subset of multi-value headers (actual has more values)",
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Accept": {"application/json", "text/xml", "application/pdf"}},
+			},
+			// Expects only application/json
+			expectedFilePath: "testdata/http_response_files/validator_headers_multival_subset.hresp",
+			// Should now pass as expected ["application/json"] is found in actual
+			expectedErrCount: 0,
+			// expectedErrTexts: []string{"header 'Accept' value mismatch:
+			//                               expected [application/json],
+			//                               got [application/json text/xml application/pdf]"},
 		},
 		{
-			name:             "case-insensitive header key matching",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}}},
-			expectedFilePath: "testdata/http_response_files/validator_headers_case_insensitive_match.hresp", // Expected file has "content-type"
+			name: "case-insensitive header key matching",
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}},
+			},
+			// Expected file has "content-type"
+			expectedFilePath: "testdata/http_response_files/validator_headers_case_insensitive_match.hresp",
 			expectedErrCount: 0,
 		},
 	}
@@ -108,22 +145,31 @@ func TestValidateResponses_HeadersContain(t *testing.T) {
 		expectedErrTexts []string
 	}{
 		{
-			name:             "HeadersContain logic not triggered (matching case for other fields)",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json; charset=utf-8"}}},
+			name: "HeadersContain logic not triggered (matching case for other fields)",
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": {"application/json; charset=utf-8"}},
+			},
 			expectedFilePath: "testdata/http_response_files/validator_headerscontain_match.hresp",
 			expectedErrCount: 0,
 		},
 		{
 			name:             "HeadersContain logic not triggered (mismatch on standard header)",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"text/html"}}},
-			expectedFilePath: "testdata/http_response_files/validator_headerscontain_key_missing.hresp", // Standard header mismatch
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"text/html"}},
+			},
+			// Standard header mismatch
+			expectedFilePath: "testdata/http_response_files/validator_headerscontain_key_missing.hresp",
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"expected value 'application/json' for header 'Content-Type' not found"},
 		},
 		{
 			name:             "HeadersContain logic not triggered (expected header key not found by standard check)",
-			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK", Headers: http.Header{"X-Other": {"value"}}},
-			expectedFilePath: "testdata/http_response_files/validator_headerscontain_key_missing.hresp", // Expected header 'Content-Type' missing from actual
+			actualResponse: &rc.Response{
+				StatusCode: 200, Status: "200 OK", Headers: http.Header{"X-Other": {"value"}},
+			},
+			// Expected header 'Content-Type' missing from actual
+			expectedFilePath: "testdata/http_response_files/validator_headerscontain_key_missing.hresp",
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"expected header 'Content-Type' not found"},
 		},
