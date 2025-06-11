@@ -371,7 +371,8 @@ func substituteRequestVariables(
 }
 
 // initializeVariableMaps sets up the variable maps based on parsed file context
-func initializeVariableMaps(parsedFile *ParsedFile) (fileScopedVars, envVarsFromFile, globalVarsFromFile map[string]string) {
+func initializeVariableMaps(parsedFile *ParsedFile) (fileScopedVars, envVarsFromFile, 
+	globalVarsFromFile map[string]string) {
 	if parsedFile != nil {
 		fileScopedVars = make(map[string]string, len(parsedFile.FileVariables))
 		for k, v := range parsedFile.FileVariables {

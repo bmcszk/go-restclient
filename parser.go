@@ -602,47 +602,59 @@ func (p *requestParserState) handleEmptyLine() error {
 
 // handleRequestLine processes a potential HTTP request line (METHOD URL HTTP/Version).
 func (p *requestParserState) handleRequestLine(trimmedLine string) error {
+	p.handleEmptyLineSeparatorState(trimmedLine)
+	p.justSawEmptyLineSeparator = false
+
+	if p.isRequestSeparator(trimmedLine) {
+		return p.handleRequestSeparator(trimmedLine)
+	}
+
+	return p.processActualRequestLine(trimmedLine)
+}
+
+// handleEmptyLineSeparatorState handles state when empty line separator was seen
+func (p *requestParserState) handleEmptyLineSeparatorState(trimmedLine string) {
 	if p.justSawEmptyLineSeparator && p.currentRequest != nil &&
 		p.currentRequest.Method != "" && isPotentialRequestLine(trimmedLine) {
 		p.finalizeCurrentRequest()
-		// ensureCurrentRequest() will be called by subsequent logic if needed, preparing for the new request.
 	}
-	p.justSawEmptyLineSeparator = false // Reset flag as we are processing a non-empty line.
+}
 
-	if strings.HasPrefix(trimmedLine, requestSeparator) {
-		p.finalizeCurrentRequest() // Finalize the previous request
+// isRequestSeparator checks if the line is a request separator
+func (*requestParserState) isRequestSeparator(trimmedLine string) bool {
+	return strings.HasPrefix(trimmedLine, requestSeparator)
+}
 
-		// Reset parser state fields that are per-request, but p.currentRequest itself is now nil.
-		// p.ensureCurrentRequest() will be called by the next line processor
-		// (e.g. handleComment, or this function again if it's not ###)
-		// or when a new request line is actually encountered.
+// handleRequestSeparator processes request separator lines
+func (p *requestParserState) handleRequestSeparator(trimmedLine string) error {
+	p.finalizeCurrentRequest()
 
-		// FR1.3: Support for request naming via ### Request Name
-		requestNameFromSeparator := strings.TrimSpace(strings.TrimPrefix(trimmedLine, requestSeparator))
-		if requestNameFromSeparator != "" {
-			p.nextRequestName = requestNameFromSeparator
-		}
-		// After a separator, currentRequest should be nil (finalized by finalizeCurrentRequest).
-		// The next actual request line will create a new currentRequest via ensureCurrentRequest.
-		return nil
+	requestNameFromSeparator := strings.TrimSpace(strings.TrimPrefix(trimmedLine, requestSeparator))
+	if requestNameFromSeparator != "" {
+		p.nextRequestName = requestNameFromSeparator
 	}
+	return nil
+}
 
-	// Not a separator, so it's a potential request line (METHOD URL)
-	p.ensureCurrentRequest() // Ensure a request object is available
+// processActualRequestLine processes actual request lines (not separators)
+func (p *requestParserState) processActualRequestLine(trimmedLine string) error {
+	p.ensureCurrentRequest()
 
-	finalizedBySeparatorInLine := p.parseRequestLineDetails(trimmedLine) // Pass trimmedLine as requestLine
-
-	// Apply stored nextRequestName if available and current request has no name yet.
-	// @name directive would have already set p.currentRequest.Name directly.
-	if !finalizedBySeparatorInLine && p.currentRequest != nil &&
-		p.currentRequest.Method != "" && p.nextRequestName != "" {
-		if p.currentRequest.Name == "" { // Only apply if no name is set yet (e.g. by @name)
-			p.currentRequest.Name = p.nextRequestName
-		}
-		p.nextRequestName = "" // Clear nextRequestName as it has been considered/applied or overridden
-	}
+	finalizedBySeparatorInLine := p.parseRequestLineDetails(trimmedLine)
+	p.applyStoredRequestName(finalizedBySeparatorInLine)
 
 	return nil
+}
+
+// applyStoredRequestName applies stored request name if conditions are met
+func (p *requestParserState) applyStoredRequestName(finalizedBySeparatorInLine bool) {
+	if !finalizedBySeparatorInLine && p.currentRequest != nil &&
+		p.currentRequest.Method != "" && p.nextRequestName != "" {
+		if p.currentRequest.Name == "" {
+			p.currentRequest.Name = p.nextRequestName
+		}
+		p.nextRequestName = ""
+	}
 }
 
 // handleHeader processes header lines with the format: Header-Name: value
@@ -909,99 +921,108 @@ func (p *requestParserState) parseRequestLineDetails(originalRequestLine string)
 
 	parts := strings.Fields(requestLine)
 	if len(parts) == 0 {
-		if finalizedBySeparator {
-			// If there was a separator, and the part before it was empty,
-			// finalize any existing request and prepare for a new one.
-			if p.currentRequest != nil && (p.currentRequest.Method != "" || p.currentRequest.RawURLString != "") {
-				p.finalizeCurrentRequest()
-			}
-			p.ensureCurrentRequest() // Prepare for the request that might be named by nextRequestName
-			return true
-		}
-		slog.Warn(
-			"parseRequestLineDetails: Empty request line after processing "+
-				"potential separator",
-			"originalRequestLine", originalRequestLine, "line", p.lineNumber,
-			"requestPtr", fmt.Sprintf("%p", p.currentRequest))
-		return false
+		return p.handleEmptyRequestLine(finalizedBySeparator, originalRequestLine)
 	}
 
-	methodCandidate := parts[0] // Method candidate in its original case
-
+	methodCandidate := parts[0]
 	if !isValidHTTPToken(methodCandidate) {
-		// First token is not a valid HTTP method token.
-		// Try to handle as a non-method line (e.g., a bare URL which implies GET).
-		p.handleNonMethodRequestLine(requestLine, methodCandidate)
-		// handleNonMethodRequestLine might set RawURLString and imply a method (e.g. GET)
-		// or leave Method empty if it can't determine one.
-
-		if finalizedBySeparator {
-			// If there was a separator, finalize this "non-method" request if it's valid enough.
-			if p.currentRequest != nil && (p.currentRequest.Method != "" || p.currentRequest.RawURLString != "") {
-				p.finalizeCurrentRequest()
-			}
-			p.ensureCurrentRequest() // Prepare for the next request
-			return true
-		}
-		// If not finalized by separator, the validity of this non-method line stands on its own.
-		// finalizeCurrentRequest will later determine if it's a complete request.
-		return false
+		return p.handleNonMethodLine(requestLine, methodCandidate, finalizedBySeparator)
 	}
 
-	// methodCandidate IS a valid HTTP token, so treat it as the method.
-	// Store in original case as per RFC 7230 (methods are case-sensitive).
+	return p.handleValidMethodLine(parts, methodCandidate, finalizedBySeparator)
+}
+
+// handleEmptyRequestLine handles empty request lines
+func (p *requestParserState) handleEmptyRequestLine(finalizedBySeparator bool, originalRequestLine string) bool {
+	if finalizedBySeparator {
+		if p.currentRequest != nil && (p.currentRequest.Method != "" || p.currentRequest.RawURLString != "") {
+			p.finalizeCurrentRequest()
+		}
+		p.ensureCurrentRequest()
+		return true
+	}
+	slog.Warn(
+		"parseRequestLineDetails: Empty request line after processing potential separator",
+		"originalRequestLine", originalRequestLine, "line", p.lineNumber,
+		"requestPtr", fmt.Sprintf("%p", p.currentRequest))
+	return false
+}
+
+// handleNonMethodLine handles lines that don't start with a valid HTTP method
+func (p *requestParserState) handleNonMethodLine(requestLine, methodCandidate string, finalizedBySeparator bool) bool {
+	p.handleNonMethodRequestLine(requestLine, methodCandidate)
+
+	if finalizedBySeparator {
+		if p.currentRequest != nil && (p.currentRequest.Method != "" || p.currentRequest.RawURLString != "") {
+			p.finalizeCurrentRequest()
+		}
+		p.ensureCurrentRequest()
+		return true
+	}
+	return false
+}
+
+// handleValidMethodLine handles lines that start with a valid HTTP method
+func (p *requestParserState) handleValidMethodLine(parts []string, methodCandidate string, 
+	finalizedBySeparator bool) bool {
 	p.currentRequest.Method = methodCandidate
 
 	if len(parts) < 2 {
-		slog.Warn(
-			"parseRequestLineDetails: Method found, but no URL part.",
-			"method", methodCandidate, "line", p.lineNumber,
-			"requestPtr", fmt.Sprintf("%p", p.currentRequest))
-		// Even if there's no URL, if a separator follows, we finalize this incomplete request.
-		if finalizedBySeparator {
-			p.finalizeCurrentRequest()
-			p.ensureCurrentRequest() // Prepare for the next request
-			return true
-		}
-		return false // Incomplete request line
+		return p.handleIncompleteMethodLine(methodCandidate, finalizedBySeparator)
 	}
 
+	p.parseURLAndVersion(parts)
+
+	if finalizedBySeparator {
+		p.finalizeCurrentRequest()
+		p.ensureCurrentRequest()
+		return true
+	}
+
+	return false
+}
+
+// handleIncompleteMethodLine handles method lines without URL parts
+func (p *requestParserState) handleIncompleteMethodLine(methodCandidate string, finalizedBySeparator bool) bool {
+	slog.Warn(
+		"parseRequestLineDetails: Method found, but no URL part.",
+		"method", methodCandidate, "line", p.lineNumber,
+		"requestPtr", fmt.Sprintf("%p", p.currentRequest))
+
+	if finalizedBySeparator {
+		p.finalizeCurrentRequest()
+		p.ensureCurrentRequest()
+		return true
+	}
+	return false
+}
+
+// parseURLAndVersion parses URL and HTTP version from request line parts
+func (p *requestParserState) parseURLAndVersion(parts []string) {
 	urlAndVersionStr := strings.TrimSpace(strings.Join(parts[1:], " "))
 	urlStr, httpVersion := p.extractURLAndVersion(urlAndVersionStr)
 
 	p.currentRequest.RawURLString = urlStr
-	p.currentRequest.HTTPVersion = httpVersion // Can be empty if not specified
+	p.currentRequest.HTTPVersion = httpVersion
 
-	// Check if URL contains variables (using {{ and }} as variable markers)
+	p.parseURLIfNoVariables(urlStr)
+}
+
+// parseURLIfNoVariables parses URL immediately if it contains no variables
+func (p *requestParserState) parseURLIfNoVariables(urlStr string) {
 	containsVariables := strings.Contains(urlStr, "{{") || strings.Contains(urlStr, "}}")
 
-	if containsVariables {
-		// p.currentRequest.URL remains nil as parsing is deferred
-	} else {
-		// No variables, try to parse URL now
-		parsedURL, err := url.Parse(urlStr)
-		if err != nil {
+	if !containsVariables {
+		if parsedURL, err := url.Parse(urlStr); err != nil {
 			slog.Warn(
 				"parseRequestLineDetails: Failed to parse RawURLString (no variables)",
 				"rawURL", urlStr, "error", err, "line", p.lineNumber,
 				"requestPtr", fmt.Sprintf("%p", p.currentRequest))
-			// p.currentRequest.URL remains nil or as set by url.Parse on error
-			// (which is typically nil for parse errors)
 		} else {
 			p.currentRequest.URL = parsedURL
 		}
 	}
-
-	if finalizedBySeparator {
-		// If there was a separator on the same line, finalize this now-parsed request.
-		p.finalizeCurrentRequest()
-		p.ensureCurrentRequest() // Prepare for the next request
-		return true
-	}
-
-	return false // Not finalized by a same-line separator
 }
-
 
 // parseExpectedStatusLine parses a line as an HTTP status line (HTTP_VERSION STATUS_CODE [STATUS_TEXT]).
 // It updates the provided ExpectedResponse with the parsed status code and status string.
