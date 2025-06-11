@@ -53,12 +53,14 @@ func runCookieJarSubtest(t *testing.T, tc cookieJarTestCase, serverVars map[stri
 			require.NoError(t, resp.Error, "Response error should be nil for @no-cookie-jar test, response: %+v", resp)
 		}
 		
-		assert.Equal(t, tc.expectedCookieCheckValue, *cookieCheck, "Cookie check assertion failed for @no-cookie-jar test")
+		assert.Equal(t, tc.expectedCookieCheckValue, *cookieCheck, 
+			"Cookie check assertion failed for @no-cookie-jar test")
 	} else {
 		// Default behavior test (with or without jar based on client setup)
 		var client *rc.Client
 		var clientErr error
-		if tc.httpFilePath == "testdata/cookies_redirects/with_cookie_jar.http" { // A bit of a hack to infer client needs jar
+		if tc.httpFilePath == "testdata/cookies_redirects/with_cookie_jar.http" { 
+			// A bit of a hack to infer client needs jar
 			jar, err := cookiejar.New(nil)
 			require.NoError(t, err, "Should create cookie jar without error")
 			customHTTPClientWithJar := &http.Client{Jar: jar}
@@ -77,11 +79,16 @@ func runCookieJarSubtest(t *testing.T, tc cookieJarTestCase, serverVars map[stri
 }
 
 // PRD-COMMENT: FR9.1 - Client Execution: Cookie Jar Management
-// Corresponds to: Client execution behavior regarding HTTP cookies and the '@no-cookie-jar' request setting (http_syntax.md "Request Settings", "@no-cookie-jar").
+// Corresponds to: Client execution behavior regarding HTTP cookies and the '@no-cookie-jar' 
+// request setting (http_syntax.md "Request Settings", "@no-cookie-jar").
 // This test verifies the client's cookie jar functionality. It checks:
-// 1. Default behavior: Cookies set by a server are stored in the client's cookie jar and sent with subsequent requests to the same domain.
-// 2. '@no-cookie-jar' directive: When a request includes the '@no-cookie-jar' setting, the client does not use its cookie jar for that specific request (neither sending stored cookies nor saving new ones from the response).
-// It uses dynamically created 'testdata/cookies_redirects/with_cookie_jar.http' and 'testdata/cookies_redirects/without_cookie_jar.http' files.
+// 1. Default behavior: Cookies set by a server are stored in the client's cookie jar and sent 
+//    with subsequent requests to the same domain.
+// 2. '@no-cookie-jar' directive: When a request includes the '@no-cookie-jar' setting, the 
+//    client does not use its cookie jar for that specific request (neither sending stored 
+//    cookies nor saving new ones from the response).
+// It uses dynamically created 'testdata/cookies_redirects/with_cookie_jar.http' and 
+// 'testdata/cookies_redirects/without_cookie_jar.http' files.
 func TestCookieJarHandling(t *testing.T) {
 	// Given: A test server that sets cookies
 	var cookieCheck bool // This variable is modified by the HTTP handler

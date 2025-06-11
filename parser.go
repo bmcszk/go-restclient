@@ -1085,93 +1085,134 @@ func processExpectedStatusOrHeaderLine(line string, lineNumber int, resp *Expect
 //
 // Returns a slice of `ExpectedResponse` structs or an error if parsing fails (e.g., due to
 // malformed status lines or headers).
+// responseParserState holds the state for parsing expected responses
+type responseParserState struct {
+	expectedResponses       []*ExpectedResponse
+	currentExpectedResponse *ExpectedResponse
+	bodyLines               []string
+	parsingBody             bool
+	lineNumber              int
+	processedAnyLine        bool
+}
+
 func parseExpectedResponses(reader io.Reader, filePath string) ([]*ExpectedResponse, error) {
 	scanner := bufio.NewScanner(reader)
-	var expectedResponses []*ExpectedResponse
-
-	currentExpectedResponse := &ExpectedResponse{Headers: make(http.Header)}
-	var bodyLines []string
-	parsingBody := false
-	lineNumber := 0
-	processedAnyLine := false
+	state := &responseParserState{
+		expectedResponses:       []*ExpectedResponse{},
+		currentExpectedResponse: &ExpectedResponse{Headers: make(http.Header)},
+		bodyLines:               []string{},
+		parsingBody:             false,
+		lineNumber:              0,
+		processedAnyLine:        false,
+	}
 
 	for scanner.Scan() {
-		lineNumber++
+		state.lineNumber++
 		originalLine := scanner.Text()
 		trimmedLine := strings.TrimSpace(originalLine)
 
-		// Request Separator (###)
-		if strings.HasPrefix(trimmedLine, requestSeparator) {
-			processedAnyLine = true // Mark that we've processed a significant line
-			// Current response (before separator) is complete. Add it if it has content.
-			if (currentExpectedResponse.Status != nil && *currentExpectedResponse.Status != "") ||
-				currentExpectedResponse.StatusCode != nil ||
-				len(currentExpectedResponse.Headers) > 0 ||
-				len(bodyLines) > 0 {
-				bodyStr := strings.Join(bodyLines, "\n") // Corrected to \n
-				currentExpectedResponse.Body = &bodyStr
-				expectedResponses = append(expectedResponses, currentExpectedResponse)
-			}
-			// Reset for the new response that starts *after* this separator.
-			currentExpectedResponse = &ExpectedResponse{Headers: make(http.Header)}
-			bodyLines = []string{}
-			parsingBody = false
-			continue // Consumed separator line (and its comment), move to next line.
-		}
-
-		// Regular Comments (#)
-		// commentPrefix is "#"
-		if strings.HasPrefix(trimmedLine, commentPrefix) || strings.HasPrefix(trimmedLine, "@") {
-			continue // Move to next line
-		}
-
-		// If we are here, the line is not a separator and not a non-body comment.
-		processedAnyLine = true      // Mark that we are processing a potentially contentful line.
-		processedLine := trimmedLine // For status/header parsing, body uses originalLine
-
-		if processedLine == "" && !parsingBody {
-			// This condition signifies the start of the body or an ignored blank line between responses
-			if (currentExpectedResponse.Status != nil && *currentExpectedResponse.Status != "") ||
-				currentExpectedResponse.StatusCode != nil {
-				parsingBody = true
-			}
-			continue
-		}
-
-		if parsingBody {
-			bodyLines = append(bodyLines, originalLine)
-		} else {
-			// Not parsingBody, line is not empty, not separator, not comment.
-			// Must be a status line or a header.
-			err := processExpectedStatusOrHeaderLine(
-				processedLine, lineNumber, currentExpectedResponse)
-			if err != nil {
-				return nil, err
-			}
+		if err := state.processLine(originalLine, trimmedLine); err != nil {
+			return nil, err
 		}
 	}
 
-	// Add the last expected response pending in currentExpectedResponse, if it has content
-	if processedAnyLine && ((currentExpectedResponse.Status != nil && *currentExpectedResponse.Status != "") ||
-		currentExpectedResponse.StatusCode != nil ||
-		len(currentExpectedResponse.Headers) > 0 || // Also check headers for empty responses
-		len(bodyLines) > 0) {
-		bodyStr := strings.Join(bodyLines, "\n")
-		currentExpectedResponse.Body = &bodyStr
-		expectedResponses = append(expectedResponses, currentExpectedResponse)
-	}
+	state.finalizeLastResponse()
 
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf(
-		"error reading expected response file %s (last processed line %d): %w",
-		filePath, lineNumber, err)
+			"error reading expected response file %s (last processed line %d): %w",
+			filePath, state.lineNumber, err)
 	}
 
-	// REQ-LIB-028: Ignore any block between separators that doesn't have a response.
-	// If parsing completed without error but yielded no responses (e.g., file only contained comments or empty blocks),
-	// return an empty list, not an error. This aligns with SCENARIO-LIB-028-006.
+	return state.expectedResponses, nil
+}
 
-	return expectedResponses, nil
+// processLine processes a single line during expected response parsing
+func (s *responseParserState) processLine(originalLine, trimmedLine string) error {
+	if s.isRequestSeparator(trimmedLine) {
+		s.handleRequestSeparator()
+		return nil
+	}
+
+	if s.isComment(trimmedLine) {
+		return nil
+	}
+
+	return s.processContentLine(originalLine, trimmedLine)
+}
+
+// isRequestSeparator checks if the line is a request separator
+func (*responseParserState) isRequestSeparator(trimmedLine string) bool {
+	return strings.HasPrefix(trimmedLine, requestSeparator)
+}
+
+// isComment checks if the line is a comment
+func (*responseParserState) isComment(trimmedLine string) bool {
+	return strings.HasPrefix(trimmedLine, commentPrefix) || strings.HasPrefix(trimmedLine, "@")
+}
+
+// handleRequestSeparator processes request separator lines
+func (s *responseParserState) handleRequestSeparator() {
+	s.processedAnyLine = true
+	
+	if s.hasResponseContent() {
+		s.finalizeCurrentResponse()
+	}
+	
+	s.resetForNewResponse()
+}
+
+// hasResponseContent checks if current response has any content
+func (s *responseParserState) hasResponseContent() bool {
+	return (s.currentExpectedResponse.Status != nil && *s.currentExpectedResponse.Status != "") ||
+		s.currentExpectedResponse.StatusCode != nil ||
+		len(s.currentExpectedResponse.Headers) > 0 ||
+		len(s.bodyLines) > 0
+}
+
+// finalizeCurrentResponse adds the current response to the list
+func (s *responseParserState) finalizeCurrentResponse() {
+	bodyStr := strings.Join(s.bodyLines, "\n")
+	s.currentExpectedResponse.Body = &bodyStr
+	s.expectedResponses = append(s.expectedResponses, s.currentExpectedResponse)
+}
+
+// resetForNewResponse resets state for parsing a new response
+func (s *responseParserState) resetForNewResponse() {
+	s.currentExpectedResponse = &ExpectedResponse{Headers: make(http.Header)}
+	s.bodyLines = []string{}
+	s.parsingBody = false
+}
+
+// processContentLine processes non-comment, non-separator lines
+func (s *responseParserState) processContentLine(originalLine, trimmedLine string) error {
+	s.processedAnyLine = true
+
+	if s.shouldStartBodyParsing(trimmedLine) {
+		s.parsingBody = true
+		return nil
+	}
+
+	if s.parsingBody {
+		s.bodyLines = append(s.bodyLines, originalLine)
+		return nil
+	}
+
+	return processExpectedStatusOrHeaderLine(trimmedLine, s.lineNumber, s.currentExpectedResponse)
+}
+
+// shouldStartBodyParsing determines if we should start parsing the body
+func (s *responseParserState) shouldStartBodyParsing(trimmedLine string) bool {
+	return trimmedLine == "" && !s.parsingBody &&
+		((s.currentExpectedResponse.Status != nil && *s.currentExpectedResponse.Status != "") ||
+			s.currentExpectedResponse.StatusCode != nil)
+}
+
+// finalizeLastResponse handles the final response at end of parsing
+func (s *responseParserState) finalizeLastResponse() {
+	if s.processedAnyLine && s.hasResponseContent() {
+		s.finalizeCurrentResponse()
+	}
 }
 
 // parseInt is a helper function to convert string to int.

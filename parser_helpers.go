@@ -10,7 +10,7 @@ import (
 // Returns the URL and HTTP version (if present).
 // extractURLAndVersion splits a URL string that may contain HTTP version.
 // Returns the URL and HTTP version (if present).
-func (*requestParserState) extractURLAndVersion(urlAndVersion string) (string, string) {
+func (*requestParserState) extractURLAndVersion(urlAndVersion string) (urlStr, httpVersion string) {
 	// Check for HTTP version (e.g., "http://example.com HTTP/1.1")
 	parts := strings.Split(urlAndVersion, " ")
 
@@ -35,14 +35,23 @@ func isValidHTTPToken(s string) bool {
 	if s == "" {
 		return false
 	}
+	return allValidHTTPTokenChars(s)
+}
+
+// allValidHTTPTokenChars checks if all characters in string are valid HTTP token chars
+func allValidHTTPTokenChars(s string) bool {
 	for _, r := range s {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') ||
-			r == '!' || r == '#' || r == '$' || r == '%' || r == '&' || r == '\'' ||
-			r == '*' || r == '+' || r == '-' || r == '.' || r == '^' || r == '_' ||
-			r == '`' || r == '|' || r == '~' {
-			continue
+		if !isValidHTTPTokenChar(r) {
+			return false
 		}
-		return false
 	}
 	return true
+}
+
+// isValidHTTPTokenChar checks if a rune is a valid HTTP token character
+func isValidHTTPTokenChar(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') ||
+		r == '!' || r == '#' || r == '$' || r == '%' || r == '&' || r == '\'' ||
+		r == '*' || r == '+' || r == '-' || r == '.' || r == '^' || r == '_' ||
+		r == '`' || r == '|' || r == '~'
 }
