@@ -1,6 +1,7 @@
 package restclient_test
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -57,7 +58,7 @@ func startMockServer(handler http.HandlerFunc) *httptest.Server {
 }
 
 // createTestFileFromTemplate processes a template file and returns the path to the processed file.
-func createTestFileFromTemplate(t *testing.T, templatePath string, data interface{}) string {
+func createTestFileFromTemplate(t *testing.T, templatePath string, data any) string {
 	t.Helper()
 	tmplContent, err := os.ReadFile(templatePath)
 	require.NoError(t, err)
@@ -95,7 +96,7 @@ func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 	if m.RoundTripFunc != nil {
 		return m.RoundTripFunc(req)
 	}
-	return nil, fmt.Errorf("RoundTripFunc not set")
+	return nil, errors.New("RoundTripFunc not set")
 }
 
 

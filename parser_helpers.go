@@ -10,7 +10,7 @@ import (
 // Returns the URL and HTTP version (if present).
 // extractURLAndVersion splits a URL string that may contain HTTP version.
 // Returns the URL and HTTP version (if present).
-func (p *requestParserState) extractURLAndVersion(urlAndVersion string) (string, string) {
+func (*requestParserState) extractURLAndVersion(urlAndVersion string) (string, string) {
 	// Check for HTTP version (e.g., "http://example.com HTTP/1.1")
 	parts := strings.Split(urlAndVersion, " ")
 

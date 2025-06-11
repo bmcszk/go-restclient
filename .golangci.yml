@@ -16,7 +16,6 @@ linters:
     - unparam
     - dupl
     - nestif
-    - funlen
     - revive
     - testpackage
     - thelper
@@ -26,27 +25,32 @@ linters:
         linters:
           - errcheck
   settings:
-    funlen:
-      lines: 100
-      statements: 60
     revive:
-      enable-all-rules: false
+      enable-all-rules: true
       rules:
+      - name: package-comments
+        disabled: true
       - name: add-constant
         disabled: true
+        exclude: ["**/*_test.go"]
+        arguments:
+          - max-lit-count: "3"
+            allow-strs: '""'
+            allow-ints: "0"
+            allow-floats: "0.0"
       - name: var-naming
         disabled: true
       - name: line-length-limit
-        disabled: true
         arguments: [120]
+      - name: function-length
+        arguments: [100, 0]
       - name: file-length-limit
-        severity: warning
-        disabled: false
-        exclude: [""]
         arguments:
           - max: 1000
             skip-comments: false
             skip-blank-lines: false
+      - name: unhandled-error
+        exclude: ["**/*_test.go"]
     nestif:
       min-complexity: 4
 

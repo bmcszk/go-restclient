@@ -324,7 +324,7 @@ func TestExecuteFile_WithProgrammaticVariables(t *testing.T) {
 	})
 	defer server.Close()
 
-	clientProgrammaticVars := map[string]interface{}{
+	clientProgrammaticVars := map[string]any{
 		"prog_baseUrl":         server.URL,
 		"prog_path":            "items",
 		"prog_id":              "prog123",
@@ -478,7 +478,7 @@ func setupConsistencyTestServer(t *testing.T, capturedVals *capturedConsistencyV
 
 		bodyBytes, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
-		var bodyJSON map[string]interface{}
+		var bodyJSON map[string]any
 		err = json.Unmarshal(bodyBytes, &bodyJSON)
 		require.NoError(t, err)
 
@@ -533,7 +533,7 @@ func assertRequestObjectConsistency(t *testing.T, parsedReq *rc.Request, capture
 	assert.Equal(t, capturedVals.HeaderTimestamp, parsedReq.Headers.Get("X-Request-Timestamp"))
 	assert.Equal(t, capturedVals.HeaderRandomInt, parsedReq.Headers.Get("X-Request-RandomInt"))
 
-	var clientReqBodyJSON map[string]interface{}
+	var clientReqBodyJSON map[string]any
 	err := json.Unmarshal([]byte(parsedReq.RawBody), &clientReqBodyJSON)
 	require.NoError(t, err, "Failed to unmarshal client request RawBody JSON")
 

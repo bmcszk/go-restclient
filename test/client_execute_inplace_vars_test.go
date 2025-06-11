@@ -33,7 +33,7 @@ func TestExecuteFile_InPlace_SimpleVariableInURL(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/simple_variable_in_url/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/simple_variable_in_url/expected.hresp"
 
-	client, err := rc.NewClient(rc.WithVars(map[string]interface{}{
+	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
 	}))
 	require.NoError(t, err)
@@ -89,7 +89,7 @@ func TestExecuteFile_InPlace_VariableInHeader(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/variable_in_header/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/variable_in_header/expected.hresp"
 
-	client, err := rc.NewClient(rc.WithVars(map[string]interface{}{
+	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
 	}))
 	require.NoError(t, err)
@@ -149,7 +149,7 @@ func TestExecuteFile_InPlace_VariableInBody(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/variable_in_body/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/variable_in_body/expected.hresp"
 
-	client, err := rc.NewClient(rc.WithVars(map[string]interface{}{
+	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
 	}))
 	require.NoError(t, err)
@@ -206,7 +206,7 @@ func TestExecuteFile_InPlace_VariableDefinedByAnotherVariable(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/variable_defined_by_another_variable/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/variable_defined_by_another_variable/expected.hresp"
 
-	client, err := rc.NewClient(rc.WithVars(map[string]interface{}{
+	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
 	}))
 	require.NoError(t, err)
@@ -266,7 +266,7 @@ func TestExecuteFile_InPlace_VariablePrecedenceOverEnvironment(t *testing.T) {
 	// The client will look for http-client.env.testPrecedenceEnv.json in the same dir as request.http
 	client, err := rc.NewClient(
 		rc.WithEnvironment(envName),
-		rc.WithVars(map[string]interface{}{
+		rc.WithVars(map[string]any{
 			"test_server_url": server.URL,
 		}),
 	)
@@ -307,7 +307,7 @@ func TestExecuteFile_InPlace_VariableInCustomHeader(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/variable_in_custom_header/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/variable_in_custom_header/expected.hresp"
 
-	client, err := rc.NewClient(rc.WithVars(map[string]interface{}{
+	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
 	}))
 	require.NoError(t, err)
@@ -355,7 +355,7 @@ func TestExecuteFile_InPlace_VariableSubstitutionInBody(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/variable_substitution_in_body/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/variable_substitution_in_body/expected.hresp"
 
-	client, err := rc.NewClient(rc.WithVars(map[string]interface{}{
+	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
 	}))
 	require.NoError(t, err)
@@ -406,7 +406,7 @@ func TestExecuteFile_InPlace_VariableDefinedBySystemVariable(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_defined_by_system_variable/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_defined_by_system_variable/expected.hresp"
 
-	client, err := rc.NewClient(rc.WithVars(map[string]interface{}{
+	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
 	}))
 	require.NoError(t, err)
@@ -468,7 +468,7 @@ func TestExecuteFile_InPlace_VariableDefinedByOsEnvVariable(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_defined_by_os_env_variable/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_defined_by_os_env_variable/expected.hresp"
 
-	client, err := rc.NewClient(rc.WithVars(map[string]interface{}{
+	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
 	}))
 	require.NoError(t, err)
@@ -516,7 +516,7 @@ func TestExecuteFile_InPlace_VariableInAuthHeader(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_in_auth_header/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_in_auth_header/expected.hresp"
 
-	client, err := rc.NewClient(rc.WithVars(map[string]interface{}{
+	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
 	}))
 	require.NoError(t, err)
@@ -568,7 +568,7 @@ func TestExecuteFile_InPlace_VariableInJsonRequestBody(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_in_json_request_body/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_in_json_request_body/expected.hresp" // Minimal hresp
 
-	client, err := rc.NewClient(rc.WithVars(map[string]interface{}{
+	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
 	}))
 	require.NoError(t, err)
@@ -620,7 +620,7 @@ func TestExecuteFile_InPlace_VariableDefinedByAnotherInPlaceVariable(t *testing.
 	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_defined_by_another_inplace_variable/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_defined_by_another_inplace_variable/expected.hresp"
 
-	client, err := rc.NewClient(rc.WithVars(map[string]interface{}{
+	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
 	}))
 	require.NoError(t, err)
@@ -676,7 +676,7 @@ func TestExecuteFile_InPlace_VariableDefinedByDotEnvOsVariable(t *testing.T) {
 	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_defined_by_dot_env_os_variable/request.http"
 	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_defined_by_dot_env_os_variable/expected.hresp"
 
-	client, err := rc.NewClient(rc.WithVars(map[string]interface{}{
+	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
 	}))
 	require.NoError(t, err)
@@ -771,7 +771,7 @@ func TestExecuteFile_InPlace_VariableDefinedByDotEnvSystemVariable(t *testing.T)
 	}))
 	defer server.Close()
 
-	client, err := rc.NewClient(rc.WithVars(map[string]interface{}{
+	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
 	}))
 	require.NoError(t, err)
@@ -810,7 +810,7 @@ func TestExecuteFile_InPlace_VariableDefinedByRandomInt(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := rc.NewClient(rc.WithVars(map[string]interface{}{
+	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
 	}))
 	require.NoError(t, err)

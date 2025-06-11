@@ -44,13 +44,13 @@ func TestExecuteFile_ExternalFileWithVariables(t *testing.T) {
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 		body, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
-		var data map[string]interface{}
+		var data map[string]any
 		err = json.Unmarshal(body, &data)
 		require.NoError(t, err)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"json": data,
 		})
 	}))
@@ -72,7 +72,7 @@ Content-Type: application/json
 	require.NoError(t, err)
 
 	// Create client with additional programmatic variables
-	client, err := rc.NewClient(rc.WithVars(map[string]interface{}{
+	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"userName": "Override Name", // This should override the file variable
 	}))
 	require.NoError(t, err)
@@ -125,13 +125,13 @@ func TestExecuteFile_ExternalFileWithoutVariables(t *testing.T) {
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 		body, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
-		var data map[string]interface{}
+		var data map[string]any
 		err = json.Unmarshal(body, &data)
 		require.NoError(t, err)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"json": data, // Echo back the received JSON data
 		})
 	}))
@@ -383,7 +383,7 @@ Content-Type: text/plain; charset=iso-8859-1
 	require.NoError(t, err)
 
 	// Create client with additional programmatic variables
-	client, err := rc.NewClient(rc.WithVars(map[string]interface{}{
+	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"city": "ProgrammaticCity", // This should be used
 	}))
 	require.NoError(t, err)

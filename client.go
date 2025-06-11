@@ -3,6 +3,7 @@ package restclient
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -39,7 +40,7 @@ type Client struct {
 	BaseURL                 string
 	DefaultHeaders          http.Header
 	currentDotEnvVars       map[string]string
-	programmaticVars        map[string]interface{}
+	programmaticVars        map[string]any
 	selectedEnvironmentName string // Added for T4
 }
 
@@ -110,10 +111,10 @@ func WithDefaultHeaders(headers http.Header) ClientOption {
 // overriding file-defined variables, environment variables, and .env variables.
 // If called multiple times, the provided vars are merged with existing ones,
 // with new values for existing keys overwriting old ones.
-func WithVars(vars map[string]interface{}) ClientOption {
+func WithVars(vars map[string]any) ClientOption {
 	return func(c *Client) error {
 		if c.programmaticVars == nil {
-			c.programmaticVars = make(map[string]interface{})
+			c.programmaticVars = make(map[string]any)
 		}
 		for k, v := range vars {
 			c.programmaticVars[k] = v
@@ -145,11 +146,13 @@ func WithEnvironment(name string) ClientOption {
 //   - Re-generates request-scoped system variables (e.g., `{{$uuid}}`) *once per individual request* to ensure
 //     uniqueness if needed across multiple requests in the same file, but consistency within a single request.
 //   - For each part of the request (URL, headers, body):
-//     a. `resolveVariablesInText` is called. For {{variableName}} placeholders (where 'variableName' does not start with '$'),
+//     a. `resolveVariablesInText` is called. For {{variableName}} placeholders
+//        (where 'variableName' does not start with '$'),
 //     the precedence is: Client programmatic vars > file-scoped `@vars` (rcRequest.ActiveVariables) >
 //     Environment vars (parsedFile.EnvironmentVariables) > Global vars (parsedFile.GlobalVariables) >
 //     OS env vars > .env vars > fallback.
-//     System variables like {{$uuid}} are resolved from the request-scoped map if the placeholder is {{$systemVarName}}.
+//     System variables like {{$uuid}} are resolved from the request-scoped map
+//     if the placeholder is {{$systemVarName}}.
 //     It resolves simple system variables like `{{$uuid}}` from the request-scoped map.
 //     It leaves dynamic system variables (e.g., `{{$dotenv NAME}}`) untouched for the next step.
 //     b. `substituteDynamicSystemVariables` is called: This handles system variables requiring arguments
@@ -180,7 +183,7 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 			}
 			// Ensure we have a response for other types of errors
 			if response == nil {
-				response = &Response{Request: restClientReq, Error: fmt.Errorf("request processing failed")}
+				response = &Response{Request: restClientReq, Error: errors.New("request processing failed")}
 			}
 		}
 		// Handle error wrapping for logging
@@ -189,7 +192,9 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 			if restClientReq.URL != nil {
 				urlForError = restClientReq.URL.String()
 			}
-			wrappedErr := fmt.Errorf("request %d (%s %s) processing resulted in error: %w", i+1, restClientReq.Method, urlForError, response.Error)
+			wrappedErr := fmt.Errorf(
+				"request %d (%s %s) processing resulted in error: %w",
+				i+1, restClientReq.Method, urlForError, response.Error)
 			multiErr = multierror.Append(multiErr, wrappedErr)
 		}
 		if response != nil {
@@ -202,12 +207,13 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 
 // End of function resolveVariablesInText
 
-// substituteDynamicSystemVariables handles system variables that require argument parsing or dynamic evaluation at substitution time.
+// substituteDynamicSystemVariables handles system variables that require argument
+// parsing or dynamic evaluation at substitution time.
 
 // generateRequestScopedSystemVariables creates a map of system variables that are generated once per request.
 // This ensures that if, for example, {{$uuid}} is used multiple times within the same request
 // (e.g., in the URL and a header), it resolves to the same value for that specific request.
-func (c *Client) generateRequestScopedSystemVariables() map[string]string {
+func (*Client) generateRequestScopedSystemVariables() map[string]string {
 	vars := make(map[string]string)
 	vars["$uuid"] = uuid.NewString()
 	vars["$guid"] = vars["$uuid"]        // Alias $guid to $uuid
@@ -222,7 +228,8 @@ func (c *Client) generateRequestScopedSystemVariables() map[string]string {
 
 // _resolveRequestURL resolves the final request URL based on the client's BaseURL and the request's URL.
 // It returns the resolved URL or an error if the BaseURL is invalid or requestURL is nil.
-// _resolveRequestURL resolves the final request URL based on the client's BaseURL, the request's initial URL (if parsed),
+// _resolveRequestURL resolves the final request URL based on the client's BaseURL,
+// the request's initial URL (if parsed),
 // and the request's RawURLString (if initial URL parsing was deferred).
 // It returns the resolved URL or an error.
 func (c *Client) _resolveRequestURL(baseURLStr string, initialRequestURL *url.URL, rawRequestURLStr string) (*url.URL, error) {
@@ -236,12 +243,14 @@ func (c *Client) _resolveRequestURL(baseURLStr string, initialRequestURL *url.UR
 		// try to parse the rawRequestURLStr. This string should have had variables expanded by now.
 		parsedRawURL, err := url.Parse(rawRequestURLStr)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse rawRequestURLString '%s' after variable expansion: %w", rawRequestURLStr, err)
+			return nil, fmt.Errorf(
+			"failed to parse rawRequestURLString '%s' after variable expansion: %w",
+			rawRequestURLStr, err)
 		}
 		currentRequestURL = parsedRawURL
 	} else {
 		// Both initialRequestURL is nil and rawRequestURLStr is empty. This is an error.
-		return nil, fmt.Errorf("request URL is unexpectedly nil and rawRequestURLString is empty")
+		return nil, errors.New("request URL is unexpectedly nil and rawRequestURLString is empty")
 	}
 
 	// Sanitize the currentRequestURL (which could be from initialRequestURL or parsed rawRequestURLStr)
@@ -289,12 +298,13 @@ func (c *Client) _resolveRequestURL(baseURLStr string, initialRequestURL *url.UR
 
 // executeRequest sends a given Request and returns the Response.
 // Errors during execution (e.g. network, body read) are captured in Response.Error.
-// A non-nil error is returned by this function only for critical pre-execution failures (e.g. nil request, bad BaseURL).
+// A non-nil error is returned by this function only for critical pre-execution
+// failures (e.g. nil request, bad BaseURL).
 func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Response, error) {
 	if rcRequest == nil {
 		slog.Error("executeRequest: called with nil rcRequest", "rcRequest_addr", fmt.Sprintf("%p", rcRequest))
 		// For a nil request, we can't even populate a Response struct meaningfully.
-		return nil, fmt.Errorf("cannot execute a nil request")
+		return nil, errors.New("cannot execute a nil request")
 	}
 
 	// Initialize a response object upfront to hold results or errors
@@ -325,8 +335,10 @@ func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Respo
 		rcRequest.URL = substitutedAndParsedURL
 	}
 
-	// Resolve the request URL. If rcRequest.URL is already parsed (e.g., from the substitution step above or programmatic setup),
-	// _resolveRequestURL will use it. Otherwise, it might re-parse RawURLString if URL is still nil (though less likely now)
+	// Resolve the request URL. If rcRequest.URL is already parsed
+	// (e.g., from the substitution step above or programmatic setup),
+	// _resolveRequestURL will use it. Otherwise, it might re-parse RawURLString
+	// if URL is still nil (though less likely now)
 	// or primarily handle BaseURL resolution against the now-populated rcRequest.URL.
 	var err error
 	rcRequest.URL, err = c._resolveRequestURL(c.BaseURL, rcRequest.URL, rcRequest.RawURLString)
@@ -379,7 +391,8 @@ func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Respo
 	// Handle HTTP client errors (e.g., network issues, DNS resolution failures) from the .Do() call
 	if doErr != nil {
 		clientResponse.Error = fmt.Errorf("failed to execute HTTP request: %w", doErr)
-		// No body to read if httpResp is nil, but capture details like status if httpResp is partially populated (e.g. timeout before body)
+		// No body to read if httpResp is nil, but capture details like status
+		// if httpResp is partially populated (e.g. timeout before body)
 		if httpResp != nil {
 			// Attempt to populate details even if there was an error during .Do()
 			// For example, a timeout might occur after headers are received but before body is fully read.
@@ -406,7 +419,7 @@ func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Respo
 }
 
 // _populateResponseDetails copies relevant information from an *http.Response and body to our *Response.
-func (c *Client) _populateResponseDetails(resp *Response, httpResp *http.Response, bodyBytes []byte, bodyReadErr error) {
+func (*Client) _populateResponseDetails(resp *Response, httpResp *http.Response, bodyBytes []byte, bodyReadErr error) {
 	if httpResp == nil {
 		return
 	}
@@ -423,7 +436,8 @@ func (c *Client) _populateResponseDetails(resp *Response, httpResp *http.Respons
 	} else {
 		resp.Body = bodyBytes
 		resp.BodyString = string(bodyBytes)
-		if resp.Size == -1 || (resp.Size == 0 && len(bodyBytes) > 0) { // Update size if not set or if chunked and body was read
+		// Update size if not set or if chunked and body was read
+	if resp.Size == -1 || (resp.Size == 0 && len(bodyBytes) > 0) {
 			resp.Size = int64(len(bodyBytes))
 		}
 	}
@@ -518,7 +532,7 @@ func (c *Client) readFileWithEncoding(filePath, encodingName string) (string, er
 }
 
 // getEncodingDecoder returns the appropriate decoder for the given encoding name
-func (c *Client) getEncodingDecoder(encodingName string) (*encoding.Decoder, error) {
+func (*Client) getEncodingDecoder(encodingName string) (*encoding.Decoder, error) {
 	encodingName = strings.ToLower(encodingName)
 
 	switch encodingName {
@@ -559,19 +573,29 @@ func (c *Client) loadDotEnvVars(requestFilePath string) {
 }
 
 // executeRequestWithVariables handles variable substitution and execution for a single request
-func (c *Client) executeRequestWithVariables(ctx context.Context, restClientReq *Request, parsedFile *ParsedFile, osEnvGetter func(string) (string, bool), index int) (*Response, error) {
+func (c *Client) executeRequestWithVariables(
+	ctx context.Context,
+	restClientReq *Request,
+	parsedFile *ParsedFile,
+	osEnvGetter func(string) (string, bool),
+	index int,
+) (*Response, error) {
 	requestScopedSystemVars := c.generateRequestScopedSystemVariables()
 
 	// Substitute variables for URL and Headers
 	err := c.substituteRequestURLAndHeaders(restClientReq, parsedFile, requestScopedSystemVars, osEnvGetter)
 	if err != nil {
-		return &Response{Request: restClientReq, Error: err}, fmt.Errorf("variable substitution failed for request %s (index %d): %w", restClientReq.Name, index, err)
+		return &Response{Request: restClientReq, Error: err}, fmt.Errorf(
+			"variable substitution failed for request %s (index %d): %w",
+			restClientReq.Name, index, err)
 	}
 
 	// Substitute variables for Body
 	err = c.substituteRequestBody(restClientReq, parsedFile, requestScopedSystemVars, osEnvGetter)
 	if err != nil {
-		return &Response{Request: restClientReq, Error: err}, fmt.Errorf("error processing body for request %s (index %d): %w", restClientReq.Name, index, err)
+		return &Response{Request: restClientReq, Error: err}, fmt.Errorf(
+			"error processing body for request %s (index %d): %w",
+			restClientReq.Name, index, err)
 	}
 
 	// Execute the HTTP request
@@ -583,7 +607,12 @@ func (c *Client) executeRequestWithVariables(ctx context.Context, restClientReq 
 }
 
 // substituteRequestURLAndHeaders handles URL and header variable substitution
-func (c *Client) substituteRequestURLAndHeaders(restClientReq *Request, parsedFile *ParsedFile, requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool)) error {
+func (c *Client) substituteRequestURLAndHeaders(
+	restClientReq *Request,
+	parsedFile *ParsedFile,
+	requestScopedSystemVars map[string]string,
+	osEnvGetter func(string) (string, bool),
+) error {
 
 	finalParsedURL, subsErr := substituteRequestVariables(
 		restClientReq,
@@ -602,7 +631,12 @@ func (c *Client) substituteRequestURLAndHeaders(restClientReq *Request, parsedFi
 }
 
 // substituteRequestBody handles body variable substitution including external files
-func (c *Client) substituteRequestBody(restClientReq *Request, parsedFile *ParsedFile, requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool)) error {
+func (c *Client) substituteRequestBody(
+	restClientReq *Request,
+	parsedFile *ParsedFile,
+	requestScopedSystemVars map[string]string,
+	osEnvGetter func(string) (string, bool),
+) error {
 	var finalSubstitutedBody string
 	var bodyErr error
 

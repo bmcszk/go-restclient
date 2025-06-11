@@ -24,7 +24,7 @@ type cookieJarTestCase struct {
 
 // runCookieJarSubtest executes a subtest for cookie jar handling scenarios.
 // It uses a pointer to cookieCheck because the HTTP handler modifies this global variable.
-func runCookieJarSubtest(t *testing.T, tc cookieJarTestCase, serverVars map[string]interface{}, cookieCheck *bool) {
+func runCookieJarSubtest(t *testing.T, tc cookieJarTestCase, serverVars map[string]any, cookieCheck *bool) {
 	t.Helper()
 
 	*cookieCheck = false // Reset for each subtest
@@ -119,7 +119,7 @@ func TestCookieJarHandling(t *testing.T) {
 
 	parsedURL, err := url.Parse(testServer.URL)
 	require.NoError(t, err, "Failed to parse testServer.URL")
-	serverVars := map[string]interface{}{
+	serverVars := map[string]any{
 		"scheme": parsedURL.Scheme,
 		"host":   parsedURL.Hostname(),
 		"port":   parsedURL.Port(),
@@ -189,7 +189,7 @@ func TestRedirectHandling(t *testing.T) {
 	// Parse testServer.URL to get scheme, host, and port
 	parsedURL, err := url.Parse(testServer.URL)
 	require.NoError(t, err, "Failed to parse testServer.URL")
-	serverVars := map[string]interface{}{
+	serverVars := map[string]any{
 		"scheme": parsedURL.Scheme,
 		"host":   parsedURL.Hostname(),
 		"port":   parsedURL.Port(),

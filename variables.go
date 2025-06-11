@@ -29,7 +29,8 @@ var (
 	reRandomPassword        = regexp.MustCompile(`{{\$randomPassword(?:\s+(\d+))?}}`)
 	reDotEnv                = regexp.MustCompile(`{{\s*\$dotenv\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*}}`)
 	reProcessEnv            = regexp.MustCompile(`{{\s*\$processEnv\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*}}`)
-	reDateTime              = regexp.MustCompile(`{{\s*\$datetime(?:\s+("([^"]+)"|[^}\s]+))?(?:\s+("([^"]+)"|[^}\s]+))?\s*}}`)
+	reDateTime = regexp.MustCompile(
+		`{{\s*\$datetime(?:\s+("([^"]+)"|[^}\s]+))?(?:\s+("([^"]+)"|[^}\s]+))?\s*}}`)
 	reAadToken              = regexp.MustCompile(`{{\s*\$aadToken(?:\s+("([^"]+)"|[^}\s]+))*\s*}}`)
 )
 
@@ -45,15 +46,18 @@ const (
 	charsetAlphabetic            = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	charsetAlphaNumeric          = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	charsetAlphaNumericWithExtra = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
-	charsetFull                  = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{};':\",./<>?"
+	charsetFull = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" +
+		"0123456789!@#$%^&*()_+-=[]{};':\",./<>?"
 )
 
 // Word list for $randomWord
 var randomWords = []string{"apple", "banana", "cherry", "date", "elderberry", "fig", "grape"}
 
-// resolveVariablesInText is the primary substitution engine for non-system variables and request-scoped system variables.
+// resolveVariablesInText is the primary substitution engine for non-system
+// variables and request-scoped system variables.
 // It iterates through placeholders like `{{varName | fallback}}` and resolves them based on a defined precedence.
-// Dynamic system variables (like {{$dotenv NAME}}) are left untouched by this function for substituteDynamicSystemVariables.
+// Dynamic system variables (like {{$dotenv NAME}}) are left untouched by this
+// function for substituteDynamicSystemVariables.
 //
 // Precedence for {{variableName}} placeholders (where 'variableName' does not start with '$'):
 // 1. Client programmatic variables (clientProgrammaticVars)
@@ -63,8 +67,18 @@ var randomWords = []string{"apple", "banana", "cherry", "date", "elderberry", "f
 // 5. OS Environment variables (via osEnvGetter)
 // 6. Variables from .env file (dotEnvVars)
 // 7. Fallback value provided in the placeholder itself.
-// System variables (e.g., {{$uuid}}, {{$timestamp}}) are handled if the placeholder is like {{$systemVarName}} (i.e. varName starts with '$').
-func resolveVariablesInText(text string, clientProgrammaticVars map[string]interface{}, fileScopedVars map[string]string, environmentVars map[string]string, globalVars map[string]string, requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool), dotEnvVars map[string]string) string {
+// System variables (e.g., {{$uuid}}, {{$timestamp}}) are handled if the
+// placeholder is like {{$systemVarName}} (i.e. varName starts with '$').
+func resolveVariablesInText(
+	text string,
+	clientProgrammaticVars map[string]any,
+	fileScopedVars map[string]string,
+	environmentVars map[string]string,
+	globalVars map[string]string,
+	requestScopedSystemVars map[string]string,
+	osEnvGetter func(string) (string, bool),
+	dotEnvVars map[string]string,
+) string {
 	const maxIterations = 10 // Safety break for circular dependencies
 	currentText := text
 
@@ -92,10 +106,15 @@ func resolveVariablesInText(text string, clientProgrammaticVars map[string]inter
 			// These are simple, pre-generated variables like $uuid, $timestamp, $randomInt (no-args).
 			if strings.HasPrefix(varName, "$") {
 				if val, ok := requestScopedSystemVars[varName]; ok {
-					slog.Debug("resolveVariablesInText: Found system var in requestScopedSystemVars", "varName", varName, "value", val)
+					slog.Debug(
+					"resolveVariablesInText: Found system var in requestScopedSystemVars",
+					"varName", varName, "value", val)
 					return val
 				}
-				slog.Debug("resolveVariablesInText: System var not in requestScopedSystemVars, returning original match for later dynamic processing", "varName", varName, "match", match)
+				slog.Debug(
+				"resolveVariablesInText: System var not in requestScopedSystemVars, "+
+					"returning original match for later dynamic processing",
+				"varName", varName, "match", match)
 				return match // Preserve for substituteDynamicSystemVariables if it's like {{$dotenv NAME}}
 			}
 
@@ -103,9 +122,13 @@ func resolveVariablesInText(text string, clientProgrammaticVars map[string]inter
 
 			// 1. Client programmatic variables (clientProgrammaticVars)
 			if clientProgrammaticVars != nil {
-				slog.Debug("resolveVariablesInText: Checking clientProgrammaticVars", "varName", varName, "found", clientProgrammaticVars[varName] != nil)
+				slog.Debug(
+				"resolveVariablesInText: Checking clientProgrammaticVars",
+				"varName", varName, "found", clientProgrammaticVars[varName] != nil)
 				if val, ok := clientProgrammaticVars[varName]; ok {
-					slog.Debug("resolveVariablesInText: Found in clientProgrammaticVars", "varName", varName, "value", val)
+					slog.Debug(
+					"resolveVariablesInText: Found in clientProgrammaticVars",
+					"varName", varName, "value", val)
 					return fmt.Sprintf("%v", val)
 				}
 			}
@@ -268,7 +291,7 @@ func randomStringFromCharset(length int, charset string) string {
 
 // substituteRequestVariables handles the substitution of variables in the request's URL and headers.
 // It returns the final parsed URL or an error if substitution/parsing fails.
-func substituteRequestVariables(rcRequest *Request, parsedFile *ParsedFile, requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool), programmaticVars map[string]interface{}, currentDotEnvVars map[string]string, clientBaseURL string) (*url.URL, error) {
+func substituteRequestVariables(rcRequest *Request, parsedFile *ParsedFile, requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool), programmaticVars map[string]any, currentDotEnvVars map[string]string, clientBaseURL string) (*url.URL, error) {
 
 	var fileScopedVars map[string]string // Declare fileScopedVars at function scope
 	var envVarsFromFile map[string]string
@@ -526,7 +549,7 @@ func _substituteDateTimeVariables(text string) string {
 // Other simple system variables like {{$uuid}} or {{$timestamp}}
 // should have been pre-resolved and substituted by resolveVariablesInText via the
 // requestScopedSystemVars map.
-func substituteDynamicSystemVariables(text string, activeDotEnvVars map[string]string, programmaticVars map[string]interface{}) string {
+func substituteDynamicSystemVariables(text string, activeDotEnvVars map[string]string, programmaticVars map[string]any) string {
 	// "[DEBUG_DYN_VARS_INPUT]", "inputText", text)
 	originalTextForLogging := text // Keep a copy for logging. Used if we add more complex types with logging.
 	_ = originalTextForLogging     // Avoid unused variable error if no logging exists below.
@@ -611,7 +634,7 @@ func substituteDynamicSystemVariables(text string, activeDotEnvVars map[string]s
 }
 
 // substituteRandomVariables handles the substitution of $random.* variables.
-func substituteRandomVariables(text string, programmaticVars map[string]interface{}) string {
+func substituteRandomVariables(text string, programmaticVars map[string]any) string {
 	// Integer types
 	text = reRandomInt.ReplaceAllStringFunc(text, _substituteRandomIntFunc(reRandomInt, defaultRandomMinInt, defaultRandomMaxInt))
 	text = reRandomDotInteger.ReplaceAllStringFunc(text, _substituteRandomIntFunc(reRandomDotInteger, defaultRandomMinInt, defaultRandomMaxInt))
@@ -682,7 +705,7 @@ func substituteRandomVariables(text string, programmaticVars map[string]interfac
 
 // _substituteRandomPasswordFunc handles the substitution of $randomPassword.* variables.
 // It now accepts programmaticVars to allow charset overrides.
-func _substituteRandomPasswordFunc(match string, programmaticVars map[string]interface{}) string {
+func _substituteRandomPasswordFunc(match string, programmaticVars map[string]any) string {
 	parts := reRandomPassword.FindStringSubmatch(match) // Use the global regex
 	length := defaultRandomPasswordLength
 	if len(parts) >= 2 && parts[1] != "" { // parts[0] is full match, parts[1] is optional length

@@ -62,16 +62,21 @@ func extractHrespDefines(hrespContent string) (map[string]string, string, error)
 // It replaces placeholders in the format `{{variableName}}` or `{{variableName | fallbackValue}}`.
 //
 // The order of precedence for variable resolution is:
-//  1. Request-scoped System Variables (e.g. `{{$uuid}}`, `{{$timestamp}}`, if the placeholder is a direct system variable like `{{$uuid}}`).
+//  1. Request-scoped System Variables (e.g. `{{$uuid}}`, `{{$timestamp}}`,
+//     if the placeholder is a direct system variable like `{{$uuid}}`).
 //     These are generated once per call by `client.generateRequestScopedSystemVariables()` if a `client` is provided.
-//  2. Client Programmatic variables (from `client.programmaticVars`, map[string]interface{})
+//  2. Client Programmatic variables (from `client.programmaticVars`, map[string]any)
 //  3. `fileVars` (variables defined with `@name=value` in the .hresp file itself, map[string]string)
 //  4. OS Environment variables (looked up by `variableName`)
 //  5. `fallbackValue` (if provided in the placeholder like `{{variableName | fallbackValue}}`)
 //
-// After the above substitutions, a final pass is made using `client.substituteDynamicSystemVariables` if a `client` is provided.
-// This second pass handles system variables that require argument parsing from their placeholder (e.g., `{{$dotenv VAR}}`, `{{$randomInt MIN MAX}}`),
-// and also resolves simple system variables (like `{{$uuid}}`) that might have been exposed if a fallback value itself was a system variable placeholder (e.g., `{{undefined | {{$uuid}}}}`).
+// After the above substitutions, a final pass is made using
+// `client.substituteDynamicSystemVariables` if a `client` is provided.
+// This second pass handles system variables that require argument parsing
+// from their placeholder (e.g., `{{$dotenv VAR}}`, `{{$randomInt MIN MAX}}`),
+// and also resolves simple system variables (like `{{$uuid}}`) that might have been
+// exposed if a fallback value itself was a system variable placeholder
+// (e.g., `{{undefined | {{$uuid}}}}`).
 //
 // If a variable is not found in any source and no fallback is specified, the placeholder remains unchanged.
 // The `client` parameter is optional; if nil, client-side programmatic variable substitution and all system
@@ -116,7 +121,7 @@ func resolveAndSubstitute(content string, fileVars map[string]string, client *Cl
 			varName = directive
 		}
 
-		// 1. Check Client Programmatic Variables (map[string]interface{})
+		// 1. Check Client Programmatic Variables (map[string]any)
 		if client != nil && client.programmaticVars != nil {
 			if val, ok := client.programmaticVars[varName]; ok {
 				return fmt.Sprintf("%v", val)
@@ -162,7 +167,8 @@ func resolveAndSubstitute(content string, fileVars map[string]string, client *Cl
 
 	// Final pass for dynamic system variables (e.g., {{$dotenv VAR}}) or any system vars exposed by fallbacks.
 	if client != nil {
-		resolvedContent = substituteDynamicSystemVariables(resolvedContent, client.currentDotEnvVars, client.programmaticVars)
+		resolvedContent = substituteDynamicSystemVariables(
+			resolvedContent, client.currentDotEnvVars, client.programmaticVars)
 	}
 
 	return resolvedContent
