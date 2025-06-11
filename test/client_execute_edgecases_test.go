@@ -117,7 +117,8 @@ func runExecuteFileSubtest(t *testing.T, client *rc.Client, serverURL string, tc
 			assert.Contains(t, execErr.Error(), sub, "Error message for test '%s' should contain '%s'", tc.name, sub)
 		}
 	} else {
-		assertSuccessfulExecutionAndValidateResponses(t, tc.name, execErr, responses, tc.expectedResponses, tc.responseValidators)
+		assertSuccessfulExecutionAndValidateResponses(
+			t, tc.name, execErr, responses, tc.expectedResponses, tc.responseValidators)
 	}
 }
 
@@ -151,12 +152,17 @@ func setupIgnoreEmptyBlocksMockServer(t *testing.T) *httptest.Server {
 	})
 }
 
-// PRD-COMMENT: FR2.4 - Parser: Request Separators and Comments / FR11.2 - Client Execution: Handling of Non-Request Content
-// Corresponds to: Client and parser behavior regarding non-executable content within .http files, such as comments, empty blocks between request separators ('###'), and files containing only variable definitions (http_syntax.md "Request Separation", "Comments", "Variables").
+// PRD-COMMENT: FR2.4 - Parser: Request Separators and Comments /
+// FR11.2 - Client Execution: Handling of Non-Request Content
+// Corresponds to: Client and parser behavior regarding non-executable content within .http files,
+// such as comments, empty blocks between request separators ('###'), and files containing only
+// variable definitions (http_syntax.md "Request Separation", "Comments", "Variables").
 // This test suite verifies various scenarios:
 // 1. Requests correctly parsed and executed when separated by comments or empty lines around separators.
-// 2. Correct error handling (e.g., 'no requests found') for files that only contain variable definitions or are otherwise empty of executable requests.
-// It uses test case templates from 'testdata/execute_file_ignore_empty_blocks/' (e.g., 'scenario_004_template.http', 'only_vars.http') to dynamically create test files.
+// 2. Correct error handling (e.g., 'no requests found') for files that only contain variable
+// definitions or are otherwise empty of executable requests.
+// It uses test case templates from 'testdata/execute_file_ignore_empty_blocks/'
+// (e.g., 'scenario_004_template.http', 'only_vars.http') to dynamically create test files.
 func TestExecuteFile_IgnoreEmptyBlocks_Client(t *testing.T) {
 	// Given common setup for all subtests
 	server := setupIgnoreEmptyBlocksMockServer(t)
@@ -197,7 +203,8 @@ func TestExecuteFile_IgnoreEmptyBlocks_Client(t *testing.T) {
 			},
 		},
 		{
-			name:                "SCENARIO-LIB-028-006: Valid request, separator with comments, then another valid request",
+			name: "SCENARIO-LIB-028-006: Valid request, separator with comments, " +
+				"then another valid request",
 			requestFileBasePath: filepath.Join(testDataDir, "scenario_006_template.http"),
 			needsServerURLCount: 2,
 			expectedResponses:   2,

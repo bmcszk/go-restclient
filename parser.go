@@ -23,6 +23,17 @@ const (
 	slashCommentPrefix = "//"
 )
 
+// RequestLineResult represents the result of parsing a request line
+type RequestLineResult int
+
+const (
+	// RequestLineContinues indicates the request line was processed normally
+	RequestLineContinues RequestLineResult = iota
+	// RequestLineFinalizedBySeparator indicates the request was finalized due to a same-line separator
+	RequestLineFinalizedBySeparator
+)
+
+
 // requestParserState holds the state during the parsing of a request file.
 type requestParserState struct {
 	// Stores the name for the *next* request, captured from '### name' or 'METHOD URL ### name'
@@ -588,15 +599,15 @@ func (p *requestParserState) handleRequestSeparator(trimmedLine string) error {
 func (p *requestParserState) processActualRequestLine(trimmedLine string) error {
 	p.ensureCurrentRequest()
 
-	finalizedBySeparatorInLine := p.parseRequestLineDetails(trimmedLine)
-	p.applyStoredRequestName(finalizedBySeparatorInLine)
+	result := p.parseRequestLineDetails(trimmedLine)
+	p.applyStoredRequestName(result)
 
 	return nil
 }
 
 // applyStoredRequestName applies stored request name if conditions are met
-func (p *requestParserState) applyStoredRequestName(finalizedBySeparatorInLine bool) {
-	if !finalizedBySeparatorInLine && p.currentRequest != nil &&
+func (p *requestParserState) applyStoredRequestName(result RequestLineResult) {
+	if result == RequestLineContinues && p.currentRequest != nil &&
 		p.currentRequest.Method != "" && p.nextRequestName != "" {
 		if p.currentRequest.Name == "" {
 			p.currentRequest.Name = p.nextRequestName
@@ -864,85 +875,95 @@ func (p *requestParserState) processSameLineSeparator(requestLine string) (proce
 // and prepares for a new one.
 // It returns true if the request was finalized due to a same-line separator, otherwise false.
 // originalLine is used for logging/error context.
-func (p *requestParserState) parseRequestLineDetails(originalRequestLine string) (finalizedBySeparator bool) {
+func (p *requestParserState) parseRequestLineDetails(originalRequestLine string) RequestLineResult {
 	requestLine, finalizedBySeparator := p.processSameLineSeparator(originalRequestLine)
 
 	parts := strings.Fields(requestLine)
+	var result RequestLineResult
+	if finalizedBySeparator {
+		result = RequestLineFinalizedBySeparator
+	} else {
+		result = RequestLineContinues
+	}
+	
 	if len(parts) == 0 {
-		return p.handleEmptyRequestLine(finalizedBySeparator, originalRequestLine)
+		return p.handleEmptyRequestLine(result, originalRequestLine)
 	}
 
 	methodCandidate := parts[0]
 	if !isValidHTTPToken(methodCandidate) {
-		return p.handleNonMethodLine(requestLine, methodCandidate, finalizedBySeparator)
+		return p.handleNonMethodLine(requestLine, methodCandidate, result)
 	}
 
-	return p.handleValidMethodLine(parts, methodCandidate, finalizedBySeparator)
+	return p.handleValidMethodLine(parts, methodCandidate, result)
 }
 
 // handleEmptyRequestLine handles empty request lines
-func (p *requestParserState) handleEmptyRequestLine(finalizedBySeparator bool, originalRequestLine string) bool {
-	if finalizedBySeparator {
+func (p *requestParserState) handleEmptyRequestLine(
+	result RequestLineResult, originalRequestLine string) RequestLineResult {
+	if result == RequestLineFinalizedBySeparator {
 		if p.currentRequest != nil && (p.currentRequest.Method != "" || p.currentRequest.RawURLString != "") {
 			p.finalizeCurrentRequest()
 		}
 		p.ensureCurrentRequest()
-		return true
+		return RequestLineFinalizedBySeparator
 	}
 	slog.Warn(
 		"parseRequestLineDetails: Empty request line after processing potential separator",
 		"originalRequestLine", originalRequestLine, "line", p.lineNumber,
 		"requestPtr", fmt.Sprintf("%p", p.currentRequest))
-	return false
+	return RequestLineContinues
 }
 
 // handleNonMethodLine handles lines that don't start with a valid HTTP method
-func (p *requestParserState) handleNonMethodLine(requestLine, methodCandidate string, finalizedBySeparator bool) bool {
+func (p *requestParserState) handleNonMethodLine(
+	requestLine, methodCandidate string, result RequestLineResult) RequestLineResult {
 	p.handleNonMethodRequestLine(requestLine, methodCandidate)
 
-	if finalizedBySeparator {
+	if result == RequestLineFinalizedBySeparator {
 		if p.currentRequest != nil && (p.currentRequest.Method != "" || p.currentRequest.RawURLString != "") {
 			p.finalizeCurrentRequest()
 		}
 		p.ensureCurrentRequest()
-		return true
+		return RequestLineFinalizedBySeparator
 	}
-	return false
+	return RequestLineContinues
 }
 
 // handleValidMethodLine handles lines that start with a valid HTTP method
 func (p *requestParserState) handleValidMethodLine(parts []string, methodCandidate string, 
-	finalizedBySeparator bool) bool {
+	result RequestLineResult) RequestLineResult {
 	p.currentRequest.Method = methodCandidate
 
 	if len(parts) < 2 {
-		return p.handleIncompleteMethodLine(methodCandidate, finalizedBySeparator)
+		return p.handleIncompleteMethodLine(methodCandidate, result)
 	}
 
 	p.parseURLAndVersion(parts)
 
-	if finalizedBySeparator {
+	if result == RequestLineFinalizedBySeparator {
 		p.finalizeCurrentRequest()
 		p.ensureCurrentRequest()
-		return true
+		return RequestLineFinalizedBySeparator
 	}
 
-	return false
+	return RequestLineContinues
 }
 
 // handleIncompleteMethodLine handles method lines without URL parts
-func (p *requestParserState) handleIncompleteMethodLine(methodCandidate string, finalizedBySeparator bool) bool {
+func (p *requestParserState) handleIncompleteMethodLine(
+	methodCandidate string, result RequestLineResult) RequestLineResult {
 	slog.Warn(
 		"parseRequestLineDetails: Method found, but no URL part.",
 		"method", methodCandidate, "line", p.lineNumber,
 		"requestPtr", fmt.Sprintf("%p", p.currentRequest))
 
-	if finalizedBySeparator {
+	if result == RequestLineFinalizedBySeparator {
 		p.finalizeCurrentRequest()
 		p.ensureCurrentRequest()
-		return true
+		return RequestLineFinalizedBySeparator
 	}
-	return false
+	return RequestLineContinues
 }
 
 // parseURLAndVersion parses URL and HTTP version from request line parts

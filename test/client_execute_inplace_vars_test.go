@@ -17,8 +17,12 @@ import (
 )
 
 // PRD-COMMENT: FR3.1, FR3.2 - In-Place Variables: Simple Definition and URL Substitution
-// Corresponds to: Client's ability to define and use simple in-place variables (e.g., '@hostname = value', '@path_segment = /path') within an .http file and substitute them into the request URL (http_syntax.md "In-place Variables", "Variable Substitution").
-// This test uses 'testdata/execute_inplace_vars/simple_variable_in_url/request.http' to verify that variables like '@hostname' and '@path_segment' are correctly resolved and used to construct the final request URL.
+// Corresponds to: Client's ability to define and use simple in-place variables
+// (e.g., '@hostname = value', '@path_segment = /path') within an .http file and substitute them
+// into the request URL (http_syntax.md "In-place Variables", "Variable Substitution").
+// This test uses 'testdata/execute_inplace_vars/simple_variable_in_url/request.http' to verify
+// that variables like '@hostname' and '@path_segment' are correctly resolved and used to
+// construct the final request URL.
 func TestExecuteFile_InPlace_SimpleVariableInURL(t *testing.T) {
 	// Given
 	var capturedPath string
@@ -73,8 +77,10 @@ func TestExecuteFile_InPlace_SimpleVariableInURL(t *testing.T) {
 }
 
 // PRD-COMMENT: FR3.1, FR3.3 - In-Place Variables: Header Substitution
-// Corresponds to: Client's ability to define in-place variables (e.g., '@api_key = mysecret') and substitute them into request headers (http_syntax.md "In-place Variables", "Variable Substitution").
-// This test uses 'testdata/execute_inplace_vars/variable_in_header/request.http' to verify that a variable like '@auth_token' is correctly resolved and inserted into the 'Authorization' header.
+// Corresponds to: Client's ability to define in-place variables (e.g., '@api_key = mysecret')
+// and substitute them into request headers (http_syntax.md "In-place Variables", "Variable Substitution").
+// This test uses 'testdata/execute_inplace_vars/variable_in_header/request.http' to verify that
+// a variable like '@auth_token' is correctly resolved and inserted into the 'Authorization' header.
 func TestExecuteFile_InPlace_VariableInHeader(t *testing.T) {
 	// Given
 	var capturedHeaders http.Header
@@ -126,12 +132,15 @@ func TestExecuteFile_InPlace_VariableInHeader(t *testing.T) {
 	// Verify ParsedFile.FileVariables
 	// parseRequestFile call removed. Assertions on internal FileVariables will be removed.
 	// require.NotNil(t, parsedFile.FileVariables) removed (testing unexported behavior).
-	// Programmatic variables are NOT stored in ParsedFile.FileVariables if not file-scoped (i.e. no '@' prefix in .http file)
+	// Programmatic variables are NOT stored in ParsedFile.FileVariables if not file-scoped
+	// (i.e. no '@' prefix in .http file)
 }
 
 // PRD-COMMENT: FR3.1, FR3.4 - In-Place Variables: Body Substitution
-// Corresponds to: Client's ability to define in-place variables (e.g., '@user_id = 123') and substitute them into the request body (http_syntax.md "In-place Variables", "Variable Substitution").
-// This test uses 'testdata/execute_inplace_vars/variable_in_body/request.http' to verify that variables like '@item_name' and '@item_price' are correctly resolved and inserted into the JSON request body.
+// Corresponds to: Client's ability to define in-place variables (e.g., '@user_id = 123')
+// and substitute them into the request body (http_syntax.md "In-place Variables", "Variable Substitution").
+// This test uses 'testdata/execute_inplace_vars/variable_in_body/request.http' to verify that
+// variables like '@item_name' and '@item_price' are correctly resolved and inserted into the JSON request body.
 func TestExecuteFile_InPlace_VariableInBody(t *testing.T) {
 	// Given
 	var capturedBody []byte
@@ -185,12 +194,16 @@ func TestExecuteFile_InPlace_VariableInBody(t *testing.T) {
 	// Verify ParsedFile.FileVariables
 	// parseRequestFile call removed. Assertions on internal FileVariables will be removed.
 	// require.NotNil(t, parsedFile.FileVariables) removed (testing unexported behavior).
-	// Programmatic variables are NOT stored in ParsedFile.FileVariables if not file-scoped (i.e. no '@' prefix in .http file)
+	// Programmatic variables are NOT stored in ParsedFile.FileVariables if not file-scoped
+	// (i.e. no '@' prefix in .http file)
 }
 
 // PRD-COMMENT: FR3.1, FR3.5 - In-Place Variables: Referencing Other In-Place Variables
-// Corresponds to: Client's ability to define an in-place variable using the value of another in-place variable (e.g., '@base_url = http://server', '@full_url = {{base_url}}/path') (http_syntax.md "In-place Variables", "Variable Substitution").
-// This test uses 'testdata/execute_inplace_vars/variable_defined_by_another_variable/request.http' to verify that '@full_url' correctly resolves by substituting '@base_url'.
+// Corresponds to: Client's ability to define an in-place variable using the value of another
+// in-place variable (e.g., '@base_url = http://server', '@full_url = {{base_url}}/path')
+// (http_syntax.md "In-place Variables", "Variable Substitution").
+// This test uses 'testdata/execute_inplace_vars/variable_defined_by_another_variable/request.http'
+// to verify that '@full_url' correctly resolves by substituting '@base_url'.
 func TestExecuteFile_InPlace_VariableDefinedByAnotherVariable(t *testing.T) {
 	// Given
 	var capturedURL string
@@ -239,14 +252,20 @@ func TestExecuteFile_InPlace_VariableDefinedByAnotherVariable(t *testing.T) {
 	// parseRequestFile call removed. Assertions on internal FileVariables will be removed.
 	// require.NotNil(t, parsedFile.FileVariables) removed (testing unexported behavior).
 	// base_url references the programmatic variable test_server_url, so it should be resolved
-	// assert.Equal(t, "{{base_url}}{{path}}/123", parsedFile.FileVariables["@full_url"], "Parsed file variable '@full_url' should be the raw placeholder")
+	// assert.Equal(t, "{{base_url}}{{path}}/123", parsedFile.FileVariables["@full_url"],
+	//     "Parsed file variable '@full_url' should be the raw placeholder")
 	// Programmatic variables are resolved during parsing
-	// assert.Equal(t, "", parsedFile.FileVariables["test_server_url"], "'test_server_url' should not be in ParsedFile.FileVariables as it is not file-scoped") // Not a file-scoped variable
+	// assert.Equal(t, "", parsedFile.FileVariables["test_server_url"],
+	//     "'test_server_url' should not be in ParsedFile.FileVariables as it is not file-scoped")
+	// Not a file-scoped variable
 }
 
 // PRD-COMMENT: FR1.5, FR3.1 - Variable Precedence: In-Place over Environment
-// Corresponds to: The rule that in-place variables defined in an .http file take precedence over environment variables with the same name (http_syntax.md "Variables", "Variable Precedence").
-// This test uses 'testdata/execute_inplace_vars/variable_precedence_over_environment/request.http', sets an OS environment variable 'ENV_VAR_PRECEDENCE', and defines an in-place variable '@ENV_VAR_PRECEDENCE' to verify that the in-place definition is used.
+// Corresponds to: The rule that in-place variables defined in an .http file take precedence
+// over environment variables with the same name (http_syntax.md "Variables", "Variable Precedence").
+// This test uses 'testdata/execute_inplace_vars/variable_precedence_over_environment/request.http',
+// sets an OS environment variable 'ENV_VAR_PRECEDENCE', and defines an in-place variable
+// '@ENV_VAR_PRECEDENCE' to verify that the in-place definition is used.
 func TestExecuteFile_InPlace_VariablePrecedenceOverEnvironment(t *testing.T) {
 	// Given: an .http file with an in-place variable and an environment variable with the same name
 	var capturedURLPath string
@@ -281,7 +300,8 @@ func TestExecuteFile_InPlace_VariablePrecedenceOverEnvironment(t *testing.T) {
 	// @host = {{test_server_url}}
 	// GET {{host}}/expected_path
 	// So, {{host}} becomes server.URL, and path becomes /expected_path
-	assert.Equal(t, "/expected_path", capturedURLPath, "The request path should match, indicating in-place var was used")
+	assert.Equal(t, "/expected_path", capturedURLPath,
+		"The request path should match, indicating in-place var was used")
 
 	// Additionally, verify that file variables were parsed correctly
 	// client.loadEnvironment is unexported, so we can't directly check the loaded environment here
@@ -292,8 +312,10 @@ func TestExecuteFile_InPlace_VariablePrecedenceOverEnvironment(t *testing.T) {
 }
 
 // PRD-COMMENT: FR3.1, FR3.3 - In-Place Variables: Custom Header Substitution
-// Corresponds to: Client's ability to use in-place variables in custom request headers (e.g., 'X-Custom-ID: {{request_id}}') (http_syntax.md "In-place Variables", "Variable Substitution").
-// This test uses 'testdata/execute_inplace_vars/variable_in_custom_header/request.http' to verify that '@request_id_value' is correctly substituted into the 'X-Request-ID' header.
+// Corresponds to: Client's ability to use in-place variables in custom request headers
+// (e.g., 'X-Custom-ID: {{request_id}}') (http_syntax.md "In-place Variables", "Variable Substitution").
+// This test uses 'testdata/execute_inplace_vars/variable_in_custom_header/request.http' to verify
+// that '@request_id_value' is correctly substituted into the 'X-Request-ID' header.
 func TestExecuteFile_InPlace_VariableInCustomHeader(t *testing.T) {
 	// Given: an .http file with an in-place variable used in a custom header
 	var capturedHeaderValue string
@@ -338,8 +360,10 @@ func TestExecuteFile_InPlace_VariableInCustomHeader(t *testing.T) {
 }
 
 // PRD-COMMENT: FR3.1, FR3.4 - In-Place Variables: Complex Body Substitution
-// Corresponds to: Client's ability to substitute multiple in-place variables into various parts of a structured request body (e.g., JSON) (http_syntax.md "In-place Variables", "Variable Substitution").
-// This test uses 'testdata/execute_inplace_vars/variable_substitution_in_body/request.http' to verify substitution of '@username' and '@product_id' into a JSON request body.
+// Corresponds to: Client's ability to substitute multiple in-place variables into various parts
+// of a structured request body (e.g., JSON) (http_syntax.md "In-place Variables", "Variable Substitution").
+// This test uses 'testdata/execute_inplace_vars/variable_substitution_in_body/request.http'
+// to verify substitution of '@username' and '@product_id' into a JSON request body.
 func TestExecuteFile_InPlace_VariableSubstitutionInBody(t *testing.T) {
 	// Given: an .http file with an in-place variable used in a JSON request body
 	var capturedBody []byte
@@ -382,7 +406,8 @@ func TestExecuteFile_InPlace_VariableSubstitutionInBody(t *testing.T) {
 	// Body assertions removed (covered by ValidateResponses).
 
 	// Assert the captured body by the server (this is the main assertion for this test)
-	assert.JSONEq(t, `{"id": "user123", "status": "active"}`, string(capturedBody), "The request body captured by the server should be correctly substituted")
+	assert.JSONEq(t, `{"id": "user123", "status": "active"}`, string(capturedBody),
+		"The request body captured by the server should be correctly substituted")
 
 	// Verify ParsedFile.FileVariables
 	// This checks how the .http file itself was parsed.
@@ -391,8 +416,10 @@ func TestExecuteFile_InPlace_VariableSubstitutionInBody(t *testing.T) {
 }
 
 // PRD-COMMENT: FR3.1, FR3.6, FR1.3 - In-Place Variables: Referencing System Variables
-// Corresponds to: Client's ability to define an in-place variable using a system variable (e.g., '@request_time = {{$timestamp}}') (http_syntax.md "In-place Variables", "System Variables").
-// This test uses 'testdata/execute_inplace_vars/variable_defined_by_system_variable/request.http' to verify that '@current_uuid' is correctly assigned a value from '{{$uuid}}'.
+// Corresponds to: Client's ability to define an in-place variable using a system variable
+// (e.g., '@request_time = {{$timestamp}}') (http_syntax.md "In-place Variables", "System Variables").
+// This test uses 'testdata/execute_inplace_vars/variable_defined_by_system_variable/request.http'
+// to verify that '@current_uuid' is correctly assigned a value from '{{$uuid}}'.
 func TestExecuteFile_InPlace_VariableDefinedBySystemVariable(t *testing.T) {
 	// Given: an .http file with an in-place variable defined by a system variable {{$uuid}}
 	var capturedURLPath string
@@ -434,10 +461,12 @@ func TestExecuteFile_InPlace_VariableDefinedBySystemVariable(t *testing.T) {
 	require.NotEmpty(t, capturedURLPath, "Captured URL path should not be empty")
 	pathSegments := strings.Split(strings.Trim(capturedURLPath, "/"), "/")
 	require.Len(t, pathSegments, 2, "URL path should have two segments")
-	assert.Len(t, pathSegments[0], 36, "The first path segment (resolved UUID) should be 36 characters long") // UUIDs are 36 chars
+	// UUIDs are 36 chars
+	assert.Len(t, pathSegments[0], 36, "The first path segment (resolved UUID) should be 36 characters long")
 	assert.Equal(t, "resource", pathSegments[1], "The second path segment should be 'resource'")
 	assert.NotEqual(t, "{{$uuid}}", pathSegments[0], "The UUID part should not be the literal system variable")
-	assert.NotEqual(t, "{{my_request_id}}", pathSegments[0], "The UUID part should not be the literal in-place variable")
+	assert.NotEqual(t, "{{my_request_id}}", pathSegments[0],
+		"The UUID part should not be the literal in-place variable")
 
 	// Verify ParsedFile.FileVariables
 	// parseRequestFile call removed. Assertions on internal FileVariables will be removed.
@@ -445,8 +474,11 @@ func TestExecuteFile_InPlace_VariableDefinedBySystemVariable(t *testing.T) {
 }
 
 // PRD-COMMENT: FR3.1, FR3.7, FR1.4 - In-Place Variables: Referencing OS Environment Variables
-// Corresponds to: Client's ability to define an in-place variable using an OS environment variable (e.g., '@api_token = {{MY_API_TOKEN}}') (http_syntax.md "In-place Variables", "Environment Variables").
-// This test uses 'testdata/execute_inplace_vars/variable_defined_by_os_env_variable/request.http', sets an OS environment variable 'OS_VAR_TEST', and defines '@os_value = {{OS_VAR_TEST}}' to verify correct substitution.
+// Corresponds to: Client's ability to define an in-place variable using an OS environment variable
+// (e.g., '@api_token = {{MY_API_TOKEN}}') (http_syntax.md "In-place Variables", "Environment Variables").
+// This test uses 'testdata/execute_inplace_vars/variable_defined_by_os_env_variable/request.http',
+// sets an OS environment variable 'OS_VAR_TEST', and defines '@os_value = {{OS_VAR_TEST}}'
+// to verify correct substitution.
 func TestExecuteFile_InPlace_VariableDefinedByOsEnvVariable(t *testing.T) {
 	// Given: an OS environment variable and an .http file with an in-place variable defined by it
 	const testEnvVarName = "TEST_USER_HOME_INPLACE"
@@ -491,7 +523,8 @@ func TestExecuteFile_InPlace_VariableDefinedByOsEnvVariable(t *testing.T) {
 	// Header and body assertions removed (covered by ValidateResponses).
 
 	// capturedURLPath should be "/testhome/userdir/files"
-	assert.Equal(t, testEnvVarValue+"/files", capturedURLPath, "The URL path should be correctly substituted with the OS environment variable via in-place var")
+	assert.Equal(t, testEnvVarValue+"/files", capturedURLPath,
+		"The URL path should be correctly substituted with the OS environment variable via in-place var")
 
 	// Verify ParsedFile.FileVariables
 	// parseRequestFile call removed. Assertions on internal FileVariables will be removed.
@@ -499,8 +532,10 @@ func TestExecuteFile_InPlace_VariableDefinedByOsEnvVariable(t *testing.T) {
 }
 
 // PRD-COMMENT: FR3.1, FR3.3, FR5.1 - In-Place Variables: Authentication Header Substitution
-// Corresponds to: Client's ability to use in-place variables within standard authentication headers like 'Authorization: Bearer {{token}}' (http_syntax.md "In-place Variables", "Authentication").
-// This test uses 'testdata/execute_inplace_vars/variable_in_auth_header/request.http' to verify that '@bearer_token' is correctly substituted into the 'Authorization' header.
+// Corresponds to: Client's ability to use in-place variables within standard authentication headers
+// like 'Authorization: Bearer {{token}}' (http_syntax.md "In-place Variables", "Authentication").
+// This test uses 'testdata/execute_inplace_vars/variable_in_auth_header/request.http' to verify
+// that '@bearer_token' is correctly substituted into the 'Authorization' header.
 func TestExecuteFile_InPlace_VariableInAuthHeader(t *testing.T) {
 	// Given: an .http file with an in-place variable used in an X-Auth-Token header
 	const headerKey = "X-Auth-Token"
@@ -544,14 +579,17 @@ func TestExecuteFile_InPlace_VariableInAuthHeader(t *testing.T) {
 	// Body assertions removed (covered by ValidateResponses).
 
 	// Main assertion: check the captured header
-	assert.Equal(t, headerValue, capturedHeaders.Get(headerKey), "The X-Auth-Token header should be correctly substituted")
+	assert.Equal(t, headerValue, capturedHeaders.Get(headerKey),
+		"The X-Auth-Token header should be correctly substituted")
 
 	// Verify ParsedFile.FileVariables
 	// parseRequestFile call removed. Assertions on internal FileVariables will be removed.
 	// require.NotNil(t, parsedFile.FileVariables) removed (testing unexported behavior).
 }
-// Corresponds to: Client's ability to substitute in-place variables into a JSON request body, ensuring correct JSON structure is maintained (http_syntax.md "In-place Variables", "Request Body").
-// This test uses 'testdata/execute_inplace_vars/variable_in_json_request_body/request.http' to verify substitution of '@user_name' and '@user_age' (an integer) into a JSON payload.
+// Corresponds to: Client's ability to substitute in-place variables into a JSON request body,
+// ensuring correct JSON structure is maintained (http_syntax.md "In-place Variables", "Request Body").
+// This test uses 'testdata/execute_inplace_vars/variable_in_json_request_body/request.http'
+// to verify substitution of '@user_name' and '@user_age' (an integer) into a JSON payload.
 func TestExecuteFile_InPlace_VariableInJsonRequestBody(t *testing.T) {
 	// Given: an .http file with an in-place variable used in the JSON request body
 	const expectedSentBody = `{"id": "user-from-var-456", "status": "pending"}`
@@ -566,7 +604,8 @@ func TestExecuteFile_InPlace_VariableInJsonRequestBody(t *testing.T) {
 	defer server.Close()
 
 	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_in_json_request_body/request.http"
-	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_in_json_request_body/expected.hresp" // Minimal hresp
+	// Minimal hresp
+	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_in_json_request_body/expected.hresp"
 
 	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
@@ -596,7 +635,8 @@ func TestExecuteFile_InPlace_VariableInJsonRequestBody(t *testing.T) {
 	// Body assertions removed (covered by ValidateResponses).
 
 	// Main assertion: check the captured request body sent to the server
-	assert.JSONEq(t, expectedSentBody, string(capturedBody), "The request body sent to the server should be correctly substituted")
+	assert.JSONEq(t, expectedSentBody, string(capturedBody),
+		"The request body sent to the server should be correctly substituted")
 
 	// Verify ParsedFile.FileVariables
 	// parseRequestFile call removed. Assertions on internal FileVariables will be removed.
@@ -604,8 +644,11 @@ func TestExecuteFile_InPlace_VariableInJsonRequestBody(t *testing.T) {
 }
 
 // PRD-COMMENT: FR3.1, FR3.5 - In-Place Variables: Chained In-Place Variable Definition
-// Corresponds to: Client's ability to resolve in-place variables that are defined by other in-place variables in a chain (e.g., '@var1 = val1', '@var2 = {{var1}}', '@var3 = {{var2}}') (http_syntax.md "In-place Variables").
-// This test uses 'testdata/execute_inplace_vars/variable_defined_by_another_inplace_variable/request.http' to verify chained resolution of '@host', '@path', and '@fullUrl'.
+// Corresponds to: Client's ability to resolve in-place variables that are defined by other
+// in-place variables in a chain (e.g., '@var1 = val1', '@var2 = {{var1}}', '@var3 = {{var2}}')
+// (http_syntax.md "In-place Variables").
+// This test uses 'testdata/execute_inplace_vars/variable_defined_by_another_inplace_variable/request.http'
+// to verify chained resolution of '@host', '@path', and '@fullUrl'.
 func TestExecuteFile_InPlace_VariableDefinedByAnotherInPlaceVariable(t *testing.T) {
 	// Given: an .http file with an in-place variable defined by another in-place variable
 	const expectedURLPath = "/api/v1/items/123"
@@ -618,7 +661,8 @@ func TestExecuteFile_InPlace_VariableDefinedByAnotherInPlaceVariable(t *testing.
 	defer server.Close()
 
 	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_defined_by_another_inplace_variable/request.http"
-	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_defined_by_another_inplace_variable/expected.hresp"
+	expectedHrespPath := "testdata/execute_inplace_vars/" +
+		"inplace_variable_defined_by_another_inplace_variable/expected.hresp"
 
 	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
@@ -648,7 +692,8 @@ func TestExecuteFile_InPlace_VariableDefinedByAnotherInPlaceVariable(t *testing.
 	// Body assertions removed (covered by ValidateResponses).
 
 	// Main assertion: check the captured URL path
-	assert.Equal(t, expectedURLPath, capturedURLPath, "The URL path should be correctly substituted with nested in-place variables")
+	assert.Equal(t, expectedURLPath, capturedURLPath,
+		"The URL path should be correctly substituted with nested in-place variables")
 
 	// Verify ParsedFile.FileVariables
 	// parseRequestFile call removed. Assertions on internal FileVariables will be removed.
@@ -656,8 +701,11 @@ func TestExecuteFile_InPlace_VariableDefinedByAnotherInPlaceVariable(t *testing.
 }
 
 // PRD-COMMENT: FR3.1, FR3.8, FR1.4 - In-Place Variables: Referencing .env Variables via {{$dotenv}}
-// Corresponds to: Client's ability to define an in-place variable using a variable from a .env file, accessed via '{{$dotenv VAR_NAME}}' (http_syntax.md "In-place Variables", "Environment Variables", ".env File Support").
-// This test uses 'testdata/execute_inplace_vars/variable_defined_by_dotenv_os_variable/request.http' and its associated '.env' file to verify that '@my_var' is correctly assigned the value of 'DOTENV_VAR' from the .env file.
+// Corresponds to: Client's ability to define an in-place variable using a variable from a .env file,
+// accessed via '{{$dotenv VAR_NAME}}' (http_syntax.md "In-place Variables", "Environment Variables", ".env File Support").
+// This test uses 'testdata/execute_inplace_vars/variable_defined_by_dotenv_os_variable/request.http'
+// and its associated '.env' file to verify that '@my_var' is correctly assigned the value of
+// 'DOTENV_VAR' from the .env file.
 func TestExecuteFile_InPlace_VariableDefinedByDotEnvOsVariable(t *testing.T) {
 	// Given: an .http file with an in-place variable defined by an OS environment variable using {{$env.VAR_NAME}}
 	const testEnvVarName = "MY_CONFIG_PATH_TEST_DOT_ENV"
@@ -705,7 +753,8 @@ func TestExecuteFile_InPlace_VariableDefinedByDotEnvOsVariable(t *testing.T) {
 
 	// Main assertion: check the captured URL path
 	expectedPath := testEnvVarValue + "/data" // As per original test logic
-	assert.Equal(t, expectedPath, capturedURLPath, "The URL path should be correctly substituted with the OS environment variable via {{$env.VAR_NAME}} in-place var")
+	assert.Equal(t, expectedPath, capturedURLPath,
+		"The URL path should be correctly substituted with the OS environment variable via {{$env.VAR_NAME}} in-place var")
 
 	// Verify ParsedFile.FileVariables
 	// parseRequestFile call removed. Assertions on internal FileVariables will be removed.
@@ -713,8 +762,11 @@ func TestExecuteFile_InPlace_VariableDefinedByDotEnvOsVariable(t *testing.T) {
 }
 
 // PRD-COMMENT: FR3.9 - In-Place Variables: Malformed Definition (Name Only)
-// Corresponds to: Parser and client robustness in handling malformed in-place variable definitions, specifically when only a name is provided (e.g., '@myvar' without '= value') (http_syntax.md "In-place Variables", implicitly by defining correct syntax).
-// This test uses 'testdata/execute_inplace_vars/malformed_name_only/request.http' to verify that such malformed definitions are ignored or handled gracefully without causing execution failure for other valid requests.
+// Corresponds to: Parser and client robustness in handling malformed in-place variable definitions,
+// specifically when only a name is provided (e.g., '@myvar' without '= value')
+// (http_syntax.md "In-place Variables", implicitly by defining correct syntax).
+// This test uses 'testdata/execute_inplace_vars/malformed_name_only/request.http' to verify that
+// such malformed definitions are ignored or handled gracefully without causing execution failure for other valid requests.
 func TestExecuteFile_InPlace_Malformed_NameOnlyNoEqualsNoValue(t *testing.T) {
 	// Given: an .http file with a malformed in-place variable (name only, no equals, no value)
 	requestFilePath := "testdata/execute_inplace_vars/malformed_name_only_no_equals_no_value/request.http"
@@ -729,12 +781,16 @@ func TestExecuteFile_InPlace_Malformed_NameOnlyNoEqualsNoValue(t *testing.T) {
 	// Then: an error should occur indicating a parsing failure due to the malformed variable
 	require.Error(t, execErr, "ExecuteFile should return an error for malformed variable definition")
 	assert.Contains(t, execErr.Error(), "failed to parse request file", "Error message should indicate parsing failure")
-	assert.Contains(t, execErr.Error(), expectedErrorSubstring, "Error message should contain specific malformed reason")
+	assert.Contains(t, execErr.Error(), expectedErrorSubstring,
+		"Error message should contain specific malformed reason")
 }
 
 // PRD-COMMENT: FR3.9 - In-Place Variables: Malformed Definition (No Name)
-// Corresponds to: Parser and client robustness in handling malformed in-place variable definitions, specifically when no name is provided (e.g., '@ = value') (http_syntax.md "In-place Variables", implicitly by defining correct syntax).
-// This test uses 'testdata/execute_inplace_vars/malformed_no_name/request.http' to verify that such malformed definitions are ignored or handled gracefully.
+// Corresponds to: Parser and client robustness in handling malformed in-place variable definitions,
+// specifically when no name is provided (e.g., '@ = value')
+// (http_syntax.md "In-place Variables", implicitly by defining correct syntax).
+// This test uses 'testdata/execute_inplace_vars/malformed_no_name/request.http' to verify that
+// such malformed definitions are ignored or handled gracefully.
 func TestExecuteFile_InPlace_Malformed_NoNameEqualsValue(t *testing.T) {
 	// Given: an .http file with a malformed in-place variable (no name, equals, value)
 	requestFilePath := "testdata/execute_inplace_vars/malformed_no_name_equals_value/request.http"
@@ -749,11 +805,16 @@ func TestExecuteFile_InPlace_Malformed_NoNameEqualsValue(t *testing.T) {
 	// Then: an error should occur indicating a parsing failure due to the malformed variable
 	require.Error(t, execErr, "ExecuteFile should return an error for malformed variable definition")
 	assert.Contains(t, execErr.Error(), "failed to parse request file", "Error message should indicate parsing failure")
-	assert.Contains(t, execErr.Error(), expectedErrorSubstring, "Error message should contain specific malformed reason")
+	assert.Contains(t, execErr.Error(), expectedErrorSubstring,
+		"Error message should contain specific malformed reason")
 }
 
-// PRD-COMMENT: FR3.1, FR3.8, FR1.3, FR1.4 - In-Place Variables: Referencing System Var via {{$dotenv}} (Conceptual - {{$dotenv}} is for OS/file env vars)
-// Corresponds to: This test explores the interaction of {{$dotenv}} with system-like variable names. While {{$dotenv}} is primarily for OS/file environment variables, this tests if defining `@my_api_key = {{$dotenv DOTENV_VAR_FOR_SYSTEM_TEST}}` correctly pulls from a .env file. (http_syntax.md "In-place Variables", "Environment Variables", ".env File Support").
+// PRD-COMMENT: FR3.1, FR3.8, FR1.3, FR1.4 - In-Place Variables: Referencing System Var via {{$dotenv}}
+// (Conceptual - {{$dotenv}} is for OS/file env vars)
+// Corresponds to: This test explores the interaction of {{$dotenv}} with system-like variable names.
+// While {{$dotenv}} is primarily for OS/file environment variables, this tests if defining
+// `@my_api_key = {{$dotenv DOTENV_VAR_FOR_SYSTEM_TEST}}` correctly pulls from a .env file.
+// (http_syntax.md "In-place Variables", "Environment Variables", ".env File Support").
 // It uses 'testdata/execute_inplace_vars/inplace_variable_defined_by_dotenv_system_variable/request.http' and its .env file.
 func TestExecuteFile_InPlace_VariableDefinedByDotEnvSystemVariable(t *testing.T) {
 	// Given: an .http file using {{$dotenv VAR_NAME}} for an in-place variable,
@@ -793,7 +854,8 @@ func TestExecuteFile_InPlace_VariableDefinedByDotEnvSystemVariable(t *testing.T)
 
 // PRD-COMMENT: FR3.1, FR3.6, FR1.3 - In-Place Variables: Referencing {{$randomInt}}
 // Corresponds to: Client's ability to define an in-place variable using the '{{$randomInt MIN MAX}}' system variable (http_syntax.md "In-place Variables", "System Variables").
-// This test uses 'testdata/execute_inplace_vars/inplace_variable_defined_by_random_int/request.http' to verify that '@my_random_port' is correctly assigned a random integer within the specified range.
+// This test uses 'testdata/execute_inplace_vars/inplace_variable_defined_by_random_int/request.http'
+// to verify that '@my_random_port' is correctly assigned a random integer within the specified range.
 func TestExecuteFile_InPlace_VariableDefinedByRandomInt(t *testing.T) {
 	// Given: an .http file using {{$randomInt MIN MAX}} for an in-place variable
 	const requestFilePath = "testdata/execute_inplace_vars/inplace_variable_defined_by_random_int/request.http"
