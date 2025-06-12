@@ -27,7 +27,7 @@ import (
 // PRD-COMMENT: FR1.1 - Custom Variables: Basic Definition and Substitution
 // Corresponds to: Client's ability to define and substitute custom variables within an .http file
 // (e.g., @name = value) (http_syntax.md "Custom Variables").
-// This test uses 'testdata/http_request_files/custom_variables.http' to verify substitution
+// This test uses 'test/data/http_request_files/custom_variables.http' to verify substitution
 // of custom variables in URLs, headers, and bodies.
 func RunExecuteFile_WithCustomVariables(t *testing.T) {
 	t.Helper()
@@ -59,7 +59,7 @@ func RunExecuteFile_WithCustomVariables(t *testing.T) {
 	defer server.Close()
 
 	client, _ := rc.NewClient()
-	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/custom_variables.http",
+	requestFilePath := createTestFileFromTemplate(t, "test/data/http_request_files/custom_variables.http",
 		struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
@@ -92,7 +92,7 @@ func RunExecuteFile_WithCustomVariables(t *testing.T) {
 // PRD-COMMENT: FR1.3.6 - System Variables: {{$processEnv.VAR_NAME}}
 // Corresponds to: Client's ability to substitute the {{$processEnv.VAR_NAME}} system variable
 // with the value of an OS environment variable (http_syntax.md "System Variables").
-// This test uses 'testdata/http_request_files/system_var_process_env.http' and sets OS environment
+// This test uses 'test/data/http_request_files/system_var_process_env.http' and sets OS environment
 // variables to verify their substitution in URLs, headers, and bodies. It also checks behavior
 // for undefined environment variables.
 func RunExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
@@ -131,7 +131,7 @@ func RunExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
 
 	client, _ := rc.NewClient()
 	requestFilePath := createTestFileFromTemplate(t,
-		"testdata/http_request_files/system_var_process_env.http",
+		"test/data/http_request_files/system_var_process_env.http",
 		struct {
 			ServerURL           string
 			TestEnvVarName      string
@@ -258,7 +258,7 @@ func runDotEnvScenarioTest(t *testing.T, client *rc.Client, serverURL string, te
 // Corresponds to: Client's ability to substitute the {{$dotenv.VAR_NAME}} system variable
 // with values from a .env file located in the same directory as the .http file
 // (http_syntax.md "System Variables").
-// This test uses 'testdata/http_request_files/system_var_dotenv.http' and a dynamically created
+// This test uses 'test/data/http_request_files/system_var_dotenv.http' and a dynamically created
 // '.env' file to verify substitution in URLs, headers, and bodies. It also checks behavior
 // for variables not present in the .env file.
 func RunExecuteFile_WithDotEnvSystemVariable(t *testing.T) {
@@ -331,7 +331,7 @@ User-Agent: test-client
 // Corresponds to: Client's ability to accept and substitute variables passed programmatically
 // during the ExecuteFile call, which can override variables defined in the .http file or
 // environment files (http_syntax.md "Variable Precedence").
-// This test uses 'testdata/http_request_files/programmatic_vars.http' and injects variables
+// This test uses 'test/data/http_request_files/programmatic_vars.http' and injects variables
 // via `WithVariables` and `ExecuteFile` options to verify their substitution and precedence
 // over file-defined variables.
 func RunExecuteFile_WithProgrammaticVariables(t *testing.T) {
@@ -368,7 +368,7 @@ func RunExecuteFile_WithProgrammaticVariables(t *testing.T) {
 	client, err := rc.NewClient(rc.WithVars(clientProgrammaticVars))
 	require.NoError(t, err)
 
-	requestFilePath := "testdata/http_request_files/programmatic_variables.http"
+	requestFilePath := "test/data/http_request_files/programmatic_variables.http"
 
 	// When
 	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
@@ -405,7 +405,7 @@ func RunExecuteFile_WithProgrammaticVariables(t *testing.T) {
 // Corresponds to: Client's ability to substitute the {{$localDatetime}} system variable
 // with the current timestamp in the system's local timezone, formatted according to a Go layout
 // string (http_syntax.md "System Variables").
-// This test uses 'testdata/http_request_files/system_var_local_datetime.http' to verify
+// This test uses 'test/data/http_request_files/system_var_local_datetime.http' to verify
 // correct formatting and substitution in URLs, headers, and bodies.
 func RunExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
 	t.Helper()
@@ -430,7 +430,7 @@ func RunExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
 	// Capture current time to compare against, allowing for slight delay
 	beforeTime := time.Now().UTC().Unix()
 
-	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_timestamp.http",
+	requestFilePath := createTestFileFromTemplate(t, "test/data/http_request_files/system_var_timestamp.http",
 		struct{ ServerURL string }{ServerURL: server.URL})
 
 	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
@@ -597,7 +597,7 @@ func assertRequestObjectConsistency(t *testing.T, parsedReq *rc.Request, capture
 // dedicated variable substitution functions and how they are resolved during a full ExecuteFile
 // operation. This is more of an internal consistency check than a direct user-facing feature test.
 // This test compares the output of `SubstituteVariablesInString` with the actual substituted
-// values observed in a request made via `ExecuteFile`, using 'testdata/http_request_files/variable_consistency.http'.
+// values observed in a request made via `ExecuteFile`, using 'test/data/http_request_files/variable_consistency.http'.
 func RunExecuteFile_VariableFunctionConsistency(t *testing.T) {
 	t.Helper()
 	var capturedVals capturedConsistencyValues
@@ -607,7 +607,7 @@ func RunExecuteFile_VariableFunctionConsistency(t *testing.T) {
 	client, err := rc.NewClient(rc.WithBaseURL(server.URL))
 	require.NoError(t, err)
 
-	requestFilePath := "testdata/http_request_files/variable_function_consistency.rest"
+	requestFilePath := "test/data/http_request_files/variable_function_consistency.rest"
 
 	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
 	require.NoError(t, err, "ExecuteFile should not return an error")
@@ -769,8 +769,8 @@ func RunExecuteFile_WithHttpClientEnvJson(t *testing.T) {
 	tests := []httpClientEnvTestCase{
 		{
 			name:                     "SCENARIO-LIB-018-004: no env selected, file exists",
-			envFileTemplatePath:      "testdata/execute_file_httpclientenv/no_env_selected_env_template.json",
-			requestFilePath:          "testdata/execute_file_httpclientenv/no_env_selected_request.http",
+			envFileTemplatePath:      "test/data/execute_file_httpclientenv/no_env_selected_env_template.json",
+			requestFilePath:          "test/data/execute_file_httpclientenv/no_env_selected_request.http",
 			selectedEnv:              "",
 			expectExecuteFileError:   true,
 			executeFileErrorContains: "unsupported protocol scheme \"\"",
@@ -785,9 +785,9 @@ func RunExecuteFile_WithHttpClientEnvJson(t *testing.T) {
 		},
 		{
 			name:                   "SCENARIO-LIB-018-005: private env overrides public env",
-			envFileTemplatePath:    "testdata/execute_file_httpclientenv/private_overrides_public_env_template.json",
-			privateEnvFilePath:     "testdata/execute_file_httpclientenv/private_overrides_private_env.json",
-			requestFilePath:        "testdata/execute_file_httpclientenv/private_overrides_request.http",
+			envFileTemplatePath:    "test/data/execute_file_httpclientenv/private_overrides_public_env_template.json",
+			privateEnvFilePath:     "test/data/execute_file_httpclientenv/private_overrides_private_env.json",
+			requestFilePath:        "test/data/execute_file_httpclientenv/private_overrides_request.http",
 			selectedEnv:            "dev",
 			expectExecuteFileError: false,
 			expectResponseError:    false,
@@ -906,7 +906,7 @@ func assertRandomEmail(t *testing.T, bodyJSON map[string]string) {
 // {{$random.integer MIN MAX}}, {{$random.float MIN MAX}}, {{$random.alphabetic LENGTH}},
 // {{$random.alphanumeric LENGTH}}, {{$random.hexadecimal LENGTH}}, {{$random.email}}
 // (http_syntax.md "System Variables - Extended Random").
-// This test uses 'testdata/http_request_files/system_var_extended_random.http' to verify
+// This test uses 'test/data/http_request_files/system_var_extended_random.http' to verify
 // the generation and substitution of these extended random variables, including handling
 // of arguments and invalid inputs.
 func RunExecuteFile_WithExtendedRandomSystemVariables(t *testing.T) {
@@ -923,7 +923,7 @@ func RunExecuteFile_WithExtendedRandomSystemVariables(t *testing.T) {
 	defer server.Close()
 
 	client, _ := rc.NewClient()
-	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_extended_random.http",
+	requestFilePath := createTestFileFromTemplate(t, "test/data/http_request_files/system_var_extended_random.http",
 		struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When

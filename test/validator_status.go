@@ -17,27 +17,27 @@ func RunValidateResponses_StatusString(t *testing.T) {
 		{
 			name:             "matching status string",
 			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK"},
-			expectedFilePath: "testdata/http_response_files/validator_body_exact_no_body_exp.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_body_exact_no_body_exp.hresp",
 			expectedErrCount: 0,
 		},
 		{
 			name:             "mismatching status string",
 			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 Something Else"},
-			expectedFilePath: "testdata/http_response_files/validator_body_exact_no_body_exp.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_body_exact_no_body_exp.hresp",
 			expectedErrCount: 1,
 			expectedErrText:  "status string mismatch: expected '200 OK', got '200 Something Else'",
 		},
 		{
 			name:             "actual status string is correct, expected file has only status code",
 			actualResponse:   &rc.Response{StatusCode: 200, Status: "200 OK"},
-			expectedFilePath: "testdata/http_response_files/validator_partial_status_code_mismatch.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_partial_status_code_mismatch.hresp",
 			expectedErrCount: 1,
 			expectedErrText:  "status string mismatch: expected '200', got '200 OK'",
 		},
 		{
 			name:             "mismatching status code, status strings also mismatch",
 			actualResponse:   &rc.Response{StatusCode: 404, Status: "404 Not Found"},
-			expectedFilePath: "testdata/http_response_files/validator_body_exact_no_body_exp.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_body_exact_no_body_exp.hresp",
 			expectedErrCount: 2,
 			expectedErrTexts: []string{
 				"status code mismatch: expected 200, got 404",
@@ -47,7 +47,7 @@ func RunValidateResponses_StatusString(t *testing.T) {
 		{
 			name:             "matching status code, expected file only code, actual also only code in status",
 			actualResponse:   &rc.Response{StatusCode: 200, Status: "200"},
-			expectedFilePath: "testdata/http_response_files/validator_partial_status_code_mismatch.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_partial_status_code_mismatch.hresp",
 			expectedErrCount: 0,
 		},
 	}
@@ -121,14 +121,14 @@ func RunValidateResponses_StatusCode(t *testing.T) {
 		{
 			name:               "matching status code only",
 			actualResponseCode: intPtr(200),
-			expectedFilePath:   "testdata/http_response_files/validator_partial_status_code_mismatch.hresp",
+			expectedFilePath:   "test/data/http_response_files/validator_partial_status_code_mismatch.hresp",
 			expectedErrCount:   0,
 		},
 		{
 			name:               "mismatching status code only",
 			actualResponseCode: intPtr(404),
 			// Expect 200
-			expectedFilePath: "testdata/http_response_files/validator_partial_status_code_mismatch.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_partial_status_code_mismatch.hresp",
 			// Expects 2 errors: status code and status string mismatch
 			expectedErrCount: 2,
 			// Clear this as we use currentExpectedErrTexts now
@@ -140,7 +140,7 @@ func RunValidateResponses_StatusCode(t *testing.T) {
 			name:               "nil actual status code (should not happen with real http.Response)",
 			// Actual code is 0, so if file expects 200, it's a mismatch
 			actualResponseCode: nil,
-			expectedFilePath: "testdata/http_response_files/validator_partial_status_code_mismatch.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_partial_status_code_mismatch.hresp",
 			// Expects 2 errors: status code and status string mismatch
 			expectedErrCount: 2,
 			// Clear this
@@ -151,7 +151,7 @@ func RunValidateResponses_StatusCode(t *testing.T) {
 		{
 			name:               "nil expected status code (file has no status line)",
 			actualResponseCode: intPtr(200),
-			expectedFilePath:   "testdata/http_response_files/validator_status_code_nil_expected.hresp",
+			expectedFilePath:   "test/data/http_response_files/validator_status_code_nil_expected.hresp",
 			expectedErrCount:   2, // This will fail parsing + count mismatch
 			// currentExpectedErrTexts will be:
 			// ["failed to parse expected response file", "mismatch in number of responses"]
@@ -162,7 +162,7 @@ func RunValidateResponses_StatusCode(t *testing.T) {
 			// (no text reason phrase in its .Status field).
 			name:               "matching status code, actual and expected only have code",
 			actualResponseCode: intPtr(200),
-			expectedFilePath:   "testdata/http_response_files/validator_status_code_only.hresp",
+			expectedFilePath:   "test/data/http_response_files/validator_status_code_only.hresp",
 			expectedErrCount:   0,
 		},
 	}

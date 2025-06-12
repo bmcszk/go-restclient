@@ -19,13 +19,13 @@ import (
 // Corresponds to: Client robustness in handling syntactically incorrect HTTP methods 
 // within a .http file (http_syntax.md, implicitly by defining valid methods).
 // This test verifies that the client correctly identifies an invalid HTTP method in 
-// 'testdata/http_request_files/invalid_method.http', reports an error for that request, 
+// 'test/data/http_request_files/invalid_method.http', reports an error for that request, 
 // and handles the overall execution flow appropriately (e.g., by aggregating errors).
 func RunExecuteFile_InvalidMethodInFile(t *testing.T) {
 	t.Helper()
 	// Given
 	client, _ := rc.NewClient()
-	requestFilePath := "testdata/http_request_files/invalid_method.http"
+	requestFilePath := "test/data/http_request_files/invalid_method.http"
 
 	// When
 	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
@@ -50,7 +50,7 @@ func RunExecuteFile_InvalidMethodInFile(t *testing.T) {
 // executeFileTestCase defines a test case for TestExecuteFile_IgnoreEmptyBlocks_Client
 type executeFileTestCase struct {
 	name                           string
-	requestFileBasePath            string // Relative path to the base .http file in testdata
+	requestFileBasePath            string // Relative path to the base .http file in test/data
 	needsServerURLCount            int    // How many times server.URL needs to be Sprintf'd (0, 1, or 2)
 	expectedResponses              int
 	expectedError                  bool
@@ -162,7 +162,7 @@ func setupIgnoreEmptyBlocksMockServer(t *testing.T) *httptest.Server {
 // 1. Requests correctly parsed and executed when separated by comments or empty lines around separators.
 // 2. Correct error handling (e.g., 'no requests found') for files that only contain variable
 // definitions or are otherwise empty of executable requests.
-// It uses test case templates from 'testdata/execute_file_ignore_empty_blocks/'
+// It uses test case templates from 'test/data/execute_file_ignore_empty_blocks/'
 // (e.g., 'scenario_004_template.http', 'only_vars.http') to dynamically create test files.
 func RunExecuteFile_IgnoreEmptyBlocks_Client(t *testing.T) {
 	t.Helper()
@@ -171,7 +171,7 @@ func RunExecuteFile_IgnoreEmptyBlocks_Client(t *testing.T) {
 	defer server.Close()
 	client, _ := rc.NewClient()
 
-	testDataDir := "testdata/execute_file_ignore_empty_blocks"
+	testDataDir := "test/data/execute_file_ignore_empty_blocks"
 
 	tests := []executeFileTestCase{
 		{

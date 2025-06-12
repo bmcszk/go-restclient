@@ -3,16 +3,16 @@
 POST https://example.com/api/documents
 Content-Type: application/json
 
-< ./testdata/request_body/sample_payload.json
+< ./test/data/request_body/sample_payload.json
 
 ### File as Request Body - Text File
 POST https://example.com/api/text
 Content-Type: text/plain
 
-< ./testdata/request_body/sample_text.txt
+< ./test/data/request_body/sample_text.txt
 
 ### File as Request Body - XML
 POST https://example.com/api/xml
 Content-Type: application/xml
 
-< ./testdata/request_body/sample_data.xml
+< ./test/data/request_body/sample_data.xml

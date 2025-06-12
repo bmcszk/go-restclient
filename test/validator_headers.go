@@ -24,7 +24,7 @@ func RunValidateResponses_Headers(t *testing.T) {
 				StatusCode: 200, Status: "200 OK",
 				Headers: http.Header{"Content-Type": {"application/json"}, "X-Request-Id": {"123"}},
 			},
-			expectedFilePath: "testdata/http_response_files/validator_headerscontain_key_missing.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_headerscontain_key_missing.hresp",
 			expectedErrCount: 0,
 		},
 		{
@@ -33,7 +33,7 @@ func RunValidateResponses_Headers(t *testing.T) {
 				StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"text/html"}},
 			},
 			// Expects application/json
-			expectedFilePath: "testdata/http_response_files/validator_headerscontain_key_missing.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_headerscontain_key_missing.hresp",
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"expected value 'application/json' for header 'Content-Type' not found"},
 		},
@@ -43,7 +43,7 @@ func RunValidateResponses_Headers(t *testing.T) {
 				StatusCode: 200, Status: "200 OK", Headers: http.Header{"X-Other": {"value"}},
 			},
 			// Expects X-Custom-Header
-			expectedFilePath: "testdata/http_response_files/validator_headers_missing_exp.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_headers_missing_exp.hresp",
 			expectedErrCount: 1,
 			// Adjusted error message
 			expectedErrTexts: []string{"expected header 'X-Custom-Header' not found"},
@@ -54,7 +54,7 @@ func RunValidateResponses_Headers(t *testing.T) {
 				StatusCode: 200, Status: "200 OK",
 				Headers: http.Header{"Content-Type": {"application/json"}, "X-Extra": {"ignored"}},
 			},
-			expectedFilePath: "testdata/http_response_files/validator_headerscontain_key_missing.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_headerscontain_key_missing.hresp",
 			expectedErrCount: 0,
 		},
 		{
@@ -63,7 +63,7 @@ func RunValidateResponses_Headers(t *testing.T) {
 				StatusCode: 200, Status: "200 OK",
 				Headers: http.Header{"Accept": {"application/json", "text/xml"}},
 			},
-			expectedFilePath: "testdata/http_response_files/validator_headers_multival_match.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_headers_multival_match.hresp",
 			expectedErrCount: 0,
 		},
 		{
@@ -73,7 +73,7 @@ func RunValidateResponses_Headers(t *testing.T) {
 				Headers: http.Header{"Accept": {"application/json", "text/xml"}},
 			},
 			// Expects xml then json
-			expectedFilePath: "testdata/http_response_files/validator_headers_multival_mismatch_order.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_headers_multival_mismatch_order.hresp",
 			// Should now pass as order is not strictly enforced for all values
 			expectedErrCount: 0,
 			// expectedErrTexts: []string{"header 'Accept' value mismatch: expected [text/xml application/json],
@@ -86,7 +86,7 @@ func RunValidateResponses_Headers(t *testing.T) {
 				Headers: http.Header{"Accept": {"application/json", "application/pdf"}},
 			},
 			// Expects json then text/plain
-			expectedFilePath: "testdata/http_response_files/validator_headers_multival_match.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_headers_multival_match.hresp",
 			expectedErrCount: 1,
 			// Adjusted for current logic
 			expectedErrTexts: []string{"expected value 'text/xml' for header 'Accept' not found"},
@@ -98,7 +98,7 @@ func RunValidateResponses_Headers(t *testing.T) {
 				Headers: http.Header{"Accept": {"application/json", "text/xml", "application/pdf"}},
 			},
 			// Expects only application/json
-			expectedFilePath: "testdata/http_response_files/validator_headers_multival_subset.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_headers_multival_subset.hresp",
 			// Should now pass as expected ["application/json"] is found in actual
 			expectedErrCount: 0,
 			// expectedErrTexts: []string{"header 'Accept' value mismatch:
@@ -111,7 +111,7 @@ func RunValidateResponses_Headers(t *testing.T) {
 				StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"application/json"}},
 			},
 			// Expected file has "content-type"
-			expectedFilePath: "testdata/http_response_files/validator_headers_case_insensitive_match.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_headers_case_insensitive_match.hresp",
 			expectedErrCount: 0,
 		},
 	}
@@ -152,7 +152,7 @@ func RunValidateResponses_HeadersContain(t *testing.T) {
 				StatusCode: 200, Status: "200 OK",
 				Headers: http.Header{"Content-Type": {"application/json; charset=utf-8"}},
 			},
-			expectedFilePath: "testdata/http_response_files/validator_headerscontain_match.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_headerscontain_match.hresp",
 			expectedErrCount: 0,
 		},
 		{
@@ -161,7 +161,7 @@ func RunValidateResponses_HeadersContain(t *testing.T) {
 				StatusCode: 200, Status: "200 OK", Headers: http.Header{"Content-Type": {"text/html"}},
 			},
 			// Standard header mismatch
-			expectedFilePath: "testdata/http_response_files/validator_headerscontain_key_missing.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_headerscontain_key_missing.hresp",
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"expected value 'application/json' for header 'Content-Type' not found"},
 		},
@@ -171,7 +171,7 @@ func RunValidateResponses_HeadersContain(t *testing.T) {
 				StatusCode: 200, Status: "200 OK", Headers: http.Header{"X-Other": {"value"}},
 			},
 			// Expected header 'Content-Type' missing from actual
-			expectedFilePath: "testdata/http_response_files/validator_headerscontain_key_missing.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_headerscontain_key_missing.hresp",
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"expected header 'Content-Type' not found"},
 		},

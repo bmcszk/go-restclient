@@ -52,7 +52,7 @@ func runValidateResponsesWithSampleFileSubtest(t *testing.T,
 func setupBaseActualResponseForSampleFileTests(t *testing.T) *rc.Response {
 	t.Helper()
 	// Read the content of the sample HTTP response file
-	filePath := "testdata/http_response_files/sample1.http"
+	filePath := "test/data/http_response_files/sample1.http"
 	fileContentBytes, err := os.ReadFile(filePath)
 	require.NoError(t, err, "Failed to read sample HTTP response file")
 
@@ -152,7 +152,7 @@ func getValidateResponsesWithSampleFileTestCases(sampleFilePath string) []valida
 		{
 			name:               "BodyContains logic not triggered, exact body mismatch from file",
 			actualModifier:     func(_ *rc.Response) {},
-			expectedFileSource: "testdata/http_response_files/validator_withsample_bodycontains_exactmismatch.hresp",
+			expectedFileSource: "test/data/http_response_files/validator_withsample_bodycontains_exactmismatch.hresp",
 			expectedErrCount:   1,
 			expectedErrTexts:   []string{"body mismatch"},
 		},
@@ -170,7 +170,8 @@ func getValidateResponsesWithSampleFileTestCases(sampleFilePath string) []valida
 				actual.BodyString = newBody
 				actual.Body = []byte(newBody)
 			},
-			expectedFileSource: "testdata/http_response_files/validator_withsample_bodynotcontains_exactmismatch.hresp",
+			expectedFileSource: "test/data/http_response_files/" +
+				"validator_withsample_bodynotcontains_exactmismatch.hresp",
 			expectedErrCount:   1,
 			expectedErrTexts:   []string{"body mismatch"},
 		},
@@ -180,7 +181,7 @@ func getValidateResponsesWithSampleFileTestCases(sampleFilePath string) []valida
 func RunValidateResponses_WithSampleFile(t *testing.T) {
 	t.Helper()
 	baseActual := setupBaseActualResponseForSampleFileTests(t)
-	sampleFilePath := "testdata/http_response_files/sample1.http" // Define sampleFilePath explicitly
+	sampleFilePath := "test/data/http_response_files/sample1.http" // Define sampleFilePath explicitly
 	tests := getValidateResponsesWithSampleFileTestCases(sampleFilePath)
 
 	for _, tt := range tests {
@@ -209,13 +210,13 @@ func RunValidateResponses_PartialExpected(t *testing.T) {
 				BodyString: "",
 				Body:       []byte(""),
 			},
-			expectedFilePath: "testdata/http_response_files/validator_partial_status_code_mismatch.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_partial_status_code_mismatch.hresp",
 			expectedErrCount: 0,
 		},
 		{
 			name:             "SCENARIO-LIB-009-005 Corrected: File has status code and empty body - actual matches",
 			actualResponse:   &rc.Response{StatusCode: 200, Status: "200", BodyString: "", Body: []byte("")},
-			expectedFilePath: "testdata/http_response_files/validator_partial_status_code_mismatch.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_partial_status_code_mismatch.hresp",
 			expectedErrCount: 0,
 		},
 		{
@@ -224,7 +225,7 @@ func RunValidateResponses_PartialExpected(t *testing.T) {
 			actualResponse: &rc.Response{
 				StatusCode: 200, Status: "200", BodyString: "non-empty body", Body: []byte("non-empty body"),
 			},
-			expectedFilePath: "testdata/http_response_files/validator_partial_status_code_mismatch.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_partial_status_code_mismatch.hresp",
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"body mismatch"},
 		},
@@ -237,7 +238,7 @@ func RunValidateResponses_PartialExpected(t *testing.T) {
 				BodyString: "",
 				Body:       []byte(""),
 			},
-			expectedFilePath: "testdata/http_response_files/validator_partial_status_code_mismatch.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_partial_status_code_mismatch.hresp",
 			expectedErrCount: 2,
 			expectedErrTexts: []string{
 				"status code mismatch: expected 200, got 404",
@@ -254,7 +255,7 @@ func RunValidateResponses_PartialExpected(t *testing.T) {
 				BodyString: "",
 				Body:       []byte(""),
 			},
-			expectedFilePath: "testdata/http_response_files/validator_partial_headers_key_missing.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_partial_headers_key_missing.hresp",
 			expectedErrCount: 0,
 		},
 		{
@@ -266,7 +267,7 @@ func RunValidateResponses_PartialExpected(t *testing.T) {
 				BodyString: "",
 				Body:       []byte(""),
 			},
-			expectedFilePath: "testdata/http_response_files/validator_partial_headers_key_missing.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_partial_headers_key_missing.hresp",
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"expected value 'application/json' for header 'Content-Type' not found"},
 		},
@@ -279,7 +280,7 @@ func RunValidateResponses_PartialExpected(t *testing.T) {
 				BodyString: "",
 				Body:       []byte(""),
 			},
-			expectedFilePath: "testdata/http_response_files/validator_partial_headers_key_missing.hresp",
+			expectedFilePath: "test/data/http_response_files/validator_partial_headers_key_missing.hresp",
 			expectedErrCount: 1,
 			expectedErrTexts: []string{"expected header 'Content-Type' not found"},
 		},

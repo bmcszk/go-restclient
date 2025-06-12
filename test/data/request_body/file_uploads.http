@@ -6,7 +6,7 @@ Content-Type: multipart/form-data; boundary=UploadBoundary
 Content-Disposition: form-data; name="file"; filename="image.jpg"
 Content-Type: image/jpeg
 
-< ./testdata/request_body/sample_image.jpg
+< ./test/data/request_body/sample_image.jpg
 --UploadBoundary--
 
 ### Multiple Files Upload Test
@@ -17,12 +17,12 @@ Content-Type: multipart/form-data; boundary=MultiUploadBoundary
 Content-Disposition: form-data; name="files"; filename="document.pdf"
 Content-Type: application/pdf
 
-< ./testdata/request_body/sample_document.pdf
+< ./test/data/request_body/sample_document.pdf
 --MultiUploadBoundary
 Content-Disposition: form-data; name="files"; filename="image.png"
 Content-Type: image/png
 
-< ./testdata/request_body/sample_image.png
+< ./test/data/request_body/sample_image.png
 --MultiUploadBoundary
 Content-Disposition: form-data; name="description"
 

@@ -22,7 +22,7 @@ import (
 // PRD-COMMENT: FR1.3.1 - System Variables: {{$guid}} and {{$uuid}}
 // Corresponds to: Client's ability to substitute {{$guid}} and {{$uuid}} system variables
 // with a unique, request-scoped UUID (http_syntax.md "System Variables").
-// This test uses 'testdata/http_request_files/system_var_guid.http' to verify that these variables
+// This test uses 'test/data/http_request_files/system_var_guid.http' to verify that these variables
 // are correctly generated and substituted in URLs, headers, and bodies. It also confirms that
 // multiple instances of {{$guid}} or {{$uuid}} within the same request resolve to the *same*
 // generated UUID for that request.
@@ -45,7 +45,7 @@ func RunExecuteFile_WithGuidSystemVariable(t *testing.T) {
 	defer server.Close()
 
 	client, _ := rc.NewClient()
-	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_guid.http",
+	requestFilePath := createTestFileFromTemplate(t, "test/data/http_request_files/system_var_guid.http",
 		struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
@@ -106,7 +106,7 @@ func RunExecuteFile_WithGuidSystemVariable(t *testing.T) {
 // Corresponds to: Client's ability to substitute the {{$isoTimestamp}} system variable
 // with the current UTC timestamp in ISO 8601 format (YYYY-MM-DDTHH:mm:ss.sssZ)
 // (http_syntax.md "System Variables").
-// This test uses 'testdata/http_request_files/system_var_iso_timestamp.http' to verify correct
+// This test uses 'test/data/http_request_files/system_var_iso_timestamp.http' to verify correct
 // substitution in URLs, headers, and bodies, and checks that multiple instances resolve to
 // the same request-scoped timestamp.
 func RunExecuteFile_WithIsoTimestampSystemVariable(t *testing.T) {
@@ -126,7 +126,7 @@ func RunExecuteFile_WithIsoTimestampSystemVariable(t *testing.T) {
 	defer server.Close()
 
 	client, _ := rc.NewClient()
-	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_iso_timestamp.http",
+	requestFilePath := createTestFileFromTemplate(t, "test/data/http_request_files/system_var_iso_timestamp.http",
 		struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
@@ -204,7 +204,7 @@ func setupDetailedMockServerInterceptor(t *testing.T) (*httptest.Server, *detail
 // Corresponds to: Client's ability to substitute the {{$datetime}} system variable with the
 // current timestamp formatted according to a Go layout string, optionally with a timezone
 // offset (http_syntax.md "System Variables").
-// This test uses 'testdata/http_request_files/system_var_datetime.http' to verify various
+// This test uses 'test/data/http_request_files/system_var_datetime.http' to verify various
 // datetime formats (RFC3339, custom, with local/UTC/specific offsets) in URLs, headers, and bodies.
 // It ensures multiple instances resolve to the same request-scoped timestamp (respecting their
 // individual formatting and offsets).
@@ -216,7 +216,7 @@ func RunExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
 
 	client, _ := rc.NewClient()
 	requestFilePath := createTestFileFromTemplate(t,
-		"testdata/http_request_files/system_var_datetime.http",
+		"test/data/http_request_files/system_var_datetime.http",
 		struct{ ServerURL string }{ServerURL: server.URL},
 	)
 
@@ -346,7 +346,7 @@ func validateDatetimeBody(t *testing.T, interceptedRequest *detailedInterceptedR
 // PRD-COMMENT: FR1.3.2 - System Variables: {{$timestamp}}
 // Corresponds to: Client's ability to substitute the {{$timestamp}} system variable with
 // the current Unix timestamp (seconds since epoch) (http_syntax.md "System Variables").
-// This test uses 'testdata/http_request_files/system_var_timestamp.http' to verify correct
+// This test uses 'test/data/http_request_files/system_var_timestamp.http' to verify correct
 // substitution in URLs, headers, and bodies. It ensures multiple instances resolve to
 // the same request-scoped timestamp.
 func RunExecuteFile_WithTimestampSystemVariable(t *testing.T) {
@@ -370,7 +370,7 @@ func RunExecuteFile_WithTimestampSystemVariable(t *testing.T) {
 
 	client, _ := rc.NewClient()
 	beforeTime := time.Now().UTC().Unix()
-	requestFilePath := createTestFileFromTemplate(t, "testdata/http_request_files/system_var_timestamp.http",
+	requestFilePath := createTestFileFromTemplate(t, "test/data/http_request_files/system_var_timestamp.http",
 		struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
@@ -541,22 +541,22 @@ func getRandomIntTestCases() []randomIntTestCase {
 	return []randomIntTestCase{
 		{ // SCENARIO-LIB-015-001
 			name:         "valid min max args",
-			httpFilePath: "testdata/http_request_files/system_var_randomint_valid_args.http",
+			httpFilePath: "test/data/http_request_files/system_var_randomint_valid_args.http",
 			validate:     validateRandomIntValidMinMaxArgs,
 		},
 		{ // SCENARIO-LIB-015-002
 			name:         "no args",
-			httpFilePath: "testdata/http_request_files/system_var_randomint_no_args.http",
+			httpFilePath: "test/data/http_request_files/system_var_randomint_no_args.http",
 			validate:     validateRandomIntNoArgs,
 		},
 		{ // SCENARIO-LIB-015-003
 			name:         "swapped min max args",
-			httpFilePath: "testdata/http_request_files/system_var_randomint_swapped_args.http",
+			httpFilePath: "test/data/http_request_files/system_var_randomint_swapped_args.http",
 			validate:     validateRandomIntSwappedMinMaxArgs,
 		},
 		{ // SCENARIO-LIB-015-004
 			name:               "malformed args",
-			httpFilePath:       "testdata/http_request_files/system_var_randomint_malformed_args.http",
+			httpFilePath:       "test/data/http_request_files/system_var_randomint_malformed_args.http",
 			validate:           validateRandomIntMalformedArgs,
 			expectErrorInParse: false,
 		},

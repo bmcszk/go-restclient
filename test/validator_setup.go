@@ -13,7 +13,7 @@ import (
 func RunValidateResponses_NilAndEmptyActuals(t *testing.T) {
 	t.Helper()
 	// Given
-	testFilePath := "testdata/http_response_files/validator_nil_empty_actuals_expected.hresp"
+	testFilePath := "test/data/http_response_files/validator_nil_empty_actuals_expected.hresp"
 
 	t.Run("nil actual response slice", func(t *testing.T) {
 		// Given
@@ -78,7 +78,7 @@ func RunValidateResponses_FileErrors(t *testing.T) {
 
 	t.Run("empty expected response file", func(t *testing.T) {
 		// Given: actualResp defined above
-		emptyFilePath := "testdata/http_response_files/validator_empty_expected.hresp"
+		emptyFilePath := "test/data/http_response_files/validator_empty_expected.hresp"
 
 		// When
 		err := client.ValidateResponses(emptyFilePath, actualResp)
@@ -91,7 +91,7 @@ func RunValidateResponses_FileErrors(t *testing.T) {
 
 	t.Run("malformed expected response file", func(t *testing.T) {
 		// Given: actualResp defined above
-		malformedFilePath := "testdata/http_response_files/validator_malformed_status.hresp"
+		malformedFilePath := "test/data/http_response_files/validator_malformed_status.hresp"
 
 		// When
 		err := client.ValidateResponses(malformedFilePath, actualResp)

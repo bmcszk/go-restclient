@@ -20,7 +20,7 @@ import (
 // Corresponds to: Client's ability to define and use simple in-place variables
 // (e.g., '@hostname = value', '@path_segment = /path') within an .http file and substitute them
 // into the request URL (http_syntax.md "In-place Variables", "Variable Substitution").
-// This test uses 'testdata/execute_inplace_vars/simple_variable_in_url/request.http' to verify
+// This test uses 'test/data/execute_inplace_vars/simple_variable_in_url/request.http' to verify
 // that variables like '@hostname' and '@path_segment' are correctly resolved and used to
 // construct the final request URL.
 func RunExecuteFile_InPlace_SimpleVariableInURL(t *testing.T) {
@@ -35,8 +35,8 @@ func RunExecuteFile_InPlace_SimpleVariableInURL(t *testing.T) {
 	}))
 	defer server.Close()
 
-	requestFilePath := "testdata/execute_inplace_vars/simple_variable_in_url/request.http"
-	expectedHrespPath := "testdata/execute_inplace_vars/simple_variable_in_url/expected.hresp"
+	requestFilePath := "test/data/execute_inplace_vars/simple_variable_in_url/request.http"
+	expectedHrespPath := "test/data/execute_inplace_vars/simple_variable_in_url/expected.hresp"
 
 	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
@@ -80,7 +80,7 @@ func RunExecuteFile_InPlace_SimpleVariableInURL(t *testing.T) {
 // PRD-COMMENT: FR3.1, FR3.3 - In-Place Variables: Header Substitution
 // Corresponds to: Client's ability to define in-place variables (e.g., '@api_key = mysecret')
 // and substitute them into request headers (http_syntax.md "In-place Variables", "Variable Substitution").
-// This test uses 'testdata/execute_inplace_vars/variable_in_header/request.http' to verify that
+// This test uses 'test/data/execute_inplace_vars/variable_in_header/request.http' to verify that
 // a variable like '@auth_token' is correctly resolved and inserted into the 'Authorization' header.
 func RunExecuteFile_InPlace_VariableInHeader(t *testing.T) {
 	t.Helper()
@@ -94,8 +94,8 @@ func RunExecuteFile_InPlace_VariableInHeader(t *testing.T) {
 	}))
 	defer server.Close()
 
-	requestFilePath := "testdata/execute_inplace_vars/variable_in_header/request.http"
-	expectedHrespPath := "testdata/execute_inplace_vars/variable_in_header/expected.hresp"
+	requestFilePath := "test/data/execute_inplace_vars/variable_in_header/request.http"
+	expectedHrespPath := "test/data/execute_inplace_vars/variable_in_header/expected.hresp"
 
 	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
@@ -141,7 +141,7 @@ func RunExecuteFile_InPlace_VariableInHeader(t *testing.T) {
 // PRD-COMMENT: FR3.1, FR3.4 - In-Place Variables: Body Substitution
 // Corresponds to: Client's ability to define in-place variables (e.g., '@user_id = 123')
 // and substitute them into the request body (http_syntax.md "In-place Variables", "Variable Substitution").
-// This test uses 'testdata/execute_inplace_vars/variable_in_body/request.http' to verify that
+// This test uses 'test/data/execute_inplace_vars/variable_in_body/request.http' to verify that
 // variables like '@item_name' and '@item_price' are correctly resolved and inserted into the JSON request body.
 func RunExecuteFile_InPlace_VariableInBody(t *testing.T) {
 	t.Helper()
@@ -158,8 +158,8 @@ func RunExecuteFile_InPlace_VariableInBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	requestFilePath := "testdata/execute_inplace_vars/variable_in_body/request.http"
-	expectedHrespPath := "testdata/execute_inplace_vars/variable_in_body/expected.hresp"
+	requestFilePath := "test/data/execute_inplace_vars/variable_in_body/request.http"
+	expectedHrespPath := "test/data/execute_inplace_vars/variable_in_body/expected.hresp"
 
 	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
@@ -205,7 +205,7 @@ func RunExecuteFile_InPlace_VariableInBody(t *testing.T) {
 // Corresponds to: Client's ability to define an in-place variable using the value of another
 // in-place variable (e.g., '@base_url = http://server', '@full_url = {{base_url}}/path')
 // (http_syntax.md "In-place Variables", "Variable Substitution").
-// This test uses 'testdata/execute_inplace_vars/variable_defined_by_another_variable/request.http'
+// This test uses 'test/data/execute_inplace_vars/variable_defined_by_another_variable/request.http'
 // to verify that '@full_url' correctly resolves by substituting '@base_url'.
 func RunExecuteFile_InPlace_VariableDefinedByAnotherVariable(t *testing.T) {
 	t.Helper()
@@ -220,8 +220,8 @@ func RunExecuteFile_InPlace_VariableDefinedByAnotherVariable(t *testing.T) {
 	}))
 	defer server.Close()
 
-	requestFilePath := "testdata/execute_inplace_vars/variable_defined_by_another_variable/request.http"
-	expectedHrespPath := "testdata/execute_inplace_vars/variable_defined_by_another_variable/expected.hresp"
+	requestFilePath := "test/data/execute_inplace_vars/variable_defined_by_another_variable/request.http"
+	expectedHrespPath := "test/data/execute_inplace_vars/variable_defined_by_another_variable/expected.hresp"
 
 	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
@@ -267,7 +267,7 @@ func RunExecuteFile_InPlace_VariableDefinedByAnotherVariable(t *testing.T) {
 // PRD-COMMENT: FR1.5, FR3.1 - Variable Precedence: In-Place over Environment
 // Corresponds to: The rule that in-place variables defined in an .http file take precedence
 // over environment variables with the same name (http_syntax.md "Variables", "Variable Precedence").
-// This test uses 'testdata/execute_inplace_vars/variable_precedence_over_environment/request.http',
+// This test uses 'test/data/execute_inplace_vars/variable_precedence_over_environment/request.http',
 // sets an OS environment variable 'ENV_VAR_PRECEDENCE', and defines an in-place variable
 // '@ENV_VAR_PRECEDENCE' to verify that the in-place definition is used.
 func RunExecuteFile_InPlace_VariablePrecedenceOverEnvironment(t *testing.T) {
@@ -280,10 +280,10 @@ func RunExecuteFile_InPlace_VariablePrecedenceOverEnvironment(t *testing.T) {
 	}))
 	defer server.Close()
 
-	requestFilePath := "testdata/execute_inplace_vars/variable_precedence_over_environment/request.http"
+	requestFilePath := "test/data/execute_inplace_vars/variable_precedence_over_environment/request.http"
 	// expectedHrespPath is not strictly needed for validation in this test as original only checks path
 	// but good to have for consistency if we wanted to validate response status code etc.
-	// expectedHrespPath := "testdata/execute_inplace_vars/variable_precedence_over_environment/expected.hresp"
+	// expectedHrespPath := "test/data/execute_inplace_vars/variable_precedence_over_environment/expected.hresp"
 
 	// The environment name matches the one in the .json filename
 	envName := "testPrecedenceEnv"
@@ -319,7 +319,7 @@ func RunExecuteFile_InPlace_VariablePrecedenceOverEnvironment(t *testing.T) {
 // PRD-COMMENT: FR3.1, FR3.3 - In-Place Variables: Custom Header Substitution
 // Corresponds to: Client's ability to use in-place variables in custom request headers
 // (e.g., 'X-Custom-ID: {{request_id}}') (http_syntax.md "In-place Variables", "Variable Substitution").
-// This test uses 'testdata/execute_inplace_vars/variable_in_custom_header/request.http' to verify
+// This test uses 'test/data/execute_inplace_vars/variable_in_custom_header/request.http' to verify
 // that '@request_id_value' is correctly substituted into the 'X-Request-ID' header.
 func RunExecuteFile_InPlace_VariableInCustomHeader(t *testing.T) {
 	t.Helper()
@@ -332,8 +332,8 @@ func RunExecuteFile_InPlace_VariableInCustomHeader(t *testing.T) {
 	}))
 	defer server.Close()
 
-	requestFilePath := "testdata/execute_inplace_vars/variable_in_custom_header/request.http"
-	expectedHrespPath := "testdata/execute_inplace_vars/variable_in_custom_header/expected.hresp"
+	requestFilePath := "test/data/execute_inplace_vars/variable_in_custom_header/request.http"
+	expectedHrespPath := "test/data/execute_inplace_vars/variable_in_custom_header/expected.hresp"
 
 	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
@@ -368,7 +368,7 @@ func RunExecuteFile_InPlace_VariableInCustomHeader(t *testing.T) {
 // PRD-COMMENT: FR3.1, FR3.4 - In-Place Variables: Complex Body Substitution
 // Corresponds to: Client's ability to substitute multiple in-place variables into various parts
 // of a structured request body (e.g., JSON) (http_syntax.md "In-place Variables", "Variable Substitution").
-// This test uses 'testdata/execute_inplace_vars/variable_substitution_in_body/request.http'
+// This test uses 'test/data/execute_inplace_vars/variable_substitution_in_body/request.http'
 // to verify substitution of '@username' and '@product_id' into a JSON request body.
 func RunExecuteFile_InPlace_VariableSubstitutionInBody(t *testing.T) {
 	t.Helper()
@@ -383,8 +383,8 @@ func RunExecuteFile_InPlace_VariableSubstitutionInBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	requestFilePath := "testdata/execute_inplace_vars/variable_substitution_in_body/request.http"
-	expectedHrespPath := "testdata/execute_inplace_vars/variable_substitution_in_body/expected.hresp"
+	requestFilePath := "test/data/execute_inplace_vars/variable_substitution_in_body/request.http"
+	expectedHrespPath := "test/data/execute_inplace_vars/variable_substitution_in_body/expected.hresp"
 
 	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
@@ -425,7 +425,7 @@ func RunExecuteFile_InPlace_VariableSubstitutionInBody(t *testing.T) {
 // PRD-COMMENT: FR3.1, FR3.6, FR1.3 - In-Place Variables: Referencing System Variables
 // Corresponds to: Client's ability to define an in-place variable using a system variable
 // (e.g., '@request_time = {{$timestamp}}') (http_syntax.md "In-place Variables", "System Variables").
-// This test uses 'testdata/execute_inplace_vars/variable_defined_by_system_variable/request.http'
+// This test uses 'test/data/execute_inplace_vars/variable_defined_by_system_variable/request.http'
 // to verify that '@current_uuid' is correctly assigned a value from '{{$uuid}}'.
 func RunExecuteFile_InPlace_VariableDefinedBySystemVariable(t *testing.T) {
 	t.Helper()
@@ -438,8 +438,8 @@ func RunExecuteFile_InPlace_VariableDefinedBySystemVariable(t *testing.T) {
 	}))
 	defer server.Close()
 
-	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_defined_by_system_variable/request.http"
-	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_defined_by_system_variable/expected.hresp"
+	requestFilePath := "test/data/execute_inplace_vars/inplace_variable_defined_by_system_variable/request.http"
+	expectedHrespPath := "test/data/execute_inplace_vars/inplace_variable_defined_by_system_variable/expected.hresp"
 
 	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
@@ -484,7 +484,7 @@ func RunExecuteFile_InPlace_VariableDefinedBySystemVariable(t *testing.T) {
 // PRD-COMMENT: FR3.1, FR3.7, FR1.4 - In-Place Variables: Referencing OS Environment Variables
 // Corresponds to: Client's ability to define an in-place variable using an OS environment variable
 // (e.g., '@api_token = {{MY_API_TOKEN}}') (http_syntax.md "In-place Variables", "Environment Variables").
-// This test uses 'testdata/execute_inplace_vars/variable_defined_by_os_env_variable/request.http',
+// This test uses 'test/data/execute_inplace_vars/variable_defined_by_os_env_variable/request.http',
 // sets an OS environment variable 'OS_VAR_TEST', and defines '@os_value = {{OS_VAR_TEST}}'
 // to verify correct substitution.
 func RunExecuteFile_InPlace_VariableDefinedByOsEnvVariable(t *testing.T) {
@@ -506,8 +506,8 @@ func RunExecuteFile_InPlace_VariableDefinedByOsEnvVariable(t *testing.T) {
 	}))
 	defer server.Close()
 
-	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_defined_by_os_env_variable/request.http"
-	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_defined_by_os_env_variable/expected.hresp"
+	requestFilePath := "test/data/execute_inplace_vars/inplace_variable_defined_by_os_env_variable/request.http"
+	expectedHrespPath := "test/data/execute_inplace_vars/inplace_variable_defined_by_os_env_variable/expected.hresp"
 
 	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
@@ -543,7 +543,7 @@ func RunExecuteFile_InPlace_VariableDefinedByOsEnvVariable(t *testing.T) {
 // PRD-COMMENT: FR3.1, FR3.3, FR5.1 - In-Place Variables: Authentication Header Substitution
 // Corresponds to: Client's ability to use in-place variables within standard authentication headers
 // like 'Authorization: Bearer {{token}}' (http_syntax.md "In-place Variables", "Authentication").
-// This test uses 'testdata/execute_inplace_vars/variable_in_auth_header/request.http' to verify
+// This test uses 'test/data/execute_inplace_vars/variable_in_auth_header/request.http' to verify
 // that '@bearer_token' is correctly substituted into the 'Authorization' header.
 func RunExecuteFile_InPlace_VariableInAuthHeader(t *testing.T) {
 	t.Helper()
@@ -558,8 +558,8 @@ func RunExecuteFile_InPlace_VariableInAuthHeader(t *testing.T) {
 	}))
 	defer server.Close()
 
-	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_in_auth_header/request.http"
-	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_in_auth_header/expected.hresp"
+	requestFilePath := "test/data/execute_inplace_vars/inplace_variable_in_auth_header/request.http"
+	expectedHrespPath := "test/data/execute_inplace_vars/inplace_variable_in_auth_header/expected.hresp"
 
 	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
@@ -598,7 +598,7 @@ func RunExecuteFile_InPlace_VariableInAuthHeader(t *testing.T) {
 }
 // Corresponds to: Client's ability to substitute in-place variables into a JSON request body,
 // ensuring correct JSON structure is maintained (http_syntax.md "In-place Variables", "Request Body").
-// This test uses 'testdata/execute_inplace_vars/variable_in_json_request_body/request.http'
+// This test uses 'test/data/execute_inplace_vars/variable_in_json_request_body/request.http'
 // to verify substitution of '@user_name' and '@user_age' (an integer) into a JSON payload.
 func RunExecuteFile_InPlace_VariableInJsonRequestBody(t *testing.T) {
 	t.Helper()
@@ -614,9 +614,9 @@ func RunExecuteFile_InPlace_VariableInJsonRequestBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_in_json_request_body/request.http"
+	requestFilePath := "test/data/execute_inplace_vars/inplace_variable_in_json_request_body/request.http"
 	// Minimal hresp
-	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_in_json_request_body/expected.hresp"
+	expectedHrespPath := "test/data/execute_inplace_vars/inplace_variable_in_json_request_body/expected.hresp"
 
 	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
@@ -658,7 +658,7 @@ func RunExecuteFile_InPlace_VariableInJsonRequestBody(t *testing.T) {
 // Corresponds to: Client's ability to resolve in-place variables that are defined by other
 // in-place variables in a chain (e.g., '@var1 = val1', '@var2 = {{var1}}', '@var3 = {{var2}}')
 // (http_syntax.md "In-place Variables").
-// This test uses 'testdata/execute_inplace_vars/variable_defined_by_another_inplace_variable/request.http'
+// This test uses 'test/data/execute_inplace_vars/variable_defined_by_another_inplace_variable/request.http'
 // to verify chained resolution of '@host', '@path', and '@fullUrl'.
 func RunExecuteFile_InPlace_VariableDefinedByAnotherInPlaceVariable(t *testing.T) {
 	t.Helper()
@@ -672,8 +672,9 @@ func RunExecuteFile_InPlace_VariableDefinedByAnotherInPlaceVariable(t *testing.T
 	}))
 	defer server.Close()
 
-	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_defined_by_another_inplace_variable/request.http"
-	expectedHrespPath := "testdata/execute_inplace_vars/" +
+	requestFilePath := "test/data/execute_inplace_vars/" +
+		"inplace_variable_defined_by_another_inplace_variable/request.http"
+	expectedHrespPath := "test/data/execute_inplace_vars/" +
 		"inplace_variable_defined_by_another_inplace_variable/expected.hresp"
 
 	client, err := rc.NewClient(rc.WithVars(map[string]any{
@@ -716,7 +717,7 @@ func RunExecuteFile_InPlace_VariableDefinedByAnotherInPlaceVariable(t *testing.T
 // Corresponds to: Client's ability to define an in-place variable using a variable from a .env file,
 // accessed via '{{$dotenv VAR_NAME}}' (http_syntax.md "In-place Variables",
 // "Environment Variables", ".env File Support").
-// This test uses 'testdata/execute_inplace_vars/variable_defined_by_dotenv_os_variable/request.http'
+// This test uses 'test/data/execute_inplace_vars/variable_defined_by_dotenv_os_variable/request.http'
 // and its associated '.env' file to verify that '@my_var' is correctly assigned the value of
 // 'DOTENV_VAR' from the .env file.
 func RunExecuteFile_InPlace_VariableDefinedByDotEnvOsVariable(t *testing.T) {
@@ -735,8 +736,8 @@ func RunExecuteFile_InPlace_VariableDefinedByDotEnvOsVariable(t *testing.T) {
 	}))
 	defer server.Close()
 
-	requestFilePath := "testdata/execute_inplace_vars/inplace_variable_defined_by_dot_env_os_variable/request.http"
-	expectedHrespPath := "testdata/execute_inplace_vars/inplace_variable_defined_by_dot_env_os_variable/expected.hresp"
+	requestFilePath := "test/data/execute_inplace_vars/inplace_variable_defined_by_dot_env_os_variable/request.http"
+	expectedHrespPath := "test/data/execute_inplace_vars/inplace_variable_defined_by_dot_env_os_variable/expected.hresp"
 
 	client, err := rc.NewClient(rc.WithVars(map[string]any{
 		"test_server_url": server.URL,
@@ -780,13 +781,13 @@ func RunExecuteFile_InPlace_VariableDefinedByDotEnvOsVariable(t *testing.T) {
 // Corresponds to: Parser and client robustness in handling malformed in-place variable definitions,
 // specifically when only a name is provided (e.g., '@myvar' without '= value')
 // (http_syntax.md "In-place Variables", implicitly by defining correct syntax).
-// This test uses 'testdata/execute_inplace_vars/malformed_name_only/request.http' to verify that
+// This test uses 'test/data/execute_inplace_vars/malformed_name_only/request.http' to verify that
 // such malformed definitions are ignored or handled gracefully without causing
 // execution failure for other valid requests.
 func RunExecuteFile_InPlace_Malformed_NameOnlyNoEqualsNoValue(t *testing.T) {
 	t.Helper()
 	// Given: an .http file with a malformed in-place variable (name only, no equals, no value)
-	requestFilePath := "testdata/execute_inplace_vars/malformed_name_only_no_equals_no_value/request.http"
+	requestFilePath := "test/data/execute_inplace_vars/malformed_name_only_no_equals_no_value/request.http"
 	expectedErrorSubstring := "malformed in-place variable definition, missing '=' or name part invalid"
 
 	client, err := rc.NewClient()
@@ -806,12 +807,12 @@ func RunExecuteFile_InPlace_Malformed_NameOnlyNoEqualsNoValue(t *testing.T) {
 // Corresponds to: Parser and client robustness in handling malformed in-place variable definitions,
 // specifically when no name is provided (e.g., '@ = value')
 // (http_syntax.md "In-place Variables", implicitly by defining correct syntax).
-// This test uses 'testdata/execute_inplace_vars/malformed_no_name/request.http' to verify that
+// This test uses 'test/data/execute_inplace_vars/malformed_no_name/request.http' to verify that
 // such malformed definitions are ignored or handled gracefully.
 func RunExecuteFile_InPlace_Malformed_NoNameEqualsValue(t *testing.T) {
 	t.Helper()
 	// Given: an .http file with a malformed in-place variable (no name, equals, value)
-	requestFilePath := "testdata/execute_inplace_vars/malformed_no_name_equals_value/request.http"
+	requestFilePath := "test/data/execute_inplace_vars/malformed_no_name_equals_value/request.http"
 	expectedErrorSubstring := "malformed in-place variable definition, variable name cannot be empty"
 
 	client, err := rc.NewClient()
@@ -833,15 +834,15 @@ func RunExecuteFile_InPlace_Malformed_NoNameEqualsValue(t *testing.T) {
 // While {{$dotenv}} is primarily for OS/file environment variables, this tests if defining
 // `@my_api_key = {{$dotenv DOTENV_VAR_FOR_SYSTEM_TEST}}` correctly pulls from a .env file.
 // (http_syntax.md "In-place Variables", "Environment Variables", ".env File Support").
-// It uses 'testdata/execute_inplace_vars/inplace_variable_defined_by_dotenv_system_variable/
+// It uses 'test/data/execute_inplace_vars/inplace_variable_defined_by_dotenv_system_variable/
 // request.http' and its .env file.
 func RunExecuteFile_InPlace_VariableDefinedByDotEnvSystemVariable(t *testing.T) {
 	t.Helper()
 	// Given: an .http file using {{$dotenv VAR_NAME}} for an in-place variable,
 	// and a .env file defining VAR_NAME in the same directory as the .http file.
-	const requestFilePath = "testdata/execute_inplace_vars/" +
+	const requestFilePath = "test/data/execute_inplace_vars/" +
 		"inplace_variable_defined_by_dotenv_system_variable/request.http"
-	// The .env file is: testdata/execute_inplace_vars/inplace_variable_defined_by_dotenv_system_variable/.env
+	// The .env file is: test/data/execute_inplace_vars/inplace_variable_defined_by_dotenv_system_variable/.env
 	// with DOTENV_VAR_FOR_SYSTEM_TEST=actual_dotenv_value
 
 	const expectedSubstitutedValue = "actual_dotenv_value"
@@ -878,12 +879,12 @@ func RunExecuteFile_InPlace_VariableDefinedByDotEnvSystemVariable(t *testing.T) 
 // Corresponds to: Client's ability to define an in-place variable using the
 // '{{$randomInt MIN MAX}}' system variable (http_syntax.md "In-place Variables",
 // "System Variables").
-// This test uses 'testdata/execute_inplace_vars/inplace_variable_defined_by_random_int/request.http'
+// This test uses 'test/data/execute_inplace_vars/inplace_variable_defined_by_random_int/request.http'
 // to verify that '@my_random_port' is correctly assigned a random integer within the specified range.
 func RunExecuteFile_InPlace_VariableDefinedByRandomInt(t *testing.T) {
 	t.Helper()
 	// Given: an .http file using {{$randomInt MIN MAX}} for an in-place variable
-	const requestFilePath = "testdata/execute_inplace_vars/inplace_variable_defined_by_random_int/request.http"
+	const requestFilePath = "test/data/execute_inplace_vars/inplace_variable_defined_by_random_int/request.http"
 	const minPort = 8000
 	const maxPort = 8080
 

@@ -27,7 +27,7 @@ test: test-unit ## Run all tests
 
 test-unit: ## Run unit tests
 	@echo "Running unit tests..."
-	@gotestsum --junitfile unit-tests.xml ./... -- -cover -v
+	@gotestsum --junitfile unit-tests.xml -- -cover -v ./...
 	@echo "Check unit-tests.xml for results."
 
 # Dependencies
