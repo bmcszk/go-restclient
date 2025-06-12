@@ -68,17 +68,17 @@ func TestExecuteFile_MultipleRequests_GreaterThanTwo(t *testing.T) {
 // GAP TESTS - These tests demonstrate functionality gaps that need to be implemented
 // They are commented out because they currently fail (which is expected)
 
-// func TestExecuteFile_MultilineQueryParameters(t *testing.T) {
-// 	test.RunExecuteFile_MultilineQueryParameters(t)
-// }
+func TestExecuteFile_MultilineQueryParameters(t *testing.T) {
+	test.RunExecuteFile_MultilineQueryParameters(t)
+}
 
-// func TestExecuteFile_MultilineFormData(t *testing.T) {
-// 	test.RunExecuteFile_MultilineFormData(t)
-// }
+func TestExecuteFile_MultilineFormData(t *testing.T) {
+	test.RunExecuteFile_MultilineFormData(t)
+}
 
-// func TestExecuteFile_MultipartFileUploads(t *testing.T) {
-// 	test.RunExecuteFile_MultipartFileUploads(t)
-// }
+func TestExecuteFile_MultipartFileUploads(t *testing.T) {
+	test.RunExecuteFile_MultipartFileUploads(t)
+}
 
 // Edge case tests
 func TestExecuteFile_InvalidMethodInFile(t *testing.T) {

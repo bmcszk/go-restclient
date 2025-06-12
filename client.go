@@ -1,6 +1,7 @@
 package restclient
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -8,10 +9,12 @@ import (
 	"io"
 	"log/slog"
 	"math/rand"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -672,21 +675,35 @@ func (c *Client) substituteRequestBody(
 			return bodyErr
 		}
 	} else if restClientReq.RawBody != "" {
-		resolvedBody := resolveVariablesInText(
-			restClientReq.RawBody,
-			c.programmaticVars,
-			restClientReq.ActiveVariables,
-			parsedFile.EnvironmentVariables,
-			parsedFile.GlobalVariables,
-			requestScopedSystemVars,
-			osEnvGetter,
-			c.currentDotEnvVars,
-		)
-		finalSubstitutedBody = substituteDynamicSystemVariables(
-			resolvedBody,
-			c.currentDotEnvVars,
-			c.programmaticVars,
-		)
+		// Check if this is a multipart form with file references
+		if c.isMultipartFormWithFileReferences(restClientReq) {
+			finalSubstitutedBody, bodyErr = c.processMultipartFormWithFiles(
+				restClientReq,
+				parsedFile,
+				requestScopedSystemVars,
+				osEnvGetter,
+			)
+			if bodyErr != nil {
+				return bodyErr
+			}
+		} else {
+			// Regular body processing
+			resolvedBody := resolveVariablesInText(
+				restClientReq.RawBody,
+				c.programmaticVars,
+				restClientReq.ActiveVariables,
+				parsedFile.EnvironmentVariables,
+				parsedFile.GlobalVariables,
+				requestScopedSystemVars,
+				osEnvGetter,
+				c.currentDotEnvVars,
+			)
+			finalSubstitutedBody = substituteDynamicSystemVariables(
+				resolvedBody,
+				c.currentDotEnvVars,
+				c.programmaticVars,
+			)
+		}
 	}
 
 	if finalSubstitutedBody != "" {
@@ -699,6 +716,273 @@ func (c *Client) substituteRequestBody(
 		restClientReq.Body = nil
 		restClientReq.GetBody = nil
 	}
+	return nil
+}
+
+// isMultipartFormWithFileReferences checks if the request is a multipart form containing file references
+func (*Client) isMultipartFormWithFileReferences(restClientReq *Request) bool {
+	contentType := restClientReq.Headers.Get("Content-Type")
+	if !strings.Contains(strings.ToLower(contentType), "multipart/form-data") {
+		return false
+	}
+	
+	// Check if the body contains file reference syntax (< filename)
+	return strings.Contains(restClientReq.RawBody, "< ")
+}
+
+// processMultipartFormWithFiles processes multipart form data and replaces file references with actual file content
+func (c *Client) processMultipartFormWithFiles(
+	restClientReq *Request,
+	parsedFile *ParsedFile,
+	requestScopedSystemVars map[string]string,
+	osEnvGetter func(string) (string, bool),
+) (string, error) {
+	// First apply variable substitution to the raw body
+	resolvedBody := resolveVariablesInText(
+		restClientReq.RawBody,
+		c.programmaticVars,
+		restClientReq.ActiveVariables,
+		parsedFile.EnvironmentVariables,
+		parsedFile.GlobalVariables,
+		requestScopedSystemVars,
+		osEnvGetter,
+		c.currentDotEnvVars,
+	)
+	
+	processedBody := substituteDynamicSystemVariables(
+		resolvedBody,
+		c.currentDotEnvVars,
+		c.programmaticVars,
+	)
+	
+	// Parse and reconstruct the multipart form with file substitution
+	return c.reconstructMultipartFormWithFiles(processedBody, restClientReq)
+}
+
+// reconstructMultipartFormWithFiles parses multipart form data and reconstructs it with file content substitution
+func (c *Client) reconstructMultipartFormWithFiles(body string, restClientReq *Request) (string, error) {
+	// Extract boundary from Content-Type header
+	contentType := restClientReq.Headers.Get("Content-Type")
+	boundary := c.extractBoundaryFromContentType(contentType)
+	if boundary == "" {
+		return "", fmt.Errorf("no boundary found in Content-Type header: %s", contentType)
+	}
+	
+	// Parse the multipart form data
+	formParts, err := c.parseMultipartBody(body, boundary)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse multipart body: %w", err)
+	}
+	
+	// Create a new multipart form with file substitution
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	
+	// Set the boundary to match the original boundary
+	err = writer.SetBoundary(boundary)
+	if err != nil {
+		return "", fmt.Errorf("failed to set multipart boundary: %w", err)
+	}
+	
+	for _, part := range formParts {
+		if part.IsFileReference {
+			// Handle file reference
+			err := c.writeFilePartToMultipart(writer, part, restClientReq.FilePath)
+			if err != nil {
+				return "", fmt.Errorf("failed to write file part: %w", err)
+			}
+		} else {
+			// Handle regular form field
+			err := c.writeFieldPartToMultipart(writer, part)
+			if err != nil {
+				return "", fmt.Errorf("failed to write field part: %w", err)
+			}
+		}
+	}
+	
+	err = writer.Close()
+	if err != nil {
+		return "", fmt.Errorf("failed to close multipart writer: %w", err)
+	}
+	
+	return buf.String(), nil
+}
+
+// multipartPart represents a parsed multipart form part
+type multipartPart struct {
+	Name            string
+	Filename        string
+	ContentType     string
+	Content         string
+	IsFileReference bool
+}
+
+// extractBoundaryFromContentType extracts the boundary from a Content-Type header
+func (*Client) extractBoundaryFromContentType(contentType string) string {
+	// Look for boundary= in Content-Type
+	re := regexp.MustCompile(`boundary=([^;]+)`)
+	matches := re.FindStringSubmatch(contentType)
+	if len(matches) >= 2 {
+		return strings.TrimSpace(matches[1])
+	}
+	return ""
+}
+
+// parseMultipartBody parses a multipart body into individual parts
+func (c *Client) parseMultipartBody(body, boundary string) ([]multipartPart, error) {
+	var parts []multipartPart
+	
+	// Split by boundary
+	boundaryDelimiter := "--" + boundary
+	sections := strings.Split(body, boundaryDelimiter)
+	
+	for _, section := range sections {
+		section = strings.TrimSpace(section)
+		if section == "" || section == "--" {
+			continue
+		}
+		
+		part, err := c.parseMultipartSection(section)
+		if err != nil {
+			continue // Skip malformed sections
+		}
+		
+		parts = append(parts, part)
+	}
+	
+	return parts, nil
+}
+
+// parseMultipartSection parses a single multipart section
+func (c *Client) parseMultipartSection(section string) (multipartPart, error) {
+	var part multipartPart
+	
+	// Split headers from content
+	lines := strings.Split(section, "\n")
+	var headerLines []string
+	var contentLines []string
+	var inHeaders = true
+	
+	for _, line := range lines {
+		if inHeaders && strings.TrimSpace(line) == "" {
+			inHeaders = false
+			continue
+		}
+		
+		if inHeaders {
+			headerLines = append(headerLines, line)
+		} else {
+			contentLines = append(contentLines, line)
+		}
+	}
+	
+	// Parse headers
+	for _, headerLine := range headerLines {
+		if strings.Contains(headerLine, "Content-Disposition:") {
+			part.Name = c.extractFormFieldName(headerLine)
+			part.Filename = c.extractFilename(headerLine)
+		} else if strings.Contains(headerLine, "Content-Type:") {
+			part.ContentType = c.extractContentType(headerLine)
+		}
+	}
+	
+	// Handle content
+	content := strings.Join(contentLines, "\n")
+	content = strings.TrimSpace(content)
+	
+	// Check if content is a file reference
+	if strings.HasPrefix(content, "< ") {
+		part.IsFileReference = true
+		part.Content = strings.TrimSpace(content[2:]) // Remove "< "
+	} else {
+		part.IsFileReference = false
+		part.Content = content
+	}
+	
+	return part, nil
+}
+
+// extractFormFieldName extracts the name from Content-Disposition header
+func (*Client) extractFormFieldName(header string) string {
+	re := regexp.MustCompile(`name="([^"]+)"`)
+	matches := re.FindStringSubmatch(header)
+	if len(matches) >= 2 {
+		return matches[1]
+	}
+	return ""
+}
+
+// extractFilename extracts the filename from Content-Disposition header
+func (*Client) extractFilename(header string) string {
+	re := regexp.MustCompile(`filename="([^"]+)"`)
+	matches := re.FindStringSubmatch(header)
+	if len(matches) >= 2 {
+		return matches[1]
+	}
+	return ""
+}
+
+// extractContentType extracts the content type from Content-Type header
+func (*Client) extractContentType(header string) string {
+	parts := strings.SplitN(header, ":", 2)
+	if len(parts) == 2 {
+		return strings.TrimSpace(parts[1])
+	}
+	return ""
+}
+
+// writeFilePartToMultipart writes a file part to the multipart writer
+func (*Client) writeFilePartToMultipart(writer *multipart.Writer, part multipartPart, _ string) error {
+	// Resolve file path
+	var filePath string
+	if filepath.IsAbs(part.Content) {
+		filePath = part.Content
+	} else {
+		wd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to get working directory: %w", err)
+		}
+		filePath = filepath.Join(wd, part.Content)
+	}
+	
+	// Read file content
+	fileContent, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to read file %s: %w", filePath, err)
+	}
+	
+	// Create form file
+	var formWriter io.Writer
+	if part.Filename != "" {
+		formWriter, err = writer.CreateFormFile(part.Name, part.Filename)
+	} else {
+		formWriter, err = writer.CreateFormField(part.Name)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to create form field: %w", err)
+	}
+	
+	// Write file content
+	_, err = formWriter.Write(fileContent)
+	if err != nil {
+		return fmt.Errorf("failed to write file content: %w", err)
+	}
+	
+	return nil
+}
+
+// writeFieldPartToMultipart writes a regular form field to the multipart writer
+func (*Client) writeFieldPartToMultipart(writer *multipart.Writer, part multipartPart) error {
+	formWriter, err := writer.CreateFormField(part.Name)
+	if err != nil {
+		return fmt.Errorf("failed to create form field: %w", err)
+	}
+	
+	_, err = formWriter.Write([]byte(part.Content))
+	if err != nil {
+		return fmt.Errorf("failed to write field content: %w", err)
+	}
+	
 	return nil
 }
 

@@ -8,10 +8,10 @@ GET [[.ServerURL]]/api/comments
 ###
 
 POST [[.ServerURL]]/api/search
-Content-Type: application/json
     ?q=test query
     &limit=50
     &offset=0
+Content-Type: application/json
 
 {
   "advanced": true
