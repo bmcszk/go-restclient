@@ -1,4 +1,0 @@
-@my_header_value = secret-token
-
-GET {{test_server_url}}/somepath
-X-Custom-Header: {{my_header_value}}

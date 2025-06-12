@@ -1,3 +1,0 @@
-This is a sample plain text file.
-It contains multiple lines.
-This content should be sent as-is in the request body.

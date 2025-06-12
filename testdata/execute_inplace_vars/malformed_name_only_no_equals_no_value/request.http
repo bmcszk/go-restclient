@@ -1,4 +1,0 @@
-@name_only_var
-
-### Test Request
-GET {{test_server_url}}/test

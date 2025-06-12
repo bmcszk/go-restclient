@@ -1,6 +1,0 @@
-GET [[.ServerURL]]/item/{{$randomInt abc def}}/malformed
-X-Random-ID: {{$randomInt 1 xyz}}
-
-{
-  "value": "{{$randomInt foo bar}}"
-} 

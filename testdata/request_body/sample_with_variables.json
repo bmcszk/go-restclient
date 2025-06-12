@@ -1,7 +1,0 @@
-{
-  "userId": "{{userId}}",
-  "name": "{{userName}}",
-  "timestamp": "{{$timestamp}}",
-  "guid": "{{$guid}}",
-  "environment": "{{env}}"
-}

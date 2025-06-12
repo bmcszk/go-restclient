@@ -1,3 +1,0 @@
-@host = http://imported.com
-@var1 = value1_from_imported
-@var2 = value2_from_imported

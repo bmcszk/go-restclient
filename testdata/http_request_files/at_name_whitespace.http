@@ -1,6 +1,0 @@
-# @name    Spaced Name  
-GET http://example.com/spaced
-
-###
-# @name	Tabbed	Name	
-PUT http://example.com/tabbed

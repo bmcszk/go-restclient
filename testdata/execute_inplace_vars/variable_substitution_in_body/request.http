@@ -1,9 +1,0 @@
-@user_id = user123
-
-POST {{test_server_url}}/users
-Content-Type: application/json
-
-{
-  "id": "{{user_id}}",
-  "status": "active"
-}

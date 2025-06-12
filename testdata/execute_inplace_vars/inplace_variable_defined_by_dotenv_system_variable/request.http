@@ -1,4 +1,0 @@
-@my_api_key = {{$dotenv DOTENV_VAR_FOR_SYSTEM_TEST}}
-
-### Test Request
-GET {{test_server_url}}/{{my_api_key}}

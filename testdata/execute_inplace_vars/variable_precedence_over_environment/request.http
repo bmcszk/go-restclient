@@ -1,4 +1,0 @@
-@host = {{test_server_url}}
-
-### Test Request
-GET {{host}}/expected_path

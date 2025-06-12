@@ -1,5 +1,0 @@
-// @import "imported_file_3_level_2.http"
-@level1_var = level1_value
-
-### Request from imported_file_2_level_1
-GET {{host}}/level1_request

@@ -1,8 +1,0 @@
-HTTP/1.1 200 OK
-Content-Type: application/json
-
-{
-  "created_at": "{{$anyDatetime 'RFC3339'}}",
-  "updated_at": "{{$anyDatetime 'RFC1123'}}",
-  "custom_date": "{{$anyDatetime '2006-01-02'}}"
-}

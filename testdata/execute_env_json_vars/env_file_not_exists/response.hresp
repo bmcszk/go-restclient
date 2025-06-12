@@ -1,6 +1,0 @@
-// Expecting an error because http-client.env.json is not found,
-// so {{host}} and {{token}} will not be resolved.
-// The HTTP client should fail to make a request with an unresolved host.
-
-// Status: Error (client-side)
-// ErrorContains: unsupported protocol scheme ""

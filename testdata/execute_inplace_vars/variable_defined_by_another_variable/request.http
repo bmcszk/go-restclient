@@ -1,5 +1,0 @@
-@base_url = {{test_server_url}}
-@path = /users
-@full_url = {{base_url}}{{path}}/123
-
-GET {{full_url}}

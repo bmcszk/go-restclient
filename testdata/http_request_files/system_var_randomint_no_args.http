@@ -1,6 +1,0 @@
-GET [[.ServerURL]]/item/{{$randomInt}}/default
-X-Random-ID: {{$randomInt}}
-
-{
-  "value": {{$randomInt}}
-} 

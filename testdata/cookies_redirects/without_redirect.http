@@ -1,3 +1,0 @@
-### No Redirect Request
-// @no-redirect
-GET {{scheme}}://{{host}}:{{port}}/redirect

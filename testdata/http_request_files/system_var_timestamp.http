@@ -1,9 +1,0 @@
-GET [[.ServerURL]]/events/{{$timestamp}}
-Content-Type: application/json
-X-Request-Time: {{$timestamp}}
-User-Agent: test-client
-
-{
-  "event_time": "{{$timestamp}}",
-  "processed_at": "{{$timestamp}}"
-} 

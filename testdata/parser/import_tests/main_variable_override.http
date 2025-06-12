@@ -1,9 +1,0 @@
-// @import "imported_variables.http"
-@host = http://main-override.com
-@var_from_main = main_value
-
-### Request from main_variable_override
-GET {{host}}/override
-X-Var1: {{var1}}
-X-Var2: {{var2}}
-X-Var-Main: {{var_from_main}}

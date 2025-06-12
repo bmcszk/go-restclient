@@ -1,7 +1,0 @@
-### VS Code Environment Variable Access
-GET https://example.com/api/env
-X-VS-Code-Env: {{$processEnv PATH}}
-
-### JetBrains Environment Variable Access
-GET https://example.com/api/env
-X-JetBrains-Env: {{$env.PATH}}

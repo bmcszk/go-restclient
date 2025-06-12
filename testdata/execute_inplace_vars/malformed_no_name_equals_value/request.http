@@ -1,4 +1,0 @@
-@=value_only_val
-
-### Test Request
-GET {{test_server_url}}/test

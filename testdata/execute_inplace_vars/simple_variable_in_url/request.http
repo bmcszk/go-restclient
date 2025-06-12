@@ -1,4 +1,0 @@
-@hostname = {{test_server_url}}
-@path_segment = /api/v1/items
-
-GET {{hostname}}{{path_segment}}/123

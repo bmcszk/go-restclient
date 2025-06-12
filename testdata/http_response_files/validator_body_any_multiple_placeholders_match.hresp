@@ -1,4 +1,0 @@
-HTTP/1.1 200 OK
-Content-Type: application/json
-
-{"field1": "{{$any}}", "field2": "constant", "field3": "{{$any}}"} 

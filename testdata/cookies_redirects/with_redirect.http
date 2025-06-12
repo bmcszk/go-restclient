@@ -1,2 +1,0 @@
-### Follow Redirect Request
-GET {{scheme}}://{{host}}:{{port}}/redirect

@@ -1,2 +1,0 @@
-// Expecting client.ExecuteFile to error due to unresolved {{host}}
-// and resp.Error to contain details.

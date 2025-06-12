@@ -1,5 +1,0 @@
-GET [[.ServerURL]]/first
-
-###
-
-INVALID_METHOD [[.ServerURL]]/second 
