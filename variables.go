@@ -395,6 +395,10 @@ func matchesDynamicPattern(value string) bool {
 		reRandomDotAlphabetic,
 		reRandomDotAlphanumeric, reRandomString, reRandomPassword,
 		reDotEnv, reProcessEnv, reDateTime, reAadToken,
+		// Person/identity faker variables - VS Code style
+		reRandomFirstName, reRandomLastName, reRandomFullName, reRandomJobTitle,
+		// Person/identity faker variables - JetBrains style
+		reRandomFirstNameDot, reRandomLastNameDot, reRandomFullNameDot, reRandomJobTitleDot,
 	}
 
 	for _, re := range dynamicRegexes {
@@ -907,21 +911,21 @@ func substituteRandomVariables(text string, programmaticVars map[string]any) str
 	}
 
 	// Person/Identity data - VS Code style
-	text = reRandomFirstName.ReplaceAllStringFunc(text, func(match string) string {
+	text = reRandomFirstName.ReplaceAllStringFunc(text, func(_ string) string {
 		if len(firstNames) > 0 {
 			return firstNames[rand.Intn(len(firstNames))]
 		}
 		return "John"
 	})
 
-	text = reRandomLastName.ReplaceAllStringFunc(text, func(match string) string {
+	text = reRandomLastName.ReplaceAllStringFunc(text, func(_ string) string {
 		if len(lastNames) > 0 {
 			return lastNames[rand.Intn(len(lastNames))]
 		}
 		return "Doe"
 	})
 
-	text = reRandomFullName.ReplaceAllStringFunc(text, func(match string) string {
+	text = reRandomFullName.ReplaceAllStringFunc(text, func(_ string) string {
 		firstName := "John"
 		lastName := "Doe"
 		if len(firstNames) > 0 {
@@ -933,7 +937,7 @@ func substituteRandomVariables(text string, programmaticVars map[string]any) str
 		return firstName + " " + lastName
 	})
 
-	text = reRandomJobTitle.ReplaceAllStringFunc(text, func(match string) string {
+	text = reRandomJobTitle.ReplaceAllStringFunc(text, func(_ string) string {
 		if len(jobTitles) > 0 {
 			return jobTitles[rand.Intn(len(jobTitles))]
 		}
@@ -941,21 +945,21 @@ func substituteRandomVariables(text string, programmaticVars map[string]any) str
 	})
 
 	// Person/Identity data - JetBrains style
-	text = reRandomFirstNameDot.ReplaceAllStringFunc(text, func(match string) string {
+	text = reRandomFirstNameDot.ReplaceAllStringFunc(text, func(_ string) string {
 		if len(firstNames) > 0 {
 			return firstNames[rand.Intn(len(firstNames))]
 		}
 		return "John"
 	})
 
-	text = reRandomLastNameDot.ReplaceAllStringFunc(text, func(match string) string {
+	text = reRandomLastNameDot.ReplaceAllStringFunc(text, func(_ string) string {
 		if len(lastNames) > 0 {
 			return lastNames[rand.Intn(len(lastNames))]
 		}
 		return "Doe"
 	})
 
-	text = reRandomFullNameDot.ReplaceAllStringFunc(text, func(match string) string {
+	text = reRandomFullNameDot.ReplaceAllStringFunc(text, func(_ string) string {
 		firstName := "John"
 		lastName := "Doe"
 		if len(firstNames) > 0 {
@@ -967,7 +971,7 @@ func substituteRandomVariables(text string, programmaticVars map[string]any) str
 		return firstName + " " + lastName
 	})
 
-	text = reRandomJobTitleDot.ReplaceAllStringFunc(text, func(match string) string {
+	text = reRandomJobTitleDot.ReplaceAllStringFunc(text, func(_ string) string {
 		if len(jobTitles) > 0 {
 			return jobTitles[rand.Intn(len(jobTitles))]
 		}
