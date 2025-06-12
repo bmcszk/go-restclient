@@ -1,0 +1,7 @@
+### GraphQL Error Handling Test
+POST [[.ServerURL]]/graphql
+Content-Type: application/json
+
+{
+  "query": "query InvalidQuery { nonExistentField { invalidSubField } }"
+}

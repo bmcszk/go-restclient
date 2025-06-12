@@ -246,6 +246,35 @@ func TestExecuteFile_InPlace_VariableDefinedByRandomInt(t *testing.T) {
 	test.RunExecuteFile_InPlace_VariableDefinedByRandomInt(t)
 }
 
+// GraphQL tests
+func TestExecuteFile_GraphQLBasicQuery(t *testing.T) {
+	test.RunExecuteFile_GraphQLBasicQuery(t)
+}
+
+func TestExecuteFile_GraphQLQueryWithVariables(t *testing.T) {
+	test.RunExecuteFile_GraphQLQueryWithVariables(t)
+}
+
+func TestExecuteFile_GraphQLMutation(t *testing.T) {
+	test.RunExecuteFile_GraphQLMutation(t)
+}
+
+func TestExecuteFile_GraphQLFragments(t *testing.T) {
+	test.RunExecuteFile_GraphQLFragments(t)
+}
+
+func TestExecuteFile_GraphQLIntrospection(t *testing.T) {
+	test.RunExecuteFile_GraphQLIntrospection(t)
+}
+
+func TestExecuteFile_GraphQLErrorHandling(t *testing.T) {
+	test.RunExecuteFile_GraphQLErrorHandling(t)
+}
+
+func TestExecuteFile_GraphQLBatchQueries(t *testing.T) {
+	test.RunExecuteFile_GraphQLBatchQueries(t)
+}
+
 // Test helper tests
 func TestCreateTestFileFromTemplate_DebugOutput(t *testing.T) {
 	test.RunCreateTestFileFromTemplate_DebugOutput(t)

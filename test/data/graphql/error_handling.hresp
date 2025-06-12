@@ -1,0 +1,17 @@
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "errors": [
+    {
+      "message": "{{$any}}",
+      "locations": [
+        {
+          "line": {{$any}},
+          "column": {{$any}}
+        }
+      ],
+      "path": ["{{$any}}"]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+### GraphQL Mutation
+POST [[.ServerURL]]/graphql
+Content-Type: application/json
+
+{
+  "query": "mutation CreateUser($input: CreateUserInput!) { createUser(input: $input) { id name email } }",
+  "variables": {
+    "input": {
+      "name": "{{userName}}",
+      "email": "{{userEmail}}"
+    }
+  }
+}

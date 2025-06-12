@@ -1,0 +1,10 @@
+### GraphQL Query with Variables
+POST [[.ServerURL]]/graphql
+Content-Type: application/json
+
+{
+  "query": "query GetUserById($userId: ID!) { user(id: $userId) { id name email createdAt } }",
+  "variables": {
+    "userId": "{{userId}}"
+  }
+}
