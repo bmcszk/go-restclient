@@ -1,4 +1,4 @@
-package test_test
+package test
 
 import (
 	"context"
@@ -21,7 +21,8 @@ import (
 // This test verifies that the client correctly identifies an invalid HTTP method in 
 // 'testdata/http_request_files/invalid_method.http', reports an error for that request, 
 // and handles the overall execution flow appropriately (e.g., by aggregating errors).
-func TestExecuteFile_InvalidMethodInFile(t *testing.T) {
+func RunExecuteFile_InvalidMethodInFile(t *testing.T) {
+	t.Helper()
 	// Given
 	client, _ := rc.NewClient()
 	requestFilePath := "testdata/http_request_files/invalid_method.http"
@@ -163,7 +164,8 @@ func setupIgnoreEmptyBlocksMockServer(t *testing.T) *httptest.Server {
 // definitions or are otherwise empty of executable requests.
 // It uses test case templates from 'testdata/execute_file_ignore_empty_blocks/'
 // (e.g., 'scenario_004_template.http', 'only_vars.http') to dynamically create test files.
-func TestExecuteFile_IgnoreEmptyBlocks_Client(t *testing.T) {
+func RunExecuteFile_IgnoreEmptyBlocks_Client(t *testing.T) {
+	t.Helper()
 	// Given common setup for all subtests
 	server := setupIgnoreEmptyBlocksMockServer(t)
 	defer server.Close()

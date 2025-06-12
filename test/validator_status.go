@@ -1,4 +1,4 @@
-package test_test
+package test
 
 import (
 	"fmt"
@@ -10,7 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestValidateResponses_StatusString(t *testing.T) {
+func RunValidateResponses_StatusString(t *testing.T) {
+	t.Helper()
 	// Given: Test cases defined in 'tests' slice
 	tests := []statusStringTestCase{
 		{
@@ -113,7 +114,8 @@ type statusCodeTestCase struct {
 	expectedErrText    string
 }
 
-func TestValidateResponses_StatusCode(t *testing.T) {
+func RunValidateResponses_StatusCode(t *testing.T) {
+	t.Helper()
 	// Given: Test cases defined in 'tests' slice
 	tests := []statusCodeTestCase{
 		{

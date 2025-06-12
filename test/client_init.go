@@ -1,4 +1,4 @@
-package test_test
+package test
 
 import (
 	rc "github.com/bmcszk/go-restclient"
@@ -14,7 +14,8 @@ import (
 // Corresponds to: The ability to create a new HTTP client instance with default
 // configurations (e.g., standard http.Client, no base URL, empty default headers).
 // This test verifies that `rc.NewClient()` without options returns a valid client with expected default values.
-func TestNewClient(t *testing.T) {
+func RunNewClient(t *testing.T) {
+	t.Helper()
 	// Given
 	// No specific setup needed
 
@@ -37,7 +38,8 @@ func TestNewClient(t *testing.T) {
 // `WithBaseURL`, `WithDefaultHeader`) correctly applies these configurations to the new
 // client instance. It also checks that providing a nil http.Client results in a default
 // client being used.
-func TestNewClient_WithOptions(t *testing.T) {
+func RunNewClient_WithOptions(t *testing.T) {
+	t.Helper()
 	// Given
 	customHTTPClient := &http.Client{Timeout: 15 * time.Second}
 	baseURL := "https://api.example.com"

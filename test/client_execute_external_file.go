@@ -1,4 +1,4 @@
-package test_test
+package test
 
 import (
 	"context"
@@ -27,7 +27,8 @@ import (
 // This test verifies that variables defined in the .http file or programmatically are correctly 
 // substituted into the content of the external file ('test_vars.json') before it's used as the 
 // request body.
-func TestExecuteFile_ExternalFileWithVariables(t *testing.T) {
+func RunExecuteFile_ExternalFileWithVariables(t *testing.T) {
+	t.Helper()
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
 
@@ -112,7 +113,8 @@ Content-Type: application/json
 // substitution (http_syntax.md "Request Body", "External File Static (< filepath)").
 // This test verifies that the content of the external file ('test_static.json') is used as the 
 // request body verbatim, with any variable-like syntax within it preserved literally.
-func TestExecuteFile_ExternalFileWithoutVariables(t *testing.T) {
+func RunExecuteFile_ExternalFileWithoutVariables(t *testing.T) {
+	t.Helper()
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
 
@@ -185,7 +187,8 @@ Content-Type: application/json
 
 // TODO: Add tests for variable substitution within external files (<@ syntax).
 
-func TestClientExecuteFileWithEncoding(t *testing.T) {
+func RunClientExecuteFileWithEncoding(t *testing.T) {
+	t.Helper()
 	testCases := getEncodingTestCases()
 
 	for _, tc := range testCases {
@@ -334,7 +337,8 @@ func executeAndVerify(t *testing.T, httpFilePath, expectedUTF8Body string, bodyR
 // "External File with Encoding (<@|encoding filepath)").
 // This test verifies that an external file ('test_encoded.txt') with a specific encoding 
 // (e.g., latin1) is correctly read and used as the request body.
-func TestExecuteFile_ExternalFileWithEncoding(t *testing.T) {
+func RunExecuteFile_ExternalFileWithEncoding(t *testing.T) {
+	t.Helper()
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
 
@@ -394,7 +398,8 @@ Content-Type: text/plain
 // specified character encoding and variable substitution.
 // This test verifies that variables are substituted into an encoded external file, and 
 // the resulting content is correctly sent to the server.
-func TestExecuteFile_ExternalFileWithVariablesAndEncoding(t *testing.T) {
+func RunExecuteFile_ExternalFileWithVariablesAndEncoding(t *testing.T) {
+	t.Helper()
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
 
@@ -477,7 +482,8 @@ Content-Type: text/plain; charset=iso-8859-1
 // Corresponds to: Client's ability to parse and execute request files with the .rest 
 // extension, as an alternative to .http (http_syntax.md "File Structure", "File Extension").
 // This test verifies that a simple GET request defined in a .rest file is correctly executed.
-func TestExecuteFile_WithRestExtension(t *testing.T) {
+func RunExecuteFile_WithRestExtension(t *testing.T) {
+	t.Helper()
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
 
@@ -533,7 +539,8 @@ X-Test-Header-Rest: rest-extension-test-value
 // body (e.g., via '<@ ./nonexistent.json') cannot be found (http_syntax.md "Request Body").
 // This test verifies that the client reports an appropriate error when attempting to 
 // process a request that references a non-existent external file.
-func TestExecuteFile_ExternalFileNotFound(t *testing.T) {
+func RunExecuteFile_ExternalFileNotFound(t *testing.T) {
+	t.Helper()
 	// Create a temporary directory for test files
 	tempDir := t.TempDir()
 

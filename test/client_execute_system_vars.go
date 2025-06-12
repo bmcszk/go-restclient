@@ -1,4 +1,4 @@
-package test_test
+package test
 
 import (
 	rc "github.com/bmcszk/go-restclient"
@@ -26,7 +26,8 @@ import (
 // are correctly generated and substituted in URLs, headers, and bodies. It also confirms that
 // multiple instances of {{$guid}} or {{$uuid}} within the same request resolve to the *same*
 // generated UUID for that request.
-func TestExecuteFile_WithGuidSystemVariable(t *testing.T) {
+func RunExecuteFile_WithGuidSystemVariable(t *testing.T) {
+	t.Helper()
 	// Given
 	var interceptedRequest struct {
 		URL    string
@@ -108,7 +109,8 @@ func TestExecuteFile_WithGuidSystemVariable(t *testing.T) {
 // This test uses 'testdata/http_request_files/system_var_iso_timestamp.http' to verify correct
 // substitution in URLs, headers, and bodies, and checks that multiple instances resolve to
 // the same request-scoped timestamp.
-func TestExecuteFile_WithIsoTimestampSystemVariable(t *testing.T) {
+func RunExecuteFile_WithIsoTimestampSystemVariable(t *testing.T) {
+	t.Helper()
 	// Given
 	var interceptedRequest struct {
 		Header string
@@ -206,7 +208,8 @@ func setupDetailedMockServerInterceptor(t *testing.T) (*httptest.Server, *detail
 // datetime formats (RFC3339, custom, with local/UTC/specific offsets) in URLs, headers, and bodies.
 // It ensures multiple instances resolve to the same request-scoped timestamp (respecting their
 // individual formatting and offsets).
-func TestExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
+func RunExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
+	t.Helper()
 	// Given
 	server, interceptedRequest := setupDetailedMockServerInterceptor(t)
 	defer server.Close()
@@ -346,7 +349,8 @@ func validateDatetimeBody(t *testing.T, interceptedRequest *detailedInterceptedR
 // This test uses 'testdata/http_request_files/system_var_timestamp.http' to verify correct
 // substitution in URLs, headers, and bodies. It ensures multiple instances resolve to
 // the same request-scoped timestamp.
-func TestExecuteFile_WithTimestampSystemVariable(t *testing.T) {
+func RunExecuteFile_WithTimestampSystemVariable(t *testing.T) {
+	t.Helper()
 	// Given
 	var interceptedRequest struct {
 		URL    string
@@ -488,7 +492,8 @@ func validateRandomIntMalformedArgs(t *testing.T, urlStr, header, body string) {
 // This test suite uses various .http files (e.g., 'system_var_randomint_valid_args.http',
 // 'system_var_randomint_no_args.http') to verify behavior with valid arguments, no arguments,
 // swapped arguments (min > max), and malformed arguments, checking substitution in URLs, headers, and bodies.
-func TestExecuteFile_WithRandomIntSystemVariable(t *testing.T) {
+func RunExecuteFile_WithRandomIntSystemVariable(t *testing.T) {
+	t.Helper()
 	interceptedRequest, server, client := setupRandomIntTest()
 	defer server.Close()
 

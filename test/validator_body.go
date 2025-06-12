@@ -1,4 +1,4 @@
-package test_test
+package test
 
 import (
 	"testing"
@@ -8,7 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestValidateResponses_Body_ExactMatch(t *testing.T) {
+func RunValidateResponses_Body_ExactMatch(t *testing.T) {
+	t.Helper()
 	// Given: Test cases defined in 'tests' slice
 	body1 := "Hello World"
 	body2 := "Hello Go"
@@ -108,7 +109,8 @@ func runBodyValidationTest(t *testing.T, client *rc.Client, tt bodyValidationTes
 // Since ParseExpectedResponseFile does not populate ExpectedResponse.BodyContains,
 // this test verifies that the BodyContains logic in ValidateResponses is benign
 // (doesn't cause errors) when the expected response comes from a file.
-func TestValidateResponses_BodyContains(t *testing.T) {
+func RunValidateResponses_BodyContains(t *testing.T) {
+	t.Helper()
 	// Given: Test cases defined in 'tests' slice
 	tests := []bodyValidationTestCase{
 		{
@@ -142,7 +144,8 @@ func TestValidateResponses_BodyContains(t *testing.T) {
 // TestValidateResponses_BodyNotContains is similar to BodyContains.
 // It verifies that BodyNotContains logic in ValidateResponses is benign
 // when the expected response comes from a file, as the file cannot specify BodyNotContains.
-func TestValidateResponses_BodyNotContains(t *testing.T) {
+func RunValidateResponses_BodyNotContains(t *testing.T) {
+	t.Helper()
 	// Given: Test cases defined in 'tests' slice
 	tests := []bodyValidationTestCase{
 		{

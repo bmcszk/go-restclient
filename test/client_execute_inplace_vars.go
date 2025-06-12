@@ -1,4 +1,4 @@
-package test_test
+package test
 
 import (
 	"context"
@@ -23,7 +23,8 @@ import (
 // This test uses 'testdata/execute_inplace_vars/simple_variable_in_url/request.http' to verify
 // that variables like '@hostname' and '@path_segment' are correctly resolved and used to
 // construct the final request URL.
-func TestExecuteFile_InPlace_SimpleVariableInURL(t *testing.T) {
+func RunExecuteFile_InPlace_SimpleVariableInURL(t *testing.T) {
+	t.Helper()
 	// Given
 	var capturedPath string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -81,7 +82,8 @@ func TestExecuteFile_InPlace_SimpleVariableInURL(t *testing.T) {
 // and substitute them into request headers (http_syntax.md "In-place Variables", "Variable Substitution").
 // This test uses 'testdata/execute_inplace_vars/variable_in_header/request.http' to verify that
 // a variable like '@auth_token' is correctly resolved and inserted into the 'Authorization' header.
-func TestExecuteFile_InPlace_VariableInHeader(t *testing.T) {
+func RunExecuteFile_InPlace_VariableInHeader(t *testing.T) {
+	t.Helper()
 	// Given
 	var capturedHeaders http.Header
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -141,7 +143,8 @@ func TestExecuteFile_InPlace_VariableInHeader(t *testing.T) {
 // and substitute them into the request body (http_syntax.md "In-place Variables", "Variable Substitution").
 // This test uses 'testdata/execute_inplace_vars/variable_in_body/request.http' to verify that
 // variables like '@item_name' and '@item_price' are correctly resolved and inserted into the JSON request body.
-func TestExecuteFile_InPlace_VariableInBody(t *testing.T) {
+func RunExecuteFile_InPlace_VariableInBody(t *testing.T) {
+	t.Helper()
 	// Given
 	var capturedBody []byte
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -204,7 +207,8 @@ func TestExecuteFile_InPlace_VariableInBody(t *testing.T) {
 // (http_syntax.md "In-place Variables", "Variable Substitution").
 // This test uses 'testdata/execute_inplace_vars/variable_defined_by_another_variable/request.http'
 // to verify that '@full_url' correctly resolves by substituting '@base_url'.
-func TestExecuteFile_InPlace_VariableDefinedByAnotherVariable(t *testing.T) {
+func RunExecuteFile_InPlace_VariableDefinedByAnotherVariable(t *testing.T) {
+	t.Helper()
 	// Given
 	var capturedURL string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -266,7 +270,8 @@ func TestExecuteFile_InPlace_VariableDefinedByAnotherVariable(t *testing.T) {
 // This test uses 'testdata/execute_inplace_vars/variable_precedence_over_environment/request.http',
 // sets an OS environment variable 'ENV_VAR_PRECEDENCE', and defines an in-place variable
 // '@ENV_VAR_PRECEDENCE' to verify that the in-place definition is used.
-func TestExecuteFile_InPlace_VariablePrecedenceOverEnvironment(t *testing.T) {
+func RunExecuteFile_InPlace_VariablePrecedenceOverEnvironment(t *testing.T) {
+	t.Helper()
 	// Given: an .http file with an in-place variable and an environment variable with the same name
 	var capturedURLPath string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -316,7 +321,8 @@ func TestExecuteFile_InPlace_VariablePrecedenceOverEnvironment(t *testing.T) {
 // (e.g., 'X-Custom-ID: {{request_id}}') (http_syntax.md "In-place Variables", "Variable Substitution").
 // This test uses 'testdata/execute_inplace_vars/variable_in_custom_header/request.http' to verify
 // that '@request_id_value' is correctly substituted into the 'X-Request-ID' header.
-func TestExecuteFile_InPlace_VariableInCustomHeader(t *testing.T) {
+func RunExecuteFile_InPlace_VariableInCustomHeader(t *testing.T) {
+	t.Helper()
 	// Given: an .http file with an in-place variable used in a custom header
 	var capturedHeaderValue string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -364,7 +370,8 @@ func TestExecuteFile_InPlace_VariableInCustomHeader(t *testing.T) {
 // of a structured request body (e.g., JSON) (http_syntax.md "In-place Variables", "Variable Substitution").
 // This test uses 'testdata/execute_inplace_vars/variable_substitution_in_body/request.http'
 // to verify substitution of '@username' and '@product_id' into a JSON request body.
-func TestExecuteFile_InPlace_VariableSubstitutionInBody(t *testing.T) {
+func RunExecuteFile_InPlace_VariableSubstitutionInBody(t *testing.T) {
+	t.Helper()
 	// Given: an .http file with an in-place variable used in a JSON request body
 	var capturedBody []byte
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -420,7 +427,8 @@ func TestExecuteFile_InPlace_VariableSubstitutionInBody(t *testing.T) {
 // (e.g., '@request_time = {{$timestamp}}') (http_syntax.md "In-place Variables", "System Variables").
 // This test uses 'testdata/execute_inplace_vars/variable_defined_by_system_variable/request.http'
 // to verify that '@current_uuid' is correctly assigned a value from '{{$uuid}}'.
-func TestExecuteFile_InPlace_VariableDefinedBySystemVariable(t *testing.T) {
+func RunExecuteFile_InPlace_VariableDefinedBySystemVariable(t *testing.T) {
+	t.Helper()
 	// Given: an .http file with an in-place variable defined by a system variable {{$uuid}}
 	var capturedURLPath string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -479,7 +487,8 @@ func TestExecuteFile_InPlace_VariableDefinedBySystemVariable(t *testing.T) {
 // This test uses 'testdata/execute_inplace_vars/variable_defined_by_os_env_variable/request.http',
 // sets an OS environment variable 'OS_VAR_TEST', and defines '@os_value = {{OS_VAR_TEST}}'
 // to verify correct substitution.
-func TestExecuteFile_InPlace_VariableDefinedByOsEnvVariable(t *testing.T) {
+func RunExecuteFile_InPlace_VariableDefinedByOsEnvVariable(t *testing.T) {
+	t.Helper()
 	// Given: an OS environment variable and an .http file with an in-place variable defined by it
 	const testEnvVarName = "TEST_USER_HOME_INPLACE"
 	const testEnvVarValue = "/testhome/userdir" // This value starts with a slash
@@ -536,7 +545,8 @@ func TestExecuteFile_InPlace_VariableDefinedByOsEnvVariable(t *testing.T) {
 // like 'Authorization: Bearer {{token}}' (http_syntax.md "In-place Variables", "Authentication").
 // This test uses 'testdata/execute_inplace_vars/variable_in_auth_header/request.http' to verify
 // that '@bearer_token' is correctly substituted into the 'Authorization' header.
-func TestExecuteFile_InPlace_VariableInAuthHeader(t *testing.T) {
+func RunExecuteFile_InPlace_VariableInAuthHeader(t *testing.T) {
+	t.Helper()
 	// Given: an .http file with an in-place variable used in an X-Auth-Token header
 	const headerKey = "X-Auth-Token"
 	const headerValue = "secret-token-12345"
@@ -590,7 +600,8 @@ func TestExecuteFile_InPlace_VariableInAuthHeader(t *testing.T) {
 // ensuring correct JSON structure is maintained (http_syntax.md "In-place Variables", "Request Body").
 // This test uses 'testdata/execute_inplace_vars/variable_in_json_request_body/request.http'
 // to verify substitution of '@user_name' and '@user_age' (an integer) into a JSON payload.
-func TestExecuteFile_InPlace_VariableInJsonRequestBody(t *testing.T) {
+func RunExecuteFile_InPlace_VariableInJsonRequestBody(t *testing.T) {
+	t.Helper()
 	// Given: an .http file with an in-place variable used in the JSON request body
 	const expectedSentBody = `{"id": "user-from-var-456", "status": "pending"}`
 
@@ -649,7 +660,8 @@ func TestExecuteFile_InPlace_VariableInJsonRequestBody(t *testing.T) {
 // (http_syntax.md "In-place Variables").
 // This test uses 'testdata/execute_inplace_vars/variable_defined_by_another_inplace_variable/request.http'
 // to verify chained resolution of '@host', '@path', and '@fullUrl'.
-func TestExecuteFile_InPlace_VariableDefinedByAnotherInPlaceVariable(t *testing.T) {
+func RunExecuteFile_InPlace_VariableDefinedByAnotherInPlaceVariable(t *testing.T) {
+	t.Helper()
 	// Given: an .http file with an in-place variable defined by another in-place variable
 	const expectedURLPath = "/api/v1/items/123"
 	var capturedURLPath string
@@ -707,7 +719,8 @@ func TestExecuteFile_InPlace_VariableDefinedByAnotherInPlaceVariable(t *testing.
 // This test uses 'testdata/execute_inplace_vars/variable_defined_by_dotenv_os_variable/request.http'
 // and its associated '.env' file to verify that '@my_var' is correctly assigned the value of
 // 'DOTENV_VAR' from the .env file.
-func TestExecuteFile_InPlace_VariableDefinedByDotEnvOsVariable(t *testing.T) {
+func RunExecuteFile_InPlace_VariableDefinedByDotEnvOsVariable(t *testing.T) {
+	t.Helper()
 	// Given: an .http file with an in-place variable defined by an OS environment variable using {{$env.VAR_NAME}}
 	const testEnvVarName = "MY_CONFIG_PATH_TEST_DOT_ENV"
 	const testEnvVarValue = "/usr/local/appconfig_dotenv"
@@ -770,7 +783,8 @@ func TestExecuteFile_InPlace_VariableDefinedByDotEnvOsVariable(t *testing.T) {
 // This test uses 'testdata/execute_inplace_vars/malformed_name_only/request.http' to verify that
 // such malformed definitions are ignored or handled gracefully without causing
 // execution failure for other valid requests.
-func TestExecuteFile_InPlace_Malformed_NameOnlyNoEqualsNoValue(t *testing.T) {
+func RunExecuteFile_InPlace_Malformed_NameOnlyNoEqualsNoValue(t *testing.T) {
+	t.Helper()
 	// Given: an .http file with a malformed in-place variable (name only, no equals, no value)
 	requestFilePath := "testdata/execute_inplace_vars/malformed_name_only_no_equals_no_value/request.http"
 	expectedErrorSubstring := "malformed in-place variable definition, missing '=' or name part invalid"
@@ -794,7 +808,8 @@ func TestExecuteFile_InPlace_Malformed_NameOnlyNoEqualsNoValue(t *testing.T) {
 // (http_syntax.md "In-place Variables", implicitly by defining correct syntax).
 // This test uses 'testdata/execute_inplace_vars/malformed_no_name/request.http' to verify that
 // such malformed definitions are ignored or handled gracefully.
-func TestExecuteFile_InPlace_Malformed_NoNameEqualsValue(t *testing.T) {
+func RunExecuteFile_InPlace_Malformed_NoNameEqualsValue(t *testing.T) {
+	t.Helper()
 	// Given: an .http file with a malformed in-place variable (no name, equals, value)
 	requestFilePath := "testdata/execute_inplace_vars/malformed_no_name_equals_value/request.http"
 	expectedErrorSubstring := "malformed in-place variable definition, variable name cannot be empty"
@@ -820,7 +835,8 @@ func TestExecuteFile_InPlace_Malformed_NoNameEqualsValue(t *testing.T) {
 // (http_syntax.md "In-place Variables", "Environment Variables", ".env File Support").
 // It uses 'testdata/execute_inplace_vars/inplace_variable_defined_by_dotenv_system_variable/
 // request.http' and its .env file.
-func TestExecuteFile_InPlace_VariableDefinedByDotEnvSystemVariable(t *testing.T) {
+func RunExecuteFile_InPlace_VariableDefinedByDotEnvSystemVariable(t *testing.T) {
+	t.Helper()
 	// Given: an .http file using {{$dotenv VAR_NAME}} for an in-place variable,
 	// and a .env file defining VAR_NAME in the same directory as the .http file.
 	const requestFilePath = "testdata/execute_inplace_vars/" +
@@ -864,7 +880,8 @@ func TestExecuteFile_InPlace_VariableDefinedByDotEnvSystemVariable(t *testing.T)
 // "System Variables").
 // This test uses 'testdata/execute_inplace_vars/inplace_variable_defined_by_random_int/request.http'
 // to verify that '@my_random_port' is correctly assigned a random integer within the specified range.
-func TestExecuteFile_InPlace_VariableDefinedByRandomInt(t *testing.T) {
+func RunExecuteFile_InPlace_VariableDefinedByRandomInt(t *testing.T) {
+	t.Helper()
 	// Given: an .http file using {{$randomInt MIN MAX}} for an in-place variable
 	const requestFilePath = "testdata/execute_inplace_vars/inplace_variable_defined_by_random_int/request.http"
 	const minPort = 8000

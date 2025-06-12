@@ -1,4 +1,4 @@
-package test_test
+package test
 
 import (
 	"net/http"
@@ -8,7 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestValidateResponses_BodyRegexpPlaceholder(t *testing.T) {
+func RunValidateResponses_BodyRegexpPlaceholder(t *testing.T) {
+	t.Helper()
 	// Given: Test cases defined in 'tests' slice
 	tests := []struct {
 		name             string
@@ -84,7 +85,8 @@ func TestValidateResponses_BodyRegexpPlaceholder(t *testing.T) {
 	}
 }
 
-func TestValidateResponses_BodyAnyGuidPlaceholder(t *testing.T) {
+func RunValidateResponses_BodyAnyGuidPlaceholder(t *testing.T) {
+	t.Helper()
 	// Given: Test cases defined in 'tests' slice
 	tests := []struct {
 		name             string
@@ -144,7 +146,8 @@ func TestValidateResponses_BodyAnyGuidPlaceholder(t *testing.T) {
 	}
 }
 
-func TestValidateResponses_BodyAnyTimestampPlaceholder(t *testing.T) {
+func RunValidateResponses_BodyAnyTimestampPlaceholder(t *testing.T) {
+	t.Helper()
 	// Given: Test cases defined in 'tests' slice
 	tests := []struct {
 		name             string
@@ -205,7 +208,8 @@ func TestValidateResponses_BodyAnyTimestampPlaceholder(t *testing.T) {
 	}
 }
 
-func TestValidateResponses_BodyAnyDatetimePlaceholder(t *testing.T) {
+func RunValidateResponses_BodyAnyDatetimePlaceholder(t *testing.T) {
+	t.Helper()
 	// Given: Test cases defined in 'tests' slice
 	tests := []struct {
 		name             string
@@ -328,7 +332,8 @@ func TestValidateResponses_BodyAnyDatetimePlaceholder(t *testing.T) {
 	}
 }
 
-func TestValidateResponses_BodyAnyPlaceholder(t *testing.T) {
+func RunValidateResponses_BodyAnyPlaceholder(t *testing.T) {
+	t.Helper()
 	// Given: Test cases defined in 'tests' slice
 	tests := []struct {
 		name             string

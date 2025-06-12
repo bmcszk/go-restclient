@@ -1,4 +1,4 @@
-package test_test
+package test
 
 import (
 	"context"
@@ -89,7 +89,8 @@ func runCookieJarSubtest(t *testing.T, tc cookieJarTestCase, serverVars map[stri
 //    cookies nor saving new ones from the response).
 // It uses dynamically created 'testdata/cookies_redirects/with_cookie_jar.http' and 
 // 'testdata/cookies_redirects/without_cookie_jar.http' files.
-func TestCookieJarHandling(t *testing.T) {
+func RunCookieJarHandling(t *testing.T) {
+	t.Helper()
 	var cookieCheck bool
 	testServer := setupCookieTestServer(&cookieCheck)
 	defer testServer.Close()
@@ -187,7 +188,8 @@ func getCookieJarTestCases(filePaths cookieTestFilePaths) []cookieJarTestCase {
 //    does not automatically follow redirects and instead returns the redirect response itself.
 // It uses dynamically created 'testdata/cookies_redirects/with_redirect.http' and 
 // 'testdata/cookies_redirects/without_redirect.http' files.
-func TestRedirectHandling(t *testing.T) {
+func RunRedirectHandling(t *testing.T) {
+	t.Helper()
 	// Given: A test server that performs redirects
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

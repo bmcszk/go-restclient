@@ -1,4 +1,4 @@
-package test_test
+package test
 
 import (
 	"net/http"
@@ -8,7 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestValidateResponses_Headers(t *testing.T) {
+func RunValidateResponses_Headers(t *testing.T) {
+	t.Helper()
 	// Given: Test cases defined in 'tests' slice
 	tests := []struct {
 		name             string
@@ -135,7 +136,8 @@ func TestValidateResponses_Headers(t *testing.T) {
 
 // TestValidateResponses_HeadersContain verifies that HeadersContain logic in ValidateResponses
 // is benign when the expected response comes from a file, as the file cannot specify HeadersContain.
-func TestValidateResponses_HeadersContain(t *testing.T) {
+func RunValidateResponses_HeadersContain(t *testing.T) {
+	t.Helper()
 	// Given: Test cases defined in 'tests' slice
 	tests := []struct {
 		name             string

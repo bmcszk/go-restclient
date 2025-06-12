@@ -1,4 +1,4 @@
-package test_test
+package test
 
 import (
 	"bufio"
@@ -177,7 +177,8 @@ func getValidateResponsesWithSampleFileTestCases(sampleFilePath string) []valida
 	}
 }
 
-func TestValidateResponses_WithSampleFile(t *testing.T) {
+func RunValidateResponses_WithSampleFile(t *testing.T) {
+	t.Helper()
 	baseActual := setupBaseActualResponseForSampleFileTests(t)
 	sampleFilePath := "testdata/http_response_files/sample1.http" // Define sampleFilePath explicitly
 	tests := getValidateResponsesWithSampleFileTestCases(sampleFilePath)
@@ -189,7 +190,8 @@ func TestValidateResponses_WithSampleFile(t *testing.T) {
 	}
 }
 
-func TestValidateResponses_PartialExpected(t *testing.T) {
+func RunValidateResponses_PartialExpected(t *testing.T) {
+	t.Helper()
 	// Given: Test cases defined in 'tests' slice
 	tests := []struct {
 		name             string

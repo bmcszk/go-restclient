@@ -1,4 +1,4 @@
-package test_test
+package test
 
 import (
 	// Used by actualResp in TestValidateResponses_FileErrors
@@ -10,7 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestValidateResponses_NilAndEmptyActuals(t *testing.T) {
+func RunValidateResponses_NilAndEmptyActuals(t *testing.T) {
+	t.Helper()
 	// Given
 	testFilePath := "testdata/http_response_files/validator_nil_empty_actuals_expected.hresp"
 
@@ -57,7 +58,8 @@ func TestValidateResponses_NilAndEmptyActuals(t *testing.T) {
 	})
 }
 
-func TestValidateResponses_FileErrors(t *testing.T) {
+func RunValidateResponses_FileErrors(t *testing.T) {
+	t.Helper()
 	// Given
 	actualResp := &rc.Response{StatusCode: 200}
 	client, _ := rc.NewClient()

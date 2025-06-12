@@ -1,4 +1,4 @@
-package test_test
+package test
 
 import (
 	"context"
@@ -29,7 +29,8 @@ import (
 // (e.g., @name = value) (http_syntax.md "Custom Variables").
 // This test uses 'testdata/http_request_files/custom_variables.http' to verify substitution
 // of custom variables in URLs, headers, and bodies.
-func TestExecuteFile_WithCustomVariables(t *testing.T) {
+func RunExecuteFile_WithCustomVariables(t *testing.T) {
+	t.Helper()
 	// Given
 	var requestCount int32
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +95,8 @@ func TestExecuteFile_WithCustomVariables(t *testing.T) {
 // This test uses 'testdata/http_request_files/system_var_process_env.http' and sets OS environment
 // variables to verify their substitution in URLs, headers, and bodies. It also checks behavior
 // for undefined environment variables.
-func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
+func RunExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
+	t.Helper()
 	// t.Skip("Skipping due to bug in {{$processEnv VAR}} substitution
 	//   (MEMORY d1edb831-da89-4cde-93ad-a9129eb7b8aa): placeholder not replaced with
 	//   OS environment variable value. See task TBD for fix.")
@@ -259,7 +261,8 @@ func runDotEnvScenarioTest(t *testing.T, client *rc.Client, serverURL string, te
 // This test uses 'testdata/http_request_files/system_var_dotenv.http' and a dynamically created
 // '.env' file to verify substitution in URLs, headers, and bodies. It also checks behavior
 // for variables not present in the .env file.
-func TestExecuteFile_WithDotEnvSystemVariable(t *testing.T) {
+func RunExecuteFile_WithDotEnvSystemVariable(t *testing.T) {
+	t.Helper()
 	// Use a single instance, reset/captured by mock server per call
 	var currentInterceptedData dotEnvInterceptedRequestData
 
@@ -331,7 +334,8 @@ User-Agent: test-client
 // This test uses 'testdata/http_request_files/programmatic_vars.http' and injects variables
 // via `WithVariables` and `ExecuteFile` options to verify their substitution and precedence
 // over file-defined variables.
-func TestExecuteFile_WithProgrammaticVariables(t *testing.T) {
+func RunExecuteFile_WithProgrammaticVariables(t *testing.T) {
+	t.Helper()
 	// Given
 	var interceptedRequest struct {
 		URL    string
@@ -403,7 +407,8 @@ func TestExecuteFile_WithProgrammaticVariables(t *testing.T) {
 // string (http_syntax.md "System Variables").
 // This test uses 'testdata/http_request_files/system_var_local_datetime.http' to verify
 // correct formatting and substitution in URLs, headers, and bodies.
-func TestExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
+func RunExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
+	t.Helper()
 	// Given
 	var interceptedRequest struct {
 		URL    string
@@ -593,7 +598,8 @@ func assertRequestObjectConsistency(t *testing.T, parsedReq *rc.Request, capture
 // operation. This is more of an internal consistency check than a direct user-facing feature test.
 // This test compares the output of `SubstituteVariablesInString` with the actual substituted
 // values observed in a request made via `ExecuteFile`, using 'testdata/http_request_files/variable_consistency.http'.
-func TestExecuteFile_VariableFunctionConsistency(t *testing.T) {
+func RunExecuteFile_VariableFunctionConsistency(t *testing.T) {
+	t.Helper()
 	var capturedVals capturedConsistencyValues
 	server := setupConsistencyTestServer(t, &capturedVals)
 	defer server.Close()
@@ -758,7 +764,8 @@ func validateResponseError(t *testing.T, tc httpClientEnvTestCase, resp *rc.Resp
 // This test suite uses various .http files and dynamically created `http-client.env.json` /
 // `http-client.private.env.json` files to verify variable loading, substitution, environment
 // selection, and precedence for different scenarios (Task T4).
-func TestExecuteFile_WithHttpClientEnvJson(t *testing.T) {
+func RunExecuteFile_WithHttpClientEnvJson(t *testing.T) {
+	t.Helper()
 	tests := []httpClientEnvTestCase{
 		{
 			name:                     "SCENARIO-LIB-018-004: no env selected, file exists",
@@ -902,7 +909,8 @@ func assertRandomEmail(t *testing.T, bodyJSON map[string]string) {
 // This test uses 'testdata/http_request_files/system_var_extended_random.http' to verify
 // the generation and substitution of these extended random variables, including handling
 // of arguments and invalid inputs.
-func TestExecuteFile_WithExtendedRandomSystemVariables(t *testing.T) {
+func RunExecuteFile_WithExtendedRandomSystemVariables(t *testing.T) {
+	t.Helper()
 	// Given
 	var interceptedRequest struct {
 		Body string

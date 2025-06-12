@@ -1,4 +1,4 @@
-package test_test
+package test
 
 import (
 	"strings"
@@ -138,7 +138,8 @@ func getTestExtractHrespDefinesTestCases() []extractHrespDefinesTestCase {
 	return tests
 }
 
-func TestExtractHrespDefines(t *testing.T) {
+func RunExtractHrespDefines(t *testing.T) {
+	t.Helper()
 	tests := getTestExtractHrespDefinesTestCases()
 
 	for _, tt := range tests {
