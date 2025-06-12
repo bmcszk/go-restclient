@@ -1,4 +1,4 @@
-package test
+package test_test
 
 import (
 	// Used by actualResp in TestValidateResponses_FileErrors

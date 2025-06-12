@@ -1,4 +1,4 @@
-package test
+package test_test
 
 import (
 	rc "github.com/bmcszk/go-restclient"
