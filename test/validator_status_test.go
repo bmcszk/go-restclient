@@ -1,4 +1,4 @@
-package restclient_test
+package test
 
 import (
 	"fmt"

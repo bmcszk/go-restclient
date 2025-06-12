@@ -1,4 +1,4 @@
-package restclient_test
+package test
 
 import (
 	// Used by actualResp in TestValidateResponses_FileErrors
