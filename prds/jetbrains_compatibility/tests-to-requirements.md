@@ -2,6 +2,15 @@
 
 This document maps test cases from the `go-restclient` project to the relevant sections in `docs/http_syntax.md`.
 
+**IMPORTANT NOTICE - DOCUMENT OUTDATED**: This mapping document contains references to test files and functions that no longer exist in the current codebase. The test structure has been consolidated since this document was created. 
+
+**CURRENT STRUCTURE**: 
+- Tests are now consolidated in `client_test.go`, `validator_test.go`, and `hresp_vars_test.go`
+- Parser functionality is tested through client execution tests rather than separate parser unit tests
+- See `test_coverage_mapping.md` for the corrected mapping of current tests to requirements
+
+This document is preserved for historical reference but should not be used for current test planning.
+
 ## parser_test.go
 
 ### TestParseRequests_IgnoreEmptyBlocks
