@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest" // Added for mock server
 	"net/url"           // Added for TestExecuteFile_WithRandomIntSystemVariable
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -681,4 +682,81 @@ func RunExecuteFile_WithFakerPersonData(t *testing.T) {
 
 	t.Logf("Generated person data - VS Code style: %s %s (%s)", firstName, lastName, jobTitle)
 	t.Logf("Generated person data - JetBrains style: %s %s (%s)", firstNameDot, lastNameDot, jobTitleDot)
+}
+
+// PRD-COMMENT: G8 - Indirect Environment Variable Lookup: {{$processEnv %VAR}}
+// Corresponds to: Client's ability to substitute indirect environment variables using the
+// {{$processEnv %VAR}} syntax where VAR is a variable containing the name of the environment
+// variable to look up. This provides dynamic environment variable selection.
+func RunExecuteFile_WithIndirectEnvironmentVariables(t *testing.T) {
+	t.Helper()
+	// Given
+	var interceptedHeaders http.Header
+	var interceptedBody string
+	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+		interceptedHeaders = r.Header.Clone()
+		bodyBytes, _ := io.ReadAll(r.Body)
+		interceptedBody = string(bodyBytes)
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, "ok")
+	})
+	defer server.Close()
+
+	// Set up environment variables for testing
+	_ = os.Setenv("TEST_SECRET_KEY", "secret123")
+	_ = os.Setenv("TEST_DATABASE_URL", "postgres://localhost:5432/test")
+	_ = os.Setenv("PROD_ENV", "production")
+	defer func() {
+		_ = os.Unsetenv("TEST_SECRET_KEY")
+		_ = os.Unsetenv("TEST_DATABASE_URL")
+		_ = os.Unsetenv("PROD_ENV")
+	}()
+
+	// Set up programmatic variables that point to environment variable names
+	client, _ := rc.NewClient(rc.WithVars(map[string]any{
+		"secretKeyVar": "TEST_SECRET_KEY",
+		"dbUrlVar":     "TEST_DATABASE_URL",
+		"envVar":       "PROD_ENV",
+		"missingVar":   "NONEXISTENT_ENV_VAR",
+		// Note: undefinedVar is intentionally not defined
+	}))
+	requestFilePath := createTestFileFromTemplate(t, "test/data/system_variables/indirect_env_lookup.http",
+		struct{ ServerURL string }{ServerURL: server.URL})
+
+	// When
+	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then
+	require.NoError(t, err)
+	require.Len(t, responses, 1)
+
+	resp := responses[0]
+	assert.NoError(t, resp.Error)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Validate that indirect environment variables were correctly resolved
+	secretKey := interceptedHeaders.Get("X-Secret-Key")
+	assert.Equal(t, "secret123", secretKey, "Secret key should be resolved from TEST_SECRET_KEY")
+
+	dbUrl := interceptedHeaders.Get("X-Database-URL")
+	assert.Equal(t, "postgres://localhost:5432/test", dbUrl, "Database URL should be resolved from TEST_DATABASE_URL")
+
+	// Missing environment variable should result in empty string
+	missingVar := interceptedHeaders.Get("X-Missing-Var")
+	assert.Equal(t, "", missingVar, "Missing environment variable should resolve to empty string")
+
+	// Check body content
+	var bodyJSON map[string]string
+	err = json.Unmarshal([]byte(interceptedBody), &bodyJSON)
+	require.NoError(t, err)
+
+	// Environment variable that exists should be resolved
+	assert.Equal(t, "production", bodyJSON["environment"], "Environment should be resolved from PROD_ENV")
+
+	// Undefined variable in programmaticVars should remain as placeholder
+	assert.Equal(t, "{{$processEnv %undefinedVar}}", bodyJSON["missing"], 
+		"Undefined variable should remain as placeholder")
+
+	t.Logf("Indirect environment variable resolution: secretKey=%s, dbUrl=%s, environment=%s", 
+		secretKey, dbUrl, bodyJSON["environment"])
 }

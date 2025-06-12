@@ -29,6 +29,7 @@ var (
 	reRandomPassword        = regexp.MustCompile(`{{\$randomPassword(?:\s+(\d+))?}}`)
 	reDotEnv                = regexp.MustCompile(`{{\s*\$dotenv\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*}}`)
 	reProcessEnv            = regexp.MustCompile(`{{\s*\$processEnv\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*}}`)
+	reProcessEnvIndirect    = regexp.MustCompile(`{{\s*\$processEnv\s+%([a-zA-Z_][a-zA-Z0-9_]*)\s*}}`)
 	reDateTime = regexp.MustCompile(
 		`{{\s*\$datetime(?:\s+("([^"]+)"|[^}\s]+))?(?:\s+("([^"]+)"|[^}\s]+))?\s*}}`)
 	reAadToken              = regexp.MustCompile(`{{\s*\$aadToken(?:\s+("([^"]+)"|[^}\s]+))*\s*}}`)
@@ -394,7 +395,7 @@ func matchesDynamicPattern(value string) bool {
 		reRandomHex, reRandomDotHexadecimal, reRandomAlphaNumeric,
 		reRandomDotAlphabetic,
 		reRandomDotAlphanumeric, reRandomString, reRandomPassword,
-		reDotEnv, reProcessEnv, reDateTime, reAadToken,
+		reDotEnv, reProcessEnv, reProcessEnvIndirect, reDateTime, reAadToken,
 		// Person/identity faker variables - VS Code style
 		reRandomFirstName, reRandomLastName, reRandomFullName, reRandomJobTitle,
 		// Person/identity faker variables - JetBrains style
@@ -734,6 +735,7 @@ func substituteDynamicSystemVariables(
 	text = substituteSystemEnvVariables(text)
 	text = substituteDotEnvVariables(text, activeDotEnvVars)
 	text = substituteProcessEnvVariables(text)
+	text = substituteProcessEnvIndirect(text, programmaticVars)
 	text = _substituteDateTimeVariables(text)
 	return text
 }
@@ -797,6 +799,36 @@ func substituteProcessEnvVariables(text string) string {
 	text = reProcessEnv.ReplaceAllStringFunc(text, processEnvReplacer())
 	text = substituteProcessEnvEncoded(text)
 	return text
+}
+
+// substituteProcessEnvIndirect handles {{$processEnv %VAR}} placeholders
+func substituteProcessEnvIndirect(text string, programmaticVars map[string]any) string {
+	return reProcessEnvIndirect.ReplaceAllStringFunc(text, func(match string) string {
+		parts := reProcessEnvIndirect.FindStringSubmatch(match)
+		if len(parts) == 2 {
+			varName := parts[1]
+			
+			// Resolve the variable name from programmaticVars first
+			if programmaticVars != nil {
+				if val, ok := programmaticVars[varName]; ok {
+					if envVarName, ok := val.(string); ok {
+						// Now look up the environment variable with the resolved name
+						if envVal, envOk := os.LookupEnv(envVarName); envOk {
+							return envVal
+						}
+						// If the environment variable doesn't exist, return empty string
+						return ""
+					}
+				}
+			}
+			
+			// If variable not found in programmaticVars, return original match
+			return match
+		}
+		slog.Warn("Failed to parse $processEnv indirect, returning original match", 
+			"match", match, "parts_len", len(parts))
+		return match
+	})
 }
 
 // processEnvReplacer returns a replacement function for process env variables

@@ -156,6 +156,10 @@ func TestExecuteFile_WithFakerPersonData(t *testing.T) {
 	test.RunExecuteFile_WithFakerPersonData(t)
 }
 
+func TestExecuteFile_WithIndirectEnvironmentVariables(t *testing.T) {
+	test.RunExecuteFile_WithIndirectEnvironmentVariables(t)
+}
+
 // System variable tests
 func TestExecuteFile_WithGuidSystemVariable(t *testing.T) {
 	test.RunExecuteFile_WithGuidSystemVariable(t)
