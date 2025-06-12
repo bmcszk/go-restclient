@@ -899,6 +899,9 @@ func (c *Client) parseMultipartSection(section string) (multipartPart, error) {
 		part.Content = content
 	}
 	
+	if part.Name == "" {
+		return part, errors.New("no name found in multipart section")
+	}
 	return part, nil
 }
 

@@ -601,3 +601,84 @@ func decodeURLIfNeeded(rawURL string) string {
 	}
 	return rawURL
 }
+
+// PRD-COMMENT: G5 - Comprehensive Faker Library Support: Person/Identity Data
+// Corresponds to: Client's ability to substitute comprehensive faker variables for person data
+// including {{$randomFirstName}}, {{$randomLastName}}, {{$randomFullName}}, and {{$randomJobTitle}}.
+// This test verifies that both VS Code style ({{$randomFirstName}}) and JetBrains style
+// ({{$random.firstName}}) syntaxes work correctly and generate realistic person data.
+func RunExecuteFile_WithFakerPersonData(t *testing.T) {
+	t.Helper()
+	// Given
+	var interceptedHeaders http.Header
+	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+		interceptedHeaders = r.Header.Clone()
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, "ok")
+	})
+	defer server.Close()
+
+	client, _ := rc.NewClient()
+	requestFilePath := createTestFileFromTemplate(t, "test/data/system_variables/faker_person_data.http",
+		struct{ ServerURL string }{ServerURL: server.URL})
+
+	// When
+	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then
+	require.NoError(t, err)
+	require.Len(t, responses, 2) // Two requests in the file
+
+	// Validate first request (VS Code style syntax)
+	resp1 := responses[0]
+	assert.NoError(t, resp1.Error)
+	assert.Equal(t, http.StatusOK, resp1.StatusCode)
+
+	// Check that faker variables were substituted (not empty and not the placeholder)
+	firstName := interceptedHeaders.Get("X-Random-First-Name")
+	assert.NotEmpty(t, firstName, "First name should not be empty")
+	assert.NotContains(t, firstName, "{{", "First name should not contain placeholder")
+	assert.Len(t, strings.Fields(firstName), 1, "First name should be a single word")
+
+	lastName := interceptedHeaders.Get("X-Random-Last-Name")
+	assert.NotEmpty(t, lastName, "Last name should not be empty")
+	assert.NotContains(t, lastName, "{{", "Last name should not contain placeholder")
+	assert.Len(t, strings.Fields(lastName), 1, "Last name should be a single word")
+
+	fullName := interceptedHeaders.Get("X-Random-Full-Name")
+	assert.NotEmpty(t, fullName, "Full name should not be empty")
+	assert.NotContains(t, fullName, "{{", "Full name should not contain placeholder")
+	assert.Len(t, strings.Fields(fullName), 2, "Full name should contain first and last name")
+
+	jobTitle := interceptedHeaders.Get("X-Random-Job-Title")
+	assert.NotEmpty(t, jobTitle, "Job title should not be empty")
+	assert.NotContains(t, jobTitle, "{{", "Job title should not contain placeholder")
+
+	// Validate second request (JetBrains style syntax)
+	resp2 := responses[1]
+	assert.NoError(t, resp2.Error)
+	assert.Equal(t, http.StatusOK, resp2.StatusCode)
+
+	// Check JetBrains style faker variables were substituted
+	firstNameDot := interceptedHeaders.Get("X-Random-First-Name-Dot")
+	assert.NotEmpty(t, firstNameDot, "JetBrains first name should not be empty")
+	assert.NotContains(t, firstNameDot, "{{", "JetBrains first name should not contain placeholder")
+	assert.Len(t, strings.Fields(firstNameDot), 1, "JetBrains first name should be a single word")
+
+	lastNameDot := interceptedHeaders.Get("X-Random-Last-Name-Dot")
+	assert.NotEmpty(t, lastNameDot, "JetBrains last name should not be empty")
+	assert.NotContains(t, lastNameDot, "{{", "JetBrains last name should not contain placeholder")
+	assert.Len(t, strings.Fields(lastNameDot), 1, "JetBrains last name should be a single word")
+
+	fullNameDot := interceptedHeaders.Get("X-Random-Full-Name-Dot")
+	assert.NotEmpty(t, fullNameDot, "JetBrains full name should not be empty")
+	assert.NotContains(t, fullNameDot, "{{", "JetBrains full name should not contain placeholder")
+	assert.Len(t, strings.Fields(fullNameDot), 2, "JetBrains full name should contain first and last name")
+
+	jobTitleDot := interceptedHeaders.Get("X-Random-Job-Title-Dot")
+	assert.NotEmpty(t, jobTitleDot, "JetBrains job title should not be empty")
+	assert.NotContains(t, jobTitleDot, "{{", "JetBrains job title should not contain placeholder")
+
+	t.Logf("Generated person data - VS Code style: %s %s (%s)", firstName, lastName, jobTitle)
+	t.Logf("Generated person data - JetBrains style: %s %s (%s)", firstNameDot, lastNameDot, jobTitleDot)
+}

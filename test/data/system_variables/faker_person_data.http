@@ -1,0 +1,13 @@
+### Person Data Tests
+GET [[.ServerURL]]/api/person
+X-Random-First-Name: {{$randomFirstName}}
+X-Random-Last-Name: {{$randomLastName}}
+X-Random-Full-Name: {{$randomFullName}}
+X-Random-Job-Title: {{$randomJobTitle}}
+
+### JetBrains Style Person Data Tests
+GET [[.ServerURL]]/api/person/jetbrains
+X-Random-First-Name-Dot: {{$random.firstName}}
+X-Random-Last-Name-Dot: {{$random.lastName}}
+X-Random-Full-Name-Dot: {{$random.fullName}}
+X-Random-Job-Title-Dot: {{$random.jobTitle}}
