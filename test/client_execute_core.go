@@ -205,10 +205,10 @@ func RunExecuteFile_ValidThenInvalidSyntax(t *testing.T) {
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/first" {
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, "response from /first")
+			_, _ = fmt.Fprint(w, "response from /first")
 		} else if r.Method == "INVALID_METHOD" && r.URL.Path == "/second" {
 			w.WriteHeader(http.StatusNotImplemented)
-			fmt.Fprint(w, "method not implemented")
+			_, _ = fmt.Fprint(w, "method not implemented")
 		} else {
 			t.Logf("Mock server received UNEXPECTED request: %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusTeapot)
@@ -390,13 +390,13 @@ func RunExecuteFile_MultipleRequests_GreaterThanTwo(t *testing.T) {
 		switch r.URL.Path {
 		case "/req1":
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, "response1")
+			_, _ = fmt.Fprint(w, "response1")
 		case "/req2":
 			w.WriteHeader(http.StatusCreated)
-			fmt.Fprint(w, "response2")
+			_, _ = fmt.Fprint(w, "response2")
 		case "/req3":
 			w.WriteHeader(http.StatusAccepted)
-			fmt.Fprint(w, "response3")
+			_, _ = fmt.Fprint(w, "response3")
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

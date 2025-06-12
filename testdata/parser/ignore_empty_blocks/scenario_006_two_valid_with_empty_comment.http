@@ -1,0 +1,12 @@
+GET https://example.com/req1
+
+### Comment for empty block
+# More comments
+
+###
+POST https://example.com/req2
+Content-Type: application/json
+
+{
+  "key": "value"
+}

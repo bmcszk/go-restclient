@@ -1,0 +1,5 @@
+@my_random_port = {{$randomInt 8000 8080}}
+
+### Test Request With Random Int In-Place Var
+GET {{test_server_url}}/port/{{my_random_port}}
+X-Random-Port: {{my_random_port}}

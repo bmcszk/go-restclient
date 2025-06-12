@@ -1,0 +1,14 @@
+### SeparatorOnlyName
+GET http://example.com/separator_only
+
+###
+# @name DirectiveNameForNext
+PATCH http://example.com/directive_only
+
+### RequestAfterDirectiveName
+# @name ThisShouldBeIgnoredDueToSeparatorNameAbove
+DELETE http://example.com/separator_wins_here
+
+###
+# @name DirectiveAfterEmptySeparator
+OPTIONS http://example.com/directive_after_empty_sep

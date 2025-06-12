@@ -200,7 +200,7 @@ func RunRedirectHandling(t *testing.T) {
 		case "/target":
 			// Target of redirect
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("Target page"))
+			_, _ = w.Write([]byte("Target page"))
 			return
 		default:
 			w.WriteHeader(http.StatusNotFound)

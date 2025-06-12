@@ -1,0 +1,17 @@
+@host = {{prog_baseUrl}}
+@file_var_to_override = file_value_should_be_overridden
+@unused_file_var = file_only
+
+POST {{host}}/{{prog_path}}/{{prog_id}}
+Content-Type: application/json
+X-Test-Header: {{prog_headerVal}}
+X-File-Var: {{file_var_to_override}}
+X-Env-Var: {{PROG_ENV_VAR}}
+X-Unused-File-Var: {{unused_file_var}}
+
+{
+  "field": "{{prog_bodyField}}",
+  "overridden_file_var": "{{file_var_to_override}}",
+  "env_var_check": "{{PROG_ENV_VAR}}",
+  "file_only_check": "{{unused_file_var}}"
+} 

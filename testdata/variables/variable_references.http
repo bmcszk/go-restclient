@@ -1,0 +1,39 @@
+### File demonstrating variable references and scoping
+
+# File-level variables
+@host = api.example.com
+@port = 8080
+@base_path = /api/v1
+
+### Request demonstrating nested variable references
+@url = https://{{host}}:{{port}}{{base_path}}
+
+GET {{url}}/users
+
+### Request with request-specific variable that overrides file-level variable
+@host = user-api.example.com
+
+GET https://{{host}}:{{port}}{{base_path}}/users/me
+
+### Request using previous file-level variable definitions
+# host is now back to the global one
+GET https://{{host}}:{{port}}{{base_path}}/status
+
+### Request with complex variable expansion in JSON body
+@user_id = 12345
+@user_role = admin
+@team_id = team-xyz
+
+POST https://{{host}}:{{port}}{{base_path}}/users/{{user_id}}/permissions
+Content-Type: application/json
+
+{
+  "userId": "{{user_id}}",
+  "role": "{{user_role}}",
+  "teamId": "{{team_id}}",
+  "permissions": [
+    "read:{{team_id}}:*",
+    "write:{{team_id}}:projects",
+    "admin:{{team_id}}:users"
+  ]
+}

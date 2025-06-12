@@ -1,0 +1,6 @@
+{
+	"dev": {
+		"override_var": "private_override_value",
+		"private_var": "private_specific_value"
+	}
+}

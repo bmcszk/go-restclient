@@ -1,0 +1,6 @@
+### Normal request with cookie jar enabled
+GET https://api.example.com/with-cookies
+
+### Request with no-cookie-jar directive
+# @no-cookie-jar
+GET https://api.example.com/no-cookies

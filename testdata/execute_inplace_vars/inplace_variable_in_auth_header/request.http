@@ -1,0 +1,6 @@
+@my_token = secret-token-12345
+@test_server_url = {{test_server_url}}
+
+### Test Request With In-Place Var in Auth Header
+GET {{test_server_url}}/some/path
+X-Auth-Token: {{my_token}}

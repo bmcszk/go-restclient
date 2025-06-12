@@ -1,0 +1,6 @@
+### Normal request with redirect allowed
+GET https://api.example.com/redirect-me
+
+### Request with no-redirect directive
+# @no-redirect
+GET https://api.example.com/redirect-me

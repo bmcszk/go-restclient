@@ -1,0 +1,10 @@
+{
+  "document": {
+    "title": "Sample Document",
+    "content": "This is a sample document content"
+  },
+  "metadata": {
+    "author": "Test Author",
+    "createdAt": "2023-05-15T14:30:00Z"
+  }
+}

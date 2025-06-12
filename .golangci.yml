@@ -21,7 +21,7 @@ linters:
     - thelper
   exclusions:
     rules:
-      - path: '(.+)_test\.go$'
+      - path: '.*test.*\.go$'
         linters:
           - errcheck
           - unparam
@@ -33,7 +33,7 @@ linters:
         disabled: true
       - name: add-constant
         disabled: true
-        exclude: ["**/*_test.go"]
+        exclude: ["**/*_test.go", "test/*.go"]
         arguments:
           - max-lit-count: "3"
             allow-strs: '""'
@@ -51,7 +51,10 @@ linters:
             skip-comments: false
             skip-blank-lines: false
       - name: unhandled-error
-        exclude: ["**/*_test.go"]
+        exclude: ["**/*_test.go", "test/*.go"]
+      - name: exported
+        exclude: ["**/*_test.go", "test/*.go"]
+        disabled: true
     nestif:
       min-complexity: 4
 

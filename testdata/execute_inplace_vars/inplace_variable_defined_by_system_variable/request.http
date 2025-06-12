@@ -1,0 +1,4 @@
+@my_request_id = {{$uuid}}
+
+### Test Request With System Var In In-Place Var
+GET {{test_server_url}}/{{my_request_id}}/resource

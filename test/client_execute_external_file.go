@@ -55,7 +55,7 @@ func RunExecuteFile_ExternalFileWithVariables(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"json": data,
 		})
 	}))
@@ -140,7 +140,7 @@ func RunExecuteFile_ExternalFileWithoutVariables(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"json": data, // Echo back the received JSON data
 		})
 	}))

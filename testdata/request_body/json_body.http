@@ -1,0 +1,56 @@
+### Basic JSON Body Test
+POST https://example.com/api/users
+Content-Type: application/json
+
+{
+  "name": "Test User",
+  "email": "test@example.com",
+  "role": "admin"
+}
+
+### JSON Body with Array Test
+POST https://example.com/api/users/batch
+Content-Type: application/json
+
+[
+  {
+    "name": "User 1",
+    "email": "user1@example.com"
+  },
+  {
+    "name": "User 2", 
+    "email": "user2@example.com"
+  }
+]
+
+### JSON Body with Nested Objects
+POST https://example.com/api/orders
+Content-Type: application/json
+
+{
+  "order": {
+    "id": "ORD-12345",
+    "customer": {
+      "name": "Test Customer",
+      "address": {
+        "street": "123 Test St",
+        "city": "Test City",
+        "zip": "12345"
+      }
+    },
+    "items": [
+      {
+        "id": "ITEM-1",
+        "name": "Product 1",
+        "quantity": 2,
+        "price": 19.99
+      },
+      {
+        "id": "ITEM-2",
+        "name": "Product 2",
+        "quantity": 1,
+        "price": 29.99
+      }
+    ]
+  }
+}

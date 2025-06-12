@@ -1,0 +1,4 @@
+@my_path_from_env = {{$env.MY_CONFIG_PATH_TEST_DOT_ENV}}
+
+### Test Request With OS Env Var ({{$env.VAR}}) In In-Place Var
+GET {{test_server_url}}{{my_path_from_env}}/data

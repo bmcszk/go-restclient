@@ -1,0 +1,2 @@
+### Basic Auth via URL
+GET https://username:password@api.example.com/secured

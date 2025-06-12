@@ -1,0 +1,3 @@
+### Request when http-client.env.json is missing
+GET {{host}}/missing_env_file_path
+Header-Test: {{token}}

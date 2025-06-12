@@ -1,0 +1,10 @@
+### First Request
+GET http://example.com/api/1
+
+### Second Request with Data
+POST http://example.com/api/2
+Content-Type: application/json
+
+{
+    "key": "value"
+}

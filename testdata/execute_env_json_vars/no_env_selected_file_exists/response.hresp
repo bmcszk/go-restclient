@@ -1,0 +1,7 @@
+// Expecting an error because no environment was selected for substitution,
+// even though http-client.env.json exists.
+// {{host}} and {{token}} will not be resolved.
+// The HTTP client should fail to make a request with an unresolved host.
+
+// Status: Error (client-side)
+// ErrorContains: unsupported protocol scheme ""

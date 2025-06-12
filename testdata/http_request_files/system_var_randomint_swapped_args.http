@@ -1,0 +1,6 @@
+GET [[.ServerURL]]/rint/{{$randomInt 30 25}}/{{$randomInt 30 25}}
+X-Random-ID: {{$randomInt 30 25}}
+
+{
+  "value": "{{$randomInt 30 25}}"
+} 

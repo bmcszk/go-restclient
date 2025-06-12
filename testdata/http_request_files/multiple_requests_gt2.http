@@ -1,0 +1,17 @@
+GET [[.ServerURL]]/req1
+X-Test-Header: Request1
+
+###
+
+POST [[.ServerURL]]/req2
+Content-Type: application/json
+X-Test-Header: Request2
+
+{
+  "name": "request2"
+}
+
+###
+
+GET [[.ServerURL]]/req3
+X-Test-Header: Request3 

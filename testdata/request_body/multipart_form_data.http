@@ -1,0 +1,35 @@
+### Basic Multipart Form Data Test
+POST https://example.com/api/profile
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="username"
+
+testuser
+--WebAppBoundary
+Content-Disposition: form-data; name="email"
+
+test@example.com
+--WebAppBoundary--
+
+### Multipart Form Data With Multiple Fields
+POST https://example.com/api/registration
+Content-Type: multipart/form-data; boundary=FormBoundary
+
+--FormBoundary
+Content-Disposition: form-data; name="username"
+
+newuser123
+--FormBoundary
+Content-Disposition: form-data; name="email"
+
+newuser@example.com
+--FormBoundary
+Content-Disposition: form-data; name="age"
+
+25
+--FormBoundary
+Content-Disposition: form-data; name="subscribe"
+
+true
+--FormBoundary--
