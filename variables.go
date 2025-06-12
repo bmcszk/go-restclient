@@ -33,16 +33,6 @@ var (
 	reDateTime = regexp.MustCompile(
 		`{{\s*\$datetime(?:\s+("([^"]+)"|[^}\s]+))?(?:\s+("([^"]+)"|[^}\s]+))?\s*}}`)
 	reAadToken              = regexp.MustCompile(`{{\s*\$aadToken(?:\s+("([^"]+)"|[^}\s]+))*\s*}}`)
-	// Person/identity faker variables - VS Code style
-	reRandomFirstName       = regexp.MustCompile(`{{\s*\$randomFirstName\s*}}`)
-	reRandomLastName        = regexp.MustCompile(`{{\s*\$randomLastName\s*}}`)
-	reRandomFullName        = regexp.MustCompile(`{{\s*\$randomFullName\s*}}`)
-	reRandomJobTitle        = regexp.MustCompile(`{{\s*\$randomJobTitle\s*}}`)
-	// Person/identity faker variables - JetBrains style
-	reRandomFirstNameDot    = regexp.MustCompile(`{{\s*\$random\.firstName\s*}}`)
-	reRandomLastNameDot     = regexp.MustCompile(`{{\s*\$random\.lastName\s*}}`)
-	reRandomFullNameDot     = regexp.MustCompile(`{{\s*\$random\.fullName\s*}}`)
-	reRandomJobTitleDot     = regexp.MustCompile(`{{\s*\$random\.jobTitle\s*}}`)
 )
 
 const (
@@ -64,29 +54,6 @@ const (
 // Word list for $randomWord
 var randomWords = []string{"apple", "banana", "cherry", "date", "elderberry", "fig", "grape"}
 
-// Name lists for person data generation
-var firstNames = []string{
-	"James", "Mary", "John", "Patricia", "Robert", "Jennifer", "Michael", "Linda", "William", "Elizabeth",
-	"David", "Barbara", "Richard", "Susan", "Joseph", "Jessica", "Thomas", "Sarah", "Christopher", "Karen",
-	"Charles", "Helen", "Daniel", "Nancy", "Matthew", "Betty", "Anthony", "Dorothy", "Mark", "Lisa",
-	"Donald", "Sandra", "Steven", "Donna", "Paul", "Carol", "Andrew", "Ruth", "Joshua", "Sharon",
-}
-
-var lastNames = []string{
-	"Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez",
-	"Hernandez", "Lopez", "Gonzalez", "Wilson", "Anderson", "Thomas", "Taylor", "Moore", "Jackson", "Martin",
-	"Lee", "Perez", "Thompson", "White", "Harris", "Sanchez", "Clark", "Ramirez", "Lewis", "Robinson",
-	"Walker", "Young", "Allen", "King", "Wright", "Scott", "Torres", "Nguyen", "Hill", "Flores",
-}
-
-// Job titles for business data
-var jobTitles = []string{
-	"Software Engineer", "Product Manager", "Data Scientist", "UX Designer", "DevOps Engineer",
-	"Marketing Manager", "Sales Representative", "Project Manager", "Business Analyst", "QA Engineer",
-	"Frontend Developer", "Backend Developer", "Full Stack Developer", "Technical Writer", "Architect",
-	"Consultant", "Analyst", "Director", "Manager", "Coordinator", "Specialist", "Administrator",
-	"Executive", "Lead", "Senior Developer", "Junior Developer", "Intern", "VP of Engineering",
-}
 
 // resolveVariablesInText is the primary substitution engine for non-system
 // variables and request-scoped system variables.
@@ -396,9 +363,8 @@ func matchesDynamicPattern(value string) bool {
 		reRandomDotAlphabetic,
 		reRandomDotAlphanumeric, reRandomString, reRandomPassword,
 		reDotEnv, reProcessEnv, reProcessEnvIndirect, reDateTime, reAadToken,
-		// Person/identity faker variables - VS Code style
+		// Person/identity faker variables
 		reRandomFirstName, reRandomLastName, reRandomFullName, reRandomJobTitle,
-		// Person/identity faker variables - JetBrains style
 		reRandomFirstNameDot, reRandomLastNameDot, reRandomFullNameDot, reRandomJobTitleDot,
 	}
 
@@ -804,31 +770,48 @@ func substituteProcessEnvVariables(text string) string {
 // substituteProcessEnvIndirect handles {{$processEnv %VAR}} placeholders
 func substituteProcessEnvIndirect(text string, programmaticVars map[string]any) string {
 	return reProcessEnvIndirect.ReplaceAllStringFunc(text, func(match string) string {
-		parts := reProcessEnvIndirect.FindStringSubmatch(match)
-		if len(parts) == 2 {
-			varName := parts[1]
-			
-			// Resolve the variable name from programmaticVars first
-			if programmaticVars != nil {
-				if val, ok := programmaticVars[varName]; ok {
-					if envVarName, ok := val.(string); ok {
-						// Now look up the environment variable with the resolved name
-						if envVal, envOk := os.LookupEnv(envVarName); envOk {
-							return envVal
-						}
-						// If the environment variable doesn't exist, return empty string
-						return ""
-					}
-				}
-			}
-			
-			// If variable not found in programmaticVars, return original match
-			return match
-		}
+		return processIndirectEnvMatch(match, programmaticVars)
+	})
+}
+
+// processIndirectEnvMatch processes a single indirect environment variable match
+func processIndirectEnvMatch(match string, programmaticVars map[string]any) string {
+	parts := reProcessEnvIndirect.FindStringSubmatch(match)
+	if len(parts) != 2 {
 		slog.Warn("Failed to parse $processEnv indirect, returning original match", 
 			"match", match, "parts_len", len(parts))
 		return match
-	})
+	}
+
+	varName := parts[1]
+	envVarName := resolveIndirectVarName(varName, programmaticVars)
+	if envVarName == "" {
+		return match // Variable not found, return original match
+	}
+
+	if envVal, ok := os.LookupEnv(envVarName); ok {
+		return envVal
+	}
+	return "" // Environment variable doesn't exist, return empty string
+}
+
+// resolveIndirectVarName resolves the variable name from programmaticVars
+func resolveIndirectVarName(varName string, programmaticVars map[string]any) string {
+	if programmaticVars == nil {
+		return ""
+	}
+	
+	val, ok := programmaticVars[varName]
+	if !ok {
+		return ""
+	}
+	
+	envVarName, ok := val.(string)
+	if !ok {
+		return ""
+	}
+	
+	return envVarName
 }
 
 // processEnvReplacer returns a replacement function for process env variables
@@ -942,73 +925,8 @@ func substituteRandomVariables(text string, programmaticVars map[string]any) str
 		text = strings.ReplaceAll(text, "{{$randomWord}}", randomWords[rand.Intn(len(randomWords))])
 	}
 
-	// Person/Identity data - VS Code style
-	text = reRandomFirstName.ReplaceAllStringFunc(text, func(_ string) string {
-		if len(firstNames) > 0 {
-			return firstNames[rand.Intn(len(firstNames))]
-		}
-		return "John"
-	})
-
-	text = reRandomLastName.ReplaceAllStringFunc(text, func(_ string) string {
-		if len(lastNames) > 0 {
-			return lastNames[rand.Intn(len(lastNames))]
-		}
-		return "Doe"
-	})
-
-	text = reRandomFullName.ReplaceAllStringFunc(text, func(_ string) string {
-		firstName := "John"
-		lastName := "Doe"
-		if len(firstNames) > 0 {
-			firstName = firstNames[rand.Intn(len(firstNames))]
-		}
-		if len(lastNames) > 0 {
-			lastName = lastNames[rand.Intn(len(lastNames))]
-		}
-		return firstName + " " + lastName
-	})
-
-	text = reRandomJobTitle.ReplaceAllStringFunc(text, func(_ string) string {
-		if len(jobTitles) > 0 {
-			return jobTitles[rand.Intn(len(jobTitles))]
-		}
-		return "Software Engineer"
-	})
-
-	// Person/Identity data - JetBrains style
-	text = reRandomFirstNameDot.ReplaceAllStringFunc(text, func(_ string) string {
-		if len(firstNames) > 0 {
-			return firstNames[rand.Intn(len(firstNames))]
-		}
-		return "John"
-	})
-
-	text = reRandomLastNameDot.ReplaceAllStringFunc(text, func(_ string) string {
-		if len(lastNames) > 0 {
-			return lastNames[rand.Intn(len(lastNames))]
-		}
-		return "Doe"
-	})
-
-	text = reRandomFullNameDot.ReplaceAllStringFunc(text, func(_ string) string {
-		firstName := "John"
-		lastName := "Doe"
-		if len(firstNames) > 0 {
-			firstName = firstNames[rand.Intn(len(firstNames))]
-		}
-		if len(lastNames) > 0 {
-			lastName = lastNames[rand.Intn(len(lastNames))]
-		}
-		return firstName + " " + lastName
-	})
-
-	text = reRandomJobTitleDot.ReplaceAllStringFunc(text, func(_ string) string {
-		if len(jobTitles) > 0 {
-			return jobTitles[rand.Intn(len(jobTitles))]
-		}
-		return "Software Engineer"
-	})
+	// Person/Identity data (faker variables)
+	text = substituteFakerVariables(text)
 
 	return text
 }
