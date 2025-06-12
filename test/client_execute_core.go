@@ -420,3 +420,230 @@ func RunExecuteFile_MultipleRequests_GreaterThanTwo(t *testing.T) {
 	validationErr := client.ValidateResponses(expectedResponseFilePath, actualResponses...)
 	assert.NoError(t, validationErr, "Validation of responses against file failed")
 }
+
+// PRD-COMMENT: G1 - Multi-line Query Parameters
+// Corresponds to: VS Code REST Client syntax for multi-line query parameters using
+// ? and & line continuations (http_syntax.md "Query Parameters on Multiple Lines").
+// This test verifies that the client can parse and execute requests with query parameters
+// spread across multiple lines using the VS Code REST Client syntax.
+func RunExecuteFile_MultilineQueryParameters(t *testing.T) {
+	t.Helper()
+	// Given
+	var capturedRequests []*http.Request
+	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+		capturedRequests = append(capturedRequests, r)
+		
+		switch r.URL.Path {
+		case "/api/comments":
+			// Verify query parameters from multi-line syntax
+			query := r.URL.Query()
+			assert.Equal(t, "2", query.Get("page"))
+			assert.Equal(t, "10", query.Get("pageSize"))
+			assert.Equal(t, "active", query.Get("filter"))
+			assert.Equal(t, "created_at", query.Get("sort"))
+			assert.Equal(t, "desc", query.Get("order"))
+			
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, `{"comments": [], "page": 2}`)
+			
+		case "/api/search":
+			// Verify query parameters with POST request
+			query := r.URL.Query()
+			assert.Equal(t, "test query", query.Get("q"))
+			assert.Equal(t, "50", query.Get("limit"))
+			assert.Equal(t, "0", query.Get("offset"))
+			
+			// Verify JSON body is present
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			assert.JSONEq(t, `{"advanced": true}`, string(body))
+			
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, `{"results": [], "total": 0}`)
+			
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer server.Close()
+
+	client, _ := rc.NewClient()
+	requestFilePath := createTestFileFromTemplate(t, 
+		"test/data/http_request_files/multiline_query_parameters.http", 
+		struct{ ServerURL string }{ServerURL: server.URL})
+
+	// When
+	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then
+	require.NoError(t, err)
+	require.Len(t, responses, 2)
+	require.Len(t, capturedRequests, 2)
+
+	// Verify first request (GET with multi-line query parameters)
+	resp1 := responses[0]
+	assert.NoError(t, resp1.Error)
+	assert.Equal(t, http.StatusOK, resp1.StatusCode)
+	assert.Contains(t, resp1.BodyString, `"page": 2`)
+
+	// Verify second request (POST with multi-line query parameters and body)
+	resp2 := responses[1]
+	assert.NoError(t, resp2.Error)
+	assert.Equal(t, http.StatusOK, resp2.StatusCode)
+	assert.Contains(t, resp2.BodyString, `"results"`)
+}
+
+// PRD-COMMENT: G2 - Multi-line Form Data
+// Corresponds to: VS Code REST Client syntax for multi-line form data using
+// & line continuations (http_syntax.md "Form Data on Multiple Lines").
+// This test verifies that the client can parse and execute requests with form data
+// spread across multiple lines using the VS Code REST Client syntax.
+func RunExecuteFile_MultilineFormData(t *testing.T) {
+	t.Helper()
+	// Given
+	var capturedRequests []*http.Request
+	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+		capturedRequests = append(capturedRequests, r)
+		
+		// Read and verify form data
+		err := r.ParseForm()
+		require.NoError(t, err)
+		
+		switch r.URL.Path {
+		case "/api/login":
+			assert.Equal(t, "testuser", r.FormValue("username"))
+			assert.Equal(t, "testpass123", r.FormValue("password"))
+			assert.Equal(t, "true", r.FormValue("remember_me"))
+			assert.Equal(t, "read,write", r.FormValue("scope"))
+			assert.Equal(t, "https://example.com/callback", r.FormValue("redirect_uri"))
+			
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, `{"token": "abc123"}`)
+			
+		case "/api/submit":
+			assert.Equal(t, "value1", r.FormValue("field1"))
+			assert.Equal(t, "value with spaces", r.FormValue("field2"))
+			assert.Equal(t, "special%20chars", r.FormValue("field3"))
+			assert.Equal(t, "multi", r.FormValue("field4"))
+			assert.Equal(t, "data", r.FormValue("line"))
+			
+			w.WriteHeader(http.StatusCreated)
+			_, _ = fmt.Fprint(w, `{"success": true}`)
+			
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer server.Close()
+
+	client, _ := rc.NewClient()
+	requestFilePath := createTestFileFromTemplate(t, 
+		"test/data/http_request_files/multiline_form_data.http", 
+		struct{ ServerURL string }{ServerURL: server.URL})
+
+	// When
+	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then
+	require.NoError(t, err)
+	require.Len(t, responses, 2)
+	require.Len(t, capturedRequests, 2)
+
+	// Verify first request (login form)
+	resp1 := responses[0]
+	assert.NoError(t, resp1.Error)
+	assert.Equal(t, http.StatusOK, resp1.StatusCode)
+	assert.Contains(t, resp1.BodyString, `"token"`)
+
+	// Verify second request (submit form)
+	resp2 := responses[1]
+	assert.NoError(t, resp2.Error)
+	assert.Equal(t, http.StatusCreated, resp2.StatusCode)
+	assert.Contains(t, resp2.BodyString, `"success"`)
+}
+
+// PRD-COMMENT: G3 - File Uploads in Multipart Forms
+// Corresponds to: File upload functionality within multipart forms using
+// < file references (http_syntax.md "File Upload").
+// This test verifies that the client can parse and execute multipart form requests
+// that include file uploads using the < file reference syntax.
+func RunExecuteFile_MultipartFileUploads(t *testing.T) {
+	t.Helper()
+	// Given
+	var capturedRequests []*http.Request
+	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+		capturedRequests = append(capturedRequests, r)
+		
+		// Parse multipart form
+		err := r.ParseMultipartForm(32 << 20) // 32MB max
+		require.NoError(t, err)
+		
+		switch r.URL.Path {
+		case "/api/upload":
+			// Verify form field
+			assert.Equal(t, "File upload test", r.FormValue("description"))
+			
+			// Verify file uploads
+			file1, file1Header, err := r.FormFile("file1")
+			require.NoError(t, err)
+			assert.Equal(t, "sample_text.txt", file1Header.Filename)
+			assert.Equal(t, "text/plain", file1Header.Header.Get("Content-Type"))
+			_ = file1.Close()
+			
+			file2, file2Header, err := r.FormFile("file2")
+			require.NoError(t, err)
+			assert.Equal(t, "sample_image.jpg", file2Header.Filename)
+			assert.Equal(t, "image/jpeg", file2Header.Header.Get("Content-Type"))
+			_ = file2.Close()
+			
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, `{"uploaded": ["file1", "file2"]}`)
+			
+		case "/api/upload-json":
+			// Verify JSON metadata
+			metadata, metadataHeader, err := r.FormFile("metadata")
+			require.NoError(t, err)
+			assert.Equal(t, "application/json", metadataHeader.Header.Get("Content-Type"))
+			_ = metadata.Close()
+			
+			// Verify PDF document
+			document, documentHeader, err := r.FormFile("document")
+			require.NoError(t, err)
+			assert.Equal(t, "sample_document.pdf", documentHeader.Filename)
+			assert.Equal(t, "application/pdf", documentHeader.Header.Get("Content-Type"))
+			_ = document.Close()
+			
+			w.WriteHeader(http.StatusCreated)
+			_, _ = fmt.Fprint(w, `{"processed": true}`)
+			
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	defer server.Close()
+
+	client, _ := rc.NewClient()
+	requestFilePath := createTestFileFromTemplate(t, 
+		"test/data/http_request_files/multipart_file_uploads.http", 
+		struct{ ServerURL string }{ServerURL: server.URL})
+
+	// When
+	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then
+	require.NoError(t, err)
+	require.Len(t, responses, 2)
+	require.Len(t, capturedRequests, 2)
+
+	// Verify first request (file uploads)
+	resp1 := responses[0]
+	assert.NoError(t, resp1.Error)
+	assert.Equal(t, http.StatusOK, resp1.StatusCode)
+	assert.Contains(t, resp1.BodyString, `"uploaded"`)
+
+	// Verify second request (JSON + PDF upload)
+	resp2 := responses[1]
+	assert.NoError(t, resp2.Error)
+	assert.Equal(t, http.StatusCreated, resp2.StatusCode)
+	assert.Contains(t, resp2.BodyString, `"processed"`)
+}
