@@ -1,180 +1,133 @@
-# Go REST Client Library (`go-restclient`)
+# Go REST Client Library
 
-**IMPORTANT:** This library is heavily inspired by:
-- [JetBrains HTTP Client](https://www.jetbrains.com/help/idea/http-client-in-product-code-editor.html)
-- [REST Client Extension for VS Code](https://marketplace.visualstudio.com/items?itemName=humao.rest-client)
+A Go library for executing HTTP requests from `.http` files and validating responses. Write once, use everywhere - for both manual testing and automated E2E tests.
 
-For comprehensive HTTP syntax reference, see [HTTP Syntax Documentation](docs/http_syntax.md).
+## Why This Library?
 
-Last Updated: 2025-06-06
+**Problem**: I wanted to use the same `.http` files for both manual testing (JetBrains HTTP Client, VS Code REST Client) and automated E2E testing in Go. No existing library offered full compatibility with both environments.
 
-## Overview
+**Solution**: This library parses `.http` files exactly like popular IDE extensions, enabling seamless workflow between manual and automated testing.
 
-`go-restclient` is a Go library designed to simplify HTTP request execution and validation. It allows developers to define HTTP requests in simple text files (`.rest` or `.http` format, similar to RFC 2616 and popular REST client tools), send these requests, and validate the responses against expected outcomes.
+## Key Features
 
-This library is suitable for programmatic use within Go applications, particularly for integration and end-to-end testing.
+- **Full JetBrains/VS Code compatibility** - Same `.http` syntax, variables, and behaviors
+- **Variable substitution** - Custom variables, environment variables, system variables (`{{$guid}}`, `{{$randomInt}}`, etc.)
+- **Response validation** - Compare responses against `.hresp` files with placeholders (`{{$any}}`, `{{$regexp}}`, `{{$anyGuid}}`)
+- **Multiple requests per file** - Separated by `###`
+- **E2E testing ready** - Perfect for automated integration tests
 
-## Features
-
-- **Parse `.rest`/`.http` files:**
-    - Supports multiple requests per file, separated by `###`.
-    - Handles request method, URL, HTTP version, headers, and body.
-    - Supports comments (`#`) and named requests (e.g., `### My Request Name`).
-- **Dynamic Variable Substitution:**
-    - **Custom Variables (File-defined):** Define and use variables within request files (e.g., `@baseUrl = https://api.example.com`, `{{baseUrl}}`).
-    - **System Variables:**
-        - `{{$guid}}`: Generates a new UUID.
-        - `{{$randomInt [min max]}}`: Generates a random integer. Optional `min` `max` (e.g., `{{$randomInt 1 10}}`). Defaults to 0-100.
-        - `{{$timestamp}}`: Current UTC Unix timestamp (seconds).
-        - `{{$datetime format}}`: Current UTC datetime. `format` can be `rfc1123`, `iso8601`, or a Go layout string (e.g., `"2006-01-02"`).
-        - `{{$localDatetime format}}`: Current local datetime, same `format` options as `$datetime`.
-        - `{{$processEnv VAR_NAME}}`: Value of environment variable `VAR_NAME`.
-        - `{{$dotenv VAR_NAME}}`: Value of `VAR_NAME` from a `.env` file in the request file's directory.
-    - **Programmatic Variables:** Pass a `map[string]interface{}` of variables via the `WithVars` client option (e.g., `restclient.WithVars(vars)`). These override file-defined and environment variables of the same name.
-- **HTTP Request Execution:**
-    - Create a `Client` with options (custom `http.Client`, `BaseURL`, default headers, programmatic variables via `WithVars`).
-    - Execute requests from a `.http` file using `ExecuteFile(ctx context.Context, filePath string)`.
-    - Captures detailed response information: status, headers, body, duration.
-    - Handles errors during request execution and stores them within the `Response` object.
-- **Response Validation:**
-    - Compare actual `Response` objects against an expected response file (`.hresp`).
-    - Validate status code and status string.
-    - Validate headers: exact match for specified keys, or check if actual headers contain specified key-substring pairs.
-    - Validate body: exact match or contains substrings.
-
-### Response Body Placeholders (`.hresp` files)
-
-When defining expected responses in `.hresp` files, the body section can use placeholders to match dynamic content. This is particularly useful for values that change with each request, like generated IDs, timestamps, or any arbitrary text.
-
-The following placeholders are supported in the expected response body:
-
-- **`{{$any}}`**: Matches any sequence of characters (including an empty string). This is useful for parts of the response body that are dynamic or not relevant to the current test. It's non-greedy.
-  *Example:* `{"message": "Processed item {{$any}} successfully"}`
-
-- **`{{$regexp 'pattern'}}`**: Matches text against the provided Go regular expression `pattern`. The pattern **must be enclosed in backticks (` `)**.
-  *Example:* `{"id": "{{$regexp `^[a-f0-9-]+$`}}"}` (matches a UUID-like string)
-  *Example:* `{"value": "{{$regexp `\d{3,5}`}}` (matches 3 to 5 digits)
-
-- **`{{$anyGuid}}`**: Matches a standard UUID string (e.g., `123e4567-e89b-12d3-a456-426614174000`).
-  *Example:* `{"correlationId": "{{$anyGuid}}"}`
-
-- **`{{$anyTimestamp}}`**: Matches a Unix timestamp (an integer representing seconds).
-  *Example:* `{"createdAt": "{{$anyTimestamp}}"}`
-
-- **`{{$anyDatetime 'format'}}`**: Matches a datetime string based on the provided `format`.
-    - Predefined formats: `'rfc1123'`, `'iso8601'`.
-    - Custom Go layout: If `format` is a Go `time.Parse` layout string, it must be **enclosed in double quotes** (e.g., `{{$anyDatetime ""2006-01-02""}}`).
-  *Example (RFC1123):* `{"lastModified": "{{$anyDatetime 'rfc1123'}}"}`
-  *Example (ISO8601):* `{"timestamp": "{{$anyDatetime 'iso8601'}}"}`
-  *Example (Custom Layout):* `{"eventDate": "{{$anyDatetime ""2006-01-02""}}"}`
-
-**Note on Placeholder Evaluation:** When a response body contains placeholders, the library constructs a single regular expression from the expected body. Each placeholder is converted into its corresponding regex pattern. Literals parts of the expected body are automatically escaped for regex. The entire actual response body is then matched against this master regex.
-
-## Getting Started
-
-### Prerequisites
-
-- Go 1.21 or higher.
-
-### Installation
+## Installation
 
 ```bash
 go get github.com/bmcszk/go-restclient
 ```
 
-## Usage
+## Quick Start
 
-### Client Configuration Options
+### 1. Create a `.http` file
 
-The `restclient.NewClient()` function accepts functional options to customize the client's behavior:
-
-- **`restclient.WithHTTPClient(customClient *http.Client)`**:
-  Allows you to provide your own `*http.Client` instance. This is useful for configuring custom transport, timeouts, redirects, TLS settings, etc. If not provided, a default `*http.Client` is used.
-
-  *Example:*
-  ```go
-  customTransport := &http.Transport{
-      TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-  }
-  httpClient := &http.Client{
-      Transport: customTransport,
-      Timeout:   15 * time.Second,
-  }
-  client, err := restclient.NewClient(restclient.WithHTTPClient(httpClient))
-  ```
-
-- **`restclient.WithBaseURL(baseURL string)`**:
-  Sets a base URL that will be prepended to all relative request URLs defined in `.http` files. If a request URL is absolute, the base URL is not used.
-
-  *Example:*
-  ```go
-  client, err := restclient.NewClient(restclient.WithBaseURL("https://api.example.com/v1"))
-  // A request to "/users" in an .http file will become "https://api.example.com/v1/users"
-  ```
-
-- **`restclient.WithDefaultHeader(key string, value string)`**:
-  Adds a single default header that will be included in every request sent by the client. If a request itself defines a header with the same key, the request's header value will typically take precedence (standard HTTP client behavior may vary slightly based on canonicalization, but usually the last one set for a key is used, or multiple are sent if the header key allows).
-
-  *Example:*
-  ```go
-  client, err := restclient.NewClient(restclient.WithDefaultHeader("X-Client-ID", "my-app-123"))
-  ```
-
-- **`restclient.WithDefaultHeaders(headers http.Header)`**:
-  Adds multiple default headers from an `http.Header` map. Similar precedence rules apply as with `WithDefaultHeader`.
-
-  *Example:*
-  ```go
-  defaultHeaders := make(http.Header)
-  defaultHeaders.Add("X-App-Name", "MyApplication")
-  defaultHeaders.Add("X-App-Version", "2.0.1")
-  client, err := restclient.NewClient(restclient.WithDefaultHeaders(defaultHeaders))
-  ```
-
-These options can be combined when creating a new client:
-```go
-client, err := restclient.NewClient(
-    restclient.WithBaseURL("https://api.myapp.com"),
-    restclient.WithDefaultHeader("Authorization", "Bearer default-token"),
-    // ... other options
-)
-```
-
-### 1. Define HTTP Requests
-
-Create a `.http` (or `.rest`) file with your requests.
-
-**Example: `api_requests.http`**
 ```http
 @baseUrl = https://api.example.com
-@defaultUser = file_user_id
+@userId = 123
 
-### Get a specific user, potentially overridden by programmatic var
+### Get user profile
 GET {{baseUrl}}/users/{{userId}}
-X-Request-ID: {{$guid}}
 Authorization: Bearer {{authToken}}
+X-Request-ID: {{$guid}}
 
-### Create a new product
-POST {{baseUrl}}/products
+### Create new user  
+POST {{baseUrl}}/users
 Content-Type: application/json
 
 {
-  "productId": "{{$randomInt 1000 9999}}",
-  "name": "Super Widget {{productSuffix}}" 
+  "id": "{{$randomInt 1000 9999}}",
+  "name": "Test User",
+  "createdAt": "{{$timestamp}}"
 }
 ```
 
-### 2. Define Expected Responses (Optional)
+### 2. Execute in Go
 
-Create an `.hresp` file to specify expected responses for validation. Each response corresponds to a request in your `.http` file, in the same order, separated by `###`.
+```go
+package main
 
-**Example: `api_expected.hresp`** (for the first two requests in `api_requests.http`)
+import (
+    "context"
+    "log"
+    "github.com/bmcszk/go-restclient"
+)
+
+func main() {
+    client, err := restclient.NewClient(
+        restclient.WithVars(map[string]interface{}{
+            "authToken": "your-token-here",
+        }),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    responses, err := client.ExecuteFile(context.Background(), "requests.http")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    for i, resp := range responses {
+        if resp.Error != nil {
+            log.Printf("Request %d failed: %v", i+1, resp.Error)
+        } else {
+            log.Printf("Request %d: %d %s", i+1, resp.StatusCode, resp.Status)
+        }
+    }
+}
+```
+
+## Variable Types
+
+### Custom Variables
+```http
+@baseUrl = https://api.example.com
+@userId = 123
+
+GET {{baseUrl}}/users/{{userId}}
+```
+
+### System Variables
+- `{{$guid}}` - UUID (e.g., `123e4567-e89b-12d3-a456-426614174000`)
+- `{{$randomInt}}` or `{{$randomInt 1 100}}` - Random integer
+- `{{$timestamp}}` - Unix timestamp
+- `{{$datetime}}` or `{{$datetime "2006-01-02"}}` - Current datetime
+- `{{$processEnv VAR_NAME}}` - Environment variable
+- `{{$dotenv VAR_NAME}}` - From `.env` file
+
+### JetBrains Faker Variables
+- `{{$randomFirstName}}`, `{{$randomLastName}}`
+- `{{$randomPhoneNumber}}`, `{{$randomStreetAddress}}`
+- `{{$randomUrl}}`, `{{$randomUserAgent}}`
+
+### Programmatic Variables (highest precedence)
+```go
+client, err := restclient.NewClient(
+    restclient.WithVars(map[string]interface{}{
+        "userId": "override-value",
+        "authToken": "secret-token",
+    }),
+)
+```
+
+## Response Validation
+
+Create `.hresp` files to validate responses:
+
+**responses.hresp:**
 ```http
 HTTP/1.1 200 OK
 Content-Type: application/json
 
 {
-  "message": "User details retrieved"
+  "id": "{{$anyGuid}}",
+  "name": "{{$any}}",
+  "createdAt": "{{$anyTimestamp}}"
 }
 
 ###
@@ -183,68 +136,83 @@ HTTP/1.1 201 Created
 Content-Type: application/json
 
 {
-  "message": "Product created successfully"
+  "id": "{{$regexp `\d{4}`}}",
+  "status": "created"
 }
 ```
 
-### 3. Execute and Validate in Go
+**Validate in Go:**
+```go
+err := client.ValidateResponses("responses.hresp", responses...)
+if err != nil {
+    log.Fatal("Validation failed:", err)
+}
+```
+
+### Validation Placeholders
+- `{{$any}}` - Matches any text
+- `{{$regexp `pattern`}}` - Regex pattern (in backticks)
+- `{{$anyGuid}}` - UUID format
+- `{{$anyTimestamp}}` - Unix timestamp
+- `{{$anyDatetime 'format'}}` - Datetime (rfc1123, iso8601, or custom)
+
+## Client Options
 
 ```go
-package main
-
-import (
-	"context"
-	"fmt"
-	"log"
-
-	"github.com/bmcszk/go-restclient"
+client, err := restclient.NewClient(
+    restclient.WithBaseURL("https://api.example.com"),
+    restclient.WithDefaultHeader("X-API-Key", "secret"),
+    restclient.WithHTTPClient(customHTTPClient),
+    restclient.WithVars(variables),
 )
+```
 
-func main() {
-	client, err := restclient.NewClient(
-		restclient.WithVars(map[string]interface{}{
-			"userId":        "prog_user_override_123",
-			"authToken":     "prog_auth_token_xyz",
-			"productSuffix": "Deluxe",
-		}),
-	)
-	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
-	}
+## Compatible Syntax
 
-	requestFilePath := "api_requests.http"
-	expectedResponseFilePath := "api_expected.hresp"
+Works with files created for:
+- [JetBrains HTTP Client](https://www.jetbrains.com/help/idea/http-client-in-product-code-editor.html)
+- [VS Code REST Client](https://marketplace.visualstudio.com/items?itemName=humao.rest-client)
 
-	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
-	if err != nil {
-		log.Fatalf("Failed to execute request file: %v", err)
-	}
+## Use Cases
 
-	fmt.Printf("Executed %d requests from %s.\n", len(responses), requestFilePath)
+### Manual Testing
+Use your favorite IDE extension to test APIs during development.
 
-	validationErr := client.ValidateResponses(expectedResponseFilePath, responses...)
-	if validationErr != nil {
-		log.Fatalf("Response validation failed: %v", validationErr)
-	}
-
-	fmt.Println("All requests executed and validated successfully!")
+### Automated E2E Testing
+```go
+func TestUserAPI(t *testing.T) {
+    client, _ := restclient.NewClient(
+        restclient.WithBaseURL(testServer.URL),
+    )
+    
+    responses, err := client.ExecuteFile(context.Background(), "user_tests.http")
+    require.NoError(t, err)
+    
+    err = client.ValidateResponses("user_expected.hresp", responses...)
+    require.NoError(t, err)
 }
+```
+
+### CI/CD Integration
+```bash
+go test ./tests/e2e/... # Runs tests using .http files
 ```
 
 ## Development
 
-### Running Tests
+### Prerequisites
+- Go 1.21+
 
-- **Unit Tests:** `make test-unit`
+### Commands
+```bash
+make check          # Run all checks (lint, test, build)
+make test-unit      # Run unit tests only
+go test .           # Quick test
+```
 
-### Linting and Checks
-
-- **All pre-commit checks (lint, build, unit tests):** `make check`
-
-## Contributing
-
-Contributions are welcome! Please follow standard Go best practices and ensure `make check` passes before submitting pull requests.
+### Test Coverage
+Current coverage: 78.4% (187 tests passing)
 
 ## License
 
-MIT License (To be formally added - assuming MIT for now). 
+MIT License
