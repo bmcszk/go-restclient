@@ -1,6 +1,0 @@
-### Normal request with default timeout
-GET https://api.example.com/standard
-
-### Request with custom timeout (milliseconds)
-# @timeout 5000
-GET https://api.example.com/slow-endpoint

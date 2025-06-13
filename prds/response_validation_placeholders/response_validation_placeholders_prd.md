@@ -97,7 +97,7 @@ All validation placeholders are implemented and working, with comprehensive supp
 5. **Error Reporting**: Provide detailed failure information if validation fails
 
 ### Test Coverage
-- Comprehensive unit tests in `validator_placeholders_test.go`
+- Comprehensive placeholder validation tests in `validator_test.go`
 - Individual placeholder validation tests
 - Integration tests with complex response scenarios
 - Edge case testing for malformed patterns and edge conditions

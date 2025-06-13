@@ -80,8 +80,8 @@ All core HTTP execution features are implemented and working, with comprehensive
 5. **Response Capture**: Complete response information including timing
 
 ### Test Coverage
-- Comprehensive unit tests in `client_execute_*_test.go` files
-- Test data in `testdata/` directory with real `.http` files
+- Comprehensive integration tests in `client_test.go` through `Client.ExecuteFile()` method
+- Test data in `test/data/` directory with real `.http` files
 - Edge case coverage for parsing, execution, and error scenarios
 
 ### Performance Characteristics

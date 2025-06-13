@@ -1,4 +1,0 @@
-// @import "main_circular_import_b.http"
-
-### Request from main_circular_import_a
-GET http://localhost/request_a

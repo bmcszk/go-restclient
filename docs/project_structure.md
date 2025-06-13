@@ -9,9 +9,10 @@ This document outlines the project structure for the `go-restclient` library.
 -   `request.go`: Defines the `Request` and `ParsedFile` structs representing parsed HTTP requests.
 -   `response.go`: Defines the `Response` struct representing a received HTTP response and `ExpectedResponse` for validation purposes.
 -   `validator.go`: Logic for validating an actual `Response` against an `ExpectedResponse`.
--   `client_test.go`, `parser_test.go`, `validator_test.go` etc.: Unit tests for the library components.
--   `testdata/`
-    -   `http_request_files/`: Contains example `.http` files used in unit tests.
+-   `client_test.go`: Comprehensive integration tests using `Client.ExecuteFile()` method.
+-   `validator_test.go`: Response validation tests against `.hresp` files.
+-   `hresp_vars_test.go`: Variable extraction tests for `.hresp` files.
+-   `test/data/`: Test data directory with real `.http` and `.hresp` files organized by functionality.
 -   `docs/`
     -   `requirements.md`: Project requirements.
     -   `tasks.md`: Development tasks.

@@ -96,8 +96,8 @@ All variable support features for `.http` request files are implemented and work
 - **Environment Access**: `{{$processEnv VAR}}`, `{{$env.VAR}}`, `{{$dotenv VAR}}`
 
 ### Test Coverage
-- Comprehensive unit tests in `client_execute_vars_test.go`, `client_execute_inplace_vars_test.go`
-- Parser tests in `parser_environment_vars_test.go`, `parser_system_vars_test.go`
+- Comprehensive integration tests in `client_test.go` covering all variable functionality
+- Variable extraction tests in `hresp_vars_test.go`
 - Integration tests with real `.http` files demonstrating all variable types
 - Edge case coverage for precedence, error handling, and malformed variables
 

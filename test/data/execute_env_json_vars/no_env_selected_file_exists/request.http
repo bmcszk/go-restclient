@@ -1,3 +1,0 @@
-### Request when no environment is selected but http-client.env.json exists
-GET {{host}}/no_env_selected_path
-Header-Test: {{token}}

@@ -1,6 +1,0 @@
-# @name RequestOne
-GET http://example.com/req1
-
-###
-# @name RequestTwo
-POST http://example.com/req2

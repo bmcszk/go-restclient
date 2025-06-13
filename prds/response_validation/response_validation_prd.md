@@ -85,7 +85,7 @@ Note: Placeholders and wildcard matching are now IMPLEMENTED (originally was out
 - **Variables**: Support for `@name = value` definitions and `{{variable}}` substitution
 
 ### Test Coverage
-- Comprehensive unit tests in `validator_*_test.go` files
+- Comprehensive response validation tests in `validator_test.go`
 - Integration tests with real `.hresp` files
 - Edge case coverage for various response scenarios
 - Placeholder validation tests

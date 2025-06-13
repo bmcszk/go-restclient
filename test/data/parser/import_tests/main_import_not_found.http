@@ -1,4 +1,0 @@
-// @import "non_existent_file.http"
-
-### Request from main_import_not_found
-GET http://localhost/request_not_found
