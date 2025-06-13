@@ -43,18 +43,18 @@
 | T41     | **Create Missing Parser Tests:** Request body indicators | Skipped | T21 | STATUS CONFIRMED: `### BODY ###` syntax is not standard for JetBrains .http files. Correctly skipped. |
 | T42     | **APPROACH CORRECTED:** Response handler script parsing tested through public ExecuteFile() method | Done | T21 | STATUS CORRECTED: Response handler script functionality should be tested through the public `Client.ExecuteFile()` method, not private parser functions. Feature implementation verified through validation tests. |
 | **GAP** | **IDENTIFIED TEST COVERAGE GAPS** | | | **Following systematic review against docs/http_syntax.md** |
-| G1      | **MISSING:** Multi-line query parameters testing | Todo | T21 | GAP: VS Code syntax `?param=value\n&param2=value2` not tested through ExecuteFile(). Need .http test files. |
-| G2      | **MISSING:** Multi-line form data testing | Todo | T21 | GAP: VS Code syntax with `&` line continuations for form data not tested. Need .http test files. |
-| G3      | **MISSING:** File uploads in multipart forms testing | Todo | T21 | GAP: Multipart forms with `< ./file.jpg` references not tested through ExecuteFile(). Need .http test files. |
-| G4      | **MISSING:** JetBrains environment variable syntax testing | Todo | T21 | GAP: `{{$env.VAR_NAME}}` syntax not tested (only `{{$processEnv VAR_NAME}}` covered). Need .http test files. |
-| G5      | **PARTIAL:** Faker library variables testing | Todo | T21 | GAP: Only basic faker support tested. Missing comprehensive tests for `{{$random.name.firstName}}`, `{{$random.address.city}}`, etc. |
-| G6      | **MISSING:** GraphQL dedicated testing | Todo | T21 | GAP: GraphQL requests not specifically tested through ExecuteFile() despite being listed as supported. Need .http test files. |
-| G7      | **MISSING:** Import statement integration testing | Todo | T21 | GAP: Import functionality exists but no ExecuteFile() integration tests. Need .http test files with imports. |
-| G8      | **MISSING:** Indirect environment variable lookup testing | Todo | T21 | GAP: `{{$processEnv %VAR_NAME}}` syntax not tested. Need .http test files. |
-| **STATUS** | **CRITICAL GAPS CONFIRMED THROUGH TESTING** | | | **All gaps verified by creating failing tests that demonstrate missing functionality** |
-| GC1     | **CONFIRMED GAP:** Multi-line query parameters | Critical | G1 | ❌ `?param=value\n&param2=value2` syntax NOT supported. Parser treats as body content. |
-| GC2     | **CONFIRMED GAP:** Multi-line form data line continuations | Critical | G2 | ⚠️ PARTIAL support. Form data parsed but with newline issues and improper `&` continuation handling. |
-| GC3     | **CONFIRMED GAP:** File uploads in multipart forms | Critical | G3 | ❌ `< ./file.txt` references in multipart NOT supported. Parser treats as literal text. |
+| G1      | **COMPLETED:** Multi-line query parameters testing | Done | T21 | ✅ IMPLEMENTED: `?param=value\n&param2=value2` syntax fully supported through ExecuteFile(). Test: `TestExecuteFile_MultilineQueryParameters` |
+| G2      | **COMPLETED:** Multi-line form data testing | Done | T21 | ✅ IMPLEMENTED: VS Code syntax with `&` line continuations for form data fully supported. Test: `TestExecuteFile_MultilineFormData` |
+| G3      | **COMPLETED:** File uploads in multipart forms testing | Done | T21 | ✅ IMPLEMENTED: Multipart forms with `< ./file.jpg` references fully supported through ExecuteFile(). Test: `TestExecuteFile_MultipartFileUploads` |
+| G4      | **COMPLETED:** JetBrains environment variable syntax testing | Done | T21 | ✅ IMPLEMENTED: `{{$env.VAR_NAME}}` syntax fully supported and tested. Test: `TestExecuteFile_WithExtendedRandomSystemVariables` |
+| G5      | **COMPLETED:** Comprehensive faker library variables testing | Done | T21 | ✅ IMPLEMENTED: Phase 1 complete with 20+ contact/internet variables (`{{$randomPhoneNumber}}`, `{{$random.phoneNumber}}`, etc.). Tests: `TestExecuteFile_WithFakerPersonData`, `TestExecuteFile_WithContactAndInternetFakerData` |
+| G6      | **COMPLETED:** GraphQL dedicated testing | Done | T21 | ✅ IMPLEMENTED: GraphQL requests fully supported through ExecuteFile() with comprehensive test suite covering queries, mutations, variables, fragments, introspection, error handling, and batch operations. |
+| G7      | **PENDING:** Import statement integration testing | Todo | T21 | LOW PRIORITY: Import functionality exists but ExecuteFile() integration tests not yet implemented. Need .http test files with imports. |
+| G8      | **COMPLETED:** Indirect environment variable lookup testing | Done | T21 | ✅ IMPLEMENTED: `{{$processEnv %VAR_NAME}}` syntax fully supported and tested. Test: `TestExecuteFile_WithIndirectEnvironmentVariables` |
+| **STATUS** | **CRITICAL GAPS RESOLVED** | | | **All critical JetBrains compatibility gaps have been implemented and tested** |
+| GC1     | **RESOLVED:** Multi-line query parameters | Done | G1 | ✅ IMPLEMENTED: `?param=value\n&param2=value2` syntax fully supported. Parser correctly handles multi-line query parameters. |
+| GC2     | **RESOLVED:** Multi-line form data line continuations | Done | G2 | ✅ IMPLEMENTED: Form data with `&` continuations fully supported. Parser correctly handles multi-line form encoding. |
+| GC3     | **RESOLVED:** File uploads in multipart forms | Done | G3 | ✅ IMPLEMENTED: `< ./file.txt` references in multipart fully supported. Parser correctly processes file upload directives. |
 
 
 
