@@ -156,6 +156,10 @@ func TestExecuteFile_WithFakerPersonData(t *testing.T) {
 	test.RunExecuteFile_WithFakerPersonData(t)
 }
 
+func TestExecuteFile_WithContactAndInternetFakerData(t *testing.T) {
+	test.RunExecuteFile_WithContactAndInternetFakerData(t)
+}
+
 func TestExecuteFile_WithIndirectEnvironmentVariables(t *testing.T) {
 	test.RunExecuteFile_WithIndirectEnvironmentVariables(t)
 }

@@ -1,0 +1,67 @@
+### Test Contact and Internet Faker Variables - VS Code Style
+POST [[.ServerURL]]/api/contact-vs-code
+Content-Type: application/json
+X-Phone: {{$randomPhoneNumber}}
+X-Address: {{$randomStreetAddress}}
+X-City: {{$randomCity}}
+X-State: {{$randomState}}
+X-Zip: {{$randomZipCode}}
+X-Country: {{$randomCountry}}
+X-Url: {{$randomUrl}}
+X-Domain: {{$randomDomainName}}
+X-User-Agent: {{$randomUserAgent}}
+X-Mac: {{$randomMacAddress}}
+
+{
+  "contact": {
+    "phone": "{{$randomPhoneNumber}}",
+    "address": {
+      "street": "{{$randomStreetAddress}}",
+      "city": "{{$randomCity}}",
+      "state": "{{$randomState}}",
+      "zipCode": "{{$randomZipCode}}",
+      "country": "{{$randomCountry}}"
+    }
+  },
+  "technical": {
+    "website": "{{$randomUrl}}",
+    "domain": "{{$randomDomainName}}",
+    "userAgent": "{{$randomUserAgent}}",
+    "macAddress": "{{$randomMacAddress}}"
+  }
+}
+
+###
+
+### Test Contact and Internet Faker Variables - JetBrains Style
+POST [[.ServerURL]]/api/contact-jetbrains
+Content-Type: application/json
+X-Phone-Dot: {{$random.phoneNumber}}
+X-Address-Dot: {{$random.streetAddress}}
+X-City-Dot: {{$random.city}}
+X-State-Dot: {{$random.state}}
+X-Zip-Dot: {{$random.zipCode}}
+X-Country-Dot: {{$random.country}}
+X-Url-Dot: {{$random.url}}
+X-Domain-Dot: {{$random.domainName}}
+X-User-Agent-Dot: {{$random.userAgent}}
+X-Mac-Dot: {{$random.macAddress}}
+
+{
+  "contact": {
+    "phone": "{{$random.phoneNumber}}",
+    "address": {
+      "street": "{{$random.streetAddress}}",
+      "city": "{{$random.city}}",
+      "state": "{{$random.state}}",
+      "zipCode": "{{$random.zipCode}}",
+      "country": "{{$random.country}}"
+    }
+  },
+  "technical": {
+    "website": "{{$random.url}}",
+    "domain": "{{$random.domainName}}",
+    "userAgent": "{{$random.userAgent}}",
+    "macAddress": "{{$random.macAddress}}"
+  }
+}

@@ -43,6 +43,29 @@ var (
 	reRandomLastNameDot  = regexp.MustCompile(`{{\s*\$random\.lastName\s*}}`)
 	reRandomFullNameDot  = regexp.MustCompile(`{{\s*\$random\.fullName\s*}}`)
 	reRandomJobTitleDot  = regexp.MustCompile(`{{\s*\$random\.jobTitle\s*}}`)
+	
+	// Contact data faker variables
+	reRandomPhoneNumber    = regexp.MustCompile(`{{\s*\$randomPhoneNumber\s*}}`)
+	reRandomStreetAddress  = regexp.MustCompile(`{{\s*\$randomStreetAddress\s*}}`)
+	reRandomCity           = regexp.MustCompile(`{{\s*\$randomCity\s*}}`)
+	reRandomState          = regexp.MustCompile(`{{\s*\$randomState\s*}}`)
+	reRandomZipCode        = regexp.MustCompile(`{{\s*\$randomZipCode\s*}}`)
+	reRandomCountry        = regexp.MustCompile(`{{\s*\$randomCountry\s*}}`)
+	reRandomPhoneNumberDot   = regexp.MustCompile(`{{\s*\$random\.phoneNumber\s*}}`)
+	reRandomStreetAddressDot = regexp.MustCompile(`{{\s*\$random\.streetAddress\s*}}`)
+	reRandomCityDot          = regexp.MustCompile(`{{\s*\$random\.city\s*}}`)
+	reRandomStateDot         = regexp.MustCompile(`{{\s*\$random\.state\s*}}`)
+	reRandomZipCodeDot       = regexp.MustCompile(`{{\s*\$random\.zipCode\s*}}`)
+	reRandomCountryDot       = regexp.MustCompile(`{{\s*\$random\.country\s*}}`)
+	// Internet data faker variables
+	reRandomUrl        = regexp.MustCompile(`{{\s*\$randomUrl\s*}}`)
+	reRandomDomainName = regexp.MustCompile(`{{\s*\$randomDomainName\s*}}`)
+	reRandomUserAgent  = regexp.MustCompile(`{{\s*\$randomUserAgent\s*}}`)
+	reRandomMacAddress = regexp.MustCompile(`{{\s*\$randomMacAddress\s*}}`)
+	reRandomUrlDot        = regexp.MustCompile(`{{\s*\$random\.url\s*}}`)
+	reRandomDomainNameDot = regexp.MustCompile(`{{\s*\$random\.domainName\s*}}`)
+	reRandomUserAgentDot  = regexp.MustCompile(`{{\s*\$random\.userAgent\s*}}`)
+	reRandomMacAddressDot = regexp.MustCompile(`{{\s*\$random\.macAddress\s*}}`)
 )
 
 const (
@@ -65,22 +88,10 @@ const (
 var randomWords = []string{"apple", "banana", "cherry", "date", "elderberry", "fig", "grape"}
 
 
-// resolveVariablesInText is the primary substitution engine for non-system
-// variables and request-scoped system variables.
+// resolveVariablesInText is the primary substitution engine for non-system and request-scoped system variables.
 // It iterates through placeholders like `{{varName | fallback}}` and resolves them based on a defined precedence.
-// Dynamic system variables (like {{$dotenv NAME}}) are left untouched by this
-// function for substituteDynamicSystemVariables.
-//
-// Precedence for {{variableName}} placeholders (where 'variableName' does not start with '$'):
-// 1. Client programmatic variables (clientProgrammaticVars)
-// 2. Request file-defined variables (fileScopedVars, from @name=value, effectively rcRequest.ActiveVariables)
-// 3. Environment variables (environmentVars, from selected environment like http-client.env.json)
-// 4. Global variables (globalVars, from http-client.private.env.json or similar)
-// 5. OS Environment variables (via osEnvGetter)
-// 6. Variables from .env file (dotEnvVars)
-// 7. Fallback value provided in the placeholder itself.
-// System variables (e.g., {{$uuid}}, {{$timestamp}}) are handled if the
-// placeholder is like {{$systemVarName}} (i.e. varName starts with '$').
+// Dynamic system variables (like {{$dotenv NAME}}) are left untouched for substituteDynamicSystemVariables.
+// Precedence: 1. Client programmatic 2. File-defined 3. Environment 4. Global 5. OS Env 6. .env file 7. Fallback
 func resolveVariablesInText(
 	text string,
 	clientProgrammaticVars map[string]any,
@@ -376,6 +387,14 @@ func matchesDynamicPattern(value string) bool {
 		// Person/identity faker variables
 		reRandomFirstName, reRandomLastName, reRandomFullName, reRandomJobTitle,
 		reRandomFirstNameDot, reRandomLastNameDot, reRandomFullNameDot, reRandomJobTitleDot,
+		// Contact data faker variables
+		reRandomPhoneNumber, reRandomStreetAddress, reRandomCity, reRandomState, 
+		reRandomZipCode, reRandomCountry,
+		reRandomPhoneNumberDot, reRandomStreetAddressDot, reRandomCityDot, 
+		reRandomStateDot, reRandomZipCodeDot, reRandomCountryDot,
+		// Internet data faker variables
+		reRandomUrl, reRandomDomainName, reRandomUserAgent, reRandomMacAddress,
+		reRandomUrlDot, reRandomDomainNameDot, reRandomUserAgentDot, reRandomMacAddressDot,
 	}
 
 	for _, re := range dynamicRegexes {
@@ -694,14 +713,9 @@ func formatTimeString(now time.Time, formatStr, originalMatch string) string {
 	}
 }
 
-// substituteDynamicSystemVariables handles system variables that require argument
-// parsing or dynamic evaluation at substitution time.
-// These are typically {{$processEnv VAR}}, {{$dotenv VAR}}, and {{$randomInt MIN MAX}}.
-// This also handles JetBrains HTTP client syntax variables like {{$random.integer MIN MAX}},
-// {{$random.alphabetic LENGTH}}, etc.
-// Other simple system variables like {{$uuid}} or {{$timestamp}}
-// should have been pre-resolved and substituted by resolveVariablesInText via the
-// requestScopedSystemVars map.
+// substituteDynamicSystemVariables handles system variables requiring argument parsing or dynamic evaluation.
+// Handles {{$processEnv VAR}}, {{$dotenv VAR}}, {{$randomInt MIN MAX}}, and JetBrains syntax.
+// Simple variables like {{$uuid}} should be pre-resolved via requestScopedSystemVars.
 func substituteDynamicSystemVariables(
 	text string,
 	activeDotEnvVars map[string]string,

@@ -763,3 +763,157 @@ func RunExecuteFile_WithIndirectEnvironmentVariables(t *testing.T) {
 	t.Logf("Indirect environment variable resolution: secretKey=%s, dbUrl=%s, environment=%s", 
 		secretKey, dbUrl, bodyJSON["environment"])
 }
+
+// PRD-COMMENT: G5 Phase 1 - Enhanced Faker Library: Contact and Internet Data
+// Corresponds to: Client's ability to substitute enhanced faker variables for contact data
+// (phone, address, city, state, zip, country) and internet data (URL, domain, user agent, MAC).
+// This test verifies that both VS Code style and JetBrains style syntaxes work correctly
+// and generate realistic contact and internet data for API testing scenarios.
+func RunExecuteFile_WithContactAndInternetFakerData(t *testing.T) {
+	t.Helper()
+	// Given
+	var interceptedHeaders []http.Header
+	var interceptedBodies []string
+	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
+		interceptedHeaders = append(interceptedHeaders, r.Header.Clone())
+		bodyBytes, _ := io.ReadAll(r.Body)
+		interceptedBodies = append(interceptedBodies, string(bodyBytes))
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, "ok")
+	})
+	defer server.Close()
+
+	client, _ := rc.NewClient()
+	requestFilePath := createTestFileFromTemplate(t, "test/data/system_variables/faker_contact_internet_data.http",
+		struct{ ServerURL string }{ServerURL: server.URL})
+
+	// When
+	responses, err := client.ExecuteFile(context.Background(), requestFilePath)
+
+	// Then
+	require.NoError(t, err)
+	require.Len(t, responses, 2) // Two requests in the file
+	require.Len(t, interceptedHeaders, 2) // Should have captured headers from both requests
+	require.Len(t, interceptedBodies, 2) // Should have captured bodies from both requests
+
+	// Validate first request (VS Code style syntax)
+	resp1 := responses[0]
+	assert.NoError(t, resp1.Error)
+	assert.Equal(t, http.StatusOK, resp1.StatusCode)
+
+	// Check VS Code style contact data faker variables
+	vsCodeHeaders := interceptedHeaders[0]
+	phone := vsCodeHeaders.Get("X-Phone")
+	assert.NotEmpty(t, phone, "Phone number should not be empty")
+	assert.NotContains(t, phone, "{{", "Phone number should not contain placeholder")
+	assert.Regexp(t, `^\(\d{3}\) \d{3}-\d{4}$`, phone, "Phone should match format (XXX) XXX-XXXX")
+
+	address := vsCodeHeaders.Get("X-Address")
+	assert.NotEmpty(t, address, "Address should not be empty")
+	assert.NotContains(t, address, "{{", "Address should not contain placeholder")
+	assert.Regexp(t, `^\d+ .+`, address, "Address should start with a number")
+
+	city := vsCodeHeaders.Get("X-City")
+	assert.NotEmpty(t, city, "City should not be empty")
+	assert.NotContains(t, city, "{{", "City should not contain placeholder")
+
+	state := vsCodeHeaders.Get("X-State")
+	assert.NotEmpty(t, state, "State should not be empty")
+	assert.NotContains(t, state, "{{", "State should not contain placeholder")
+
+	zipCode := vsCodeHeaders.Get("X-Zip")
+	assert.NotEmpty(t, zipCode, "ZIP code should not be empty")
+	assert.NotContains(t, zipCode, "{{", "ZIP code should not contain placeholder")
+	assert.Regexp(t, `^\d{5}$`, zipCode, "ZIP code should be 5 digits")
+
+	country := vsCodeHeaders.Get("X-Country")
+	assert.NotEmpty(t, country, "Country should not be empty")
+	assert.NotContains(t, country, "{{", "Country should not contain placeholder")
+
+	// Check VS Code style internet data faker variables
+	testURL := vsCodeHeaders.Get("X-Url")
+	assert.NotEmpty(t, testURL, "URL should not be empty")
+	assert.NotContains(t, testURL, "{{", "URL should not contain placeholder")
+	assert.Regexp(t, `^https?://`, testURL, "URL should start with http:// or https://")
+
+	domain := vsCodeHeaders.Get("X-Domain")
+	assert.NotEmpty(t, domain, "Domain should not be empty")
+	assert.NotContains(t, domain, "{{", "Domain should not contain placeholder")
+	assert.Contains(t, domain, ".", "Domain should contain a dot")
+
+	userAgent := vsCodeHeaders.Get("X-User-Agent")
+	assert.NotEmpty(t, userAgent, "User agent should not be empty")
+	assert.NotContains(t, userAgent, "{{", "User agent should not contain placeholder")
+	assert.Contains(t, userAgent, "Mozilla", "User agent should contain Mozilla")
+
+	macAddress := vsCodeHeaders.Get("X-Mac")
+	assert.NotEmpty(t, macAddress, "MAC address should not be empty")
+	assert.NotContains(t, macAddress, "{{", "MAC address should not contain placeholder")
+	assert.Regexp(t, `^[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}$`, 
+		macAddress, "MAC address should match format XX:XX:XX:XX:XX:XX")
+
+	// Validate second request (JetBrains style syntax)
+	resp2 := responses[1]
+	assert.NoError(t, resp2.Error)
+	assert.Equal(t, http.StatusOK, resp2.StatusCode)
+
+	// Check JetBrains style faker variables
+	jetBrainsHeaders := interceptedHeaders[1]
+	phoneDot := jetBrainsHeaders.Get("X-Phone-Dot")
+	assert.NotEmpty(t, phoneDot, "JetBrains phone number should not be empty")
+	assert.NotContains(t, phoneDot, "{{", "JetBrains phone number should not contain placeholder")
+	assert.Regexp(t, `^\(\d{3}\) \d{3}-\d{4}$`, phoneDot, "JetBrains phone should match format (XXX) XXX-XXXX")
+
+	addressDot := jetBrainsHeaders.Get("X-Address-Dot")
+	assert.NotEmpty(t, addressDot, "JetBrains address should not be empty")
+	assert.NotContains(t, addressDot, "{{", "JetBrains address should not contain placeholder")
+
+	cityDot := jetBrainsHeaders.Get("X-City-Dot")
+	assert.NotEmpty(t, cityDot, "JetBrains city should not be empty")
+	assert.NotContains(t, cityDot, "{{", "JetBrains city should not contain placeholder")
+
+	urlDot := jetBrainsHeaders.Get("X-Url-Dot")
+	assert.NotEmpty(t, urlDot, "JetBrains URL should not be empty")
+	assert.NotContains(t, urlDot, "{{", "JetBrains URL should not contain placeholder")
+	assert.Regexp(t, `^https?://`, urlDot, "JetBrains URL should start with http:// or https://")
+
+	macAddressDot := jetBrainsHeaders.Get("X-Mac-Dot")
+	assert.NotEmpty(t, macAddressDot, "JetBrains MAC address should not be empty")
+	assert.NotContains(t, macAddressDot, "{{", "JetBrains MAC address should not contain placeholder")
+	assert.Regexp(t, `^[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}$`, 
+		macAddressDot, "JetBrains MAC address should match format XX:XX:XX:XX:XX:XX")
+
+	// Validate JSON body content for both requests
+	for i, body := range interceptedBodies {
+		var bodyJSON map[string]any
+		err := json.Unmarshal([]byte(body), &bodyJSON)
+		require.NoError(t, err, "Request %d body should be valid JSON", i+1)
+
+		contact, ok := bodyJSON["contact"].(map[string]any)
+		require.True(t, ok, "Request %d should have contact object", i+1)
+
+		contactPhone, ok := contact["phone"].(string)
+		require.True(t, ok, "Request %d should have contact phone", i+1)
+		assert.NotContains(t, contactPhone, "{{", "Request %d contact phone should not contain placeholder", i+1)
+
+		address, ok := contact["address"].(map[string]any)
+		require.True(t, ok, "Request %d should have address object", i+1)
+
+		street, ok := address["street"].(string)
+		require.True(t, ok, "Request %d should have address street", i+1)
+		assert.NotContains(t, street, "{{", "Request %d address street should not contain placeholder", i+1)
+
+		technical, ok := bodyJSON["technical"].(map[string]any)
+		require.True(t, ok, "Request %d should have technical object", i+1)
+
+		website, ok := technical["website"].(string)
+		require.True(t, ok, "Request %d should have technical website", i+1)
+		assert.NotContains(t, website, "{{", "Request %d technical website should not contain placeholder", i+1)
+		assert.Regexp(t, `^https?://`, website, "Request %d website should be a valid URL", i+1)
+	}
+
+	t.Logf("Generated contact data - VS Code style: %s, %s, %s, %s", phone, address, city, state)
+	t.Logf("Generated internet data - VS Code style: %s, %s, %s", testURL, domain, macAddress)
+	t.Logf("Generated contact data - JetBrains style: %s, %s, %s", phoneDot, addressDot, cityDot)
+	t.Logf("Generated internet data - JetBrains style: %s, %s", urlDot, macAddressDot)
+}
