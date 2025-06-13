@@ -177,15 +177,10 @@ func parseVariableDirective(directive string) (varName, fallbackValue string, ha
 // resolveSystemVariable handles system variables that start with $.
 func resolveSystemVariable(varName, match string, requestScopedSystemVars map[string]string) string {
 	if val, ok := requestScopedSystemVars[varName]; ok {
-		slog.Debug(
-			"resolveVariablesInText: Found system var in requestScopedSystemVars",
-			"varName", varName, "value", val)
+		// Found system variable in request scope
 		return val
 	}
-	slog.Debug(
-		"resolveVariablesInText: System var not in requestScopedSystemVars, "+
-			"returning original match for later dynamic processing",
-		"varName", varName, "match", match)
+	// System variable not in scope, preserve for dynamic processing
 	return match // Preserve for substituteDynamicSystemVariables
 }
 
@@ -241,13 +236,9 @@ func resolveLowPriorityVariables(varName string, ctx variableResolverContext) st
 // resolveProgrammaticVariable resolves from client programmatic variables.
 func resolveProgrammaticVariable(varName string, clientProgrammaticVars map[string]any) string {
 	if clientProgrammaticVars != nil {
-		slog.Debug(
-			"resolveVariablesInText: Checking clientProgrammaticVars",
-			"varName", varName, "found", clientProgrammaticVars[varName] != nil)
+		// Checking client programmatic variables
 		if val, ok := clientProgrammaticVars[varName]; ok {
-			slog.Debug(
-				"resolveVariablesInText: Found in clientProgrammaticVars",
-				"varName", varName, "value", val)
+			// Found in programmatic variables
 			return fmt.Sprintf("%v", val)
 		}
 	}
@@ -266,16 +257,11 @@ func resolveFileScopedVariable(varName string, ctx variableResolverContext) stri
 		return ""
 	}
 
-	slog.Debug(
-		"resolveVariablesInText: Found in fileScopedVars",
-		"varNameLookup", fileScopedVarNameToTry, "value", val)
+	// Found in file-scoped variables
 
 	// Check if the resolved file-scoped variable's value is itself a dynamic system variable placeholder
 	if isDynamicSystemVariablePlaceholder(val, ctx.requestScopedSystemVars) {
-		slog.Debug(
-			"resolveVariablesInText: File-scoped var value is a dynamic system "+
-				"variable placeholder. Evaluating and caching.",
-			"varNameLookup", fileScopedVarNameToTry, "placeholderValue", val)
+		// File-scoped variable is dynamic, evaluating
 		// Pass clientProgrammaticVars and dotEnvVars to substituteDynamicSystemVariables
 		evaluatedVal := substituteDynamicSystemVariables(val, ctx.dotEnvVars, ctx.clientProgrammaticVars)
 		ctx.fileScopedVars[fileScopedVarNameToTry] = evaluatedVal // Cache the evaluated value

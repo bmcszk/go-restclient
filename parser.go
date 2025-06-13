@@ -28,7 +28,7 @@ func loadEnvironmentFile(filePath string, selectedEnvName string) (map[string]st
 
 	if _, statErr := os.Stat(filePath); statErr != nil {
 		if os.IsNotExist(statErr) {
-			slog.Debug("Environment file not found.", "file", filePath)
+			// Environment file not found
 			return nil, nil // File not found is not an error, just means no vars from this file
 		}
 		// Another error occurred trying to stat the file (e.g., permissions)
@@ -52,7 +52,7 @@ func loadEnvironmentFile(filePath string, selectedEnvName string) (map[string]st
 		return selectedEnvVars, nil
 	}
 
-	slog.Debug("Selected environment not found in environment file", "environment", selectedEnvName, "file", filePath)
+	// Selected environment not found
 	return nil, nil // Environment not found in this file
 }
 
@@ -189,8 +189,7 @@ func loadPublicEnvFile(fileDir, selectedEnvName string, mergedEnvVars map[string
 		for k, v := range publicVars {
 			mergedEnvVars[k] = v
 		}
-		slog.Debug("Loaded environment variables from public file",
-			"environment", selectedEnvName, "file", publicEnvFile, "varCount", len(publicVars))
+		// Environment variables loaded from public file
 	}
 }
 
@@ -201,18 +200,16 @@ func loadPrivateEnvFile(fileDir, selectedEnvName string, mergedEnvVars map[strin
 		for k, v := range privateVars {
 			mergedEnvVars[k] = v
 		}
-		slog.Debug("Loaded environment variables from private file",
-			"environment", selectedEnvName, "file", privateEnvFile, "varCount", len(privateVars))
+		// Environment variables loaded from private file
 	}
 }
 
 // ensureEnvironmentVariablesInitialized ensures the EnvironmentVariables map is initialized
-func ensureEnvironmentVariablesInitialized(parsedFile *ParsedFile, selectedEnvName, fileDir string) {
+func ensureEnvironmentVariablesInitialized(parsedFile *ParsedFile, _, _ string) {
 	if parsedFile.EnvironmentVariables == nil {
 		parsedFile.EnvironmentVariables = make(map[string]string)
 	}
-	slog.Debug("No environment-specific variables found for selected environment",
-		"environment", selectedEnvName, "searchDir", fileDir)
+	// No environment-specific variables found
 }
 
 // parseRequests reads HTTP requests from a reader and parses them into a ParsedFile struct.

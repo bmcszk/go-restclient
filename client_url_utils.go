@@ -1,7 +1,6 @@
 package restclient
 
 import (
-	"log/slog"
 	"net/url"
 )
 
@@ -11,8 +10,7 @@ func joinURLPaths(base *url.URL, requestURL *url.URL) *url.URL {
 	// Join the paths using the standard url.JoinPath
 	targetPath, err := url.JoinPath(base.Path, requestURL.Path)
 	if err != nil {
-		slog.Error("joinURLPaths: failed to join paths", "basePath", base.Path,
-			"requestPath", requestURL.Path, "error", err)
+		// Path join failed, return nil
 		return nil
 	}
 
@@ -32,12 +30,12 @@ func joinURLPaths(base *url.URL, requestURL *url.URL) *url.URL {
 
 	// Get the string representation of this assembled URL
 	finalURLStr := tempURL.String()
-	slog.Debug("joinURLPaths: constructed finalURLStr", "url", finalURLStr)
+	// URL constructed successfully
 
 	// Parse this string to get a fully validated *url.URL object
 	finalResolvedURL, err := url.Parse(finalURLStr)
 	if err != nil {
-		slog.Error("joinURLPaths: failed to parse self-constructed URL string", "url", finalURLStr, "error", err)
+		// Failed to parse constructed URL
 		return nil
 	}
 

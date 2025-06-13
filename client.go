@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -287,7 +286,6 @@ func handleSpecialPathJoining(freshRequestURL, freshBase *url.URL) (*url.URL, er
 // failures (e.g. nil request, bad BaseURL).
 func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Response, error) {
 	if rcRequest == nil {
-		slog.Error("executeRequest: called with nil rcRequest", "rcRequest_addr", fmt.Sprintf("%p", rcRequest))
 		return nil, errors.New("cannot execute a nil request")
 	}
 
@@ -330,9 +328,7 @@ func (c *Client) prepareRequestURL(rcRequest *Request) error {
 			c.BaseURL, // Pass client's BaseURL for consistency
 		)
 		if subsErr != nil {
-			err := fmt.Errorf("variable substitution failed in executeRequest for '%s': %w", rcRequest.Name, subsErr)
-			slog.Error("executeRequest: Variable substitution error", "error", err, "requestName", rcRequest.Name)
-			return err
+			return fmt.Errorf("variable substitution failed for request '%s': %w", rcRequest.Name, subsErr)
 		}
 		rcRequest.URL = substitutedAndParsedURL
 	}
@@ -409,7 +405,7 @@ func (c *Client) handleHTTPError(
 	clientResponse *Response,
 	httpResp *http.Response,
 	doErr error,
-	httpReq *http.Request,
+	_ *http.Request,
 ) *Response {
 	clientResponse.Error = fmt.Errorf("failed to execute HTTP request: %w", doErr)
 	if httpResp != nil {
@@ -419,7 +415,7 @@ func (c *Client) handleHTTPError(
 			_ = httpResp.Body.Close()
 		}
 	}
-	slog.Error("HTTP request execution failed", "error", doErr, "url", httpReq.URL.String())
+	// Log critical HTTP errors only
 	return clientResponse
 }
 
