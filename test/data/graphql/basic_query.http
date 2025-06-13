@@ -1,0 +1,7 @@
+### Basic GraphQL Query
+POST [[.ServerURL]]/graphql
+Content-Type: application/json
+
+{
+  "query": "query GetUser { user(id: \"123\") { id name email } }"
+}

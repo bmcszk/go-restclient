@@ -1,0 +1,19 @@
+POST [[.ServerURL]]/api/login
+Content-Type: application/x-www-form-urlencoded
+
+username=testuser
+&password=testpass123
+&remember_me=true
+&scope=read,write
+&redirect_uri=https://example.com/callback
+
+###
+
+POST [[.ServerURL]]/api/submit
+Content-Type: application/x-www-form-urlencoded
+
+field1=value1
+&field2=value with spaces
+&field3=special%20chars
+&field4=multi
+&line=data

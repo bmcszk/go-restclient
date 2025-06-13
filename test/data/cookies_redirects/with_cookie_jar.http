@@ -1,0 +1,5 @@
+### Set Cookie Request
+GET {{scheme}}://{{host}}:{{port}}/set-cookie
+
+### Check Cookie Request
+GET {{scheme}}://{{host}}:{{port}}/check-cookie

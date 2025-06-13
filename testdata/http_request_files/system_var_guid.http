@@ -1,8 +1,0 @@
-GET [[.ServerURL]]/users/{{$guid}}
-User-Agent: test-client
-X-Request-ID: {{$guid}}
-
-{
-  "transactionId": "{{$guid}}",
-  "correlationId": "{{$guid}}"
-} 

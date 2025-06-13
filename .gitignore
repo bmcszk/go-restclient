@@ -27,9 +27,14 @@ Thumbs.db
 # Log files
 *.log
 
+# Test reports
+unit-tests.xml
+
 # Coverage reports
 coverage.out
 coverage.html 
+
+# Cursor
 /.cursor.bak.*/
 /.cursorignore.bak.*/
 /.cursor/rules/go_guideline.mdc
@@ -42,3 +47,29 @@ coverage.html
 /.cursor/rules/testing_guidelines.mdc
 /.cursorignore
 /.cursor/rules/*.bak.*/
+
+# Windsurf
+/.windsurf.back/
+/.windsurf/rules/go_guideline.md
+/.windsurf/rules/go_project_setup_guideline.md
+/.windsurf/rules/migration_to_prd_process_helper.md
+/.windsurf/rules/prd_workflow.md
+/.windsurf/rules/project_guidelines.md
+/.windsurf/rules/requirement_workflow.md
+/.windsurf/rules/task_workflow.md
+/.windsurf/rules/testing_guidelines.md
+/.windsurfignore
+/.windsurf/rules/ai_operational_guidelines.md
+/.windsurf/rules/ai_tool_usage_code_editing.md
+/.windsurf/rules/e2e_testing_guidelines.md
+/.windsurf/rules/git_guidelines.md
+/.windsurf/rules/prd_implementation_and_review.md
+/.windsurf/rules/prd_setup_and_planning.md
+/.windsurf/rules/project_standards.md
+/.windsurf/rules/test_design_and_execution.md
+/.windsurf/rules/testing_fundamentals.md
+/.windsurf/rules/unit_testing_guidelines.md
+
+# Other AI
+.aider*
+CLAUDE.md

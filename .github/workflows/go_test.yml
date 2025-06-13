@@ -14,7 +14,12 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v4
 
-    - name: Run checks
+    - name: Run lint
       run: |
         make install-lint
-        make check
+        make lint
+
+    - name: Run tests
+      run: |
+        make install-gotestsum
+        make test

@@ -1,0 +1,9 @@
+### Test Private Env Override
+GET {{host}}/test
+Content-Type: application/json
+X-Custom-Header: {{override_var}}
+
+{
+  "public": "{{public_var}}",
+  "private_only": "{{private_var}}"
+}

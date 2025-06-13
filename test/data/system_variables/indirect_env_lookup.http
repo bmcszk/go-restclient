@@ -1,0 +1,10 @@
+### Indirect Environment Variable Lookup Test
+GET [[.ServerURL]]/api/indirect-env
+X-Secret-Key: {{$processEnv %secretKeyVar}}
+X-Database-URL: {{$processEnv %dbUrlVar}}
+X-Missing-Var: {{$processEnv %missingVar}}
+
+{
+  "environment": "{{$processEnv %envVar}}",
+  "missing": "{{$processEnv %undefinedVar}}"
+}

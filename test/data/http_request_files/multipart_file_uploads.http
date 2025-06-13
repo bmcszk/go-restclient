@@ -1,0 +1,35 @@
+POST [[.ServerURL]]/api/upload
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="description"
+
+File upload test
+--WebAppBoundary
+Content-Disposition: form-data; name="file1"; filename="sample_text.txt"
+Content-Type: text/plain
+
+< ./test/data/request_body/sample_text.txt
+--WebAppBoundary
+Content-Disposition: form-data; name="file2"; filename="sample_image.jpg"
+Content-Type: image/jpeg
+
+< ./test/data/request_body/sample_image.jpg
+--WebAppBoundary--
+
+###
+
+POST [[.ServerURL]]/api/upload-json
+Content-Type: multipart/form-data; boundary=FormBoundary
+
+--FormBoundary
+Content-Disposition: form-data; name="metadata"
+Content-Type: application/json
+
+< ./test/data/request_body/sample_payload.json
+--FormBoundary
+Content-Disposition: form-data; name="document"; filename="sample_document.pdf"
+Content-Type: application/pdf
+
+< ./test/data/request_body/sample_document.pdf
+--FormBoundary--

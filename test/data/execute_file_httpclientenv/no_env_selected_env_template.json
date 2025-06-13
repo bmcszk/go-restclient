@@ -1,0 +1,6 @@
+{
+	"dev": {
+		"host": "{{SERVER_URL}}",
+		"token": "dev-token"
+	}
+}

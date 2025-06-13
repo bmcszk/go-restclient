@@ -1,0 +1,13 @@
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "data": {
+    "user": {
+      "id": "{{$any}}",
+      "name": "{{$any}}",
+      "email": "{{$any}}",
+      "createdAt": "{{$any}}"
+    }
+  }
+}

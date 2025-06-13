@@ -1,0 +1,4 @@
+@my_home_dir = {{$processEnv TEST_USER_HOME_INPLACE}}
+
+### Test Request With OS Env Var In In-Place Var
+GET {{test_server_url}}{{my_home_dir}}/files

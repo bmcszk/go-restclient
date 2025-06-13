@@ -1,0 +1,13 @@
+### GraphQL Batch Queries
+POST [[.ServerURL]]/graphql
+Content-Type: application/json
+
+[
+  {
+    "query": "query GetUser($id: ID!) { user(id: $id) { id name } }",
+    "variables": { "id": "123" }
+  },
+  {
+    "query": "query GetPosts { posts { id title } }"
+  }
+]

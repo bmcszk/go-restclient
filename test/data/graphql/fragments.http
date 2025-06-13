@@ -1,0 +1,7 @@
+### GraphQL Query with Fragments
+POST [[.ServerURL]]/graphql
+Content-Type: application/json
+
+{
+  "query": "fragment UserInfo on User { id name email createdAt } query GetUsers { users { ...UserInfo } activeUsers: users(status: ACTIVE) { ...UserInfo } }"
+}
