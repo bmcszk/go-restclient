@@ -1,0 +1,37 @@
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "uuid": "{{$anyGuid}}"
+}
+
+###
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "json": {
+    "scenario_id": "{{$anyGuid}}",
+    "test_data": {
+      "uuid": "{{$anyGuid}}",
+      "metadata": {
+        "scenario": "{{$anyGuid}}"
+      }
+    }
+  }
+}
+
+###
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "json": {
+    "update_scenario": "{{$anyGuid}}"
+  },
+  "headers": {
+    "X-Scenario-Id": "{{$anyGuid}}"
+  }
+}

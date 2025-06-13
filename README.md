@@ -173,6 +173,8 @@ Works with files created for:
 - [JetBrains HTTP Client](https://www.jetbrains.com/help/idea/http-client-in-product-code-editor.html)
 - [VS Code REST Client](https://marketplace.visualstudio.com/items?itemName=humao.rest-client)
 
+📚 **[Complete HTTP Syntax Reference](docs/http_syntax.md)** - Comprehensive documentation of all supported HTTP request syntax, variables, and features.
+
 ## Use Cases
 
 ### Manual Testing

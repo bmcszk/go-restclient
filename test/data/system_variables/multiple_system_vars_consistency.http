@@ -1,0 +1,36 @@
+@transactionId = {{$uuid}}
+@requestTime = {{$timestamp}}
+@sessionToken = {{$randomInt 1000000 9999999}}
+
+###
+
+GET [[.ServerURL]]/transactions/{{transactionId}}
+X-Request-Time: {{requestTime}}
+X-Session-Token: {{sessionToken}}
+
+###
+
+POST [[.ServerURL]]/transactions
+Content-Type: application/json
+X-Request-Time: {{requestTime}}
+
+{
+  "transaction_id": "{{transactionId}}",
+  "timestamp": {{requestTime}},
+  "session": {
+    "token": "{{sessionToken}}",
+    "id": "{{transactionId}}"
+  }
+}
+
+###
+
+PUT [[.ServerURL]]/sessions/{{sessionToken}}
+Content-Type: application/json
+X-Transaction-ID: {{transactionId}}
+
+{
+  "session_token": "{{sessionToken}}",
+  "last_activity": {{requestTime}},
+  "transaction_ref": "{{transactionId}}"
+}
