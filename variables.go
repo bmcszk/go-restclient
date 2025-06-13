@@ -265,10 +265,6 @@ func resolveFileScopedVariable(varName string, ctx variableResolverContext) stri
 		// Pass clientProgrammaticVars and dotEnvVars to substituteDynamicSystemVariables
 		evaluatedVal := substituteDynamicSystemVariables(val, ctx.dotEnvVars, ctx.clientProgrammaticVars)
 		ctx.fileScopedVars[fileScopedVarNameToTry] = evaluatedVal // Cache the evaluated value
-		slog.Debug(
-			"resolveVariablesInText: Cached evaluated dynamic system variable "+
-				"from file-scoped var",
-			"varNameLookup", fileScopedVarNameToTry, "evaluatedValue", evaluatedVal)
 		return evaluatedVal
 	}
 	return val // Return the original value if not a dynamic placeholder needing evaluation

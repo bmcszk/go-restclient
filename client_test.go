@@ -185,6 +185,14 @@ func TestExecuteFile_WithRandomIntSystemVariable(t *testing.T) {
 	test.RunExecuteFile_WithRandomIntSystemVariable(t)
 }
 
+func TestExecuteFile_UuidVariableConsistency(t *testing.T) {
+	test.TestExecuteFile_UuidVariableConsistency(t)
+}
+
+func TestExecuteFile_MultipleSystemVarsConsistency(t *testing.T) {
+	test.TestExecuteFile_MultipleSystemVarsConsistency(t)
+}
+
 // In-place variable tests
 func TestExecuteFile_InPlace_SimpleVariableInURL(t *testing.T) {
 	test.RunExecuteFile_InPlace_SimpleVariableInURL(t)

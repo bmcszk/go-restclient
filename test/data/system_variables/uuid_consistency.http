@@ -1,0 +1,31 @@
+@scenarioId = {{$uuid}}
+
+###
+
+GET [[.ServerURL]]/uuid/{{scenarioId}}
+Accept: application/json
+
+###
+
+POST [[.ServerURL]]/post
+Content-Type: application/json
+
+{
+  "scenario_id": "{{scenarioId}}",
+  "test_data": {
+    "uuid": "{{scenarioId}}",
+    "metadata": {
+      "scenario": "{{scenarioId}}"
+    }
+  }
+}
+
+###
+
+PUT [[.ServerURL]]/put
+Content-Type: application/json
+X-Scenario-ID: {{scenarioId}}
+
+{
+  "update_scenario": "{{scenarioId}}"
+}
