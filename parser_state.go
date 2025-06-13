@@ -812,26 +812,38 @@ func (p *requestParserState) finalizeQueryParameters() {
 	queryString := strings.Join(p.queryParams, "&")
 	
 	// Append to the URL
-	if p.currentRequest.RawURLString != "" {
-		separator := "?"
-		if strings.Contains(p.currentRequest.RawURLString, "?") {
-			separator = "&"
-		}
-		p.currentRequest.RawURLString += separator + queryString
-		
-		// Re-parse the URL if it doesn't contain variables
-		rawURL := p.currentRequest.RawURLString
-		containsVariables := strings.Contains(rawURL, "{{") || strings.Contains(rawURL, "}}")
-		if !containsVariables {
-			if parsedURL, err := url.Parse(p.currentRequest.RawURLString); err == nil {
-				p.currentRequest.URL = parsedURL
-			}
-		}
-	}
+	p.appendQueryStringToURL(queryString)
 
 	// Reset query parameter state
 	p.parsingQueryParams = false
 	p.queryParams = []string{}
+}
+
+// appendQueryStringToURL appends the query string to the current request URL
+func (p *requestParserState) appendQueryStringToURL(queryString string) {
+	if p.currentRequest.RawURLString == "" {
+		return
+	}
+	
+	separator := "?"
+	if strings.Contains(p.currentRequest.RawURLString, "?") {
+		separator = "&"
+	}
+	p.currentRequest.RawURLString += separator + queryString
+	
+	// Re-parse the URL if it doesn't contain variables
+	p.reparseURLIfNoVariables()
+}
+
+// reparseURLIfNoVariables re-parses the URL if it doesn't contain template variables
+func (p *requestParserState) reparseURLIfNoVariables() {
+	rawURL := p.currentRequest.RawURLString
+	containsVariables := strings.Contains(rawURL, "{{") || strings.Contains(rawURL, "}}")
+	if !containsVariables {
+		if parsedURL, err := url.Parse(p.currentRequest.RawURLString); err == nil {
+			p.currentRequest.URL = parsedURL
+		}
+	}
 }
 
 // isFormUrlEncodedContent checks if the current request has form-urlencoded content type

@@ -2,7 +2,6 @@ package restclient
 
 import (
 	"math/rand"
-	"regexp"
 )
 
 // Name lists for person data generation
@@ -29,88 +28,65 @@ var jobTitles = []string{
 	"Executive", "Lead", "Senior Developer", "Junior Developer", "Intern", "VP of Engineering",
 }
 
-var (
-	// Person/identity faker variables - VS Code style
-	reRandomFirstName    = regexp.MustCompile(`{{\s*\$randomFirstName\s*}}`)
-	reRandomLastName     = regexp.MustCompile(`{{\s*\$randomLastName\s*}}`)
-	reRandomFullName     = regexp.MustCompile(`{{\s*\$randomFullName\s*}}`)
-	reRandomJobTitle     = regexp.MustCompile(`{{\s*\$randomJobTitle\s*}}`)
-	// Person/identity faker variables - JetBrains style
-	reRandomFirstNameDot = regexp.MustCompile(`{{\s*\$random\.firstName\s*}}`)
-	reRandomLastNameDot  = regexp.MustCompile(`{{\s*\$random\.lastName\s*}}`)
-	reRandomFullNameDot  = regexp.MustCompile(`{{\s*\$random\.fullName\s*}}`)
-	reRandomJobTitleDot  = regexp.MustCompile(`{{\s*\$random\.jobTitle\s*}}`)
-)
 
 // substituteFakerVariables handles the substitution of faker/person data variables
 func substituteFakerVariables(text string) string {
-	// Person/Identity data - VS Code style
-	text = reRandomFirstName.ReplaceAllStringFunc(text, func(_ string) string {
-		if len(firstNames) > 0 {
-			return firstNames[rand.Intn(len(firstNames))]
-		}
-		return "John"
-	})
-
-	text = reRandomLastName.ReplaceAllStringFunc(text, func(_ string) string {
-		if len(lastNames) > 0 {
-			return lastNames[rand.Intn(len(lastNames))]
-		}
-		return "Doe"
-	})
-
-	text = reRandomFullName.ReplaceAllStringFunc(text, func(_ string) string {
-		firstName := "John"
-		lastName := "Doe"
-		if len(firstNames) > 0 {
-			firstName = firstNames[rand.Intn(len(firstNames))]
-		}
-		if len(lastNames) > 0 {
-			lastName = lastNames[rand.Intn(len(lastNames))]
-		}
-		return firstName + " " + lastName
-	})
-
-	text = reRandomJobTitle.ReplaceAllStringFunc(text, func(_ string) string {
-		if len(jobTitles) > 0 {
-			return jobTitles[rand.Intn(len(jobTitles))]
-		}
-		return "Software Engineer"
-	})
-
-	// Person/Identity data - JetBrains style
-	text = reRandomFirstNameDot.ReplaceAllStringFunc(text, func(_ string) string {
-		if len(firstNames) > 0 {
-			return firstNames[rand.Intn(len(firstNames))]
-		}
-		return "John"
-	})
-
-	text = reRandomLastNameDot.ReplaceAllStringFunc(text, func(_ string) string {
-		if len(lastNames) > 0 {
-			return lastNames[rand.Intn(len(lastNames))]
-		}
-		return "Doe"
-	})
-
-	text = reRandomFullNameDot.ReplaceAllStringFunc(text, func(_ string) string {
-		firstName := "John"
-		lastName := "Doe"
-		if len(firstNames) > 0 {
-			firstName = firstNames[rand.Intn(len(firstNames))]
-		}
-		if len(lastNames) > 0 {
-			lastName = lastNames[rand.Intn(len(lastNames))]
-		}
-		return firstName + " " + lastName
-	})
-
-	text = reRandomJobTitleDot.ReplaceAllStringFunc(text, func(_ string) string {
-		if len(jobTitles) > 0 {
-			return jobTitles[rand.Intn(len(jobTitles))]
-		}
-		return "Software Engineer"
-	})
-
+	text = substituteVSCodeStyleFakers(text)
+	text = substituteJetBrainsStyleFakers(text)
 	return text
+}
+
+// substituteVSCodeStyleFakers handles VS Code style faker variables
+func substituteVSCodeStyleFakers(text string) string {
+	text = reRandomFirstName.ReplaceAllStringFunc(text, getRandomFirstName)
+	text = reRandomLastName.ReplaceAllStringFunc(text, getRandomLastName)
+	text = reRandomFullName.ReplaceAllStringFunc(text, getRandomFullName)
+	text = reRandomJobTitle.ReplaceAllStringFunc(text, getRandomJobTitle)
+	return text
+}
+
+// substituteJetBrainsStyleFakers handles JetBrains style faker variables
+func substituteJetBrainsStyleFakers(text string) string {
+	text = reRandomFirstNameDot.ReplaceAllStringFunc(text, getRandomFirstName)
+	text = reRandomLastNameDot.ReplaceAllStringFunc(text, getRandomLastName)
+	text = reRandomFullNameDot.ReplaceAllStringFunc(text, getRandomFullName)
+	text = reRandomJobTitleDot.ReplaceAllStringFunc(text, getRandomJobTitle)
+	return text
+}
+
+// getRandomFirstName returns a random first name
+func getRandomFirstName(_ string) string {
+	if len(firstNames) > 0 {
+		return firstNames[rand.Intn(len(firstNames))]
+	}
+	return "John"
+}
+
+// getRandomLastName returns a random last name
+func getRandomLastName(_ string) string {
+	if len(lastNames) > 0 {
+		return lastNames[rand.Intn(len(lastNames))]
+	}
+	return "Doe"
+}
+
+// getRandomFullName returns a random full name
+func getRandomFullName(_ string) string {
+	firstName := "John"
+	lastName := "Doe"
+	if len(firstNames) > 0 {
+		firstName = firstNames[rand.Intn(len(firstNames))]
+	}
+	if len(lastNames) > 0 {
+		lastName = lastNames[rand.Intn(len(lastNames))]
+	}
+	return firstName + " " + lastName
+}
+
+// getRandomJobTitle returns a random job title
+func getRandomJobTitle(_ string) string {
+	if len(jobTitles) > 0 {
+		return jobTitles[rand.Intn(len(jobTitles))]
+	}
+	return "Software Engineer"
 }

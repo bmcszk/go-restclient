@@ -77,9 +77,9 @@ func TestExecuteFile_MultilineFormData(t *testing.T) {
 }
 
 // TODO: Complete multipart file upload implementation - parsing logic needs refinement
-// func TestExecuteFile_MultipartFileUploads(t *testing.T) {
-// 	test.RunExecuteFile_MultipartFileUploads(t)
-// }
+func TestExecuteFile_MultipartFileUploads(t *testing.T) {
+	test.RunExecuteFile_MultipartFileUploads(t)
+}
 
 // Edge case tests
 func TestExecuteFile_InvalidMethodInFile(t *testing.T) {

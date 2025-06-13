@@ -33,6 +33,16 @@ var (
 	reDateTime = regexp.MustCompile(
 		`{{\s*\$datetime(?:\s+("([^"]+)"|[^}\s]+))?(?:\s+("([^"]+)"|[^}\s]+))?\s*}}`)
 	reAadToken              = regexp.MustCompile(`{{\s*\$aadToken(?:\s+("([^"]+)"|[^}\s]+))*\s*}}`)
+	// Person/identity faker variables - VS Code style
+	reRandomFirstName    = regexp.MustCompile(`{{\s*\$randomFirstName\s*}}`)
+	reRandomLastName     = regexp.MustCompile(`{{\s*\$randomLastName\s*}}`)
+	reRandomFullName     = regexp.MustCompile(`{{\s*\$randomFullName\s*}}`)
+	reRandomJobTitle     = regexp.MustCompile(`{{\s*\$randomJobTitle\s*}}`)
+	// Person/identity faker variables - JetBrains style
+	reRandomFirstNameDot = regexp.MustCompile(`{{\s*\$random\.firstName\s*}}`)
+	reRandomLastNameDot  = regexp.MustCompile(`{{\s*\$random\.lastName\s*}}`)
+	reRandomFullNameDot  = regexp.MustCompile(`{{\s*\$random\.fullName\s*}}`)
+	reRandomJobTitleDot  = regexp.MustCompile(`{{\s*\$random\.jobTitle\s*}}`)
 )
 
 const (

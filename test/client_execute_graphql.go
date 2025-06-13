@@ -12,23 +12,29 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// GraphQL location for error reporting
+type graphqlLocation struct {
+	Line   int `json:"line"`
+	Column int `json:"column"`
+}
+
+// GraphQL error structure
+type graphqlError struct {
+	Message   string            `json:"message"`
+	Locations []graphqlLocation `json:"locations,omitempty"`
+	Path      []any             `json:"path,omitempty"`
+}
+
 // GraphQL test data structure for mock responses
 type graphqlResponse struct {
-	Data   interface{} `json:"data,omitempty"`
-	Errors []struct {
-		Message   string `json:"message"`
-		Locations []struct {
-			Line   int `json:"line"`
-			Column int `json:"column"`
-		} `json:"locations,omitempty"`
-		Path []interface{} `json:"path,omitempty"`
-	} `json:"errors,omitempty"`
+	Data   any            `json:"data,omitempty"`
+	Errors []graphqlError `json:"errors,omitempty"`
 }
 
 // GraphQL request structure for parsing incoming requests
 type graphqlRequest struct {
-	Query     string                 `json:"query"`
-	Variables map[string]interface{} `json:"variables,omitempty"`
+	Query     string         `json:"query"`
+	Variables map[string]any `json:"variables,omitempty"`
 }
 
 // RunExecuteFile_GraphQLBasicQuery tests basic GraphQL query execution
@@ -38,12 +44,12 @@ func RunExecuteFile_GraphQLBasicQuery(t *testing.T) {
 	var interceptedRequest graphqlRequest
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
 		bodyBytes, _ := io.ReadAll(r.Body)
-		json.Unmarshal(bodyBytes, &interceptedRequest)
+		_ = json.Unmarshal(bodyBytes, &interceptedRequest)
 		
 		// Mock GraphQL response
 		response := graphqlResponse{
-			Data: map[string]interface{}{
-				"user": map[string]interface{}{
+			Data: map[string]any{
+				"user": map[string]any{
 					"id":    "123",
 					"name":  "John Doe",
 					"email": "john@example.com",
@@ -53,7 +59,7 @@ func RunExecuteFile_GraphQLBasicQuery(t *testing.T) {
 		
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
 
@@ -86,12 +92,12 @@ func RunExecuteFile_GraphQLQueryWithVariables(t *testing.T) {
 	var interceptedRequest graphqlRequest
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
 		bodyBytes, _ := io.ReadAll(r.Body)
-		json.Unmarshal(bodyBytes, &interceptedRequest)
+		_ = json.Unmarshal(bodyBytes, &interceptedRequest)
 		
 		// Mock GraphQL response
 		response := graphqlResponse{
-			Data: map[string]interface{}{
-				"user": map[string]interface{}{
+			Data: map[string]any{
+				"user": map[string]any{
 					"id":        "456",
 					"name":      "Jane Smith",
 					"email":     "jane@example.com",
@@ -102,7 +108,7 @@ func RunExecuteFile_GraphQLQueryWithVariables(t *testing.T) {
 		
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
 
@@ -136,12 +142,12 @@ func RunExecuteFile_GraphQLMutation(t *testing.T) {
 	var interceptedRequest graphqlRequest
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
 		bodyBytes, _ := io.ReadAll(r.Body)
-		json.Unmarshal(bodyBytes, &interceptedRequest)
+		_ = json.Unmarshal(bodyBytes, &interceptedRequest)
 		
 		// Mock GraphQL mutation response
 		response := graphqlResponse{
-			Data: map[string]interface{}{
-				"createUser": map[string]interface{}{
+			Data: map[string]any{
+				"createUser": map[string]any{
 					"id":    "789",
 					"name":  "New User",
 					"email": "newuser@example.com",
@@ -151,7 +157,7 @@ func RunExecuteFile_GraphQLMutation(t *testing.T) {
 		
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
 
@@ -178,7 +184,7 @@ func RunExecuteFile_GraphQLMutation(t *testing.T) {
 	assert.NotNil(t, interceptedRequest.Variables)
 	
 	// Check that variables were properly substituted
-	input, ok := interceptedRequest.Variables["input"].(map[string]interface{})
+	input, ok := interceptedRequest.Variables["input"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "New User", input["name"])
 	assert.Equal(t, "newuser@example.com", input["email"])
@@ -191,16 +197,16 @@ func RunExecuteFile_GraphQLFragments(t *testing.T) {
 	var interceptedRequest graphqlRequest
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
 		bodyBytes, _ := io.ReadAll(r.Body)
-		json.Unmarshal(bodyBytes, &interceptedRequest)
+		_ = json.Unmarshal(bodyBytes, &interceptedRequest)
 		
 		// Mock GraphQL response with fragments
 		response := graphqlResponse{
-			Data: map[string]interface{}{
-				"users": []map[string]interface{}{
+			Data: map[string]any{
+				"users": []map[string]any{
 					{"id": "1", "name": "User 1", "email": "user1@example.com", "createdAt": "2023-01-01T00:00:00Z"},
 					{"id": "2", "name": "User 2", "email": "user2@example.com", "createdAt": "2023-01-02T00:00:00Z"},
 				},
-				"activeUsers": []map[string]interface{}{
+				"activeUsers": []map[string]any{
 					{"id": "1", "name": "User 1", "email": "user1@example.com", "createdAt": "2023-01-01T00:00:00Z"},
 				},
 			},
@@ -208,7 +214,7 @@ func RunExecuteFile_GraphQLFragments(t *testing.T) {
 		
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
 
@@ -240,23 +246,23 @@ func RunExecuteFile_GraphQLIntrospection(t *testing.T) {
 	var interceptedRequest graphqlRequest
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
 		bodyBytes, _ := io.ReadAll(r.Body)
-		json.Unmarshal(bodyBytes, &interceptedRequest)
+		_ = json.Unmarshal(bodyBytes, &interceptedRequest)
 		
 		// Mock minimal introspection response
 		response := graphqlResponse{
-			Data: map[string]interface{}{
-				"__schema": map[string]interface{}{
-					"queryType":        map[string]interface{}{"name": "Query"},
-					"mutationType":     map[string]interface{}{"name": "Mutation"},
+			Data: map[string]any{
+				"__schema": map[string]any{
+					"queryType":        map[string]any{"name": "Query"},
+					"mutationType":     map[string]any{"name": "Mutation"},
 					"subscriptionType": nil,
-					"types":            []interface{}{},
+					"types":            []any{},
 				},
 			},
 		}
 		
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
 
@@ -288,34 +294,24 @@ func RunExecuteFile_GraphQLErrorHandling(t *testing.T) {
 	var interceptedRequest graphqlRequest
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
 		bodyBytes, _ := io.ReadAll(r.Body)
-		json.Unmarshal(bodyBytes, &interceptedRequest)
+		_ = json.Unmarshal(bodyBytes, &interceptedRequest)
 		
 		// Mock GraphQL error response
 		response := graphqlResponse{
-			Errors: []struct {
-				Message   string `json:"message"`
-				Locations []struct {
-					Line   int `json:"line"`
-					Column int `json:"column"`
-				} `json:"locations,omitempty"`
-				Path []interface{} `json:"path,omitempty"`
-			}{
+			Errors: []graphqlError{
 				{
 					Message: "Cannot query field 'nonExistentField' on type 'Query'",
-					Locations: []struct {
-						Line   int `json:"line"`
-						Column int `json:"column"`
-					}{
+					Locations: []graphqlLocation{
 						{Line: 1, Column: 15},
 					},
-					Path: []interface{}{"nonExistentField"},
+					Path: []any{"nonExistentField"},
 				},
 			},
 		}
 		
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK) // GraphQL errors are still HTTP 200
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	})
 	defer server.Close()
 
@@ -360,23 +356,23 @@ func RunExecuteFile_GraphQLBatchQueries(t *testing.T) {
 			interceptedRequests = batchRequest
 		} else {
 			var singleRequest graphqlRequest
-			json.Unmarshal(bodyBytes, &singleRequest)
+			_ = json.Unmarshal(bodyBytes, &singleRequest)
 			interceptedRequests = []graphqlRequest{singleRequest}
 		}
 		
 		// Mock batch response
 		responses := []graphqlResponse{
 			{
-				Data: map[string]interface{}{
-					"user": map[string]interface{}{
+				Data: map[string]any{
+					"user": map[string]any{
 						"id":   "123",
 						"name": "John Doe",
 					},
 				},
 			},
 			{
-				Data: map[string]interface{}{
-					"posts": []map[string]interface{}{
+				Data: map[string]any{
+					"posts": []map[string]any{
 						{"id": "1", "title": "Post 1"},
 						{"id": "2", "title": "Post 2"},
 					},
@@ -386,7 +382,7 @@ func RunExecuteFile_GraphQLBatchQueries(t *testing.T) {
 		
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(responses)
+		_ = json.NewEncoder(w).Encode(responses)
 	})
 	defer server.Close()
 

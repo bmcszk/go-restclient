@@ -611,9 +611,9 @@ func decodeURLIfNeeded(rawURL string) string {
 func RunExecuteFile_WithFakerPersonData(t *testing.T) {
 	t.Helper()
 	// Given
-	var interceptedHeaders http.Header
+	var interceptedHeaders []http.Header
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
-		interceptedHeaders = r.Header.Clone()
+		interceptedHeaders = append(interceptedHeaders, r.Header.Clone())
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprint(w, "ok")
 	})
@@ -629,6 +629,7 @@ func RunExecuteFile_WithFakerPersonData(t *testing.T) {
 	// Then
 	require.NoError(t, err)
 	require.Len(t, responses, 2) // Two requests in the file
+	require.Len(t, interceptedHeaders, 2) // Should have captured headers from both requests
 
 	// Validate first request (VS Code style syntax)
 	resp1 := responses[0]
@@ -636,22 +637,23 @@ func RunExecuteFile_WithFakerPersonData(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp1.StatusCode)
 
 	// Check that faker variables were substituted (not empty and not the placeholder)
-	firstName := interceptedHeaders.Get("X-Random-First-Name")
+	vsCodeHeaders := interceptedHeaders[0]
+	firstName := vsCodeHeaders.Get("X-Random-First-Name")
 	assert.NotEmpty(t, firstName, "First name should not be empty")
 	assert.NotContains(t, firstName, "{{", "First name should not contain placeholder")
 	assert.Len(t, strings.Fields(firstName), 1, "First name should be a single word")
 
-	lastName := interceptedHeaders.Get("X-Random-Last-Name")
+	lastName := vsCodeHeaders.Get("X-Random-Last-Name")
 	assert.NotEmpty(t, lastName, "Last name should not be empty")
 	assert.NotContains(t, lastName, "{{", "Last name should not contain placeholder")
 	assert.Len(t, strings.Fields(lastName), 1, "Last name should be a single word")
 
-	fullName := interceptedHeaders.Get("X-Random-Full-Name")
+	fullName := vsCodeHeaders.Get("X-Random-Full-Name")
 	assert.NotEmpty(t, fullName, "Full name should not be empty")
 	assert.NotContains(t, fullName, "{{", "Full name should not contain placeholder")
 	assert.Len(t, strings.Fields(fullName), 2, "Full name should contain first and last name")
 
-	jobTitle := interceptedHeaders.Get("X-Random-Job-Title")
+	jobTitle := vsCodeHeaders.Get("X-Random-Job-Title")
 	assert.NotEmpty(t, jobTitle, "Job title should not be empty")
 	assert.NotContains(t, jobTitle, "{{", "Job title should not contain placeholder")
 
@@ -661,22 +663,23 @@ func RunExecuteFile_WithFakerPersonData(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp2.StatusCode)
 
 	// Check JetBrains style faker variables were substituted
-	firstNameDot := interceptedHeaders.Get("X-Random-First-Name-Dot")
+	jetBrainsHeaders := interceptedHeaders[1]
+	firstNameDot := jetBrainsHeaders.Get("X-Random-First-Name-Dot")
 	assert.NotEmpty(t, firstNameDot, "JetBrains first name should not be empty")
 	assert.NotContains(t, firstNameDot, "{{", "JetBrains first name should not contain placeholder")
 	assert.Len(t, strings.Fields(firstNameDot), 1, "JetBrains first name should be a single word")
 
-	lastNameDot := interceptedHeaders.Get("X-Random-Last-Name-Dot")
+	lastNameDot := jetBrainsHeaders.Get("X-Random-Last-Name-Dot")
 	assert.NotEmpty(t, lastNameDot, "JetBrains last name should not be empty")
 	assert.NotContains(t, lastNameDot, "{{", "JetBrains last name should not contain placeholder")
 	assert.Len(t, strings.Fields(lastNameDot), 1, "JetBrains last name should be a single word")
 
-	fullNameDot := interceptedHeaders.Get("X-Random-Full-Name-Dot")
+	fullNameDot := jetBrainsHeaders.Get("X-Random-Full-Name-Dot")
 	assert.NotEmpty(t, fullNameDot, "JetBrains full name should not be empty")
 	assert.NotContains(t, fullNameDot, "{{", "JetBrains full name should not contain placeholder")
 	assert.Len(t, strings.Fields(fullNameDot), 2, "JetBrains full name should contain first and last name")
 
-	jobTitleDot := interceptedHeaders.Get("X-Random-Job-Title-Dot")
+	jobTitleDot := jetBrainsHeaders.Get("X-Random-Job-Title-Dot")
 	assert.NotEmpty(t, jobTitleDot, "JetBrains job title should not be empty")
 	assert.NotContains(t, jobTitleDot, "{{", "JetBrains job title should not contain placeholder")
 
