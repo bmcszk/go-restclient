@@ -5,19 +5,20 @@ on: [push]
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: [ '1.21', '1.22', '1.23', '1.24' ]
     steps:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.24'
+        go-version: ${{ matrix.go-version }}
 
     - name: Check out code
       uses: actions/checkout@v4
 
     - name: Run lint
-      run: |
-        make install-lint
-        make lint
+      uses: golangci/golangci-lint-action@v8
 
     - name: Run tests
       run: |
