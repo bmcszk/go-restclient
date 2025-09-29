@@ -367,13 +367,15 @@ func processDatetimePlaceholder(formatArg string) string {
 
 // isJSONContent checks if the given body string contains valid JSON content.
 // It attempts to parse the string as JSON and returns true if successful.
+// This handles all JSON types: objects, arrays, strings, numbers, booleans, and null.
 func isJSONContent(body string) bool {
-	// Quick pre-check: if the body doesn't contain JSON-like characters, skip parsing
-	if !strings.Contains(body, "{") && !strings.Contains(body, "[") {
-		return false
-	}
-
-	// Attempt to parse as JSON
+	// Attempt to parse as JSON - this handles all valid JSON types including:
+	// - Objects: {"key": "value"}
+	// - Arrays: [1, 2, 3]
+	// - Strings: "hello"
+	// - Numbers: 42, 3.14
+	// - Booleans: true, false
+	// - Null: null
 	var jsonData any
 	err := json.Unmarshal([]byte(body), &jsonData)
 	return err == nil
