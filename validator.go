@@ -400,39 +400,43 @@ func normalizeJSON(jsonStr string) (string, error) {
 
 // replacePlaceholdersWithTempValues replaces JSON placeholders with temporary valid JSON values
 // and returns a mapping from temp values to original placeholders for restoration.
-func replacePlaceholdersWithTempValues(jsonStr string) (string, map[string]string) {
+// Uses random numbers as keys to avoid string quoting issues and ensure uniqueness.
+func replacePlaceholdersWithTempValues(jsonStr string) (string, map[int]string) {
 	result := jsonStr
-	placeholderMap := make(map[string]string)
-	// Replace {{$anyGuid}} with a temporary GUID
-	result = strings.ReplaceAll(result, `"{{$anyGuid}}"`, `"temp-guid-1234"`)
-	placeholderMap[`"temp-guid-1234"`] = `"{{$anyGuid}}"`
-	// Replace {{$anyTimestamp}} with a temporary timestamp
-	result = strings.ReplaceAll(result, `"{{$anyTimestamp}}"`, `"1234567890"`)
-	placeholderMap[`"1234567890"`] = `"{{$anyTimestamp}}"`
-	// Replace {{$anyDatetime ...}} with unique temporary datetimes
-	re := regexp.MustCompile(`"\{\{\$anyDatetime[^\}]*\}\}"`)
-	datetimeMatches := re.FindAllString(result, -1)
-	seen := make(map[string]string)
-	for i, match := range datetimeMatches {
-		if _, exists := seen[match]; !exists {
-			tempValue := fmt.Sprintf(`"temp-datetime-%d"`, i+1)
-			result = strings.ReplaceAll(result, match, tempValue)
-			placeholderMap[tempValue] = match
-			seen[match] = tempValue
+	placeholderMap := make(map[int]string)
+	counter := 1
+
+	// Replace all placeholder patterns with unique random number keys
+	placeholderPatterns := []struct {
+		regex   *regexp.Regexp
+		example string
+	}{
+		{regexp.MustCompile(`"\{\{\$anyGuid\}\}"`), `"{{$anyGuid}}"`},
+		{regexp.MustCompile(`"\{\{\$anyTimestamp\}\}"`), `"{{$anyTimestamp}}"`},
+		{regexp.MustCompile(`"\{\{\$anyDatetime.*?\}\}"`), `"{{$anyDatetime format}}"`},
+		{regexp.MustCompile(`"\{\{\$any(?:\s+[^}]*)?\}\}"`), `"{{$any 'name'}}"`},
+	}
+
+	for _, pattern := range placeholderPatterns {
+		matches := pattern.regex.FindAllString(result, -1)
+		for _, match := range matches {
+			// Replace with unique random number key
+			tempKey := counter
+			counter++
+			result = strings.ReplaceAll(result, match, fmt.Sprintf("%d", tempKey))
+			placeholderMap[tempKey] = match
 		}
 	}
-	// Replace {{$any}} with a temporary value
-	result = strings.ReplaceAll(result, `"{{$any}}"`, `"temp-any-value"`)
-	placeholderMap[`"temp-any-value"`] = `"{{$any}}"`
+
 	return result, placeholderMap
 }
 
 // restorePlaceholdersInNormalizedJSON restores placeholders in a normalized JSON string
 // by finding the temporary values and replacing them back with placeholders using the mapping.
-func restorePlaceholdersInNormalizedJSON(normalizedJSON string, placeholderMap map[string]string) string {
+func restorePlaceholdersInNormalizedJSON(normalizedJSON string, placeholderMap map[int]string) string {
 	result := normalizedJSON
-	for tempValue, originalPlaceholder := range placeholderMap {
-		result = strings.ReplaceAll(result, tempValue, originalPlaceholder)
+	for tempKey, originalPlaceholder := range placeholderMap {
+		result = strings.ReplaceAll(result, fmt.Sprintf("%d", tempKey), originalPlaceholder)
 	}
 	return result
 }
