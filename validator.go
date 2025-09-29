@@ -22,6 +22,12 @@ var ( //nolint:gochecknoglobals
 	// For {{$anyDatetime}} without args
 	anyDatetimeNoArgFinder = regexp.MustCompile(`\{\{\$anyDatetime\}\}`)
 	anyPlaceholderFinder   = regexp.MustCompile(`\{\{\$any\}\}`)
+
+	// Pre-compiled regex patterns for JSON placeholder normalization
+	jsonAnyGuidPlaceholderPattern      = regexp.MustCompile(`"\{\{\$anyGuid\}\}"`)
+	jsonAnyTimestampPlaceholderPattern = regexp.MustCompile(`"\{\{\$anyTimestamp\}\}"`)
+	jsonAnyDatetimePlaceholderPattern  = regexp.MustCompile(`"\{\{\$anyDatetime.*?\}\}"`)
+	jsonAnyPlaceholderPattern          = regexp.MustCompile(`"\{\{\$any(?:\s+[^}]*)?\}\}"`)
 )
 
 const guidRegexPattern = `[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}`
@@ -408,20 +414,11 @@ func replacePlaceholdersWithTempValues(jsonStr string) (string, map[int]string) 
 	result := jsonStr
 	placeholderMap := make(map[int]string)
 
-	// Replace all placeholder patterns with unique random number keys
-	placeholderPatterns := []struct {
-		regex   *regexp.Regexp
-		example string
-	}{
-		{regexp.MustCompile(`"\{\{\$anyGuid\}\}"`), `"{{$anyGuid}}"`},
-		{regexp.MustCompile(`"\{\{\$anyTimestamp\}\}"`), `"{{$anyTimestamp}}"`},
-		{regexp.MustCompile(`"\{\{\$anyDatetime.*?\}\}"`), `"{{$anyDatetime format}}"`},
-		{regexp.MustCompile(`"\{\{\$any(?:\s+[^}]*)?\}\}"`), `"{{$any 'name'}}"`},
-	}
-
-	for _, pattern := range placeholderPatterns {
-		result = replacePatternPlaceholders(result, pattern.regex, placeholderMap)
-	}
+	// Replace all placeholder patterns with unique random number keys using pre-compiled regex patterns
+	result = replacePatternPlaceholders(result, jsonAnyGuidPlaceholderPattern, placeholderMap)
+	result = replacePatternPlaceholders(result, jsonAnyTimestampPlaceholderPattern, placeholderMap)
+	result = replacePatternPlaceholders(result, jsonAnyDatetimePlaceholderPattern, placeholderMap)
+	result = replacePatternPlaceholders(result, jsonAnyPlaceholderPattern, placeholderMap)
 
 	return result, placeholderMap
 }
