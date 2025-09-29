@@ -3,6 +3,7 @@ package restclient
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"regexp"
 	"strings"
@@ -404,7 +405,6 @@ func normalizeJSON(jsonStr string) (string, error) {
 func replacePlaceholdersWithTempValues(jsonStr string) (string, map[int]string) {
 	result := jsonStr
 	placeholderMap := make(map[int]string)
-	counter := 1
 
 	// Replace all placeholder patterns with unique random number keys
 	placeholderPatterns := []struct {
@@ -418,17 +418,39 @@ func replacePlaceholdersWithTempValues(jsonStr string) (string, map[int]string) 
 	}
 
 	for _, pattern := range placeholderPatterns {
-		matches := pattern.regex.FindAllString(result, -1)
-		for _, match := range matches {
-			// Replace with unique random number key
-			tempKey := counter
-			counter++
-			result = strings.ReplaceAll(result, match, fmt.Sprintf("%d", tempKey))
-			placeholderMap[tempKey] = match
-		}
+		result = replacePatternPlaceholders(result, pattern.regex, placeholderMap)
 	}
 
 	return result, placeholderMap
+}
+
+// replacePatternPlaceholders replaces placeholders matching a specific pattern with unique random keys
+func replacePatternPlaceholders(jsonStr string, regex *regexp.Regexp, placeholderMap map[int]string) string {
+	result := jsonStr
+	matches := regex.FindAllString(result, -1)
+
+	for _, match := range matches {
+		// Generate unique random number key
+		tempKey := generateUniqueRandomKey(placeholderMap)
+		result = strings.ReplaceAll(result, match, fmt.Sprintf("%d", tempKey))
+		placeholderMap[tempKey] = match
+	}
+
+	return result
+}
+
+// generateUniqueRandomKey generates a unique random number key that doesn't exist in the placeholderMap
+// Uses range -2147483648 + 1000 to -2147483648 + 10000 to avoid collision with real data
+func generateUniqueRandomKey(placeholderMap map[int]string) int {
+	minRange := -2147483648 + 1000  // int.Min + 1000
+	maxRange := -2147483648 + 10000 // int.Min + 10000
+
+	for {
+		tempKey := minRange + rand.Intn(maxRange-minRange)
+		if _, exists := placeholderMap[tempKey]; !exists {
+			return tempKey
+		}
+	}
 }
 
 // restorePlaceholdersInNormalizedJSON restores placeholders in a normalized JSON string
