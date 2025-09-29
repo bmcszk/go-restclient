@@ -42,6 +42,8 @@ func validateExpectedErrorTexts(t *testing.T, actualErrors []error, expectedErrT
 	}
 }
 
+// assertErrorTextExists checks if any error contains the specified text.
+// Uses a flexible approach with equivalent error message mappings.
 func assertErrorTextExists(t *testing.T, actualErrors []error, expectedText string) {
 	t.Helper()
 
@@ -50,13 +52,27 @@ func assertErrorTextExists(t *testing.T, actualErrors []error, expectedText stri
 		return
 	}
 
-	// Special case for "body mismatch" - also accept "JSON content mismatch" as an improvement
-	if expectedText == "body mismatch" && hasErrorText(actualErrors, "JSON content mismatch") {
-		return
+	// Check for equivalent error messages using a mapping
+	equivalentErrors := getEquivalentErrorMessages(expectedText)
+	for _, equivalent := range equivalentErrors {
+		if hasErrorText(actualErrors, equivalent) {
+			return
+		}
 	}
 
 	assert.Fail(t, "Expected error text not found",
 		"Expected error text '%s' not found in %v", expectedText, actualErrors)
+}
+
+// getEquivalentErrorMessages returns a list of error messages that are considered
+// equivalent to the given expected text for flexible error matching.
+func getEquivalentErrorMessages(expectedText string) []string {
+	equivalentMap := map[string][]string{
+		"body mismatch": {"JSON content mismatch"},
+		// Add more equivalent error mappings here as needed
+	}
+
+	return equivalentMap[expectedText]
 }
 
 // hasErrorText checks if any error contains the specified text

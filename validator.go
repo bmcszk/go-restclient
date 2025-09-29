@@ -399,39 +399,41 @@ func normalizeJSON(jsonStr string) (string, error) {
 }
 
 // replacePlaceholdersWithTempValues replaces JSON placeholders with temporary valid JSON values
-// so the JSON can be parsed and normalized.
-func replacePlaceholdersWithTempValues(jsonStr string) string {
+// and returns a mapping from temp values to original placeholders for restoration.
+func replacePlaceholdersWithTempValues(jsonStr string) (string, map[string]string) {
 	result := jsonStr
+	placeholderMap := make(map[string]string)
 	// Replace {{$anyGuid}} with a temporary GUID
 	result = strings.ReplaceAll(result, `"{{$anyGuid}}"`, `"temp-guid-1234"`)
+	placeholderMap[`"temp-guid-1234"`] = `"{{$anyGuid}}"`
 	// Replace {{$anyTimestamp}} with a temporary timestamp
 	result = strings.ReplaceAll(result, `"{{$anyTimestamp}}"`, `"1234567890"`)
-	// Replace {{$anyDatetime format}} with a temporary datetime
-	result = regexpPlaceholderFinder.ReplaceAllString(result, `"temp-datetime"`)
+	placeholderMap[`"1234567890"`] = `"{{$anyTimestamp}}"`
+	// Replace {{$anyDatetime ...}} with unique temporary datetimes
+	re := regexp.MustCompile(`"\{\{\$anyDatetime[^\}]*\}\}"`)
+	datetimeMatches := re.FindAllString(result, -1)
+	seen := make(map[string]string)
+	for i, match := range datetimeMatches {
+		if _, exists := seen[match]; !exists {
+			tempValue := fmt.Sprintf(`"temp-datetime-%d"`, i+1)
+			result = strings.ReplaceAll(result, match, tempValue)
+			placeholderMap[tempValue] = match
+			seen[match] = tempValue
+		}
+	}
 	// Replace {{$any}} with a temporary value
 	result = strings.ReplaceAll(result, `"{{$any}}"`, `"temp-any-value"`)
-	return result
+	placeholderMap[`"temp-any-value"`] = `"{{$any}}"`
+	return result, placeholderMap
 }
 
 // restorePlaceholdersInNormalizedJSON restores placeholders in a normalized JSON string
-// by finding the temporary values and replacing them back with placeholders.
-func restorePlaceholdersInNormalizedJSON(normalizedJSON, originalJSON string) string {
+// by finding the temporary values and replacing them back with placeholders using the mapping.
+func restorePlaceholdersInNormalizedJSON(normalizedJSON string, placeholderMap map[string]string) string {
 	result := normalizedJSON
-
-	// Check which placeholders were in the original and restore them
-	if strings.Contains(originalJSON, "{{$anyGuid}}") {
-		result = strings.ReplaceAll(result, `"temp-guid-1234"`, `"{{$anyGuid}}"`)
+	for tempValue, originalPlaceholder := range placeholderMap {
+		result = strings.ReplaceAll(result, tempValue, originalPlaceholder)
 	}
-	if strings.Contains(originalJSON, "{{$anyTimestamp}}") {
-		result = strings.ReplaceAll(result, `"1234567890"`, `"{{$anyTimestamp}}"`)
-	}
-	if strings.Contains(originalJSON, "{{$anyDatetime") {
-		result = strings.ReplaceAll(result, `"temp-datetime"`, `"{{$anyDatetime}}"`)
-	}
-	if strings.Contains(originalJSON, "{{$any}}") {
-		result = strings.ReplaceAll(result, `"temp-any-value"`, `"{{$any}}"`)
-	}
-
 	return result
 }
 
@@ -452,7 +454,7 @@ func compareJSONWithPlaceholders(responseFilePath string, responseIndex int, exp
 	// 3. Build regex pattern from the normalized structure with placeholders restored
 
 	// Replace placeholders with temporary valid JSON values
-	tempExpectedBody := replacePlaceholdersWithTempValues(expectedBody)
+	tempExpectedBody, placeholderMap := replacePlaceholdersWithTempValues(expectedBody)
 
 	// Try to normalize the temporary JSON to get the structure
 	normalizedTemp, err := normalizeJSON(tempExpectedBody)
@@ -463,7 +465,7 @@ func compareJSONWithPlaceholders(responseFilePath string, responseIndex int, exp
 	}
 
 	// Restore placeholders in the normalized JSON
-	normalizedExpectedWithPlaceholders := restorePlaceholdersInNormalizedJSON(normalizedTemp, expectedBody)
+	normalizedExpectedWithPlaceholders := restorePlaceholdersInNormalizedJSON(normalizedTemp, placeholderMap)
 
 	// Build regex pattern from the normalized JSON with placeholders
 	regexPatternString := buildRegexFromExpectedBody(normalizedExpectedWithPlaceholders)
