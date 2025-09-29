@@ -1,0 +1,12 @@
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "key": "value,
+  "number": 42,
+  "array": [1, 2, 3],
+  "nested": {
+    "id": 1,
+    "name": "test"
+  }
+}

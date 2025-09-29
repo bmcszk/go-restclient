@@ -1,6 +1,7 @@
 package restclient
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -18,8 +19,8 @@ var ( //nolint:gochecknoglobals
 	anyTimestampPlaceholderFinder = regexp.MustCompile(`\{\{\$anyTimestamp\}\}`)
 	anyDatetimePlaceholderFinder  = regexp.MustCompile(`\{\{\$anyDatetime\s+(.*?)\}\}`) // Captures format arg
 	// For {{$anyDatetime}} without args
-	anyDatetimeNoArgFinder        = regexp.MustCompile(`\{\{\$anyDatetime\}\}`)
-	anyPlaceholderFinder          = regexp.MustCompile(`\{\{\$any\}\}`)
+	anyDatetimeNoArgFinder = regexp.MustCompile(`\{\{\$anyDatetime\}\}`)
+	anyPlaceholderFinder   = regexp.MustCompile(`\{\{\$any\}\}`)
 )
 
 const guidRegexPattern = `[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}`
@@ -50,12 +51,12 @@ const anyRegexPattern = `(?s).*?`       // Matches any char (incl newline), non-
 // .hresp parsing are also returned.
 func (c *Client) ValidateResponses(responseFilePath string, actualResponses ...*Response) error {
 	expectedResponses, errs, parseErr := c.loadAndParseExpectedResponses(responseFilePath)
-	
+
 	// If there was a critical error (file not found, etc.), return immediately
 	if parseErr != nil && errs == nil {
 		return parseErr
 	}
-	
+
 	// Continue with validation even if parsing failed, but use empty expected responses
 	if parseErr != nil {
 		expectedResponses = nil
@@ -180,8 +181,8 @@ func (c *Client) validateHeaders(responseFilePath string, responseIndex int,
 		actualValues, ok := actual.Headers[key]
 		if !ok {
 			errs = multierror.Append(errs, fmt.Errorf(
-			"validation for response #%d ('%s'): expected header '%s' not found",
-			responseIndex, responseFilePath, key))
+				"validation for response #%d ('%s'): expected header '%s' not found",
+				responseIndex, responseFilePath, key))
 			continue
 		}
 
@@ -229,11 +230,11 @@ func (*Client) validateBody(responseFilePath string, responseIndex int,
 // supporting placeholders like {{$regexp pattern}}, {{$anyGuid}}, {{$anyTimestamp}}, and {{$anyDatetime format}}.
 // placeholderInfo holds details about a supported placeholder type.
 type placeholderInfo struct {
-	name         string         // e.g., "regexp", "anyGuid"
-	finder       *regexp.Regexp // Regex to find the placeholder itself, e.g., "{{$anyGuid}}" or "{{$regexp ...}}"
-	pattern      string         // Regex pattern to insert for this placeholder, e.g., guidRegexPattern (if no arg)
+	name    string         // e.g., "regexp", "anyGuid"
+	finder  *regexp.Regexp // Regex to find the placeholder itself, e.g., "{{$anyGuid}}" or "{{$regexp ...}}"
+	pattern string         // Regex pattern to insert for this placeholder, e.g., guidRegexPattern (if no arg)
 	// True if the placeholder takes an argument (e.g., {{$regexp `pattern`}} or {{$anyDatetime "format"}})
-	hasArgument  bool
+	hasArgument bool
 	// True if the argument itself is the regex pattern to use (e.g., for {{$regexp `pattern`}})
 	isArgPattern bool
 	// For placeholders like {{$anyDatetime "format"}}, specific logic is needed
@@ -347,7 +348,7 @@ func processRegexpPlaceholder(userPattern string) string {
 // processDatetimePlaceholder processes a {{$anyDatetime}} placeholder argument.
 func processDatetimePlaceholder(formatArg string) string {
 	formatArg = strings.TrimSpace(formatArg)
-	
+
 	if formatArg == "rfc1123" {
 		return rfc1123RegexPattern
 	}
@@ -363,9 +364,170 @@ func processDatetimePlaceholder(formatArg string) string {
 	return nonMatchingRegexPattern
 }
 
-// compareBodies compares the expected body string with the actual body string,
+// isJSONContent checks if the given body string contains valid JSON content.
+// It attempts to parse the string as JSON and returns true if successful.
+func isJSONContent(body string) bool {
+	// Quick pre-check: if the body doesn't contain JSON-like characters, skip parsing
+	if !strings.Contains(body, "{") && !strings.Contains(body, "[") {
+		return false
+	}
+
+	// Attempt to parse as JSON
+	var jsonData any
+	err := json.Unmarshal([]byte(body), &jsonData)
+	return err == nil
+}
+
+// normalizeJSON parses JSON content and re-serializes it with consistent formatting.
+// This ensures that JSON with different whitespace, indentation, or line breaks
+// will be normalized to the same string representation.
+func normalizeJSON(jsonStr string) (string, error) {
+	var jsonData any
+
+	// Parse the JSON
+	if err := json.Unmarshal([]byte(jsonStr), &jsonData); err != nil {
+		return "", fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	// Re-serialize with consistent formatting (no extra whitespace)
+	normalized, err := json.Marshal(jsonData)
+	if err != nil {
+		return "", fmt.Errorf("failed to serialize JSON: %w", err)
+	}
+
+	return string(normalized), nil
+}
+
+// replacePlaceholdersWithTempValues replaces JSON placeholders with temporary valid JSON values
+// so the JSON can be parsed and normalized.
+func replacePlaceholdersWithTempValues(jsonStr string) string {
+	result := jsonStr
+	// Replace {{$anyGuid}} with a temporary GUID
+	result = strings.ReplaceAll(result, `"{{$anyGuid}}"`, `"temp-guid-1234"`)
+	// Replace {{$anyTimestamp}} with a temporary timestamp
+	result = strings.ReplaceAll(result, `"{{$anyTimestamp}}"`, `"1234567890"`)
+	// Replace {{$anyDatetime format}} with a temporary datetime
+	result = regexpPlaceholderFinder.ReplaceAllString(result, `"temp-datetime"`)
+	// Replace {{$any}} with a temporary value
+	result = strings.ReplaceAll(result, `"{{$any}}"`, `"temp-any-value"`)
+	return result
+}
+
+// restorePlaceholdersInNormalizedJSON restores placeholders in a normalized JSON string
+// by finding the temporary values and replacing them back with placeholders.
+func restorePlaceholdersInNormalizedJSON(normalizedJSON, originalJSON string) string {
+	result := normalizedJSON
+
+	// Check which placeholders were in the original and restore them
+	if strings.Contains(originalJSON, "{{$anyGuid}}") {
+		result = strings.ReplaceAll(result, `"temp-guid-1234"`, `"{{$anyGuid}}"`)
+	}
+	if strings.Contains(originalJSON, "{{$anyTimestamp}}") {
+		result = strings.ReplaceAll(result, `"1234567890"`, `"{{$anyTimestamp}}"`)
+	}
+	if strings.Contains(originalJSON, "{{$anyDatetime") {
+		result = strings.ReplaceAll(result, `"temp-datetime"`, `"{{$anyDatetime}}"`)
+	}
+	if strings.Contains(originalJSON, "{{$any}}") {
+		result = strings.ReplaceAll(result, `"temp-any-value"`, `"{{$any}}"`)
+	}
+
+	return result
+}
+
+// compareJSONWithPlaceholders compares JSON bodies that contain placeholders.
+// It attempts to normalize JSON structure while preserving placeholders, but falls back to original behavior if needed.
+func compareJSONWithPlaceholders(responseFilePath string, responseIndex int, expectedBody, actualBody string) error {
+	// First, try the JSON-aware placeholder handling
+	// Normalize the actual JSON first
+	normalizedActual, err := normalizeJSON(actualBody)
+	if err != nil {
+		// If actual body isn't valid JSON, fall back to original placeholder handling
+		return compareBodiesOriginal(responseFilePath, responseIndex, expectedBody, actualBody)
+	}
+
+	// For JSON with placeholders, we need to:
+	// 1. Create a version where we replace placeholders with temporary values that can be parsed as JSON
+	// 2. Normalize this temporary JSON to get the structure
+	// 3. Build regex pattern from the normalized structure with placeholders restored
+
+	// Replace placeholders with temporary valid JSON values
+	tempExpectedBody := replacePlaceholdersWithTempValues(expectedBody)
+
+	// Try to normalize the temporary JSON to get the structure
+	normalizedTemp, err := normalizeJSON(tempExpectedBody)
+	if err != nil {
+		// If we can't normalize the temporary JSON (e.g., malformed JSON with placeholders),
+		// fall back to original behavior
+		return compareBodiesOriginal(responseFilePath, responseIndex, expectedBody, actualBody)
+	}
+
+	// Restore placeholders in the normalized JSON
+	normalizedExpectedWithPlaceholders := restorePlaceholdersInNormalizedJSON(normalizedTemp, expectedBody)
+
+	// Build regex pattern from the normalized JSON with placeholders
+	regexPatternString := buildRegexFromExpectedBody(normalizedExpectedWithPlaceholders)
+
+	compiledRegex, err := regexp.Compile(regexPatternString)
+	if err != nil {
+		// If regex compilation fails, fall back to original behavior
+		return compareBodiesOriginal(responseFilePath, responseIndex, expectedBody, actualBody)
+	}
+
+	// Match the normalized actual JSON against the regex pattern
+	if compiledRegex.MatchString(normalizedActual) {
+		return nil // Success!
+	}
+
+	// If JSON-aware placeholder matching failed, fall back to original behavior
+	return compareBodiesOriginal(responseFilePath, responseIndex, expectedBody, actualBody)
+}
+
+// compareJSONBodies compares two JSON bodies with whitespace-agnostic comparison.
+// It processes placeholders in the expected body, then normalizes both JSON strings and compares them.
+func compareJSONBodies(responseFilePath string, responseIndex int, expectedBody, actualBody string) error {
+	// First, check if the expected body contains placeholders
+	normalizedExpectedBody := strings.TrimSpace(strings.ReplaceAll(expectedBody, "\\r\\n", "\\n"))
+
+	if strings.Contains(normalizedExpectedBody, "{{$") {
+		// Use placeholder-based comparison for JSON with placeholders
+		return compareJSONWithPlaceholders(responseFilePath, responseIndex, expectedBody, actualBody)
+	}
+
+	// No placeholders, use direct JSON normalization and comparison
+	normalizedExpected, err := normalizeJSON(expectedBody)
+	if err != nil {
+		return fmt.Errorf("validation for response #%d ('%s'): failed to normalize expected JSON: %w",
+			responseIndex, responseFilePath, err)
+	}
+
+	normalizedActual, err := normalizeJSON(actualBody)
+	if err != nil {
+		return fmt.Errorf("validation for response #%d ('%s'): failed to normalize actual JSON: %w",
+			responseIndex, responseFilePath, err)
+	}
+
+	// Compare the normalized JSON strings
+	if normalizedActual != normalizedExpected {
+		diff := difflib.UnifiedDiff{
+			A:        difflib.SplitLines(normalizedExpected),
+			B:        difflib.SplitLines(normalizedActual),
+			FromFile: "Expected JSON (normalized)",
+			ToFile:   "Actual JSON (normalized)",
+			Context:  3,
+		}
+		diffText, _ := difflib.GetUnifiedDiffString(diff)
+		return fmt.Errorf("validation for response #%d ('%s'): JSON content mismatch:\\n%s",
+			responseIndex, responseFilePath, diffText)
+	}
+
+	return nil
+}
+
+// compareBodiesOriginal compares the expected body string with the actual body string,
 // supporting placeholders like {{$regexp pattern}}, {{$anyGuid}}, {{$anyTimestamp}}, and {{$anyDatetime format}}.
-func compareBodies(responseFilePath string, responseIndex int, expectedBody, actualBody string) error {
+// This is the original placeholder logic without JSON-specific handling.
+func compareBodiesOriginal(responseFilePath string, responseIndex int, expectedBody, actualBody string) error {
 	normalizedExpectedBody := strings.TrimSpace(strings.ReplaceAll(expectedBody, "\\r\\n", "\\n"))
 	normalizedActualBody := strings.TrimSpace(strings.ReplaceAll(actualBody, "\\r\\n", "\\n"))
 
@@ -382,7 +544,7 @@ func compareBodies(responseFilePath string, responseIndex int, expectedBody, act
 			}
 			diffText, _ := difflib.GetUnifiedDiffString(diff)
 			return fmt.Errorf("validation for response #%d ('%s'): body mismatch:\\n%s",
-			responseIndex, responseFilePath, diffText)
+				responseIndex, responseFilePath, diffText)
 		}
 		return nil
 	}
@@ -413,6 +575,19 @@ func compareBodies(responseFilePath string, responseIndex int, expectedBody, act
 	}
 
 	return nil
+}
+
+// compareBodies compares the expected body string with the actual body string,
+// supporting placeholders like {{$regexp pattern}}, {{$anyGuid}}, {{$anyTimestamp}}, and {{$anyDatetime format}}.
+// For JSON content, it performs whitespace-agnostic comparison by normalizing JSON formatting.
+func compareBodies(responseFilePath string, responseIndex int, expectedBody, actualBody string) error {
+	// Check if both bodies are JSON content - if so, use JSON-specific comparison
+	if isJSONContent(expectedBody) && isJSONContent(actualBody) {
+		return compareJSONBodies(responseFilePath, responseIndex, expectedBody, actualBody)
+	}
+
+	// For non-JSON content, use the original placeholder logic
+	return compareBodiesOriginal(responseFilePath, responseIndex, expectedBody, actualBody)
 }
 
 // countNonNilActuals counts non-nil responses in a slice.

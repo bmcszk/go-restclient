@@ -1,0 +1,17 @@
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "id": "{{$anyGuid}}",
+  "timestamp": "{{$anyTimestamp}}",
+  "user": {
+    "name": "{{$any 'name'}}",
+    "email": "{{$any 'email'}}"
+  },
+  "data": [
+    {
+      "item_id": "{{$anyGuid}}",
+      "created_at": "{{$anyDateTime '2006-01-02T15:04:05Z07:00'}}"
+    }
+  ]
+}

@@ -1,10 +1,10 @@
 package test
 
 import (
-	rc "github.com/bmcszk/go-restclient"
 	"context"
 	"encoding/json"
 	"fmt"
+	rc "github.com/bmcszk/go-restclient"
 	"io"
 	"net/http"
 	"net/http/httptest" // Added for mock server
@@ -184,7 +184,7 @@ func setupDetailedMockServerInterceptor(t *testing.T) (*httptest.Server, *detail
 		}
 		data.Body = string(bodyBytes)
 		t.Logf("[DEBUG_MOCK_SERVER] Received Body: %s", data.Body)
-		t.Logf("[DEBUG_MOCK_SERVER] --- Headers Start ---")
+		t.Log("[DEBUG_MOCK_SERVER] --- Headers Start ---")
 		for name, values := range r.Header {
 			canonicalName := http.CanonicalHeaderKey(name)
 			if len(values) > 0 {
@@ -194,7 +194,7 @@ func setupDetailedMockServerInterceptor(t *testing.T) (*httptest.Server, *detail
 				t.Logf("[DEBUG_MOCK_SERVER] Header (empty): %s", canonicalName)
 			}
 		}
-		t.Logf("[DEBUG_MOCK_SERVER] --- Headers End ---")
+		t.Log("[DEBUG_MOCK_SERVER] --- Headers End ---")
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprint(w, "ok")
 	}))
@@ -278,7 +278,7 @@ func checkDateTimeStrWithTimezone(t *testing.T, valueStr string, formatKeyword s
 		headerName, valueStr, layout)
 	assert.WithinDuration(t, now, parsedTime, threshold,
 		"%s datetime %s not within threshold of current time %s", headerName, parsedTime, now)
-	
+
 	if expectedLocation == time.UTC {
 		assert.Equal(t, time.UTC, parsedTime.Location(), "%s expected to be UTC", headerName)
 	} else {
@@ -628,7 +628,7 @@ func RunExecuteFile_WithFakerPersonData(t *testing.T) {
 
 	// Then
 	require.NoError(t, err)
-	require.Len(t, responses, 2) // Two requests in the file
+	require.Len(t, responses, 2)          // Two requests in the file
 	require.Len(t, interceptedHeaders, 2) // Should have captured headers from both requests
 
 	// Validate first request (VS Code style syntax)
@@ -757,10 +757,10 @@ func RunExecuteFile_WithIndirectEnvironmentVariables(t *testing.T) {
 	assert.Equal(t, "production", bodyJSON["environment"], "Environment should be resolved from PROD_ENV")
 
 	// Undefined variable in programmaticVars should remain as placeholder
-	assert.Equal(t, "{{$processEnv %undefinedVar}}", bodyJSON["missing"], 
+	assert.Equal(t, "{{$processEnv %undefinedVar}}", bodyJSON["missing"],
 		"Undefined variable should remain as placeholder")
 
-	t.Logf("Indirect environment variable resolution: secretKey=%s, dbUrl=%s, environment=%s", 
+	t.Logf("Indirect environment variable resolution: secretKey=%s, dbUrl=%s, environment=%s",
 		secretKey, dbUrl, bodyJSON["environment"])
 }
 
@@ -792,9 +792,9 @@ func RunExecuteFile_WithContactAndInternetFakerData(t *testing.T) {
 
 	// Then
 	require.NoError(t, err)
-	require.Len(t, responses, 2) // Two requests in the file
+	require.Len(t, responses, 2)          // Two requests in the file
 	require.Len(t, interceptedHeaders, 2) // Should have captured headers from both requests
-	require.Len(t, interceptedBodies, 2) // Should have captured bodies from both requests
+	require.Len(t, interceptedBodies, 2)  // Should have captured bodies from both requests
 
 	// Validate first request (VS Code style syntax)
 	resp1 := responses[0]
@@ -849,7 +849,7 @@ func RunExecuteFile_WithContactAndInternetFakerData(t *testing.T) {
 	macAddress := vsCodeHeaders.Get("X-Mac")
 	assert.NotEmpty(t, macAddress, "MAC address should not be empty")
 	assert.NotContains(t, macAddress, "{{", "MAC address should not contain placeholder")
-	assert.Regexp(t, `^[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}$`, 
+	assert.Regexp(t, `^[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}$`,
 		macAddress, "MAC address should match format XX:XX:XX:XX:XX:XX")
 
 	// Validate second request (JetBrains style syntax)
@@ -880,7 +880,7 @@ func RunExecuteFile_WithContactAndInternetFakerData(t *testing.T) {
 	macAddressDot := jetBrainsHeaders.Get("X-Mac-Dot")
 	assert.NotEmpty(t, macAddressDot, "JetBrains MAC address should not be empty")
 	assert.NotContains(t, macAddressDot, "{{", "JetBrains MAC address should not contain placeholder")
-	assert.Regexp(t, `^[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}$`, 
+	assert.Regexp(t, `^[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}$`,
 		macAddressDot, "JetBrains MAC address should match format XX:XX:XX:XX:XX:XX")
 
 	// Validate JSON body content for both requests

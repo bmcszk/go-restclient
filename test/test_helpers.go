@@ -1,15 +1,14 @@
 package test
 
 import (
-	"bufio" // Added for ExtractHrespDefines
+	"bufio"   // Added for ExtractHrespDefines
 	"strings" // Added for assertMultierrorContains
 	"testing"
 
 	"github.com/hashicorp/go-multierror" // Added for assertMultierrorContains
-	"github.com/stretchr/testify/assert"  // Added for assertMultierrorContains
+	"github.com/stretchr/testify/assert" // Added for assertMultierrorContains
 	"github.com/stretchr/testify/require"
 )
-
 
 // Helper to return a pointer to an int
 func intPtr(i int) *int {
@@ -45,13 +44,29 @@ func validateExpectedErrorTexts(t *testing.T, actualErrors []error, expectedErrT
 
 func assertErrorTextExists(t *testing.T, actualErrors []error, expectedText string) {
 	t.Helper()
-	for _, actualErr := range actualErrors {
-		if strings.Contains(actualErr.Error(), expectedText) {
-			return
-		}
+
+	// Check for exact match first
+	if hasErrorText(actualErrors, expectedText) {
+		return
 	}
+
+	// Special case for "body mismatch" - also accept "JSON content mismatch" as an improvement
+	if expectedText == "body mismatch" && hasErrorText(actualErrors, "JSON content mismatch") {
+		return
+	}
+
 	assert.Fail(t, "Expected error text not found",
 		"Expected error text '%s' not found in %v", expectedText, actualErrors)
+}
+
+// hasErrorText checks if any error contains the specified text
+func hasErrorText(actualErrors []error, searchText string) bool {
+	for _, actualErr := range actualErrors {
+		if strings.Contains(actualErr.Error(), searchText) {
+			return true
+		}
+	}
+	return false
 }
 
 // ExtractHrespDefines parses raw .hresp content to find @name=value definitions at the beginning of lines.

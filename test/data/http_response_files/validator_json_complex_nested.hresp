@@ -1,0 +1,37 @@
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "user": {
+    "id": 123,
+    "name": "John Doe",
+    "email": "john@example.com",
+    "preferences": {
+      "theme": "dark",
+      "notifications": true,
+      "language": "en"
+    }
+  },
+  "orders": [
+    {
+      "id": "order-1",
+      "items": [
+        {"product": "laptop", "quantity": 1},
+        {"product": "mouse", "quantity": 2}
+      ],
+      "total": 1299.99
+    },
+    {
+      "id": "order-2",
+      "items": [
+        {"product": "keyboard", "quantity": 1}
+      ],
+      "total": 99.99
+    }
+  ],
+  "metadata": {
+    "created_at": "2023-01-01T00:00:00Z",
+    "updated_at": "2023-01-02T00:00:00Z",
+    "version": "1.0"
+  }
+}

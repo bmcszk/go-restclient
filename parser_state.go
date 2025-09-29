@@ -41,10 +41,10 @@ type requestParserState struct {
 	lineNumber                int
 	currentFileVariables      map[string]string // Variables accumulated at the file scope
 	justSawEmptyLineSeparator bool              // Flag to indicate the previous line was an empty separator
-	
+
 	// Multi-line query parameter support
-	queryParams               []string          // Accumulated query parameters from multi-line syntax
-	parsingQueryParams        bool              // Flag to indicate we're collecting query parameters
+	queryParams        []string // Accumulated query parameters from multi-line syntax
+	parsingQueryParams bool     // Flag to indicate we're collecting query parameters
 }
 
 // processFileLines reads and processes all lines from the reader
@@ -54,11 +54,11 @@ func processFileLines(reader *bufio.Reader, parserState *requestParserState) err
 		if readErr := handleReadError(err); readErr != nil {
 			return readErr
 		}
-		
+
 		if processErr := processLineIfNeeded(line, parserState); processErr != nil {
 			return processErr
 		}
-		
+
 		if err == io.EOF {
 			break
 		}
@@ -96,7 +96,7 @@ func finalizeParseResults(parserState *requestParserState) {
 	if parserState.currentRequest != nil {
 		parserState.finalizeCurrentRequest()
 	}
-	
+
 	for k, v := range parserState.currentFileVariables {
 		parserState.parsedFile.FileVariables[k] = v
 	}
@@ -156,8 +156,9 @@ func (p *requestParserState) processLine(lineType lineType, trimmedLine, origina
 	case lineTypeContent:
 		// Handle general content - could be a request line, header, or body
 		return p.handleContent(trimmedLine, originalLine)
+	default:
+		return nil
 	}
-	return nil
 }
 
 // handleContent processes general content lines that could be request lines, headers, or body content
@@ -233,7 +234,7 @@ func (p *requestParserState) ensureCurrentRequest() {
 // Supports both # and // style comments (FR1.4)
 func (p *requestParserState) handleComment(trimmedLine string) error {
 	commentContent := p.extractCommentContent(trimmedLine)
-	
+
 	if p.isCommentedSeparator(commentContent) {
 		return nil
 	}
@@ -538,7 +539,7 @@ func (p *requestParserState) finalizeCurrentRequest() {
 	p.bodyLines = []string{}
 	p.parsingBody = false
 	p.justSawEmptyLineSeparator = false // Reset separator state
-	p.parsingQueryParams = false         // Reset query parameter state
+	p.parsingQueryParams = false        // Reset query parameter state
 	p.queryParams = []string{}
 }
 
@@ -660,7 +661,7 @@ func (p *requestParserState) parseRequestLineDetails(originalRequestLine string)
 	} else {
 		result = RequestLineContinues
 	}
-	
+
 	if len(parts) == 0 {
 		return p.handleEmptyRequestLine(result, originalRequestLine)
 	}
@@ -706,7 +707,7 @@ func (p *requestParserState) handleNonMethodLine(
 }
 
 // handleValidMethodLine handles lines that start with a valid HTTP method
-func (p *requestParserState) handleValidMethodLine(parts []string, methodCandidate string, 
+func (p *requestParserState) handleValidMethodLine(parts []string, methodCandidate string,
 	result RequestLineResult) RequestLineResult {
 	p.currentRequest.Method = methodCandidate
 
@@ -768,7 +769,6 @@ func (p *requestParserState) parseURLIfNoVariables(urlStr string) {
 	}
 }
 
-
 // isQueryParameterLine checks if a line is a multi-line query parameter
 // VS Code REST Client syntax: lines starting with ? or & (after whitespace)
 func (p *requestParserState) isQueryParameterLine(trimmedLine string) bool {
@@ -810,7 +810,7 @@ func (p *requestParserState) finalizeQueryParameters() {
 
 	// Join all query parameters with &
 	queryString := strings.Join(p.queryParams, "&")
-	
+
 	// Append to the URL
 	p.appendQueryStringToURL(queryString)
 
@@ -824,13 +824,13 @@ func (p *requestParserState) appendQueryStringToURL(queryString string) {
 	if p.currentRequest.RawURLString == "" {
 		return
 	}
-	
+
 	separator := "?"
 	if strings.Contains(p.currentRequest.RawURLString, "?") {
 		separator = "&"
 	}
 	p.currentRequest.RawURLString += separator + queryString
-	
+
 	// Re-parse the URL if it doesn't contain variables
 	p.reparseURLIfNoVariables()
 }
@@ -851,7 +851,7 @@ func (p *requestParserState) isFormUrlEncodedContent() bool {
 	if p.currentRequest == nil {
 		return false
 	}
-	
+
 	contentType := p.currentRequest.Headers.Get("Content-Type")
 	return strings.Contains(strings.ToLower(contentType), "application/x-www-form-urlencoded")
 }
@@ -859,12 +859,12 @@ func (p *requestParserState) isFormUrlEncodedContent() bool {
 // shouldHandleFormDataContinuation checks if this line should be handled as form data continuation
 func (*requestParserState) shouldHandleFormDataContinuation(line string) bool {
 	trimmedLine := strings.TrimSpace(line)
-	
+
 	// Handle & line continuations (VS Code REST Client syntax)
 	if strings.HasPrefix(trimmedLine, "&") {
 		return true
 	}
-	
+
 	// Handle regular form data lines (key=value format)
 	hasEquals := strings.Contains(trimmedLine, "=")
 	notJSON := !strings.HasPrefix(trimmedLine, "{") && !strings.HasPrefix(trimmedLine, "[")
@@ -874,7 +874,7 @@ func (*requestParserState) shouldHandleFormDataContinuation(line string) bool {
 // handleFormDataLine processes a form data line, handling & continuations properly
 func (p *requestParserState) handleFormDataLine(line string) {
 	trimmedLine := strings.TrimSpace(line)
-	
+
 	if strings.HasPrefix(trimmedLine, "&") {
 		// Remove the & and add to existing form data
 		formParam := strings.TrimSpace(trimmedLine[1:])
@@ -891,7 +891,6 @@ func (p *requestParserState) handleFormDataLine(line string) {
 		p.bodyLines = append(p.bodyLines, strings.TrimSpace(line))
 	}
 }
-
 
 // isValidEncoding checks if the given string is a valid encoding name
 func isValidEncoding(encoding string) bool {
