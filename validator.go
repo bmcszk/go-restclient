@@ -34,6 +34,9 @@ var ( //nolint:gochecknoglobals
 	jsonAnyTimestampPlaceholderPatternUnquoted = regexp.MustCompile(`\{\{\$anyTimestamp\}\}`)
 	jsonAnyDatetimePlaceholderPatternUnquoted  = regexp.MustCompile(`\{\{\$anyDatetime.*?\}\}`)
 	jsonAnyPlaceholderPatternUnquoted          = regexp.MustCompile(`\{\{\$any(?:\s+[^}]*)?\}\}`)
+	// Additional patterns for JSON content detection with placeholders
+	jsonAnyPlaceholderPatternUnquotedForDetection         = regexp.MustCompile(`\{\{\$any\s+[^}]*\}\}`)
+	jsonAnyDatetimePlaceholderPatternUnquotedForDetection = regexp.MustCompile(`\{\{\$anyDatetime\s+[^}]*\}\}`)
 )
 
 const guidRegexPattern = `[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}`
@@ -412,10 +415,11 @@ func isJSONContentWithPlaceholders(body string) bool {
 		testBody = strings.ReplaceAll(testBody, "{{$any}}", "\"test-value\"")
 
 		// Handle {{$any 'name'}} format
-		testBody = regexp.MustCompile(`\{\{\$any\s+[^}]*\}\}`).ReplaceAllString(testBody, "\"test-value\"")
+		testBody = jsonAnyPlaceholderPatternUnquotedForDetection.ReplaceAllString(
+			testBody, "\"test-value\"")
 		// Handle {{$anyDatetime format}} format
-		anyDatetimeRegex := regexp.MustCompile(`\{\{\$anyDatetime\s+[^}]*\}\}`)
-		testBody = anyDatetimeRegex.ReplaceAllString(testBody, "\"2023-01-01T00:00:00Z\"")
+		testBody = jsonAnyDatetimePlaceholderPatternUnquotedForDetection.ReplaceAllString(
+			testBody, "\"2023-01-01T00:00:00Z\"")
 
 		return isJSONContent(testBody)
 	}
