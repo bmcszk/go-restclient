@@ -1,10 +1,10 @@
 package test
 
 import (
-	rc "github.com/bmcszk/go-restclient"
 	"context"
 	"encoding/json"
 	"fmt"
+	rc "github.com/bmcszk/go-restclient"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -39,7 +39,7 @@ func TestExecuteFile_UuidVariableConsistency(t *testing.T) {
 			Headers: r.Header.Clone(),
 			Body:    string(bodyBytes),
 		})
-		
+
 		// Mock different responses based on method
 		switch r.Method {
 		case "GET":
@@ -49,7 +49,7 @@ func TestExecuteFile_UuidVariableConsistency(t *testing.T) {
 		case "POST", "PUT":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = fmt.Fprintf(w, `{"json": %s, "headers": {"X-Scenario-Id": "%s"}}`, 
+			_, _ = fmt.Fprintf(w, `{"json": %s, "headers": {"X-Scenario-Id": "%s"}}`,
 				string(bodyBytes), r.Header.Get("X-Scenario-ID"))
 		default:
 			w.WriteHeader(http.StatusOK)
@@ -91,7 +91,7 @@ func TestExecuteFile_UuidVariableConsistency(t *testing.T) {
 	var postBody map[string]any
 	err = json.Unmarshal([]byte(postRequest.Body), &postBody)
 	require.NoError(t, err, "POST body should be valid JSON")
-	
+
 	scenarioID, ok := postBody["scenario_id"].(string)
 	require.True(t, ok, "POST body should contain scenario_id")
 	_, err = uuid.Parse(scenarioID)
@@ -100,7 +100,7 @@ func TestExecuteFile_UuidVariableConsistency(t *testing.T) {
 
 	testData, ok := postBody["test_data"].(map[string]any)
 	require.True(t, ok, "POST body should contain test_data object")
-	
+
 	testDataUuid, ok := testData["uuid"].(string)
 	require.True(t, ok, "test_data should contain uuid")
 	_, err = uuid.Parse(testDataUuid)
@@ -109,7 +109,7 @@ func TestExecuteFile_UuidVariableConsistency(t *testing.T) {
 
 	metadata, ok := testData["metadata"].(map[string]any)
 	require.True(t, ok, "test_data should contain metadata object")
-	
+
 	metadataScenario, ok := metadata["scenario"].(string)
 	require.True(t, ok, "metadata should contain scenario")
 	_, err = uuid.Parse(metadataScenario)
@@ -127,7 +127,7 @@ func TestExecuteFile_UuidVariableConsistency(t *testing.T) {
 	var putBody map[string]any
 	err = json.Unmarshal([]byte(putRequest.Body), &putBody)
 	require.NoError(t, err, "PUT body should be valid JSON")
-	
+
 	updateScenario, ok := putBody["update_scenario"].(string)
 	require.True(t, ok, "PUT body should contain update_scenario")
 	_, err = uuid.Parse(updateScenario)
@@ -137,13 +137,13 @@ func TestExecuteFile_UuidVariableConsistency(t *testing.T) {
 	// Verify all UUIDs are the same
 	firstUUID := extractedUUIDs[0]
 	for i, extractedUUID := range extractedUUIDs {
-		assert.Equal(t, firstUUID, extractedUUID, 
+		assert.Equal(t, firstUUID, extractedUUID,
 			"UUID %d should match the first UUID. All UUIDs should be consistent across the file", i+1)
 	}
 
 	// Log the consistent UUID for verification
 	t.Logf("All requests used the same UUID: %s", firstUUID)
-	t.Logf("UUID was found in:")
+	t.Log("UUID was found in:")
 	t.Logf("  - GET URL: %s", uuidFromURL)
 	t.Logf("  - POST body scenario_id: %s", scenarioID)
 	t.Logf("  - POST body test_data.uuid: %s", testDataUuid)

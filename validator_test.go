@@ -75,3 +75,12 @@ func TestValidateResponses_BodyAnyDatetimePlaceholder(t *testing.T) {
 func TestValidateResponses_BodyAnyPlaceholder(t *testing.T) {
 	test.RunValidateResponses_BodyAnyPlaceholder(t)
 }
+
+// JSON comparison tests
+func TestValidateResponses_JSON_WhitespaceComparison(t *testing.T) {
+	test.RunValidateResponses_JSON_WhitespaceComparison(t)
+}
+
+func TestValidateResponses_JSON_WithPlaceholders(t *testing.T) {
+	test.RunValidateResponses_JSON_WithPlaceholders(t)
+}

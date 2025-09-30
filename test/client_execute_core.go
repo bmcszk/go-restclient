@@ -17,9 +17,9 @@ import (
 )
 
 // PRD-COMMENT: FR10.1 - Client Core Execution: Single Request
-// Corresponds to: Basic client capability to parse and execute a single valid HTTP request 
+// Corresponds to: Basic client capability to parse and execute a single valid HTTP request
 // from a .http file (http_syntax.md).
-// This test verifies that the client can successfully execute one request defined in 
+// This test verifies that the client can successfully execute one request defined in
 // 'test/data/http_request_files/single_request.http' and retrieve the response.
 func RunExecuteFile_SingleRequest(t *testing.T) {
 	t.Helper()
@@ -33,8 +33,8 @@ func RunExecuteFile_SingleRequest(t *testing.T) {
 	defer server.Close()
 
 	client, _ := rc.NewClient()
-	requestFilePath := createTestFileFromTemplate(t, 
-		"test/data/http_request_files/single_request.http", 
+	requestFilePath := createTestFileFromTemplate(t,
+		"test/data/http_request_files/single_request.http",
 		struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
@@ -51,11 +51,11 @@ func RunExecuteFile_SingleRequest(t *testing.T) {
 }
 
 // PRD-COMMENT: FR10.2 - Client Core Execution: Multiple Requests
-// Corresponds to: Client capability to parse and execute multiple sequential HTTP requests 
+// Corresponds to: Client capability to parse and execute multiple sequential HTTP requests
 // from a single .http file (http_syntax.md "Request Separation").
-// This test verifies that the client can execute all requests in 
-// 'test/data/http_request_files/multiple_requests.http', collect all responses, and 
-// optionally validate them against 
+// This test verifies that the client can execute all requests in
+// 'test/data/http_request_files/multiple_requests.http', collect all responses, and
+// optionally validate them against
 // 'test/data/http_response_files/client_multiple_requests_expected.hresp'.
 func RunExecuteFile_MultipleRequests(t *testing.T) {
 	t.Helper()
@@ -83,8 +83,8 @@ func RunExecuteFile_MultipleRequests(t *testing.T) {
 	defer server.Close()
 
 	client, _ := rc.NewClient()
-	processedFilePath := createTestFileFromTemplate(t, 
-		"test/data/http_request_files/multiple_requests.http", 
+	processedFilePath := createTestFileFromTemplate(t,
+		"test/data/http_request_files/multiple_requests.http",
 		struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
@@ -111,11 +111,11 @@ func RunExecuteFile_MultipleRequests(t *testing.T) {
 }
 
 // PRD-COMMENT: FR10.3 - Client Core Execution: Request Execution Error Handling
-// Corresponds to: Client error handling for individual request failures during execution 
+// Corresponds to: Client error handling for individual request failures during execution
 // of a multi-request file (http_syntax.md).
-// This test verifies that if a request in 
-// 'test/data/http_request_files/request_with_error.http' fails (e.g., network error), the 
-// client reports the error for that specific request but continues to process subsequent 
+// This test verifies that if a request in
+// 'test/data/http_request_files/request_with_error.http' fails (e.g., network error), the
+// client reports the error for that specific request but continues to process subsequent
 // requests. The overall operation should also report an aggregated error.
 func RunExecuteFile_RequestWithError(t *testing.T) {
 	t.Helper()
@@ -127,8 +127,8 @@ func RunExecuteFile_RequestWithError(t *testing.T) {
 	defer server2.Close()
 
 	client, _ := rc.NewClient()
-	processedFilePath := createTestFileFromTemplate(t, 
-		"test/data/http_request_files/request_with_error.http", 
+	processedFilePath := createTestFileFromTemplate(t,
+		"test/data/http_request_files/request_with_error.http",
 		struct{ ServerURL string }{ServerURL: server2.URL})
 
 	// When
@@ -137,7 +137,7 @@ func RunExecuteFile_RequestWithError(t *testing.T) {
 	// Then
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "1 error occurred:")
-	assert.Contains(t, err.Error(), 
+	assert.Contains(t, err.Error(),
 		"request 1 (GET http://localhost:12346/bad) processing resulted in error")
 
 	require.Len(t, responses, 2)
@@ -153,11 +153,11 @@ func RunExecuteFile_RequestWithError(t *testing.T) {
 }
 
 // PRD-COMMENT: FR10.4 - Client Core Execution: File Parse Error Handling
-// Corresponds to: Client error handling when a .http file has parsing issues, such as 
+// Corresponds to: Client error handling when a .http file has parsing issues, such as
 // no valid requests found (http_syntax.md).
-// This test verifies that the client reports a suitable error if the provided file 
-// 'test/data/http_request_files/parse_error.http' (which is expected to be empty or 
-// syntactically invalid to the point of yielding no requests) cannot be successfully 
+// This test verifies that the client reports a suitable error if the provided file
+// 'test/data/http_request_files/parse_error.http' (which is expected to be empty or
+// syntactically invalid to the point of yielding no requests) cannot be successfully
 // parsed into executable requests.
 func RunExecuteFile_ParseError(t *testing.T) {
 	t.Helper()
@@ -174,10 +174,10 @@ func RunExecuteFile_ParseError(t *testing.T) {
 }
 
 // PRD-COMMENT: FR10.5 - Client Core Execution: Empty Request File
-// Corresponds to: Client behavior when processing a .http file that syntactically 
+// Corresponds to: Client behavior when processing a .http file that syntactically
 // parses but contains no actual HTTP requests (http_syntax.md).
-// This test uses 'test/data/http_request_files/no_requests.http' to verify that the 
-// client correctly identifies that no requests are present and returns an appropriate 
+// This test uses 'test/data/http_request_files/no_requests.http' to verify that the
+// client correctly identifies that no requests are present and returns an appropriate
 // error or empty response set.
 func RunExecuteFile_NoRequestsInFile(t *testing.T) {
 	t.Helper()
@@ -194,10 +194,10 @@ func RunExecuteFile_NoRequestsInFile(t *testing.T) {
 }
 
 // PRD-COMMENT: FR10.6 - Client Core Execution: Mixed Validity Parse Error
-// Corresponds to: Client behavior when a .http file contains a mix of valid requests 
+// Corresponds to: Client behavior when a .http file contains a mix of valid requests
 // followed by content that causes a parsing error (http_syntax.md).
-// This test uses 'test/data/http_request_files/valid_then_invalid_syntax.http' to ensure 
-// the client executes valid requests up to the point of the parse error and then reports 
+// This test uses 'test/data/http_request_files/valid_then_invalid_syntax.http' to ensure
+// the client executes valid requests up to the point of the parse error and then reports
 // the parsing error, potentially halting further execution from that file.
 func RunExecuteFile_ValidThenInvalidSyntax(t *testing.T) {
 	t.Helper()
@@ -217,15 +217,15 @@ func RunExecuteFile_ValidThenInvalidSyntax(t *testing.T) {
 	defer server.Close()
 
 	client, _ := rc.NewClient()
-	tempFilePath := createTestFileFromTemplate(t, 
-		"test/data/http_request_files/valid_then_invalid_syntax.http", 
+	tempFilePath := createTestFileFromTemplate(t,
+		"test/data/http_request_files/valid_then_invalid_syntax.http",
 		struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
 	responses, err := client.ExecuteFile(context.Background(), tempFilePath)
 
 	// Then
-	require.NoError(t, err, 
+	require.NoError(t, err,
 		"ExecuteFile should not return an error if requests are merely rejected by server")
 	require.Len(t, responses, 2, "Should have two response objects")
 
@@ -237,19 +237,19 @@ func RunExecuteFile_ValidThenInvalidSyntax(t *testing.T) {
 
 	resp2 := responses[1]
 	require.NotNil(t, resp2, "Second response object should not be nil")
-	assert.NoError(t, resp2.Error, 
+	assert.NoError(t, resp2.Error,
 		"Error in second object should be nil as it's a server response, not client-side exec error")
-	assert.Equal(t, http.StatusNotImplemented, resp2.StatusCode, 
+	assert.Equal(t, http.StatusNotImplemented, resp2.StatusCode,
 		"Status code for second response should be Not Implemented")
-	assert.Contains(t, resp2.BodyString, "method not implemented", 
+	assert.Contains(t, resp2.BodyString, "method not implemented",
 		"Body for second response should indicate method error")
 }
 
 // PRD-COMMENT: FR10.7 - Client Core Execution: Multiple Execution Errors
-// Corresponds to: Client's ability to handle and aggregate multiple errors if several 
+// Corresponds to: Client's ability to handle and aggregate multiple errors if several
 // requests within a single file fail during execution (http_syntax.md).
-// This test uses 'test/data/http_request_files/multiple_errors.http' (containing requests 
-// designed to fail) to verify that each failing request's error is captured in its 
+// This test uses 'test/data/http_request_files/multiple_errors.http' (containing requests
+// designed to fail) to verify that each failing request's error is captured in its
 // respective response object and that an aggregated error is returned by ExecuteFile.
 func RunExecuteFile_MultipleErrors(t *testing.T) {
 	t.Helper()
@@ -261,20 +261,20 @@ func RunExecuteFile_MultipleErrors(t *testing.T) {
 	responses, err := client.ExecuteFile(context.Background(), filePath)
 
 	// Then
-	require.Error(t, err, 
+	require.Error(t, err,
 		"Expected an error from ExecuteFile when multiple requests fail")
-	assert.Contains(t, err.Error(), 
-		"request 1 (GET http://localhost:12347/badreq1) processing resulted in error", 
+	assert.Contains(t, err.Error(),
+		"request 1 (GET http://localhost:12347/badreq1) processing resulted in error",
 		"Error message should contain info about first failed request")
-	assert.Contains(t, err.Error(), ":12347: connect: connection refused", 
+	assert.Contains(t, err.Error(), ":12347: connect: connection refused",
 		"Error message should contain specific connection error for first request")
-	assert.Contains(t, err.Error(), 
-		"request 2 (POST http://localhost:12348/badreq2) processing resulted in error", 
+	assert.Contains(t, err.Error(),
+		"request 2 (POST http://localhost:12348/badreq2) processing resulted in error",
 		"Error message should contain info about second failed request")
-	assert.Contains(t, err.Error(), ":12348: connect: connection refused", 
+	assert.Contains(t, err.Error(), ":12348: connect: connection refused",
 		"Error message should contain specific connection error for second request")
 
-	require.Len(t, responses, 2, 
+	require.Len(t, responses, 2,
 		"Should receive two response objects, even if they contain errors")
 
 	resp1 := responses[0]
@@ -289,10 +289,10 @@ func RunExecuteFile_MultipleErrors(t *testing.T) {
 }
 
 // PRD-COMMENT: FR10.8 - Client Core Execution: Response Header Capturing
-// Corresponds to: Client's capability to accurately capture all HTTP response headers 
+// Corresponds to: Client's capability to accurately capture all HTTP response headers
 // (http_syntax.md "Response Object").
-// This test uses 'test/data/http_request_files/captures_response_headers.http' to verify that 
-// the client correctly stores received headers, including multi-value headers, in the Response 
+// This test uses 'test/data/http_request_files/captures_response_headers.http' to verify that
+// the client correctly stores received headers, including multi-value headers, in the Response
 // object.
 func RunExecuteFile_CapturesResponseHeaders(t *testing.T) {
 	t.Helper()
@@ -307,8 +307,8 @@ func RunExecuteFile_CapturesResponseHeaders(t *testing.T) {
 	defer server.Close()
 
 	client, _ := rc.NewClient()
-	requestFilePath := createTestFileFromTemplate(t, 
-		"test/data/http_request_files/captures_response_headers.http", 
+	requestFilePath := createTestFileFromTemplate(t,
+		"test/data/http_request_files/captures_response_headers.http",
 		struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
@@ -329,10 +329,10 @@ func RunExecuteFile_CapturesResponseHeaders(t *testing.T) {
 }
 
 // PRD-COMMENT: FR10.9 - Client Core Execution: Basic HTTP GET
-// Corresponds to: Client's ability to execute a simple GET request over plain HTTP using a 
+// Corresponds to: Client's ability to execute a simple GET request over plain HTTP using a
 // mock transport (http_syntax.md).
-// This test uses 'test/data/http_request_files/simple_get.http' and a mock HTTP transport to 
-// verify the fundamental request execution flow, ensuring the correct method, URL, and headers 
+// This test uses 'test/data/http_request_files/simple_get.http' and a mock HTTP transport to
+// verify the fundamental request execution flow, ensuring the correct method, URL, and headers
 // are prepared and sent.
 func RunExecuteFile_SimpleGetHTTP(t *testing.T) {
 	t.Helper()
@@ -366,16 +366,16 @@ func RunExecuteFile_SimpleGetHTTP(t *testing.T) {
 
 	require.NotNil(t, interceptedReq, "Request should have been intercepted")
 	assert.Equal(t, http.MethodGet, interceptedReq.Method, "Expected GET method")
-	assert.Equal(t, "https://jsonplaceholder.typicode.com/todos/1", 
+	assert.Equal(t, "https://jsonplaceholder.typicode.com/todos/1",
 		interceptedReq.URL.String(), "Expected full URL from file")
 	assert.Empty(t, interceptedReq.Header, "Expected no headers from simple_get.http")
 }
 
 // PRD-COMMENT: FR10.10 - Client Core Execution: Multiple Requests (Extended)
-// Corresponds to: Robustness of client in handling .http files with more than two requests, 
+// Corresponds to: Robustness of client in handling .http files with more than two requests,
 // ensuring all are processed sequentially (http_syntax.md "Request Separation").
-// This test uses 'test/data/http_request_files/multiple_requests_gt2.http' and validates 
-// responses against 'test/data/http_response_files/multiple_responses_gt2_expected.http' to 
+// This test uses 'test/data/http_request_files/multiple_requests_gt2.http' and validates
+// responses against 'test/data/http_response_files/multiple_responses_gt2_expected.http' to
 // ensure the client can handle a larger number of requests in a file.
 func RunExecuteFile_MultipleRequests_GreaterThanTwo(t *testing.T) {
 	t.Helper()
@@ -404,8 +404,8 @@ func RunExecuteFile_MultipleRequests_GreaterThanTwo(t *testing.T) {
 	defer server.Close()
 
 	client, _ := rc.NewClient()
-	requestFilePath := createTestFileFromTemplate(t, 
-		"test/data/http_request_files/multiple_requests_gt2.http", 
+	requestFilePath := createTestFileFromTemplate(t,
+		"test/data/http_request_files/multiple_requests_gt2.http",
 		struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
@@ -434,9 +434,9 @@ func RunExecuteFile_MultilineQueryParameters(t *testing.T) {
 		capturedRequests = append(capturedRequests, r)
 		body, _ := io.ReadAll(r.Body)
 		r.Body = io.NopCloser(strings.NewReader(string(body))) // Restore body for later use
-		t.Logf("Server received request: %s %s with query: %s, body: %s, content-type: %s", 
+		t.Logf("Server received request: %s %s with query: %s, body: %s, content-type: %s",
 			r.Method, r.URL.Path, r.URL.RawQuery, string(body), r.Header.Get("Content-Type"))
-		
+
 		switch r.URL.Path {
 		case "/api/comments":
 			// Verify query parameters from multi-line syntax
@@ -446,24 +446,24 @@ func RunExecuteFile_MultilineQueryParameters(t *testing.T) {
 			assert.Equal(t, "active", query.Get("filter"))
 			assert.Equal(t, "created_at", query.Get("sort"))
 			assert.Equal(t, "desc", query.Get("order"))
-			
+
 			w.WriteHeader(http.StatusOK)
 			_, _ = fmt.Fprint(w, `{"comments": [], "page": 2}`)
-			
+
 		case "/api/search":
 			// Verify query parameters with POST request
 			query := r.URL.Query()
-			t.Logf("POST request query params: q='%s', limit='%s', offset='%s'", 
+			t.Logf("POST request query params: q='%s', limit='%s', offset='%s'",
 				query.Get("q"), query.Get("limit"), query.Get("offset"))
-			
+
 			// Read body
 			body, err := io.ReadAll(r.Body)
 			require.NoError(t, err)
 			t.Logf("POST request body: '%s'", string(body))
-			
+
 			w.WriteHeader(http.StatusOK)
 			_, _ = fmt.Fprint(w, `{"results": [], "total": 0}`)
-			
+
 		default:
 			t.Logf("Server received unexpected request to: %s", r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
@@ -472,8 +472,8 @@ func RunExecuteFile_MultilineQueryParameters(t *testing.T) {
 	defer server.Close()
 
 	client, _ := rc.NewClient()
-	requestFilePath := createTestFileFromTemplate(t, 
-		"test/data/http_request_files/multiline_query_parameters.http", 
+	requestFilePath := createTestFileFromTemplate(t,
+		"test/data/http_request_files/multiline_query_parameters.http",
 		struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
@@ -491,7 +491,7 @@ func RunExecuteFile_MultilineQueryParameters(t *testing.T) {
 		if resp.Error != nil {
 			errorInfo = resp.Error.Error()
 		}
-		t.Logf("Response %d: Request=%s, StatusCode=%d, Error=%s", 
+		t.Logf("Response %d: Request=%s, StatusCode=%d, Error=%s",
 			i, requestInfo, resp.StatusCode, errorInfo)
 	}
 	require.Len(t, responses, 2)
@@ -513,8 +513,8 @@ func RunExecuteFile_MultilineQueryParameters(t *testing.T) {
 	assert.Contains(t, resp2.Request.RawURLString, "q=test query")
 	assert.Contains(t, resp2.Request.RawURLString, "limit=50")
 	assert.Contains(t, resp2.Request.RawURLString, "offset=0")
-	
-	t.Logf("✅ Multi-line query parameters test PASSED! Both requests have correct query parameters.")
+
+	t.Log("✅ Multi-line query parameters test PASSED! Both requests have correct query parameters.")
 }
 
 // PRD-COMMENT: G2 - Multi-line Form Data
@@ -528,11 +528,11 @@ func RunExecuteFile_MultilineFormData(t *testing.T) {
 	var capturedRequests []*http.Request
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
 		capturedRequests = append(capturedRequests, r)
-		
+
 		// Read and verify form data
 		err := r.ParseForm()
 		require.NoError(t, err)
-		
+
 		switch r.URL.Path {
 		case "/api/login":
 			assert.Equal(t, "testuser", r.FormValue("username"))
@@ -540,20 +540,20 @@ func RunExecuteFile_MultilineFormData(t *testing.T) {
 			assert.Equal(t, "true", r.FormValue("remember_me"))
 			assert.Equal(t, "read,write", r.FormValue("scope"))
 			assert.Equal(t, "https://example.com/callback", r.FormValue("redirect_uri"))
-			
+
 			w.WriteHeader(http.StatusOK)
 			_, _ = fmt.Fprint(w, `{"token": "abc123"}`)
-			
+
 		case "/api/submit":
 			assert.Equal(t, "value1", r.FormValue("field1"))
 			assert.Equal(t, "value with spaces", r.FormValue("field2"))
 			assert.Equal(t, "special chars", r.FormValue("field3"))
 			assert.Equal(t, "multi", r.FormValue("field4"))
 			assert.Equal(t, "data", r.FormValue("line"))
-			
+
 			w.WriteHeader(http.StatusCreated)
 			_, _ = fmt.Fprint(w, `{"success": true}`)
-			
+
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -561,8 +561,8 @@ func RunExecuteFile_MultilineFormData(t *testing.T) {
 	defer server.Close()
 
 	client, _ := rc.NewClient()
-	requestFilePath := createTestFileFromTemplate(t, 
-		"test/data/http_request_files/multiline_form_data.http", 
+	requestFilePath := createTestFileFromTemplate(t,
+		"test/data/http_request_files/multiline_form_data.http",
 		struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When
@@ -597,49 +597,49 @@ func RunExecuteFile_MultipartFileUploads(t *testing.T) {
 	var capturedRequests []*http.Request
 	server := startMockServer(func(w http.ResponseWriter, r *http.Request) {
 		capturedRequests = append(capturedRequests, r)
-		
+
 		// Parse multipart form
 		err := r.ParseMultipartForm(32 << 20) // 32MB max
 		require.NoError(t, err)
-		
+
 		switch r.URL.Path {
 		case "/api/upload":
 			// Verify form field
 			assert.Equal(t, "File upload test", r.FormValue("description"))
-			
+
 			// Verify file uploads
 			file1, file1Header, err := r.FormFile("file1")
 			require.NoError(t, err)
 			assert.Equal(t, "sample_text.txt", file1Header.Filename)
 			assert.Equal(t, "text/plain", file1Header.Header.Get("Content-Type"))
 			_ = file1.Close()
-			
+
 			file2, file2Header, err := r.FormFile("file2")
 			require.NoError(t, err)
 			assert.Equal(t, "sample_image.jpg", file2Header.Filename)
 			assert.Equal(t, "image/jpeg", file2Header.Header.Get("Content-Type"))
 			_ = file2.Close()
-			
+
 			w.WriteHeader(http.StatusOK)
 			_, _ = fmt.Fprint(w, `{"uploaded": ["file1", "file2"]}`)
-			
+
 		case "/api/upload-json":
 			// Verify JSON metadata
 			metadata, metadataHeader, err := r.FormFile("metadata")
 			require.NoError(t, err)
 			assert.Equal(t, "application/json", metadataHeader.Header.Get("Content-Type"))
 			_ = metadata.Close()
-			
+
 			// Verify PDF document
 			document, documentHeader, err := r.FormFile("document")
 			require.NoError(t, err)
 			assert.Equal(t, "sample_document.pdf", documentHeader.Filename)
 			assert.Equal(t, "application/pdf", documentHeader.Header.Get("Content-Type"))
 			_ = document.Close()
-			
+
 			w.WriteHeader(http.StatusCreated)
 			_, _ = fmt.Fprint(w, `{"processed": true}`)
-			
+
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -647,8 +647,8 @@ func RunExecuteFile_MultipartFileUploads(t *testing.T) {
 	defer server.Close()
 
 	client, _ := rc.NewClient()
-	requestFilePath := createTestFileFromTemplate(t, 
-		"test/data/http_request_files/multipart_file_uploads.http", 
+	requestFilePath := createTestFileFromTemplate(t,
+		"test/data/http_request_files/multipart_file_uploads.http",
 		struct{ ServerURL string }{ServerURL: server.URL})
 
 	// When

@@ -1,10 +1,10 @@
 package test
 
 import (
-	rc "github.com/bmcszk/go-restclient"
 	"context"
 	"encoding/json"
 	"fmt"
+	rc "github.com/bmcszk/go-restclient"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestExecuteFile_MultipleSystemVarsConsistency tests that multiple system variables 
+// TestExecuteFile_MultipleSystemVarsConsistency tests that multiple system variables
 // defined in file-scoped variables maintain consistency across all requests in the file
 func TestExecuteFile_MultipleSystemVarsConsistency(t *testing.T) {
 	// Given
@@ -38,7 +38,7 @@ func TestExecuteFile_MultipleSystemVarsConsistency(t *testing.T) {
 			Headers: r.Header.Clone(),
 			Body:    string(bodyBytes),
 		})
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprint(w, `{"status": "ok"}`)
@@ -107,7 +107,7 @@ func TestExecuteFile_MultipleSystemVarsConsistency(t *testing.T) {
 
 	session, ok := postBody["session"].(map[string]any)
 	require.True(t, ok, "POST body should contain session object")
-	
+
 	sessionTokenFromBody, ok := session["token"].(string)
 	require.True(t, ok, "session should contain token")
 	extractedSessionTokens = append(extractedSessionTokens, sessionTokenFromBody)
@@ -153,26 +153,26 @@ func TestExecuteFile_MultipleSystemVarsConsistency(t *testing.T) {
 	// Verify all UUIDs are the same
 	firstUUID := extractedUUIDs[0]
 	for i, extractedUUID := range extractedUUIDs {
-		assert.Equal(t, firstUUID, extractedUUID, 
+		assert.Equal(t, firstUUID, extractedUUID,
 			"UUID %d should match the first UUID. All UUIDs should be consistent across the file", i+1)
 	}
 
 	// Verify all timestamps are the same
 	firstTimestamp := extractedTimestamps[0]
 	for i, extractedTimestamp := range extractedTimestamps {
-		assert.Equal(t, firstTimestamp, extractedTimestamp, 
+		assert.Equal(t, firstTimestamp, extractedTimestamp,
 			"Timestamp %d should match the first timestamp. All timestamps should be consistent across the file", i+1)
 	}
 
 	// Verify all session tokens are the same
 	firstSessionToken := extractedSessionTokens[0]
 	for i, extractedSessionToken := range extractedSessionTokens {
-		assert.Equal(t, firstSessionToken, extractedSessionToken, 
+		assert.Equal(t, firstSessionToken, extractedSessionToken,
 			"Session token %d should match the first session token. All tokens should be consistent", i+1)
 	}
 
 	// Log the consistent values for verification
-	t.Logf("All requests used the same values:")
+	t.Log("All requests used the same values:")
 	t.Logf("  - UUID: %s", firstUUID)
 	t.Logf("  - Timestamp: %s", firstTimestamp)
 	t.Logf("  - Session Token: %s", firstSessionToken)

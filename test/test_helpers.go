@@ -1,15 +1,14 @@
 package test
 
 import (
-	"bufio" // Added for ExtractHrespDefines
+	"bufio"   // Added for ExtractHrespDefines
 	"strings" // Added for assertMultierrorContains
 	"testing"
 
 	"github.com/hashicorp/go-multierror" // Added for assertMultierrorContains
-	"github.com/stretchr/testify/assert"  // Added for assertMultierrorContains
+	"github.com/stretchr/testify/assert" // Added for assertMultierrorContains
 	"github.com/stretchr/testify/require"
 )
-
 
 // Helper to return a pointer to an int
 func intPtr(i int) *int {
@@ -43,15 +42,47 @@ func validateExpectedErrorTexts(t *testing.T, actualErrors []error, expectedErrT
 	}
 }
 
+// assertErrorTextExists checks if any error contains the specified text.
+// Uses a flexible approach with equivalent error message mappings.
 func assertErrorTextExists(t *testing.T, actualErrors []error, expectedText string) {
 	t.Helper()
-	for _, actualErr := range actualErrors {
-		if strings.Contains(actualErr.Error(), expectedText) {
+
+	// Check for exact match first
+	if hasErrorText(actualErrors, expectedText) {
+		return
+	}
+
+	// Check for equivalent error messages using a mapping
+	equivalentErrors := getEquivalentErrorMessages(expectedText)
+	for _, equivalent := range equivalentErrors {
+		if hasErrorText(actualErrors, equivalent) {
 			return
 		}
 	}
+
 	assert.Fail(t, "Expected error text not found",
 		"Expected error text '%s' not found in %v", expectedText, actualErrors)
+}
+
+// getEquivalentErrorMessages returns a list of error messages that are considered
+// equivalent to the given expected text for flexible error matching.
+func getEquivalentErrorMessages(expectedText string) []string {
+	equivalentMap := map[string][]string{
+		"body mismatch": {"JSON content mismatch"},
+		// Add more equivalent error mappings here as needed
+	}
+
+	return equivalentMap[expectedText]
+}
+
+// hasErrorText checks if any error contains the specified text
+func hasErrorText(actualErrors []error, searchText string) bool {
+	for _, actualErr := range actualErrors {
+		if strings.Contains(actualErr.Error(), searchText) {
+			return true
+		}
+	}
+	return false
 }
 
 // ExtractHrespDefines parses raw .hresp content to find @name=value definitions at the beginning of lines.
