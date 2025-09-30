@@ -57,3 +57,28 @@ func RunValidateResponses_JSON_WithPlaceholders(t *testing.T) {
 
 	assert.NoError(t, validationErr, "JSON with placeholders should validate successfully")
 }
+
+// RunValidateResponses_JSON_WithPlaceholdersInBody tests JSON comparison when actual response contains placeholders
+func RunValidateResponses_JSON_WithPlaceholdersInBody(t *testing.T) {
+	t.Helper()
+
+	response := &rc.Response{
+		StatusCode: 200,
+		Status:     "200 OK",
+		Headers:    map[string][]string{"Content-Type": {"application/json"}},
+		BodyString: "{\"last_updated\": 1634567890}",
+	}
+
+	client, err := rc.NewClient()
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	responses := []*rc.Response{response}
+	validationErr := client.ValidateResponses(
+		"test/data/http_response_files/validator_json_placeholders_in_body.hresp",
+		responses...,
+	)
+
+	assert.NoError(t, validationErr, "JSON with placeholders in expected response should validate successfully")
+}

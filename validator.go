@@ -24,10 +24,11 @@ var ( //nolint:gochecknoglobals
 	anyPlaceholderFinder   = regexp.MustCompile(`\{\{\$any\}\}`)
 
 	// Pre-compiled regex patterns for JSON placeholder normalization
-	jsonAnyGuidPlaceholderPattern      = regexp.MustCompile(`"\{\{\$anyGuid\}\}"`)
-	jsonAnyTimestampPlaceholderPattern = regexp.MustCompile(`"\{\{\$anyTimestamp\}\}"`)
-	jsonAnyDatetimePlaceholderPattern  = regexp.MustCompile(`"\{\{\$anyDatetime.*?\}\}"`)
-	jsonAnyPlaceholderPattern          = regexp.MustCompile(`"\{\{\$any(?:\s+[^}]*)?\}\}"`)
+	// Since we replace with numbers and restore later, quotes don't matter
+	jsonAnyGuidPlaceholderPattern      = regexp.MustCompile(`\{\{\$anyGuid\}\}`)
+	jsonAnyTimestampPlaceholderPattern = regexp.MustCompile(`\{\{\$anyTimestamp\}\}`)
+	jsonAnyDatetimePlaceholderPattern  = regexp.MustCompile(`\{\{\$anyDatetime.*?\}\}`)
+	jsonAnyPlaceholderPattern          = regexp.MustCompile(`\{\{\$any(?:\s+[^}]*)?\}\}`)
 )
 
 const guidRegexPattern = `[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}`
@@ -387,6 +388,25 @@ func isJSONContent(body string) bool {
 	return err == nil
 }
 
+// isJSONContentWithPlaceholders checks if the given body string contains valid JSON content,
+// even when it contains placeholders like {{$anyTimestamp}}. It uses the same placeholder
+// replacement logic as the JSON comparison to ensure consistency.
+func isJSONContentWithPlaceholders(body string) bool {
+	// First, try normal JSON parsing
+	if isJSONContent(body) {
+		return true
+	}
+
+	// If that fails, check if it contains placeholders and try with placeholder substitution
+	if strings.Contains(body, "{{$") {
+		// Use the same placeholder replacement logic as JSON comparison
+		testBody, _ := replacePlaceholdersWithTempValues(body)
+		return isJSONContent(testBody)
+	}
+
+	return false
+}
+
 // normalizeJSON parses JSON content and re-serializes it with consistent formatting.
 // This ensures that JSON with different whitespace, indentation, or line breaks
 // will be normalized to the same string representation.
@@ -609,7 +629,11 @@ func compareBodiesOriginal(responseFilePath string, responseIndex int, expectedB
 // For JSON content, it performs whitespace-agnostic comparison by normalizing JSON formatting.
 func compareBodies(responseFilePath string, responseIndex int, expectedBody, actualBody string) error {
 	// Check if both bodies are JSON content - if so, use JSON-specific comparison
-	if isJSONContent(expectedBody) && isJSONContent(actualBody) {
+	// For expected body, use placeholder-aware JSON detection
+	expectedIsJSON := isJSONContentWithPlaceholders(expectedBody)
+	actualIsJSON := isJSONContent(actualBody)
+
+	if expectedIsJSON && actualIsJSON {
 		return compareJSONBodies(responseFilePath, responseIndex, expectedBody, actualBody)
 	}
 
