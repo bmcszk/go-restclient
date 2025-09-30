@@ -24,10 +24,16 @@ var ( //nolint:gochecknoglobals
 	anyPlaceholderFinder   = regexp.MustCompile(`\{\{\$any\}\}`)
 
 	// Pre-compiled regex patterns for JSON placeholder normalization
+	// Quoted placeholders (valid JSON)
 	jsonAnyGuidPlaceholderPattern      = regexp.MustCompile(`"\{\{\$anyGuid\}\}"`)
 	jsonAnyTimestampPlaceholderPattern = regexp.MustCompile(`"\{\{\$anyTimestamp\}\}"`)
 	jsonAnyDatetimePlaceholderPattern  = regexp.MustCompile(`"\{\{\$anyDatetime.*?\}\}"`)
 	jsonAnyPlaceholderPattern          = regexp.MustCompile(`"\{\{\$any(?:\s+[^}]*)?\}\}"`)
+	// Unquoted placeholders (invalid JSON but common in templates)
+	jsonAnyGuidPlaceholderPatternUnquoted      = regexp.MustCompile(`\{\{\$anyGuid\}\}`)
+	jsonAnyTimestampPlaceholderPatternUnquoted = regexp.MustCompile(`\{\{\$anyTimestamp\}\}`)
+	jsonAnyDatetimePlaceholderPatternUnquoted  = regexp.MustCompile(`\{\{\$anyDatetime.*?\}\}`)
+	jsonAnyPlaceholderPatternUnquoted          = regexp.MustCompile(`\{\{\$any(?:\s+[^}]*)?\}\}`)
 )
 
 const guidRegexPattern = `[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}`
@@ -387,6 +393,36 @@ func isJSONContent(body string) bool {
 	return err == nil
 }
 
+// isJSONContentWithPlaceholders checks if the given body string contains valid JSON content,
+// even when it contains placeholders like {{$anyTimestamp}}. It temporarily replaces
+// placeholders with valid JSON values to test if the structure is valid JSON.
+func isJSONContentWithPlaceholders(body string) bool {
+	// First, try normal JSON parsing
+	if isJSONContent(body) {
+		return true
+	}
+
+	// If that fails, check if it contains placeholders and try with placeholder substitution
+	if strings.Contains(body, "{{$") {
+		// Replace common placeholders with valid JSON values for testing
+		testBody := body
+		testBody = strings.ReplaceAll(testBody, "{{$anyGuid}}", "\"550e8400-e29b-41d4-a716-446655440000\"")
+		testBody = strings.ReplaceAll(testBody, "{{$anyTimestamp}}", "1634567890")
+		testBody = strings.ReplaceAll(testBody, "{{$anyDatetime}}", "\"2023-01-01T00:00:00Z\"")
+		testBody = strings.ReplaceAll(testBody, "{{$any}}", "\"test-value\"")
+
+		// Handle {{$any 'name'}} format
+		testBody = regexp.MustCompile(`\{\{\$any\s+[^}]*\}\}`).ReplaceAllString(testBody, "\"test-value\"")
+		// Handle {{$anyDatetime format}} format
+		anyDatetimeRegex := regexp.MustCompile(`\{\{\$anyDatetime\s+[^}]*\}\}`)
+		testBody = anyDatetimeRegex.ReplaceAllString(testBody, "\"2023-01-01T00:00:00Z\"")
+
+		return isJSONContent(testBody)
+	}
+
+	return false
+}
+
 // normalizeJSON parses JSON content and re-serializes it with consistent formatting.
 // This ensures that JSON with different whitespace, indentation, or line breaks
 // will be normalized to the same string representation.
@@ -415,10 +451,15 @@ func replacePlaceholdersWithTempValues(jsonStr string) (string, map[int]string) 
 	placeholderMap := make(map[int]string)
 
 	// Replace all placeholder patterns with unique random number keys using pre-compiled regex patterns
+	// Handle both quoted and unquoted placeholders
 	result = replacePatternPlaceholders(result, jsonAnyGuidPlaceholderPattern, placeholderMap)
+	result = replacePatternPlaceholders(result, jsonAnyGuidPlaceholderPatternUnquoted, placeholderMap)
 	result = replacePatternPlaceholders(result, jsonAnyTimestampPlaceholderPattern, placeholderMap)
+	result = replacePatternPlaceholders(result, jsonAnyTimestampPlaceholderPatternUnquoted, placeholderMap)
 	result = replacePatternPlaceholders(result, jsonAnyDatetimePlaceholderPattern, placeholderMap)
+	result = replacePatternPlaceholders(result, jsonAnyDatetimePlaceholderPatternUnquoted, placeholderMap)
 	result = replacePatternPlaceholders(result, jsonAnyPlaceholderPattern, placeholderMap)
+	result = replacePatternPlaceholders(result, jsonAnyPlaceholderPatternUnquoted, placeholderMap)
 
 	return result, placeholderMap
 }
@@ -609,7 +650,11 @@ func compareBodiesOriginal(responseFilePath string, responseIndex int, expectedB
 // For JSON content, it performs whitespace-agnostic comparison by normalizing JSON formatting.
 func compareBodies(responseFilePath string, responseIndex int, expectedBody, actualBody string) error {
 	// Check if both bodies are JSON content - if so, use JSON-specific comparison
-	if isJSONContent(expectedBody) && isJSONContent(actualBody) {
+	// For expected body, use placeholder-aware JSON detection
+	expectedIsJSON := isJSONContentWithPlaceholders(expectedBody)
+	actualIsJSON := isJSONContent(actualBody)
+
+	if expectedIsJSON && actualIsJSON {
 		return compareJSONBodies(responseFilePath, responseIndex, expectedBody, actualBody)
 	}
 
