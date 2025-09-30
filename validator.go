@@ -24,16 +24,11 @@ var ( //nolint:gochecknoglobals
 	anyPlaceholderFinder   = regexp.MustCompile(`\{\{\$any\}\}`)
 
 	// Pre-compiled regex patterns for JSON placeholder normalization
-	// Quoted placeholders (valid JSON)
-	jsonAnyGuidPlaceholderPattern      = regexp.MustCompile(`"\{\{\$anyGuid\}\}"`)
-	jsonAnyTimestampPlaceholderPattern = regexp.MustCompile(`"\{\{\$anyTimestamp\}\}"`)
-	jsonAnyDatetimePlaceholderPattern  = regexp.MustCompile(`"\{\{\$anyDatetime.*?\}\}"`)
-	jsonAnyPlaceholderPattern          = regexp.MustCompile(`"\{\{\$any(?:\s+[^}]*)?\}\}"`)
-	// Unquoted placeholders (invalid JSON but common in templates)
-	jsonAnyGuidPlaceholderPatternUnquoted      = regexp.MustCompile(`\{\{\$anyGuid\}\}`)
-	jsonAnyTimestampPlaceholderPatternUnquoted = regexp.MustCompile(`\{\{\$anyTimestamp\}\}`)
-	jsonAnyDatetimePlaceholderPatternUnquoted  = regexp.MustCompile(`\{\{\$anyDatetime.*?\}\}"`)
-	jsonAnyPlaceholderPatternUnquoted          = regexp.MustCompile(`\{\{\$any(?:\s+[^}]*)?\}\}`)
+	// Since we replace with numbers and restore later, quotes don't matter
+	jsonAnyGuidPlaceholderPattern      = regexp.MustCompile(`\{\{\$anyGuid\}\}`)
+	jsonAnyTimestampPlaceholderPattern = regexp.MustCompile(`\{\{\$anyTimestamp\}\}`)
+	jsonAnyDatetimePlaceholderPattern  = regexp.MustCompile(`\{\{\$anyDatetime.*?\}\}`)
+	jsonAnyPlaceholderPattern          = regexp.MustCompile(`\{\{\$any(?:\s+[^}]*)?\}\}`)
 )
 
 const guidRegexPattern = `[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}`
@@ -440,15 +435,10 @@ func replacePlaceholdersWithTempValues(jsonStr string) (string, map[int]string) 
 	placeholderMap := make(map[int]string)
 
 	// Replace all placeholder patterns with unique random number keys using pre-compiled regex patterns
-	// Handle both quoted and unquoted placeholders
 	result = replacePatternPlaceholders(result, jsonAnyGuidPlaceholderPattern, placeholderMap)
-	result = replacePatternPlaceholders(result, jsonAnyGuidPlaceholderPatternUnquoted, placeholderMap)
 	result = replacePatternPlaceholders(result, jsonAnyTimestampPlaceholderPattern, placeholderMap)
-	result = replacePatternPlaceholders(result, jsonAnyTimestampPlaceholderPatternUnquoted, placeholderMap)
 	result = replacePatternPlaceholders(result, jsonAnyDatetimePlaceholderPattern, placeholderMap)
-	result = replacePatternPlaceholders(result, jsonAnyDatetimePlaceholderPatternUnquoted, placeholderMap)
 	result = replacePatternPlaceholders(result, jsonAnyPlaceholderPattern, placeholderMap)
-	result = replacePatternPlaceholders(result, jsonAnyPlaceholderPatternUnquoted, placeholderMap)
 
 	return result, placeholderMap
 }
