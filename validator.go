@@ -32,11 +32,8 @@ var ( //nolint:gochecknoglobals
 	// Unquoted placeholders (invalid JSON but common in templates)
 	jsonAnyGuidPlaceholderPatternUnquoted      = regexp.MustCompile(`\{\{\$anyGuid\}\}`)
 	jsonAnyTimestampPlaceholderPatternUnquoted = regexp.MustCompile(`\{\{\$anyTimestamp\}\}`)
-	jsonAnyDatetimePlaceholderPatternUnquoted  = regexp.MustCompile(`\{\{\$anyDatetime.*?\}\}`)
+	jsonAnyDatetimePlaceholderPatternUnquoted  = regexp.MustCompile(`\{\{\$anyDatetime.*?\}\}"`)
 	jsonAnyPlaceholderPatternUnquoted          = regexp.MustCompile(`\{\{\$any(?:\s+[^}]*)?\}\}`)
-	// Additional patterns for JSON content detection with placeholders
-	jsonAnyPlaceholderPatternUnquotedForDetection         = regexp.MustCompile(`\{\{\$any\s+[^}]*\}\}`)
-	jsonAnyDatetimePlaceholderPatternUnquotedForDetection = regexp.MustCompile(`\{\{\$anyDatetime\s+[^}]*\}\}`)
 )
 
 const guidRegexPattern = `[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}`
@@ -397,8 +394,8 @@ func isJSONContent(body string) bool {
 }
 
 // isJSONContentWithPlaceholders checks if the given body string contains valid JSON content,
-// even when it contains placeholders like {{$anyTimestamp}}. It temporarily replaces
-// placeholders with valid JSON values to test if the structure is valid JSON.
+// even when it contains placeholders like {{$anyTimestamp}}. It uses the same placeholder
+// replacement logic as the JSON comparison to ensure consistency.
 func isJSONContentWithPlaceholders(body string) bool {
 	// First, try normal JSON parsing
 	if isJSONContent(body) {
@@ -407,20 +404,8 @@ func isJSONContentWithPlaceholders(body string) bool {
 
 	// If that fails, check if it contains placeholders and try with placeholder substitution
 	if strings.Contains(body, "{{$") {
-		// Replace common placeholders with valid JSON values for testing
-		testBody := body
-		testBody = strings.ReplaceAll(testBody, "{{$anyGuid}}", "\"550e8400-e29b-41d4-a716-446655440000\"")
-		testBody = strings.ReplaceAll(testBody, "{{$anyTimestamp}}", "1634567890")
-		testBody = strings.ReplaceAll(testBody, "{{$anyDatetime}}", "\"2023-01-01T00:00:00Z\"")
-		testBody = strings.ReplaceAll(testBody, "{{$any}}", "\"test-value\"")
-
-		// Handle {{$any 'name'}} format
-		testBody = jsonAnyPlaceholderPatternUnquotedForDetection.ReplaceAllString(
-			testBody, "\"test-value\"")
-		// Handle {{$anyDatetime format}} format
-		testBody = jsonAnyDatetimePlaceholderPatternUnquotedForDetection.ReplaceAllString(
-			testBody, "\"2023-01-01T00:00:00Z\"")
-
+		// Use the same placeholder replacement logic as JSON comparison
+		testBody, _ := replacePlaceholdersWithTempValues(body)
 		return isJSONContent(testBody)
 	}
 
