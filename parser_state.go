@@ -765,25 +765,28 @@ func (p *requestParserState) parseURLAndVersion(parts []string) {
 
 // parseURLIfNoVariables parses URL immediately if it contains no variables
 func (p *requestParserState) parseURLIfNoVariables(urlStr string) {
-	containsVariables := strings.Contains(urlStr, "{{") || strings.Contains(urlStr, "}}")
-
-	if !containsVariables {
-		parseTarget := urlStr
-		if p.currentRequest.Method == "GRPC" && !strings.Contains(urlStr, "://") {
-			if !strings.HasPrefix(urlStr, "//") {
-				parseTarget = "//" + urlStr
-			}
-		}
-
-		if parsedURL, err := url.Parse(parseTarget); err != nil {
-			slog.Warn(
-				"parseRequestLineDetails: Failed to parse RawURLString (no variables)",
-				"rawURL", urlStr, "error", err, "line", p.lineNumber,
-				"requestPtr", fmt.Sprintf("%p", p.currentRequest))
-		} else {
-			p.currentRequest.URL = parsedURL
-		}
+	if strings.Contains(urlStr, "{{") || strings.Contains(urlStr, "}}") {
+		return
 	}
+
+	parseTarget := p.prepareParseTarget(urlStr)
+
+	parsedURL, err := url.Parse(parseTarget)
+	if err != nil {
+		slog.Warn(
+			"parseRequestLineDetails: Failed to parse RawURLString (no variables)",
+			"rawURL", urlStr, "error", err, "line", p.lineNumber,
+			"requestPtr", fmt.Sprintf("%p", p.currentRequest))
+		return
+	}
+	p.currentRequest.URL = parsedURL
+}
+
+func (p *requestParserState) prepareParseTarget(urlStr string) string {
+	if p.currentRequest.Method == "GRPC" && !strings.Contains(urlStr, "://") && !strings.HasPrefix(urlStr, "//") {
+		return "//" + urlStr
+	}
+	return urlStr
 }
 
 // isQueryParameterLine checks if a line is a multi-line query parameter

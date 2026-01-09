@@ -54,11 +54,11 @@ func StartTestGRPCServer() (string, func(), error) {
 	// Register the service handler (dummy)
 	serviceDesc := &grpc.ServiceDesc{
 		ServiceName: "test.TestService",
-		HandlerType: (*interface{})(nil),
+		HandlerType: (*any)(nil),
 		Methods: []grpc.MethodDesc{
 			{
 				MethodName: "Ping",
-				Handler: func(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+				Handler: func(_ any, _ context.Context, _ func(any) error, _ grpc.UnaryServerInterceptor) (any, error) {
 					// For testing, we just return a successful but empty response
 					// if it reaches here, dispatch worked!
 					return nil, nil
@@ -93,7 +93,7 @@ func TestGRPCE2E(t *testing.T) {
 
 	t.Run("Basic Ping File", func(t *testing.T) {
 		client, _ := restclient.NewClient(
-			restclient.WithVars(map[string]interface{}{
+			restclient.WithVars(map[string]any{
 				"target": addr,
 			}),
 		)
@@ -111,7 +111,7 @@ func TestGRPCE2E(t *testing.T) {
 		// Test with 'dev' environment from http-client.env.json
 		client, _ := restclient.NewClient(
 			restclient.WithEnvironment("dev"),
-			restclient.WithVars(map[string]interface{}{
+			restclient.WithVars(map[string]any{
 				"target": addr,
 			}),
 		)
@@ -132,7 +132,7 @@ func TestGRPCE2E(t *testing.T) {
 	t.Run("Variable Substitution with Prod Env", func(t *testing.T) {
 		client, _ := restclient.NewClient(
 			restclient.WithEnvironment("prod"),
-			restclient.WithVars(map[string]interface{}{
+			restclient.WithVars(map[string]any{
 				"target": addr,
 			}),
 		)
