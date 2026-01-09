@@ -2,13 +2,16 @@ package restclient_test
 
 import (
 	"context"
+	"errors"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/bmcszk/go-restclient"
-	"github.com/jhump/protoreflect/desc/builder"
+	"github.com/bufbuild/protocompile"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -25,31 +28,33 @@ func StartTestGRPCServer() (string, func(), error) {
 
 	s := grpc.NewServer()
 
-	// Create descriptors at runtime using builder
-	pingReq := builder.NewMessage("PingRequest").
-		AddField(builder.NewField("value", builder.FieldTypeString()).SetNumber(1))
-	pingResp := builder.NewMessage("PingResponse").
-		AddField(builder.NewField("value", builder.FieldTypeString()).SetNumber(1))
-
-	pingMethod := builder.NewMethod("Ping",
-		builder.RpcTypeMessage(pingReq, false),
-		builder.RpcTypeMessage(pingResp, false))
-
-	svc := builder.NewService("TestService").
-		AddMethod(pingMethod)
-
-	file := builder.NewFile("test.proto").
-		SetPackageName("test").
-		AddService(svc)
-
-	fd, err := file.Build()
+	// Create descriptors at runtime using protocompile
+	protoSource := `
+		syntax = "proto3";
+		package test;
+		message PingRequest { string value = 1; }
+		message PingResponse { string value = 1; }
+		service TestService {
+			rpc Ping(PingRequest) returns (PingResponse);
+		}
+	`
+	compiler := protocompile.Compiler{
+		Resolver: &protocompile.SourceResolver{
+			Accessor: func(filename string) (io.ReadCloser, error) {
+				if filename == "test.proto" {
+					return io.NopCloser(strings.NewReader(protoSource)), nil
+				}
+				return nil, errors.New("not found")
+			},
+		},
+	}
+	fds, err := compiler.Compile(context.Background(), "test.proto")
 	if err != nil {
 		return "", nil, err
 	}
 
 	// Register the file descriptor with the global registry so reflection can find it
-	protoFd := fd.UnwrapFile()
-	_ = protoregistry.GlobalFiles.RegisterFile(protoFd)
+	_ = protoregistry.GlobalFiles.RegisterFile(fds[0])
 
 	// Register the service handler (dummy)
 	serviceDesc := &grpc.ServiceDesc{
@@ -59,8 +64,6 @@ func StartTestGRPCServer() (string, func(), error) {
 			{
 				MethodName: "Ping",
 				Handler: func(_ any, _ context.Context, _ func(any) error, _ grpc.UnaryServerInterceptor) (any, error) {
-					// For testing, we just return a successful but empty response
-					// if it reaches here, dispatch worked!
 					return nil, nil
 				},
 			},
@@ -108,7 +111,6 @@ func TestGRPCE2E(t *testing.T) {
 	})
 
 	t.Run("Variable Substitution with Env File", func(t *testing.T) {
-		// Test with 'dev' environment from http-client.env.json
 		client, _ := restclient.NewClient(
 			restclient.WithEnvironment("dev"),
 			restclient.WithVars(map[string]any{
@@ -122,10 +124,7 @@ func TestGRPCE2E(t *testing.T) {
 
 		resp := responses[0]
 		assert.NoError(t, resp.Error)
-		// Header should be substituted: X-Request-ID: dev-request-id
 		assert.Equal(t, "dev-request-id", resp.Request.Headers.Get("X-Request-ID"))
-		// Body should be substituted: "value": "hello-from-dev-env"
-		// Since we don't have a real handler, we just check that the request body in resp.Request was changed
 		assert.Contains(t, resp.Request.RawBody, "hello-from-dev-env")
 	})
 

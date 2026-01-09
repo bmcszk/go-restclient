@@ -8,17 +8,15 @@ import (
 	"strings"
 	"time"
 
-	//nolint:staticcheck // usage of deprecated jhump/protoreflect is intentional
-	"github.com/jhump/protoreflect/desc"
-	//nolint:staticcheck // usage of deprecated jhump/protoreflect is intentional
-	"github.com/jhump/protoreflect/dynamic"
-	"github.com/jhump/protoreflect/grpcreflect"
+	"github.com/jhump/protoreflect/v2/grpcreflect"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
-	reflectpb "google.golang.org/grpc/reflection/grpc_reflection_v1"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/dynamicpb"
 )
 
 // executeGRPCRequest executes a gRPC request and returns the Response.
@@ -63,8 +61,8 @@ func (*Client) executeGRPCRequest(ctx context.Context, rcRequest *Request) (*Res
 	return clientResponse, nil
 }
 
-func resolveGRPCMethod(ctx context.Context, conn *grpc.ClientConn, path string) (*desc.MethodDescriptor, error) {
-	refClient := grpcreflect.NewClientV1(ctx, reflectpb.NewServerReflectionClient(conn))
+func resolveGRPCMethod(ctx context.Context, conn *grpc.ClientConn, path string) (protoreflect.MethodDescriptor, error) {
+	refClient := grpcreflect.NewClientAuto(ctx, conn)
 	defer refClient.Reset()
 
 	serviceName, methodName := splitGRPCMethod(path)
@@ -72,22 +70,34 @@ func resolveGRPCMethod(ctx context.Context, conn *grpc.ClientConn, path string) 
 		return nil, fmt.Errorf("invalid gRPC method path: %s. Expected /package.Service/Method", path)
 	}
 
-	sd, err := refClient.ResolveService(serviceName)
+	fd, err := refClient.FileContainingSymbol(protoreflect.FullName(serviceName))
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve service %s: %w", serviceName, err)
 	}
 
-	mdDesc := sd.FindMethodByName(methodName)
+	// Find the service in the file descriptor
+	lastDot := strings.LastIndex(serviceName, ".")
+	shortServiceName := serviceName
+	if lastDot != -1 {
+		shortServiceName = serviceName[lastDot+1:]
+	}
+
+	sd := fd.Services().ByName(protoreflect.Name(shortServiceName))
+	if sd == nil {
+		return nil, fmt.Errorf("service %s not found in descriptors", serviceName)
+	}
+
+	mdDesc := sd.Methods().ByName(protoreflect.Name(methodName))
 	if mdDesc == nil {
 		return nil, fmt.Errorf("method %s not found in service %s", methodName, serviceName)
 	}
 	return mdDesc, nil
 }
 
-func prepareGRPCRequest(mdDesc *desc.MethodDescriptor, rawBody string) (*dynamic.Message, error) {
-	reqMsg := dynamic.NewMessage(mdDesc.GetInputType())
+func prepareGRPCRequest(mdDesc protoreflect.MethodDescriptor, rawBody string) (*dynamicpb.Message, error) {
+	reqMsg := dynamicpb.NewMessage(mdDesc.Input())
 	if rawBody != "" {
-		if err := reqMsg.UnmarshalJSON([]byte(rawBody)); err != nil {
+		if err := protojson.Unmarshal([]byte(rawBody), reqMsg); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal request body to protobuf: %w", err)
 		}
 	}
@@ -111,12 +121,14 @@ func prepareGRPCMetadata(ctx context.Context, headers http.Header) context.Conte
 
 func (p *grpcProcessor) invokeAndProcess(
 	ctx context.Context,
-	reqMsg *dynamic.Message,
-	mdDesc *desc.MethodDescriptor,
+	reqMsg *dynamicpb.Message,
+	mdDesc protoreflect.MethodDescriptor,
 ) {
-	respMsg := dynamic.NewMessage(mdDesc.GetOutputType())
+	respMsg := dynamicpb.NewMessage(mdDesc.Output())
 	startTime := time.Now()
-	fullMethodPath := fmt.Sprintf("/%s/%s", mdDesc.GetService().GetFullyQualifiedName(), mdDesc.GetName())
+
+	// gRPC full method path is /package.Service/MethodName
+	fullMethodPath := fmt.Sprintf("/%s/%s", mdDesc.Parent().FullName(), mdDesc.Name())
 
 	var header, trailer metadata.MD
 	err := p.conn.Invoke(ctx, fullMethodPath, reqMsg, respMsg, grpc.Header(&header), grpc.Trailer(&trailer))
@@ -149,8 +161,8 @@ func (p *grpcProcessor) processMetadata(header, trailer metadata.MD) {
 	}
 }
 
-func (p *grpcProcessor) handleSuccess(respMsg *dynamic.Message) {
-	bodyBytes, err := respMsg.MarshalJSON()
+func (p *grpcProcessor) handleSuccess(respMsg *dynamicpb.Message) {
+	bodyBytes, err := protojson.Marshal(respMsg)
 	if err != nil {
 		p.clientResponse.Error = fmt.Errorf("failed to marshal response to JSON: %w", err)
 	} else {
@@ -160,7 +172,6 @@ func (p *grpcProcessor) handleSuccess(respMsg *dynamic.Message) {
 }
 
 // splitGRPCMethod splits a full gRPC method path into service and method names.
-// e.g. "/package.Service/MethodName" -> ("package.Service", "MethodName")
 func splitGRPCMethod(fullMethod string) (serviceName, methodName string) {
 	fullMethod = strings.TrimPrefix(fullMethod, "/")
 	parts := strings.Split(fullMethod, "/")
