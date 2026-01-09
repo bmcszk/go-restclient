@@ -1,0 +1,7 @@
+### gRPC Ping with variables
+GRPC {{target}}/test.TestService/Ping
+X-Request-ID: {{request_id}}
+
+{
+  "value": "{{ping_value}}"
+}

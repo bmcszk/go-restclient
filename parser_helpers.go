@@ -21,7 +21,7 @@ func isPotentialRequestLine(line string) bool {
 	methodToken := strings.ToUpper(parts[0])
 	validMethods := map[string]bool{
 		"GET": true, "POST": true, "PUT": true, "DELETE": true, "PATCH": true,
-		"HEAD": true, "OPTIONS": true, "TRACE": true, "CONNECT": true,
+		"HEAD": true, "OPTIONS": true, "TRACE": true, "CONNECT": true, "GRPC": true,
 	}
 	return validMethods[methodToken]
 }

@@ -568,7 +568,17 @@ func (p *requestParserState) processTimeoutDirective(commentContent string) {
 func (p *requestParserState) _setRawURLFromLine(requestLine, contextHint string) {
 	trimmedURL := strings.TrimSpace(requestLine)
 	p.currentRequest.RawURLString = trimmedURL
-	parsedURL, err := url.Parse(trimmedURL)
+
+	parseTarget := trimmedURL
+	if p.currentRequest.Method == "GRPC" && !strings.Contains(trimmedURL, "://") {
+		// For gRPC, if no scheme is provided, we can assume it's a target and optionally
+		// treat it as protocol-relative for url.Parse to work better with host:port
+		if !strings.HasPrefix(trimmedURL, "//") {
+			parseTarget = "//" + trimmedURL
+		}
+	}
+
+	parsedURL, err := url.Parse(parseTarget)
 	if err != nil {
 		slog.Warn("Failed to parse RawURLString",
 			"context", contextHint, "rawURL", trimmedURL, "error", err,
@@ -758,7 +768,14 @@ func (p *requestParserState) parseURLIfNoVariables(urlStr string) {
 	containsVariables := strings.Contains(urlStr, "{{") || strings.Contains(urlStr, "}}")
 
 	if !containsVariables {
-		if parsedURL, err := url.Parse(urlStr); err != nil {
+		parseTarget := urlStr
+		if p.currentRequest.Method == "GRPC" && !strings.Contains(urlStr, "://") {
+			if !strings.HasPrefix(urlStr, "//") {
+				parseTarget = "//" + urlStr
+			}
+		}
+
+		if parsedURL, err := url.Parse(parseTarget); err != nil {
 			slog.Warn(
 				"parseRequestLineDetails: Failed to parse RawURLString (no variables)",
 				"rawURL", urlStr, "error", err, "line", p.lineNumber,

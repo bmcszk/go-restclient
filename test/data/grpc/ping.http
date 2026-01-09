@@ -1,0 +1,6 @@
+### gRPC Ping
+GRPC {{target}}/test.TestService/Ping
+
+{
+  "value": "hello"
+}
