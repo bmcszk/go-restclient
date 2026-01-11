@@ -23,7 +23,6 @@ import (
 	"golang.org/x/text/encoding/unicode"
 )
 
-
 // Client is the main struct for interacting with the REST client library.
 // It holds configuration like the HTTP client, base URL, default headers,
 // and programmatic variables for substitution.
@@ -54,7 +53,6 @@ func NewClient(options ...ClientOption) (*Client, error) {
 	return c, nil
 }
 
-
 // ExecuteFile parses a request file (.http, .rest), executes all requests found, and returns their responses.
 // It returns an error if the file cannot be parsed or no requests are found.
 // Individual request execution errors are stored within each Response object.
@@ -71,7 +69,7 @@ func NewClient(options ...ClientOption) (*Client, error) {
 //     uniqueness if needed across multiple requests in the same file, but consistency within a single request.
 //   - For each part of the request (URL, headers, body):
 //     a. `resolveVariablesInText` is called. For {{variableName}} placeholders
-//        (where 'variableName' does not start with '$'),
+//     (where 'variableName' does not start with '$'),
 //     the precedence is: Client programmatic vars > file-scoped `@vars` (rcRequest.ActiveVariables) >
 //     Environment vars (parsedFile.EnvironmentVariables) > Global vars (parsedFile.GlobalVariables) >
 //     OS env vars > .env vars > fallback.
@@ -90,7 +88,7 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 	}
 
 	c.loadDotEnvVars(requestFilePath)
-	
+
 	// Generate file-scoped system variables once for the entire file
 	c.resolveFileScopedSystemVariables(parsedFile)
 
@@ -128,7 +126,7 @@ func (c *Client) handleRequestExecutionError(
 		}
 		response = ensureResponseExists(response, restClientReq)
 	}
-	
+
 	c.wrapResponseError(response, restClientReq, index, multiErr)
 	return response, false
 }
@@ -198,21 +196,21 @@ func (c *Client) resolveFileScopedSystemVariables(parsedFile *ParsedFile) {
 
 	// Generate file-scoped system variables once for the entire file
 	fileScopedSystemVars := c.generateRequestScopedSystemVariables()
-	
+
 	// Resolve file-scoped variables and track resolved ones
 	resolvedVariables := c.resolveFileVariables(parsedFile, fileScopedSystemVars)
-	
+
 	// Update all requests' ActiveVariables to reflect the resolved values
 	c.updateRequestActiveVariables(parsedFile.Requests, resolvedVariables)
 }
 
 // resolveFileVariables processes each file-scoped variable that contains system variable placeholders
 func (c *Client) resolveFileVariables(
-	parsedFile *ParsedFile, 
+	parsedFile *ParsedFile,
 	fileScopedSystemVars map[string]string,
 ) map[string]string {
 	resolvedVariables := make(map[string]string)
-	
+
 	for varName, varValue := range parsedFile.FileVariables {
 		if isSystemVariablePlaceholder(varValue) {
 			resolvedValue := resolveSystemVariablePlaceholder(
@@ -221,7 +219,7 @@ func (c *Client) resolveFileVariables(
 			resolvedVariables[varName] = resolvedValue
 		}
 	}
-	
+
 	return resolvedVariables
 }
 
@@ -237,7 +235,7 @@ func (*Client) updateSingleRequestActiveVariables(request *Request, resolvedVari
 	if request.ActiveVariables == nil {
 		return
 	}
-	
+
 	for varName, resolvedValue := range resolvedVariables {
 		if _, exists := request.ActiveVariables[varName]; exists {
 			request.ActiveVariables[varName] = resolvedValue
@@ -250,25 +248,25 @@ func isSystemVariablePlaceholder(value string) bool {
 	if !strings.HasPrefix(value, "{{") || !strings.HasSuffix(value, "}}") {
 		return false
 	}
-	
+
 	innerDirective := strings.TrimSpace(value[2 : len(value)-2])
 	return strings.HasPrefix(innerDirective, "$")
 }
 
 // resolveSystemVariablePlaceholder resolves a system variable placeholder to its value
 func resolveSystemVariablePlaceholder(
-	placeholder string, 
-	systemVars map[string]string, 
-	dotEnvVars map[string]string, 
+	placeholder string,
+	systemVars map[string]string,
+	dotEnvVars map[string]string,
 	programmaticVars map[string]any,
 ) string {
 	innerDirective := strings.TrimSpace(placeholder[2 : len(placeholder)-2])
-	
+
 	// Check if it's a simple system variable that we have pre-generated
 	if val, ok := systemVars[innerDirective]; ok {
 		return val
 	}
-	
+
 	// For dynamic system variables, use the existing substitution logic
 	return substituteDynamicSystemVariables(placeholder, dotEnvVars, programmaticVars)
 }
@@ -381,6 +379,10 @@ func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Respo
 
 	if err := c.prepareRequestURL(rcRequest); err != nil {
 		return nil, err
+	}
+
+	if rcRequest.Method == "GRPC" {
+		return c.executeGRPCRequest(ctx, rcRequest)
 	}
 
 	httpReq, err := c.createHTTPRequest(ctx, rcRequest)

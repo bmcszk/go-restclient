@@ -30,27 +30,27 @@ var (
 	reDotEnv                = regexp.MustCompile(`{{\s*\$dotenv\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*}}`)
 	reProcessEnv            = regexp.MustCompile(`{{\s*\$processEnv\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*}}`)
 	reProcessEnvIndirect    = regexp.MustCompile(`{{\s*\$processEnv\s+%([a-zA-Z_][a-zA-Z0-9_]*)\s*}}`)
-	reDateTime = regexp.MustCompile(
+	reDateTime              = regexp.MustCompile(
 		`{{\s*\$datetime(?:\s+("([^"]+)"|[^}\s]+))?(?:\s+("([^"]+)"|[^}\s]+))?\s*}}`)
-	reAadToken              = regexp.MustCompile(`{{\s*\$aadToken(?:\s+("([^"]+)"|[^}\s]+))*\s*}}`)
+	reAadToken = regexp.MustCompile(`{{\s*\$aadToken(?:\s+("([^"]+)"|[^}\s]+))*\s*}}`)
 	// Person/identity faker variables - VS Code style
-	reRandomFirstName    = regexp.MustCompile(`{{\s*\$randomFirstName\s*}}`)
-	reRandomLastName     = regexp.MustCompile(`{{\s*\$randomLastName\s*}}`)
-	reRandomFullName     = regexp.MustCompile(`{{\s*\$randomFullName\s*}}`)
-	reRandomJobTitle     = regexp.MustCompile(`{{\s*\$randomJobTitle\s*}}`)
+	reRandomFirstName = regexp.MustCompile(`{{\s*\$randomFirstName\s*}}`)
+	reRandomLastName  = regexp.MustCompile(`{{\s*\$randomLastName\s*}}`)
+	reRandomFullName  = regexp.MustCompile(`{{\s*\$randomFullName\s*}}`)
+	reRandomJobTitle  = regexp.MustCompile(`{{\s*\$randomJobTitle\s*}}`)
 	// Person/identity faker variables - JetBrains style
 	reRandomFirstNameDot = regexp.MustCompile(`{{\s*\$random\.firstName\s*}}`)
 	reRandomLastNameDot  = regexp.MustCompile(`{{\s*\$random\.lastName\s*}}`)
 	reRandomFullNameDot  = regexp.MustCompile(`{{\s*\$random\.fullName\s*}}`)
 	reRandomJobTitleDot  = regexp.MustCompile(`{{\s*\$random\.jobTitle\s*}}`)
-	
+
 	// Contact data faker variables
-	reRandomPhoneNumber    = regexp.MustCompile(`{{\s*\$randomPhoneNumber\s*}}`)
-	reRandomStreetAddress  = regexp.MustCompile(`{{\s*\$randomStreetAddress\s*}}`)
-	reRandomCity           = regexp.MustCompile(`{{\s*\$randomCity\s*}}`)
-	reRandomState          = regexp.MustCompile(`{{\s*\$randomState\s*}}`)
-	reRandomZipCode        = regexp.MustCompile(`{{\s*\$randomZipCode\s*}}`)
-	reRandomCountry        = regexp.MustCompile(`{{\s*\$randomCountry\s*}}`)
+	reRandomPhoneNumber      = regexp.MustCompile(`{{\s*\$randomPhoneNumber\s*}}`)
+	reRandomStreetAddress    = regexp.MustCompile(`{{\s*\$randomStreetAddress\s*}}`)
+	reRandomCity             = regexp.MustCompile(`{{\s*\$randomCity\s*}}`)
+	reRandomState            = regexp.MustCompile(`{{\s*\$randomState\s*}}`)
+	reRandomZipCode          = regexp.MustCompile(`{{\s*\$randomZipCode\s*}}`)
+	reRandomCountry          = regexp.MustCompile(`{{\s*\$randomCountry\s*}}`)
 	reRandomPhoneNumberDot   = regexp.MustCompile(`{{\s*\$random\.phoneNumber\s*}}`)
 	reRandomStreetAddressDot = regexp.MustCompile(`{{\s*\$random\.streetAddress\s*}}`)
 	reRandomCityDot          = regexp.MustCompile(`{{\s*\$random\.city\s*}}`)
@@ -58,10 +58,10 @@ var (
 	reRandomZipCodeDot       = regexp.MustCompile(`{{\s*\$random\.zipCode\s*}}`)
 	reRandomCountryDot       = regexp.MustCompile(`{{\s*\$random\.country\s*}}`)
 	// Internet data faker variables
-	reRandomUrl        = regexp.MustCompile(`{{\s*\$randomUrl\s*}}`)
-	reRandomDomainName = regexp.MustCompile(`{{\s*\$randomDomainName\s*}}`)
-	reRandomUserAgent  = regexp.MustCompile(`{{\s*\$randomUserAgent\s*}}`)
-	reRandomMacAddress = regexp.MustCompile(`{{\s*\$randomMacAddress\s*}}`)
+	reRandomUrl           = regexp.MustCompile(`{{\s*\$randomUrl\s*}}`)
+	reRandomDomainName    = regexp.MustCompile(`{{\s*\$randomDomainName\s*}}`)
+	reRandomUserAgent     = regexp.MustCompile(`{{\s*\$randomUserAgent\s*}}`)
+	reRandomMacAddress    = regexp.MustCompile(`{{\s*\$randomMacAddress\s*}}`)
 	reRandomUrlDot        = regexp.MustCompile(`{{\s*\$random\.url\s*}}`)
 	reRandomDomainNameDot = regexp.MustCompile(`{{\s*\$random\.domainName\s*}}`)
 	reRandomUserAgentDot  = regexp.MustCompile(`{{\s*\$random\.userAgent\s*}}`)
@@ -80,13 +80,12 @@ const (
 	charsetAlphabetic            = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	charsetAlphaNumeric          = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	charsetAlphaNumericWithExtra = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
-	charsetFull = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" +
+	charsetFull                  = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" +
 		"0123456789!@#$%^&*()_+-=[]{};':\",./<>?"
 )
 
 // Word list for $randomWord
 var randomWords = []string{"apple", "banana", "cherry", "date", "elderberry", "fig", "grape"}
-
 
 // resolveVariablesInText is the primary substitution engine for non-system and request-scoped system variables.
 // It iterates through placeholders like `{{varName | fallback}}` and resolves them based on a defined precedence.
@@ -111,13 +110,13 @@ func resolveVariablesInText(
 
 		currentText = re.ReplaceAllStringFunc(previousText, func(match string) string {
 			return resolveVariablePlaceholder(match, variableResolverContext{
-				clientProgrammaticVars:    clientProgrammaticVars,
-				fileScopedVars:            fileScopedVars,
-				environmentVars:           environmentVars,
-				globalVars:                globalVars,
-				requestScopedSystemVars:   requestScopedSystemVars,
-				osEnvGetter:               osEnvGetter,
-				dotEnvVars:                dotEnvVars,
+				clientProgrammaticVars:  clientProgrammaticVars,
+				fileScopedVars:          fileScopedVars,
+				environmentVars:         environmentVars,
+				globalVars:              globalVars,
+				requestScopedSystemVars: requestScopedSystemVars,
+				osEnvGetter:             osEnvGetter,
+				dotEnvVars:              dotEnvVars,
 			})
 		}) // End of ReplaceAllStringFunc
 
@@ -370,9 +369,9 @@ func matchesDynamicPattern(value string) bool {
 		reRandomFirstName, reRandomLastName, reRandomFullName, reRandomJobTitle,
 		reRandomFirstNameDot, reRandomLastNameDot, reRandomFullNameDot, reRandomJobTitleDot,
 		// Contact data faker variables
-		reRandomPhoneNumber, reRandomStreetAddress, reRandomCity, reRandomState, 
+		reRandomPhoneNumber, reRandomStreetAddress, reRandomCity, reRandomState,
 		reRandomZipCode, reRandomCountry,
-		reRandomPhoneNumberDot, reRandomStreetAddressDot, reRandomCityDot, 
+		reRandomPhoneNumberDot, reRandomStreetAddressDot, reRandomCityDot,
 		reRandomStateDot, reRandomZipCodeDot, reRandomCountryDot,
 		// Internet data faker variables
 		reRandomUrl, reRandomDomainName, reRandomUserAgent, reRandomMacAddress,
@@ -430,27 +429,27 @@ func substituteRequestVariables(
 ) (*url.URL, error) {
 	fileScopedVars, envVarsFromFile, globalVarsFromFile := initializeVariableMaps(parsedFile)
 	mergeRequestActiveVariables(rcRequest, fileScopedVars)
-	
+
 	varMaps := variableMaps{
 		fileScopedVars:     fileScopedVars,
 		envVarsFromFile:    envVarsFromFile,
 		globalVarsFromFile: globalVarsFromFile,
 	}
-	
+
 	finalParsedURL, err := processURLSubstitution(rcRequest, varMaps,
 		requestScopedSystemVars, osEnvGetter, programmaticVars, currentDotEnvVars, clientBaseURL)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	processHeaderSubstitution(rcRequest, varMaps,
 		requestScopedSystemVars, osEnvGetter, programmaticVars, currentDotEnvVars)
-	
+
 	return finalParsedURL, nil
 }
 
 // initializeVariableMaps sets up the variable maps based on parsed file context
-func initializeVariableMaps(parsedFile *ParsedFile) (fileScopedVars, envVarsFromFile, 
+func initializeVariableMaps(parsedFile *ParsedFile) (fileScopedVars, envVarsFromFile,
 	globalVarsFromFile map[string]string) {
 	if parsedFile != nil {
 		fileScopedVars = make(map[string]string, len(parsedFile.FileVariables))
@@ -464,7 +463,7 @@ func initializeVariableMaps(parsedFile *ParsedFile) (fileScopedVars, envVarsFrom
 		envVarsFromFile = make(map[string]string)
 		globalVarsFromFile = make(map[string]string)
 	}
-	
+
 	return fileScopedVars, envVarsFromFile, globalVarsFromFile
 }
 
@@ -482,7 +481,7 @@ func processURLSubstitution(rcRequest *Request, varMaps variableMaps,
 	requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool),
 	programmaticVars map[string]any, currentDotEnvVars map[string]string, clientBaseURL string) (*url.URL, error) {
 	substitutedRawURL := resolveVariablesInText(
-		rcRequest.RawURLString, programmaticVars, varMaps.fileScopedVars, varMaps.envVarsFromFile, 
+		rcRequest.RawURLString, programmaticVars, varMaps.fileScopedVars, varMaps.envVarsFromFile,
 		varMaps.globalVarsFromFile, requestScopedSystemVars, osEnvGetter, currentDotEnvVars)
 	substitutedRawURL = substituteDynamicSystemVariables(substitutedRawURL, currentDotEnvVars, programmaticVars)
 
@@ -492,13 +491,20 @@ func processURLSubstitution(rcRequest *Request, varMaps variableMaps,
 
 	substitutedRawURL = _applyBaseURLIfNeeded(substitutedRawURL, clientBaseURL)
 
-	finalParsedURL, parseErr := url.Parse(substitutedRawURL)
+	parseTarget := substitutedRawURL
+	if rcRequest.Method == "GRPC" && !strings.Contains(substitutedRawURL, "://") {
+		if !strings.HasPrefix(substitutedRawURL, "//") {
+			parseTarget = "//" + substitutedRawURL
+		}
+	}
+
+	finalParsedURL, parseErr := url.Parse(parseTarget)
 	if parseErr != nil {
 		return nil, fmt.Errorf(
 			"failed to parse URL after variable substitution: %s (original: %s): %w",
 			substitutedRawURL, rcRequest.RawURLString, parseErr)
 	}
-	
+
 	return finalParsedURL, nil
 }
 
@@ -509,12 +515,12 @@ func processHeaderSubstitution(rcRequest *Request, varMaps variableMaps,
 	if rcRequest.Headers == nil {
 		return
 	}
-	
+
 	for key, values := range rcRequest.Headers {
 		newValues := make([]string, len(values))
 		for j, val := range values {
 			resolvedVal := resolveVariablesInText(val, programmaticVars, varMaps.fileScopedVars,
-				varMaps.envVarsFromFile, varMaps.globalVarsFromFile, requestScopedSystemVars, 
+				varMaps.envVarsFromFile, varMaps.globalVarsFromFile, requestScopedSystemVars,
 				osEnvGetter, currentDotEnvVars)
 			newValues[j] = substituteDynamicSystemVariables(resolvedVal, currentDotEnvVars, programmaticVars)
 		}
@@ -784,7 +790,7 @@ func substituteProcessEnvIndirect(text string, programmaticVars map[string]any) 
 func processIndirectEnvMatch(match string, programmaticVars map[string]any) string {
 	parts := reProcessEnvIndirect.FindStringSubmatch(match)
 	if len(parts) != 2 {
-		slog.Warn("Failed to parse $processEnv indirect, returning original match", 
+		slog.Warn("Failed to parse $processEnv indirect, returning original match",
 			"match", match, "parts_len", len(parts))
 		return match
 	}
@@ -806,17 +812,17 @@ func resolveIndirectVarName(varName string, programmaticVars map[string]any) str
 	if programmaticVars == nil {
 		return ""
 	}
-	
+
 	val, ok := programmaticVars[varName]
 	if !ok {
 		return ""
 	}
-	
+
 	envVarName, ok := val.(string)
 	if !ok {
 		return ""
 	}
-	
+
 	return envVarName
 }
 

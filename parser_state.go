@@ -568,7 +568,17 @@ func (p *requestParserState) processTimeoutDirective(commentContent string) {
 func (p *requestParserState) _setRawURLFromLine(requestLine, contextHint string) {
 	trimmedURL := strings.TrimSpace(requestLine)
 	p.currentRequest.RawURLString = trimmedURL
-	parsedURL, err := url.Parse(trimmedURL)
+
+	parseTarget := trimmedURL
+	if p.currentRequest.Method == "GRPC" && !strings.Contains(trimmedURL, "://") {
+		// For gRPC, if no scheme is provided, we can assume it's a target and optionally
+		// treat it as protocol-relative for url.Parse to work better with host:port
+		if !strings.HasPrefix(trimmedURL, "//") {
+			parseTarget = "//" + trimmedURL
+		}
+	}
+
+	parsedURL, err := url.Parse(parseTarget)
 	if err != nil {
 		slog.Warn("Failed to parse RawURLString",
 			"context", contextHint, "rawURL", trimmedURL, "error", err,
@@ -755,18 +765,28 @@ func (p *requestParserState) parseURLAndVersion(parts []string) {
 
 // parseURLIfNoVariables parses URL immediately if it contains no variables
 func (p *requestParserState) parseURLIfNoVariables(urlStr string) {
-	containsVariables := strings.Contains(urlStr, "{{") || strings.Contains(urlStr, "}}")
-
-	if !containsVariables {
-		if parsedURL, err := url.Parse(urlStr); err != nil {
-			slog.Warn(
-				"parseRequestLineDetails: Failed to parse RawURLString (no variables)",
-				"rawURL", urlStr, "error", err, "line", p.lineNumber,
-				"requestPtr", fmt.Sprintf("%p", p.currentRequest))
-		} else {
-			p.currentRequest.URL = parsedURL
-		}
+	if strings.Contains(urlStr, "{{") || strings.Contains(urlStr, "}}") {
+		return
 	}
+
+	parseTarget := p.prepareParseTarget(urlStr)
+
+	parsedURL, err := url.Parse(parseTarget)
+	if err != nil {
+		slog.Warn(
+			"parseRequestLineDetails: Failed to parse RawURLString (no variables)",
+			"rawURL", urlStr, "error", err, "line", p.lineNumber,
+			"requestPtr", fmt.Sprintf("%p", p.currentRequest))
+		return
+	}
+	p.currentRequest.URL = parsedURL
+}
+
+func (p *requestParserState) prepareParseTarget(urlStr string) string {
+	if p.currentRequest.Method == "GRPC" && !strings.Contains(urlStr, "://") && !strings.HasPrefix(urlStr, "//") {
+		return "//" + urlStr
+	}
+	return urlStr
 }
 
 // isQueryParameterLine checks if a line is a multi-line query parameter
