@@ -1,8 +1,0 @@
-client_grpc.go:11:2: SA1019: "github.com/jhump/protoreflect/desc" is deprecated: This module was created for use with the older "v1" Protobuf API in github.com/golang/protobuf. However, much of this module is no longer necessary as the newer "v2" API in google.golang.org/protobuf provides similar capabilities. Instead of using this github.com/jhump/protoreflect/desc package, see [google.golang.org/protobuf/reflect/protoreflect]. (staticcheck)
-	"github.com/jhump/protoreflect/desc"
-	^
-client_grpc.go:12:2: SA1019: "github.com/jhump/protoreflect/dynamic" is deprecated: This module was created for use with the older "v1" Protobuf API in github.com/golang/protobuf. However, much of this module is no longer necessary as the newer "v2" API in google.golang.org/protobuf provides similar capabilities. Instead of using this github.com/jhump/protoreflect/dynamic package, see [google.golang.org/protobuf/types/dynamicpb]. (staticcheck)
-	"github.com/jhump/protoreflect/dynamic"
-	^
-2 issues:
-* staticcheck: 2

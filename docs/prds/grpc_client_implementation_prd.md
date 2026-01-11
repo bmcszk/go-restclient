@@ -45,7 +45,7 @@ X-Request-ID: {{$guid}}
 }
 ```
 
-### 3.2 variable Substitution
+### 3.2 Variable Substitution
 All variable types (Custom, System, Faker, Environment) must work exactly as they do for REST requests.
 
 ### 3.3 Response Format
