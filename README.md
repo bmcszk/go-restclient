@@ -34,7 +34,38 @@ go install github.com/bmcszk/go-restclient/cmd/restclient@latest
 restclient -f requests.http
 ```
 
-Exits with code `1` if any request fails, `0` otherwise.
+#### Run a single request
+
+By name (case-insensitive):
+```bash
+restclient -f requests.http -n "create user"
+```
+
+By 0-based index:
+```bash
+restclient -f requests.http -i 0
+```
+
+#### Assert responses
+
+Validate against an expected-response file (`.hresp` format):
+```bash
+restclient -f requests.http -e expected.hresp
+restclient -f requests.http -n "login" -e login_expected.hresp
+```
+
+#### Flags
+
+| Flag | Description |
+|------|-------------|
+| `-f` | Path to the `.http` / `.rest` request file (required) |
+| `-n` | Run only the request with this name |
+| `-i` | Run only the request at this 0-based index |
+| `-e` | Path to `.hresp` file for response assertion |
+
+`-n` and `-i` are mutually exclusive.
+
+Exits with code `1` if any request fails or assertion fails, `0` on success, `2` on usage error.
 
 ## Quick Start
 

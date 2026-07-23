@@ -63,6 +63,17 @@ func startMockServer(handler http.HandlerFunc) *httptest.Server {
 	return httptest.NewServer(handler)
 }
 
+// createTestFileFromString writes content to a temp .http file and returns its path.
+func createTestFileFromString(t *testing.T, content string) string {
+	t.Helper()
+	tempFile, err := os.CreateTemp(t.TempDir(), "test_*.http")
+	require.NoError(t, err)
+	_, err = tempFile.WriteString(content)
+	require.NoError(t, err)
+	require.NoError(t, tempFile.Close())
+	return tempFile.Name()
+}
+
 // createTestFileFromTemplate processes a template file and returns the path to the processed file.
 func createTestFileFromTemplate(t *testing.T, templatePath string, data any) string {
 	t.Helper()

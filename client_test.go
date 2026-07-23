@@ -291,6 +291,44 @@ func TestExecuteFile_GraphQLBatchQueries(t *testing.T) {
 	test.RunExecuteFile_GraphQLBatchQueries(t)
 }
 
+// ParseFile tests
+func TestParseFile_SingleRequest(t *testing.T) {
+	test.RunParseFile_SingleRequest(t)
+}
+
+func TestParseFile_MultipleRequests(t *testing.T) {
+	test.RunParseFile_MultipleRequests(t)
+}
+
+func TestParseFile_NamedRequests(t *testing.T) {
+	test.RunParseFile_NamedRequests(t)
+}
+
+func TestParseFile_NoRequests(t *testing.T) {
+	test.RunParseFile_NoRequests(t)
+}
+
+func TestParseFile_FileNotFound(t *testing.T) {
+	test.RunParseFile_FileNotFound(t)
+}
+
+// ExecuteRequest tests
+func TestExecuteRequest_ByIndex(t *testing.T) {
+	test.RunExecuteRequest_ByIndex(t)
+}
+
+func TestExecuteRequest_OutOfRange(t *testing.T) {
+	test.RunExecuteRequest_OutOfRange(t)
+}
+
+func TestExecuteRequest_NegativeIndex(t *testing.T) {
+	test.RunExecuteRequest_NegativeIndex(t)
+}
+
+func TestExecuteRequest_SecondOfThree(t *testing.T) {
+	test.RunExecuteRequest_SecondOfThree(t)
+}
+
 // Test helper tests
 func TestCreateTestFileFromTemplate_DebugOutput(t *testing.T) {
 	test.RunCreateTestFileFromTemplate_DebugOutput(t)

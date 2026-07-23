@@ -90,8 +90,6 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 	}
 
 	c.loadDotEnvVars(requestFilePath)
-	
-	// Generate file-scoped system variables once for the entire file
 	c.resolveFileScopedSystemVariables(parsedFile)
 
 	var responses []*Response
@@ -110,6 +108,39 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 	}
 
 	return responses, multiErr.ErrorOrNil()
+}
+
+// ParseFile parses the request file (.http, .rest) without executing requests.
+// Returns the parsed file with all requests, variables, and environment resolved.
+func (c *Client) ParseFile(requestFilePath string) (*ParsedFile, error) {
+	parsedFile, err := c.parseAndValidateFile(requestFilePath)
+	if err != nil {
+		return nil, err
+	}
+
+	c.loadDotEnvVars(requestFilePath)
+	c.resolveFileScopedSystemVariables(parsedFile)
+
+	return parsedFile, nil
+}
+
+// ExecuteRequest executes a single request from a parsed file by index.
+// The caller must first call ParseFile to obtain the parsed file.
+func (c *Client) ExecuteRequest(ctx context.Context, parsedFile *ParsedFile, index int) (*Response, error) {
+	if index < 0 || index >= len(parsedFile.Requests) {
+		return nil, fmt.Errorf("request index %d out of range (file has %d requests)", index, len(parsedFile.Requests))
+	}
+
+	osEnvGetter := func(key string) (string, bool) { return os.LookupEnv(key) }
+	restClientReq := parsedFile.Requests[index]
+	response, err := c.executeRequestWithVariables(ctx, restClientReq, parsedFile, osEnvGetter, index)
+	if err != nil {
+		if response == nil {
+			response = &Response{Request: restClientReq, Error: err}
+		}
+		return response, err
+	}
+	return response, nil
 }
 
 // handleRequestExecutionError processes errors from request execution and manages error wrapping
@@ -372,7 +403,7 @@ func handleSpecialPathJoining(freshRequestURL, freshBase *url.URL) (*url.URL, er
 // Errors during execution (e.g. network, body read) are captured in Response.Error.
 // A non-nil error is returned by this function only for critical pre-execution
 // failures (e.g. nil request, bad BaseURL).
-func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Response, error) {
+func (c *Client) doHTTPRequest(ctx context.Context, rcRequest *Request) (*Response, error) {
 	if rcRequest == nil {
 		return nil, errors.New("cannot execute a nil request")
 	}
@@ -704,7 +735,7 @@ func (c *Client) executeRequestWithVariables(
 	}
 
 	// Execute the HTTP request
-	resp, execErr := c.executeRequest(ctx, restClientReq)
+	resp, execErr := c.doHTTPRequest(ctx, restClientReq)
 	if execErr != nil {
 		return &Response{Request: restClientReq, Error: execErr}, nil
 	}

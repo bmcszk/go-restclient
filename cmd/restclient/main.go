@@ -1,7 +1,7 @@
 // Command restclient executes HTTP requests defined in a .http / .rest file.
 //
 // Install: go install github.com/bmcszk/go-restclient/cmd/restclient@latest
-// Usage:   restclient -f requests.http
+// Usage:   restclient -f requests.http [-n name | -i index] [-e expected.hresp]
 package main
 
 import (
@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"math"
 	"os"
 	"slices"
 	"strings"
@@ -18,26 +19,116 @@ import (
 
 func main() {
 	file := flag.String("f", "", "path to the .http / .rest request file (required)")
+	name := flag.String("n", "", "run only the request with this name")
+	index := flag.Int("i", math.MinInt, "run only the request at this 0-based index")
+	expected := flag.String("e", "", "path to .hresp file for response assertion")
 	flag.Parse()
-	os.Exit(run(*file))
+	os.Exit(run(*file, *name, *index, *expected))
 }
 
-func run(filePath string) int {
+func run(filePath, name string, index int, expected string) int {
 	if filePath == "" {
 		flushError("-f <file> is required")
 		return 2
 	}
+	if name != "" && index != math.MinInt {
+		flushError("-n and -i are mutually exclusive")
+		return 2
+	}
+
 	client, err := restclient.NewClient()
 	if err != nil {
 		flushError(err.Error())
 		return 1
 	}
-	responses, err := client.ExecuteFile(context.Background(), filePath)
+
+	parsedFile, err := client.ParseFile(filePath)
 	if err != nil {
 		flushError(err.Error())
 		return 1
 	}
+
+	responses, execErr := executeRequests(client, parsedFile, filePath, name, index)
+	if execErr != nil {
+		flushError(execErr.Error())
+		return 1
+	}
+
+	if assertErr := validateIfRequested(client, expected, responses); assertErr != nil {
+		flushError(assertErr.Error())
+		return 1
+	}
+
 	return emit(responses)
+}
+
+// validateIfRequested runs ValidateResponses when an expected file is provided.
+func validateIfRequested(
+	client *restclient.Client,
+	expected string,
+	responses []*restclient.Response,
+) error {
+	if expected == "" {
+		return nil
+	}
+	return client.ValidateResponses(expected, responses...)
+}
+
+// executeRequests runs one or all requests and returns the responses.
+func executeRequests(
+	client *restclient.Client,
+	parsedFile *restclient.ParsedFile,
+	filePath, name string,
+	index int,
+) ([]*restclient.Response, error) {
+	if name != "" || index != math.MinInt {
+		return executeSingle(client, parsedFile, name, index)
+	}
+	return client.ExecuteFile(context.Background(), filePath)
+}
+
+// executeSingle runs one request from a parsed file by name or index.
+func executeSingle(
+	client *restclient.Client,
+	parsedFile *restclient.ParsedFile,
+	name string,
+	index int,
+) ([]*restclient.Response, error) {
+	reqIndex, findErr := findRequestIndex(parsedFile.Requests, name, index)
+	if findErr != nil {
+		return nil, findErr
+	}
+	resp, err := client.ExecuteRequest(context.Background(), parsedFile, reqIndex)
+	if err != nil {
+		return nil, err
+	}
+	return []*restclient.Response{resp}, nil
+}
+
+// findRequestIndex resolves a request name or index to its position in the list.
+func findRequestIndex(requests []*restclient.Request, name string, index int) (int, error) {
+	if name != "" {
+		idx, found := findByName(requests, name)
+		if !found {
+			return -1, fmt.Errorf("request name %q not found", name)
+		}
+		return idx, nil
+	}
+	if index < 0 || index >= len(requests) {
+		return -1, fmt.Errorf(
+			"request index %d out of range (file has %d requests)", index, len(requests))
+	}
+	return index, nil
+}
+
+// findByName returns the index of the first request with a matching name (case-insensitive).
+func findByName(requests []*restclient.Request, name string) (int, bool) {
+	for i, r := range requests {
+		if strings.EqualFold(r.Name, name) {
+			return i, true
+		}
+	}
+	return -1, false
 }
 
 // emit builds and writes the output for all responses. Returns the exit code:
@@ -61,15 +152,11 @@ func emit(responses []*restclient.Response) int {
 	return 0
 }
 
-// flushOutput writes accumulated output to stdout, returning any write error.
 func flushOutput(s string) error {
 	_, err := os.Stdout.WriteString(s)
 	return err
 }
 
-// flushError writes a single error message to stderr. A broken stderr is the
-// one failure mode this program cannot report, so the write result is
-// discarded after the attempt.
 func flushError(msg string) {
 	_, _ = fmt.Fprintf(os.Stderr, "error: %s\n", msg)
 }
@@ -133,3 +220,4 @@ func formatBody(body []byte) string {
 	}
 	return s
 }
+
