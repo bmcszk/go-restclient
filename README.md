@@ -22,6 +22,20 @@ A Go library for executing HTTP requests from `.http` files and validating respo
 go get github.com/bmcszk/go-restclient
 ```
 
+### CLI
+
+Install the `restclient` CLI (runs a `.http` file and prints each response):
+
+```bash
+go install github.com/bmcszk/go-restclient/cmd/restclient@latest
+```
+
+```bash
+restclient -f requests.http
+```
+
+Exits with code `1` if any request fails, `0` otherwise.
+
 ## Quick Start
 
 ### 1. Create a `.http` file
