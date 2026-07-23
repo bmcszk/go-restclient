@@ -247,3 +247,72 @@ func TestCLI_NegativeIndex(t *testing.T) {
 	assert.Equal(t, 1, code)
 	assert.Contains(t, out, "out of range")
 }
+
+func TestCLI_List(t *testing.T) {
+	binary := buildBinary(t)
+	dir := t.TempDir()
+	filePath := writeTestFile(t, dir, "test.http",
+		"### login\nGET http://example.com/login\n###\n### logout\nGET http://example.com/logout\n")
+
+	out, code := runBinary(t, binary, "-f", filePath, "--list")
+	assert.Equal(t, 0, code)
+	assert.Contains(t, out, "0  login")
+	assert.Contains(t, out, "1  logout")
+}
+
+func TestCLI_ListUnnamed(t *testing.T) {
+	binary := buildBinary(t)
+	dir := t.TempDir()
+	filePath := writeTestFile(t, dir, "test.http",
+		"GET http://example.com/a\n###\nGET http://example.com/b\n")
+
+	out, code := runBinary(t, binary, "-f", filePath, "--list")
+	assert.Equal(t, 0, code)
+	assert.Contains(t, out, "0  (unnamed)")
+	assert.Contains(t, out, "1  (unnamed)")
+}
+
+func TestCLI_ListMissingFile(t *testing.T) {
+	binary := buildBinary(t)
+	out, code := runBinary(t, binary, "--list")
+	assert.Equal(t, 2, code)
+	assert.Contains(t, out, "-f <file> is required")
+}
+
+func TestCLI_FailOnError_4xx(t *testing.T) {
+	server := startMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = fmt.Fprint(w, "not found")
+	})
+	defer server.Close()
+
+	binary := buildBinary(t)
+	dir := t.TempDir()
+	filePath := writeTestFile(t, dir, "test.http",
+		fmt.Sprintf("GET %s/missing\n", server.URL))
+
+	// Without --fail-on-error: exits 0
+	_, code := runBinary(t, binary, "-f", filePath)
+	assert.Equal(t, 0, code)
+
+	// With --fail-on-error: exits 1
+	_, code = runBinary(t, binary, "-f", filePath, "--fail-on-error")
+	assert.Equal(t, 1, code)
+}
+
+func TestCLI_FailOnError_Success(t *testing.T) {
+	server := startMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, "ok")
+	})
+	defer server.Close()
+
+	binary := buildBinary(t)
+	dir := t.TempDir()
+	filePath := writeTestFile(t, dir, "test.http",
+		fmt.Sprintf("GET %s/ok\n", server.URL))
+
+	// With --fail-on-error but 200 response: exits 0
+	_, code := runBinary(t, binary, "-f", filePath, "--fail-on-error")
+	assert.Equal(t, 0, code)
+}

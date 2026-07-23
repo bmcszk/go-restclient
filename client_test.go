@@ -358,6 +358,15 @@ func TestResponseRef_BodyWhole(t *testing.T) {
 	test.RunResponseRef_BodyWhole(t)
 }
 
+// System variable tests
+func TestSystemVar_Base64Encode(t *testing.T) {
+	test.RunSystemVar_Base64Encode(t)
+}
+
+func TestSystemVar_Base64EncodeInBody(t *testing.T) {
+	test.RunSystemVar_Base64EncodeInBody(t)
+}
+
 // Test helper tests
 func TestCreateTestFileFromTemplate_DebugOutput(t *testing.T) {
 	test.RunCreateTestFileFromTemplate_DebugOutput(t)

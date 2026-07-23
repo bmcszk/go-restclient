@@ -6,72 +6,163 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
-	"net/http"
 	"math"
+	"net/http"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/bmcszk/go-restclient"
 )
+
+type runConfig struct {
+	filePath      string
+	name          string
+	index         int
+	expected      string
+	expectedName  string
+	expectedIndex int
+	failOnError   bool
+	output        string
+	after         string
+}
 
 func main() {
 	file := flag.String("f", "", "path to the .http / .rest request file (required)")
 	name := flag.String("n", "", "run only the request with this name")
 	index := flag.Int("i", math.MinInt, "run only the request at this 0-based index")
 	expected := flag.String("e", "", "path to .hresp file for response assertion")
+	expectedName := flag.String("e-name", "", "expected response name in .hresp file to validate (for use with -n/-i)")
+	e := flag.Int("e-index", -1, "expected response 0-based index in .hresp file to validate (for use with -n/-i)")
+	expectedIndex := e
+	listFlag := flag.Bool("list", false, "list named requests and indices without executing")
+	failOnError := flag.Bool("fail-on-error", false, "exit with code 1 on HTTP 4xx/5xx responses")
+	output := flag.String("o", "", "output format: body, jsonpath <expr>, env <key>")
+	after := flag.String("after", "", "run prerequisite request by name before target (for response references)")
 	flag.Parse()
-	os.Exit(run(*file, *name, *index, *expected))
+
+	if *listFlag {
+		os.Exit(runList(*file))
+	}
+	config := runConfig{
+		filePath:      *file,
+		name:          *name,
+		index:         *index,
+		expected:      *expected,
+		expectedName:  *expectedName,
+		expectedIndex: *expectedIndex,
+		failOnError:   *failOnError,
+		output:        *output,
+		after:         *after,
+	}
+	os.Exit(run(config))
 }
 
-func run(filePath, name string, index int, expected string) int {
+// runList handles the --list flag: parse and print request names.
+func runList(filePath string) int {
 	if filePath == "" {
 		flushError("-f <file> is required")
 		return 2
 	}
-	if name != "" && index != math.MinInt {
-		flushError("-n and -i are mutually exclusive")
-		return 2
-	}
-
 	client, err := restclient.NewClient()
 	if err != nil {
 		flushError(err.Error())
 		return 1
 	}
-
 	parsedFile, err := client.ParseFile(filePath)
 	if err != nil {
 		flushError(err.Error())
 		return 1
 	}
+	printRequestList(parsedFile)
+	return 0
+}
 
-	responses, execErr := executeRequests(client, parsedFile, filePath, name, index)
+func run(config runConfig) int {
+	if err := validateRunConfig(config); err != nil {
+		flushError(err.Error())
+		return 2
+	}
+
+	client, err := newClient()
+	if err != nil {
+		flushError(err.Error())
+		return 1
+	}
+
+	parsedFile, err := client.ParseFile(config.filePath)
+	if err != nil {
+		flushError(err.Error())
+		return 1
+	}
+
+	if err := runPrerequisite(client, parsedFile, config.filePath, config.after); err != nil {
+		return 1
+	}
+
+	responses, execErr := executeRequests(client, parsedFile, config.filePath, config.name, config.index)
 	if execErr != nil {
 		flushError(execErr.Error())
 		return 1
 	}
 
-	if assertErr := validateIfRequested(client, expected, responses); assertErr != nil {
-		flushError(assertErr.Error())
+	if err := validateAssertions(client, config, responses); err != nil {
+		flushError(err.Error())
 		return 1
 	}
 
-	return emit(responses)
+	return emit(responses, config.failOnError, config.output)
+}
+
+func validateRunConfig(config runConfig) error {
+	if config.filePath == "" {
+		return errors.New("-f <file> is required")
+	}
+	if config.name != "" && config.index != math.MinInt {
+		return errors.New("-n and -i are mutually exclusive")
+	}
+	return nil
+}
+
+func newClient() (*restclient.Client, error) {
+	return restclient.NewClient()
+}
+
+func validateAssertions(
+	client *restclient.Client,
+	config runConfig,
+	responses []*restclient.Response,
+) error {
+	assertErr := validateIfRequested(
+		client,
+		config.expected,
+		config.expectedName,
+		config.expectedIndex,
+		responses,
+	)
+	return assertErr
 }
 
 // validateIfRequested runs ValidateResponses when an expected file is provided.
 func validateIfRequested(
 	client *restclient.Client,
 	expected string,
+	expectedName string,
+	expectedIndex int,
 	responses []*restclient.Response,
 ) error {
 	if expected == "" {
 		return nil
 	}
-	return client.ValidateResponses(expected, responses...)
+	return client.ValidateResponsesWithOptions(expected, restclient.ValidateOptions{
+		ExpectedName:  expectedName,
+		ExpectedIndex: expectedIndex,
+	}, responses...)
 }
 
 // executeRequests runs one or all requests and returns the responses.
@@ -82,30 +173,55 @@ func executeRequests(
 	index int,
 ) ([]*restclient.Response, error) {
 	if name != "" || index != math.MinInt {
-		return executeSingle(client, parsedFile, name, index)
+		return executeSingle(client, parsedFile, filePath, name, index)
 	}
-	return client.ExecuteFile(context.Background(), filePath)
+	return executeAll(client, parsedFile, filePath)
 }
 
-// executeSingle runs one request from a parsed file by name or index.
 func executeSingle(
 	client *restclient.Client,
 	parsedFile *restclient.ParsedFile,
+	_ string, // filePath unused
 	name string,
 	index int,
 ) ([]*restclient.Response, error) {
-	reqIndex, findErr := findRequestIndex(parsedFile.Requests, name, index)
-	if findErr != nil {
-		return nil, findErr
+	reqIdx, err := findRequestIndex(parsedFile.Requests, name, index)
+	if err != nil {
+		return nil, err
 	}
-	resp, err := client.ExecuteRequest(context.Background(), parsedFile, reqIndex)
+
+	resp, err := client.ExecuteRequest(context.Background(), parsedFile, reqIdx)
 	if err != nil {
 		return nil, err
 	}
 	return []*restclient.Response{resp}, nil
 }
 
+func executeAll(
+	client *restclient.Client,
+	_ *restclient.ParsedFile, // parsedFile unused
+	filePath string,
+) ([]*restclient.Response, error) {
+	responses, err := client.ExecuteFile(context.Background(), filePath)
+	if err != nil {
+		return nil, err
+	}
+	return responses, nil
+}
+
 // findRequestIndex resolves a request name or index to its position in the list.
+func runPrerequisite(client *restclient.Client, parsedFile *restclient.ParsedFile, filePath, after string) error {
+	if after == "" {
+		return nil
+	}
+	_, err := executeSingle(client, parsedFile, filePath, after, math.MinInt)
+	if err != nil {
+		flushError(fmt.Sprintf("prerequisite request %q failed: %v", after, err))
+		return err
+	}
+	return nil
+}
+
 func findRequestIndex(requests []*restclient.Request, name string, index int) (int, error) {
 	if name != "" {
 		idx, found := findByName(requests, name)
@@ -114,33 +230,38 @@ func findRequestIndex(requests []*restclient.Request, name string, index int) (i
 		}
 		return idx, nil
 	}
-	if index < 0 || index >= len(requests) {
-		return -1, fmt.Errorf(
-			"request index %d out of range (file has %d requests)", index, len(requests))
+	if index != math.MinInt {
+		if index < 0 || index >= len(requests) {
+			return -1, fmt.Errorf("request index %d out of range (file has %d requests)", index, len(requests))
+		}
+		return index, nil
 	}
-	return index, nil
+	return -1, errors.New("either -n or -i must be specified")
 }
 
-// findByName returns the index of the first request with a matching name (case-insensitive).
 func findByName(requests []*restclient.Request, name string) (int, bool) {
 	for i, r := range requests {
-		if strings.EqualFold(r.Name, name) {
+		if r.Name == name {
 			return i, true
 		}
 	}
 	return -1, false
 }
 
-// emit builds and writes the output for all responses. Returns the exit code:
-// 1 if any response carried an error, 0 otherwise.
-func emit(responses []*restclient.Response) int {
+// shouldFail returns true if the response indicates failure.
+func shouldFail(resp *restclient.Response, failOnError bool) bool {
+	if resp.Error != nil {
+		return true
+	}
+	return failOnError && resp.StatusCode >= 400
+}
+
+func emit(responses []*restclient.Response, failOnError bool, output string) int {
 	var failed bool
 	out := make([]string, 0, len(responses)+1)
 	for _, resp := range responses {
-		out = append(out, formatResponse(resp))
-		if resp.Error != nil {
-			failed = true
-		}
+		out = append(out, formatOutput(resp, output))
+		failed = failed || shouldFail(resp, failOnError)
 	}
 	if err := flushOutput(strings.Join(out, "")); err != nil {
 		flushError(err.Error())
@@ -152,13 +273,100 @@ func emit(responses []*restclient.Response) int {
 	return 0
 }
 
-func flushOutput(s string) error {
-	_, err := os.Stdout.WriteString(s)
-	return err
+// formatOutput formats a single response according to output mode.
+func formatOutput(resp *restclient.Response, output string) string {
+	if output == "" || output == "default" {
+		return formatResponse(resp)
+	}
+
+	if resp.Error != nil {
+		return ""
+	}
+
+	switch {
+	case output == "body":
+		return string(resp.Body) + "\n"
+	case strings.HasPrefix(output, "jsonpath ") || strings.HasPrefix(output, "jsonpath:"):
+		expr := strings.TrimSpace(strings.TrimPrefix(output, "jsonpath "))
+		expr = strings.TrimSpace(strings.TrimPrefix(expr, "jsonpath:"))
+		return jsonPathExtract(resp.Body, expr) + "\n"
+	case strings.HasPrefix(output, "env ") || strings.HasPrefix(output, "env:"):
+		key := strings.TrimSpace(strings.TrimPrefix(output, "env "))
+		key = strings.TrimSpace(strings.TrimPrefix(key, "env:"))
+		val := jsonPathExtract(resp.Body, key)
+		return fmt.Sprintf("%s=%s\n", key, val)
+	default:
+		return formatResponse(resp)
+	}
 }
 
-func flushError(msg string) {
-	_, _ = fmt.Fprintf(os.Stderr, "error: %s\n", msg)
+func jsonPathExtract(body []byte, expr string) string {
+	var data any
+	if err := json.Unmarshal(body, &data); err != nil {
+		return ""
+	}
+
+	segments := parseOutputPath(expr)
+	val := walkOutputPath(data, segments)
+	if val == nil {
+		return ""
+	}
+	return fmt.Sprintf("%v", val)
+}
+
+func parseOutputPath(path string) []string {
+	if path == "" {
+		return nil
+	}
+	var segments []string
+	for _, part := range strings.Split(path, ".") {
+		segments = append(segments, splitBracketPart(part)...)
+	}
+	return segments
+}
+
+func splitBracketPart(part string) []string {
+	if !strings.Contains(part, "[") {
+		return []string{part}
+	}
+	var segs []string
+	before, after, found := strings.Cut(part, "[")
+	_ = found
+	if before != "" {
+		segs = append(segs, before)
+	}
+	for after != "" {
+		idxStr, rest, _ := strings.Cut(after, "]")
+		segs = append(segs, idxStr)
+		if rest == "" {
+			break
+		}
+		after = strings.TrimPrefix(rest, ".")
+	}
+	return segs
+}
+
+func walkOutputPath(val any, segments []string) any {
+	return walkPathRecursive(val, segments)
+}
+
+func walkPathRecursive(val any, segments []string) any {
+	if len(segments) == 0 {
+		return val
+	}
+	seg := segments[0]
+	switch v := val.(type) {
+	case map[string]any:
+		return walkPathRecursive(v[seg], segments[1:])
+	case []any:
+		idx, err := strconv.Atoi(seg)
+		if err != nil || idx < 0 || idx >= len(v) {
+			return nil
+		}
+		return walkPathRecursive(v[idx], segments[1:])
+	default:
+		return nil
+	}
 }
 
 func formatResponse(resp *restclient.Response) string {
@@ -221,3 +429,22 @@ func formatBody(body []byte) string {
 	return s
 }
 
+func flushOutput(s string) error {
+	_, err := os.Stdout.WriteString(s)
+	return err
+}
+
+func flushError(msg string) {
+	_, _ = fmt.Fprintf(os.Stderr, "error: %s\n", msg)
+}
+
+// printRequestList prints numbered list of requests with names.
+func printRequestList(parsedFile *restclient.ParsedFile) {
+	for i, req := range parsedFile.Requests {
+		name := req.Name
+		if name == "" {
+			name = "(unnamed)"
+		}
+		_, _ = fmt.Fprintf(os.Stdout, "%d  %s\n", i, name)
+	}
+}

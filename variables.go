@@ -130,6 +130,8 @@ func resolveVariablesInText(text string, rctx resolveContext) string {
 		// If we are on the last iteration and still making changes, it might be a circular dependency.
 		// The currentText will be returned as is, potentially with unresolved variables.
 	} // End of for loop
+
+	warnUnresolvedPlaceholders(currentText)
 	return currentText
 }
 
@@ -192,7 +194,6 @@ func resolveSystemVariable(varName, match string, requestScopedSystemVars map[st
 	// System variable not in scope, preserve for dynamic processing
 	return match // Preserve for substituteDynamicSystemVariables
 }
-
 
 // resolveRegularVariable resolves regular variables using the precedence order.
 func resolveRegularVariable(varName string, ctx variableResolverContext) string {
@@ -652,7 +653,6 @@ func generateRandomHexString(length int, fallbackMatch string) string {
 	hexStr := fmt.Sprintf("%x", b)
 	return hexStr[:length]
 }
-
 // _substituteDateTimeVariables handles the substitution of $datetime and $localDatetime variables.
 func _substituteDateTimeVariables(text string) string {
 	reDateTimeRelated := regexp.MustCompile(`{{\$(datetime|localDatetime)((?:\s*(?:\"[^\"]*\"|[^\"\s}]+))*)\s*}}`)
@@ -729,6 +729,7 @@ func substituteDynamicSystemVariables(
 	text = substituteProcessEnvVariables(text)
 	text = substituteProcessEnvIndirect(text, programmaticVars)
 	text = _substituteDateTimeVariables(text)
+	text = substituteBase64Encode(text)
 	return text
 }
 
