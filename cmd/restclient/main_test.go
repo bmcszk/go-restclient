@@ -316,3 +316,75 @@ func TestCLI_FailOnError_Success(t *testing.T) {
 	_, code := runBinary(t, binary, "-f", filePath, "--fail-on-error")
 	assert.Equal(t, 0, code)
 }
+
+func TestCLI_DefineFlag(t *testing.T) {
+	server := startMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if auth := r.Header.Get("Authorization"); auth != "Bearer test-token" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, "ok")
+	})
+	defer server.Close()
+
+	binary := buildBinary(t)
+	dir := t.TempDir()
+	filePath := writeTestFile(t, dir, "test.http",
+		fmt.Sprintf("GET %s/protected\nAuthorization: Bearer {{token}}\n", server.URL))
+
+	// With -D token=test-token
+	_, code := runBinary(t, binary, "-f", filePath, "-D", "token=test-token")
+	assert.Equal(t, 0, code)
+}
+
+func TestCLI_DefineFlagLong(t *testing.T) {
+	server := startMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if auth := r.Header.Get("Authorization"); auth != "Bearer another" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, "ok")
+	})
+	defer server.Close()
+
+	binary := buildBinary(t)
+	dir := t.TempDir()
+	filePath := writeTestFile(t, dir, "test.http",
+		fmt.Sprintf("GET %s/protected\nAuthorization: Bearer {{token}}\n", server.URL))
+
+	// With --define token=another
+	_, code := runBinary(t, binary, "-f", filePath, "--define", "token=another")
+	assert.Equal(t, 0, code)
+}
+
+func TestCLI_DefineFlagMultiple(t *testing.T) {
+	server := startMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-API-Key") != "key123" || r.Header.Get("X-Env") != "staging" {
+			http.Error(w, "bad headers", http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, "ok")
+	})
+	defer server.Close()
+
+	binary := buildBinary(t)
+	dir := t.TempDir()
+	filePath := writeTestFile(t, dir, "test.http",
+		fmt.Sprintf("GET %s/protected\nX-API-Key: {{api_key}}\nX-Env: {{env}}\n", server.URL))
+
+	// Multiple -D flags
+	_, code := runBinary(t, binary, "-f", filePath, "-D", "api_key=key123", "-D", "env=staging")
+	assert.Equal(t, 0, code)
+}
+
+func TestCLI_DefineFlagInvalid(t *testing.T) {
+	binary := buildBinary(t)
+	dir := t.TempDir()
+	filePath := writeTestFile(t, dir, "test.http", "GET http://example.com\n")
+
+	_, code := runBinary(t, binary, "-f", filePath, "-D", "invalid")
+	assert.Equal(t, 1, code)
+}

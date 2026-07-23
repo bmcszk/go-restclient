@@ -30,6 +30,18 @@ type runConfig struct {
 	failOnError   bool
 	output        string
 	after         string
+	defines       []string
+}
+
+type defineArray []string
+
+func (d *defineArray) String() string {
+	return strings.Join(*d, ",")
+}
+
+func (d *defineArray) Set(value string) error {
+	*d = append(*d, value)
+	return nil
 }
 
 func main() {
@@ -44,6 +56,9 @@ func main() {
 	failOnError := flag.Bool("fail-on-error", false, "exit with code 1 on HTTP 4xx/5xx responses")
 	output := flag.String("o", "", "output format: body, jsonpath <expr>, env <key>")
 	after := flag.String("after", "", "run prerequisite request by name before target (for response references)")
+	var defines defineArray
+	flag.Var(&defines, "D", "define variable key=value (repeatable)")
+	flag.Var(&defines, "define", "define variable key=value (repeatable)")
 	flag.Parse()
 
 	if *listFlag {
@@ -59,6 +74,7 @@ func main() {
 		failOnError:   *failOnError,
 		output:        *output,
 		after:         *after,
+		defines:       defines,
 	}
 	os.Exit(run(config))
 }
@@ -95,6 +111,11 @@ func run(config runConfig) int {
 		return 1
 	}
 
+	if err := applyDefines(client, config.defines); err != nil {
+		flushError(err.Error())
+		return 1
+	}
+
 	parsedFile, err := client.ParseFile(config.filePath)
 	if err != nil {
 		flushError(err.Error())
@@ -117,6 +138,22 @@ func run(config runConfig) int {
 	}
 
 	return emit(responses, config.failOnError, config.output)
+}
+
+func applyDefines(client *restclient.Client, defines []string) error {
+	if len(defines) == 0 {
+		return nil
+	}
+	vars := make(map[string]any)
+	for _, d := range defines {
+		key, value, found := strings.Cut(d, "=")
+		if !found {
+			return fmt.Errorf("invalid -D/--define format: %q (expected key=value)", d)
+		}
+		vars[key] = value
+	}
+	client.SetProgrammaticVars(vars)
+	return nil
 }
 
 func validateRunConfig(config runConfig) error {

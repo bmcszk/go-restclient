@@ -55,6 +55,17 @@ func NewClient(options ...ClientOption) (*Client, error) {
 }
 
 
+// SetProgrammaticVars sets variables with highest precedence for variable substitution.
+// These override .env, OS env, file-scoped vars, and globals.
+func (c *Client) SetProgrammaticVars(vars map[string]any) {
+	if c.programmaticVars == nil {
+		c.programmaticVars = make(map[string]any)
+	}
+	for k, v := range vars {
+		c.programmaticVars[k] = v
+	}
+}
+
 // ExecuteFile parses a request file (.http, .rest), executes all requests found, and returns their responses.
 // It returns an error if the file cannot be parsed or no requests are found.
 // Individual request execution errors are stored within each Response object.
