@@ -42,16 +42,12 @@ func (c *Client) processMultipartFormWithFiles(
 	osEnvGetter func(string) (string, bool),
 ) (string, error) {
 	// First apply variable substitution to the raw body
-	resolvedBody := resolveVariablesInText(
-		restClientReq.RawBody,
-		c.programmaticVars,
-		restClientReq.ActiveVariables,
-		parsedFile.EnvironmentVariables,
-		parsedFile.GlobalVariables,
-		requestScopedSystemVars,
-		osEnvGetter,
-		c.currentDotEnvVars,
-	)
+	resolvedBody := resolveVariablesInText(restClientReq.RawBody, resolveContext{
+		programmaticVars: c.programmaticVars, fileScopedVars: restClientReq.ActiveVariables,
+		environmentVars: parsedFile.EnvironmentVariables, globalVars: parsedFile.GlobalVariables,
+		systemVars: requestScopedSystemVars, osEnvGetter: osEnvGetter,
+		dotEnvVars: c.currentDotEnvVars, responseMap: parsedFile.ResponseMap,
+	})
 	
 	processedBody := substituteDynamicSystemVariables(
 		resolvedBody,

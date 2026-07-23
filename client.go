@@ -92,6 +92,7 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 	c.loadDotEnvVars(requestFilePath)
 	c.resolveFileScopedSystemVariables(parsedFile)
 
+	parsedFile.ResponseMap = make(map[string]*Response)
 	var responses []*Response
 	var multiErr *multierror.Error
 	osEnvGetter := func(key string) (string, bool) { return os.LookupEnv(key) }
@@ -104,10 +105,18 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 		}
 		if response != nil {
 			responses = append(responses, response)
+			storeResponse(parsedFile, restClientReq, response)
 		}
 	}
 
 	return responses, multiErr.ErrorOrNil()
+}
+
+// storeResponse saves a response in the response map keyed by request name.
+func storeResponse(parsedFile *ParsedFile, req *Request, resp *Response) {
+	if req.Name != "" {
+		parsedFile.ResponseMap[req.Name] = resp
+	}
 }
 
 // ParseFile parses the request file (.http, .rest) without executing requests.
@@ -121,6 +130,7 @@ func (c *Client) ParseFile(requestFilePath string) (*ParsedFile, error) {
 	c.loadDotEnvVars(requestFilePath)
 	c.resolveFileScopedSystemVariables(parsedFile)
 
+	parsedFile.ResponseMap = make(map[string]*Response)
 	return parsedFile, nil
 }
 
@@ -140,6 +150,7 @@ func (c *Client) ExecuteRequest(ctx context.Context, parsedFile *ParsedFile, ind
 		}
 		return response, err
 	}
+	storeResponse(parsedFile, restClientReq, response)
 	return response, nil
 }
 
@@ -619,16 +630,12 @@ func (c *Client) processExternalFile(
 
 	// Apply variable substitution if requested
 	if restClientReq.ExternalFileWithVariables {
-		resolvedContent := resolveVariablesInText(
-			content,
-			c.programmaticVars,
-			restClientReq.ActiveVariables,
-			parsedFile.EnvironmentVariables,
-			parsedFile.GlobalVariables,
-			requestScopedSystemVars,
-			osEnvGetter,
-			c.currentDotEnvVars,
-		)
+		resolvedContent := resolveVariablesInText(content, resolveContext{
+			programmaticVars: c.programmaticVars, fileScopedVars: restClientReq.ActiveVariables,
+			environmentVars: parsedFile.EnvironmentVariables, globalVars: parsedFile.GlobalVariables,
+			systemVars: requestScopedSystemVars, osEnvGetter: osEnvGetter,
+			dotEnvVars: c.currentDotEnvVars, responseMap: parsedFile.ResponseMap,
+		})
 		content = substituteDynamicSystemVariables(
 			resolvedContent,
 			c.currentDotEnvVars,
@@ -810,16 +817,12 @@ func (c *Client) processRegularBody(
 	requestScopedSystemVars map[string]string,
 	osEnvGetter func(string) (string, bool),
 ) string {
-	resolvedBody := resolveVariablesInText(
-		restClientReq.RawBody,
-		c.programmaticVars,
-		restClientReq.ActiveVariables,
-		parsedFile.EnvironmentVariables,
-		parsedFile.GlobalVariables,
-		requestScopedSystemVars,
-		osEnvGetter,
-		c.currentDotEnvVars,
-	)
+	resolvedBody := resolveVariablesInText(restClientReq.RawBody, resolveContext{
+		programmaticVars: c.programmaticVars, fileScopedVars: restClientReq.ActiveVariables,
+		environmentVars: parsedFile.EnvironmentVariables, globalVars: parsedFile.GlobalVariables,
+		systemVars: requestScopedSystemVars, osEnvGetter: osEnvGetter,
+		dotEnvVars: c.currentDotEnvVars, responseMap: parsedFile.ResponseMap,
+	})
 	return substituteDynamicSystemVariables(resolvedBody, c.currentDotEnvVars, c.programmaticVars)
 }
 

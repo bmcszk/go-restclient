@@ -546,20 +546,74 @@ Content-Type: application/json
 
 Access data from previous responses for chained requests:
 
-```
-### Get authentication token
-# @name getToken
+| Syntax | Description |
+|--------|-------------|
+| `{{name.response.body}}` | Entire response body as string |
+| `{{name.response.body.field}}` | JSON field from response body |
+| `{{name.response.body.data.user.name}}` | Nested JSON field |
+| `{{name.response.body.items[0]}}` | Array element by index |
+| `{{name.response.headers.Header-Name}}` | Response header value |
+| `{{name.response.status}}` | HTTP status code (e.g. `200`) |
+
+> **Note:** `name` must match the request name defined with `### name` or `# @name`.
+> Request names are case-sensitive. Spaces are supported in names.
+
+#### Auth token flow
+
+```http
+### login
 POST https://example.com/api/login
 Content-Type: application/json
 
-{
-  "username": "test",
-  "password": "password"
-}
+{ "username": "test", "password": "password" }
 
-### Use token for authenticated request
+### use token
 GET https://example.com/api/secure
-Authorization: Bearer {{getToken.response.body.token}}
+Authorization: Bearer {{login.response.body.token}}
+```
+
+#### Accessing nested JSON fields
+
+```http
+### get user
+GET https://example.com/api/users/me
+
+### greet user
+GET https://example.com/api/greet/{{get user.response.body.data.name}}
+```
+
+#### Using response headers
+
+```http
+### init
+GET https://example.com/api/init
+
+### use session
+GET https://example.com/api/data
+X-Session: {{init.response.headers.X-Session-Id}}
+```
+
+#### Using status code in URL
+
+```http
+### create
+POST https://example.com/api/items
+
+### check status
+GET https://example.com/api/status/{{create.response.status}}
+```
+
+#### Passing whole body to another request
+
+```http
+### get data
+GET https://example.com/api/export
+
+### send data
+POST https://example.com/api/import
+Content-Type: application/json
+
+{{get data.response.body}}
 ```
 
 ## Response Body Validation Placeholders

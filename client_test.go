@@ -329,6 +329,35 @@ func TestExecuteRequest_SecondOfThree(t *testing.T) {
 	test.RunExecuteRequest_SecondOfThree(t)
 }
 
+// Response reference tests
+func TestResponseRef_StatusCode(t *testing.T) {
+	test.RunResponseRef_StatusCode(t)
+}
+
+func TestResponseRef_BodyField(t *testing.T) {
+	test.RunResponseRef_BodyField(t)
+}
+
+func TestResponseRef_HeaderValue(t *testing.T) {
+	test.RunResponseRef_HeaderValue(t)
+}
+
+func TestResponseRef_NestedBodyField(t *testing.T) {
+	test.RunResponseRef_NestedBodyField(t)
+}
+
+func TestResponseRef_ArrayIndex(t *testing.T) {
+	test.RunResponseRef_ArrayIndex(t)
+}
+
+func TestResponseRef_MissingName(t *testing.T) {
+	test.RunResponseRef_MissingName(t)
+}
+
+func TestResponseRef_BodyWhole(t *testing.T) {
+	test.RunResponseRef_BodyWhole(t)
+}
+
 // Test helper tests
 func TestCreateTestFileFromTemplate_DebugOutput(t *testing.T) {
 	test.RunCreateTestFileFromTemplate_DebugOutput(t)
