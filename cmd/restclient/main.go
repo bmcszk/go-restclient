@@ -37,7 +37,7 @@ type cli struct {
 var c cli
 
 func main() {
-	kong.Parse(&c,
+	_ = kong.Parse(&c,
 		kong.Name("restclient"),
 		kong.Description("Execute HTTP requests defined in a .http / .rest file"),
 		kong.UsageOnError(),
