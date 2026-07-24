@@ -95,7 +95,7 @@ func TestCLI_SingleRequest(t *testing.T) {
 	filePath := writeTestFile(t, dir, "test.http",
 		fmt.Sprintf("GET %s/health\n", server.URL))
 
-	out, code := runBinary(t, binary, "-f", filePath)
+	out, code := runBinary(t, binary, "-f", filePath, "--all")
 	assert.Equal(t, 0, code)
 	assert.Contains(t, out, "200 OK")
 	assert.Contains(t, out, "hello")
@@ -191,7 +191,7 @@ func TestCLI_ExpectedPass(t *testing.T) {
 	expectedPath := writeTestFile(t, dir, "expected.hresp",
 		"HTTP/1.1 200 OK\nX-Custom: yes\n\nbody-ok\n")
 
-	out, code := runBinary(t, binary, "-f", filePath, "-e", expectedPath)
+	out, code := runBinary(t, binary, "-f", filePath, "--all", "-e", expectedPath)
 	assert.Equal(t, 0, code)
 	assert.Contains(t, out, "200 OK")
 }
@@ -211,7 +211,7 @@ func TestCLI_ExpectedFail(t *testing.T) {
 	expectedPath := writeTestFile(t, dir, "expected.hresp",
 		"HTTP/1.1 200 OK\n\nexpected-body\n")
 
-	out, code := runBinary(t, binary, "-f", filePath, "-e", expectedPath)
+	out, code := runBinary(t, binary, "-f", filePath, "--all", "-e", expectedPath)
 	assert.Equal(t, 1, code)
 	assert.Contains(t, out, "error")
 }
@@ -292,11 +292,11 @@ func TestCLI_FailOnError_4xx(t *testing.T) {
 		fmt.Sprintf("GET %s/missing\n", server.URL))
 
 	// Without --fail-on-error: exits 0
-	_, code := runBinary(t, binary, "-f", filePath)
+	_, code := runBinary(t, binary, "-f", filePath, "--all")
 	assert.Equal(t, 0, code)
 
 	// With --fail-on-error: exits 1
-	_, code = runBinary(t, binary, "-f", filePath, "--fail-on-error")
+	_, code = runBinary(t, binary, "-f", filePath, "--all", "--fail-on-error")
 	assert.Equal(t, 1, code)
 }
 
@@ -313,7 +313,7 @@ func TestCLI_FailOnError_Success(t *testing.T) {
 		fmt.Sprintf("GET %s/ok\n", server.URL))
 
 	// With --fail-on-error but 200 response: exits 0
-	_, code := runBinary(t, binary, "-f", filePath, "--fail-on-error")
+	_, code := runBinary(t, binary, "-f", filePath, "--all", "--fail-on-error")
 	assert.Equal(t, 0, code)
 }
 
@@ -334,7 +334,7 @@ func TestCLI_DefineFlag(t *testing.T) {
 		fmt.Sprintf("GET %s/protected\nAuthorization: Bearer {{token}}\n", server.URL))
 
 	// With -D token=test-token
-	_, code := runBinary(t, binary, "-f", filePath, "-D", "token=test-token")
+	_, code := runBinary(t, binary, "-f", filePath, "--all", "-D", "token=test-token")
 	assert.Equal(t, 0, code)
 }
 
@@ -355,7 +355,7 @@ func TestCLI_DefineFlagLong(t *testing.T) {
 		fmt.Sprintf("GET %s/protected\nAuthorization: Bearer {{token}}\n", server.URL))
 
 	// With --define token=another
-	_, code := runBinary(t, binary, "-f", filePath, "--define", "token=another")
+	_, code := runBinary(t, binary, "-f", filePath, "--all", "--define", "token=another")
 	assert.Equal(t, 0, code)
 }
 
@@ -376,7 +376,7 @@ func TestCLI_DefineFlagMultiple(t *testing.T) {
 		fmt.Sprintf("GET %s/protected\nX-API-Key: {{api_key}}\nX-Env: {{env}}\n", server.URL))
 
 	// Multiple -D flags
-	_, code := runBinary(t, binary, "-f", filePath, "-D", "api_key=key123", "-D", "env=staging")
+	_, code := runBinary(t, binary, "-f", filePath, "--all", "-D", "api_key=key123", "-D", "env=staging")
 	assert.Equal(t, 0, code)
 }
 
@@ -385,6 +385,6 @@ func TestCLI_DefineFlagInvalid(t *testing.T) {
 	dir := t.TempDir()
 	filePath := writeTestFile(t, dir, "test.http", "GET http://example.com\n")
 
-	_, code := runBinary(t, binary, "-f", filePath, "-D", "invalid")
+	_, code := runBinary(t, binary, "-f", filePath, "--all", "-D", "invalid")
 	assert.Equal(t, 1, code)
 }

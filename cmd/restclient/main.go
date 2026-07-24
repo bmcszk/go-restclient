@@ -24,6 +24,7 @@ type cli struct {
 	File          string   `short:"f" long:"file" required:"true" help:"Request file path" group:"required"`
 	Name          string   `short:"n" long:"name" help:"Run request by name" group:"selection"`
 	Index         *int     `short:"i" long:"index" help:"Run request by index" group:"selection"`
+	All           bool     `long:"all" help:"Run all requests in file" group:"selection"`
 	Expected      string   `short:"e" long:"expected" help:"Expected response file" group:"validation"`
 	ExpectedName  string   `long:"e-name" help:"Expected response name" group:"validation"`
 	ExpectedIndex int      `long:"e-index" help:"Expected response index" default:"-1" group:"validation"`
@@ -62,7 +63,13 @@ func run(c cli) int {
 		return 1
 	}
 
-	responses, execErr := executeRequests(client, parsedFile, c.File, c.Name, c.Index)
+	var responses []*restclient.Response
+	var execErr error
+	if c.All {
+		responses, execErr = client.ExecuteFile(context.Background(), c.File)
+	} else {
+		responses, execErr = executeRequestsOrAll(client, parsedFile, c.Name, c.Index)
+	}
 	if execErr != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", execErr)
 		return 1
@@ -160,21 +167,20 @@ func runList(filePath string) int {
 	return 0
 }
 
-func executeRequests(
+func executeRequestsOrAll(
 	client *restclient.Client,
 	parsedFile *restclient.ParsedFile,
-	filePath string,
 	name string,
 	index *int,
 ) ([]*restclient.Response, error) {
+	if name == "" && index == nil {
+		return nil, errors.New("specify -n NAME, -i INDEX, or --all to run requests")
+	}
 	idx := math.MinInt
 	if index != nil {
 		idx = *index
 	}
-	if name != "" || idx != math.MinInt {
-		return executeSingle(client, parsedFile, name, idx)
-	}
-	return client.ExecuteFile(context.Background(), filePath)
+	return executeSingle(client, parsedFile, name, idx)
 }
 
 func executeSingle(
