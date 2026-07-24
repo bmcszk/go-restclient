@@ -12,8 +12,6 @@ A Go library for executing HTTP requests from `.http` files and validating respo
 
 - **Full JetBrains/VS Code compatibility** - Same `.http` syntax, variables, and behaviors
 - **Variable substitution** - Custom variables, environment variables, system variables (`{{$guid}}`, `{{$randomInt}}`, etc.)
-- **Response chaining** - Reference responses from other requests: `{{name.response.body.field}}`
-- **Command-line variables** - Override values with `-D key=value`
 - **Response validation** - Compare responses against `.hresp` files with placeholders (`{{$any}}`, `{{$regexp}}`, `{{$anyGuid}}`)
 - **Multiple requests per file** - Separated by `###`
 - **E2E testing ready** - Perfect for automated integration tests
@@ -122,85 +120,203 @@ restclient -f requests.http -n "login" -e responses.hresp --e-index 0
 | `-A` | `--after` | Prerequisite request |
 | `-D` | `--define` | Define variable (repeatable) |
 
-## HTTP File Syntax
+`-n` and `-i` are mutually exclusive.
 
-### Request Format
+Exits with code `1` if any request fails or assertion fails, `0` on success, `2` on usage error.
 
-```http
-### Request Name
-METHOD URL
-Header1: value1
-Header2: value2
+## Quick Start
 
-body content
-```
-
-### Variables
+### 1. Create a `.http` file
 
 ```http
-### Create User
-POST https://api.example.com/users
+@baseUrl = https://api.example.com
+@userId = 123
+
+### Get user profile
+GET {{baseUrl}}/users/{{userId}}
+Authorization: Bearer {{authToken}}
+X-Request-ID: {{$guid}}
+
+### Create new user  
+POST {{baseUrl}}/users
 Content-Type: application/json
-Authorization: Bearer {{$dotenv TOKEN}}
 
 {
-  "name": "{{username}}",
-  "email": "{{email}}"
+  "id": "{{$randomInt 1000 9999}}",
+  "name": "Test User",
+  "createdAt": "{{$timestamp}}"
 }
 ```
 
-### Response Chaining
+### 2. Execute in Go
 
-Reference responses from other requests in the same file:
+```go
+package main
+
+import (
+    "context"
+    "log"
+    "github.com/bmcszk/go-restclient"
+)
+
+func main() {
+    client, err := restclient.NewClient(
+        restclient.WithVars(map[string]interface{}{
+            "authToken": "your-token-here",
+        }),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    responses, err := client.ExecuteFile(context.Background(), "requests.http")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    for i, resp := range responses {
+        if resp.Error != nil {
+            log.Printf("Request %d failed: %v", i+1, resp.Error)
+        } else {
+            log.Printf("Request %d: %d %s", i+1, resp.StatusCode, resp.Status)
+        }
+    }
+}
+```
+
+## Variable Types
+
+### Custom Variables
 ```http
-### Authenticate
-POST https://api.example.com/auth
-Content-Type: application/json
+@baseUrl = https://api.example.com
+@userId = 123
 
-{"user":"admin","pass":"secret"}
-
-### Get Protected
-GET https://api.example.com/protected
-Authorization: Bearer {{authenticate.response.body.token}}
+GET {{baseUrl}}/users/{{userId}}
 ```
 
 ### System Variables
+- `{{$guid}}` - UUID (e.g., `123e4567-e89b-12d3-a456-426614174000`)
+- `{{$randomInt}}` or `{{$randomInt 1 100}}` - Random integer
+- `{{$timestamp}}` - Unix timestamp
+- `{{$datetime}}` or `{{$datetime "2006-01-02"}}` - Current datetime
+- `{{$processEnv VAR_NAME}}` - Environment variable
+- `{{$dotenv VAR_NAME}}` - From `.env` file
 
-| Variable | Description |
-|----------|-------------|
-| `{{$guid}}` | UUID v4 |
-| `{{$randomInt}}` | Random integer |
-| `{{$timestamp}}` | Current Unix timestamp |
-| `{{$dotenv KEY}}` | Environment variable from .env file |
-| `{{$base64encode value}}` | Base64 encode a value |
+### JetBrains Faker Variables
+- `{{$randomFirstName}}`, `{{$randomLastName}}`
+- `{{$randomPhoneNumber}}`, `{{$randomStreetAddress}}`
+- `{{$randomUrl}}`, `{{$randomUserAgent}}`
 
-### Multiple Requests
+### Programmatic Variables (highest precedence)
+```go
+client, err := restclient.NewClient(
+    restclient.WithVars(map[string]interface{}{
+        "userId": "override-value",
+        "authToken": "secret-token",
+    }),
+)
+```
 
-Separate requests with `###`:
+## Response Validation
+
+Create `.hresp` files to validate responses:
+
+**responses.hresp:**
 ```http
-### Get Users
-GET https://api.example.com/users
-
-### Get User
-GET https://api.example.com/users/1
-
-### Create User
-POST https://api.example.com/users
+HTTP/1.1 200 OK
 Content-Type: application/json
 
-{"name":"John"}
+{
+  "id": "{{$anyGuid}}",
+  "name": "{{$any}}",
+  "createdAt": "{{$anyTimestamp}}"
+}
+
+###
+
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+{
+  "id": "{{$regexp `\d{4}`}}",
+  "status": "created"
+}
 ```
 
-## Testing
+**Validate in Go:**
+```go
+err := client.ValidateResponses("responses.hresp", responses...)
+if err != nil {
+    log.Fatal("Validation failed:", err)
+}
+```
 
+### Validation Placeholders
+- `{{$any}}` - Matches any text
+- `{{$regexp `pattern`}}` - Regex pattern (in backticks)
+- `{{$anyGuid}}` - UUID format
+- `{{$anyTimestamp}}` - Unix timestamp
+- `{{$anyDatetime 'format'}}` - Datetime (rfc1123, iso8601, or custom)
+
+## Client Options
+
+```go
+client, err := restclient.NewClient(
+    restclient.WithBaseURL("https://api.example.com"),
+    restclient.WithDefaultHeader("X-API-Key", "secret"),
+    restclient.WithHTTPClient(customHTTPClient),
+    restclient.WithVars(variables),
+)
+```
+
+## Compatible Syntax
+
+Works with files created for:
+- [JetBrains HTTP Client](https://www.jetbrains.com/help/idea/http-client-in-product-code-editor.html)
+- [VS Code REST Client](https://marketplace.visualstudio.com/items?itemName=humao.rest-client)
+
+📚 **[Complete HTTP Syntax Reference](docs/http_syntax.md)** - Comprehensive documentation of all supported HTTP request syntax, variables, and features.
+
+## Use Cases
+
+### Manual Testing
+Use your favorite IDE extension to test APIs during development.
+
+### Automated E2E Testing
+```go
+func TestUserAPI(t *testing.T) {
+    client, _ := restclient.NewClient(
+        restclient.WithBaseURL(testServer.URL),
+    )
+    
+    responses, err := client.ExecuteFile(context.Background(), "user_tests.http")
+    require.NoError(t, err)
+    
+    err = client.ValidateResponses("user_expected.hresp", responses...)
+    require.NoError(t, err)
+}
+```
+
+### CI/CD Integration
 ```bash
-# Run all tests
-make check
-
-# Run specific test
-go test -run TestCLI_DefineFlag ./cmd/restclient/
+go test ./tests/e2e/... # Runs tests using .http files
 ```
+
+## Development
+
+### Prerequisites
+- Go 1.21+
+
+### Commands
+```bash
+make check          # Run all checks (lint, test, build)
+make test-unit      # Run unit tests only
+go test .           # Quick test
+```
+
+### Test Coverage
+Current coverage: 78.4% (187 tests passing)
 
 ## License
 
-MIT
+MIT License
