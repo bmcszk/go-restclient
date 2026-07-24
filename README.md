@@ -32,7 +32,9 @@ Header2: value2
 body content
 ```
 
-### Variables
+## Variable Types
+
+### Custom Variables
 
 ```http
 @baseUrl = https://api.example.com
@@ -45,13 +47,18 @@ Authorization: Bearer {{$dotenv TOKEN}}
 
 ### System Variables
 
-| Variable | Description |
-|----------|-------------|
-| `{{$guid}}` | UUID v4 |
-| `{{$randomInt}}` | Random integer |
-| `{{$timestamp}}` | Unix timestamp |
-| `{{$dotenv KEY}}` | Environment variable from .env file |
-| `{{$base64encode value}}` | Base64 encode a value |
+- `{{$guid}}` - UUID (e.g., `123e4567-e89b-12d3-a456-426614174000`)
+- `{{$randomInt}}` or `{{$randomInt 1 100}}` - Random integer
+- `{{$timestamp}}` - Unix timestamp
+- `{{$datetime}}` or `{{$datetime "2006-01-02"}}` - Current datetime
+- `{{$processEnv VAR_NAME}}` - Environment variable
+- `{{$dotenv VAR_NAME}}` - From `.env` file
+
+### JetBrains Faker Variables
+
+- `{{$randomFirstName}}`, `{{$randomLastName}}`
+- `{{$randomPhoneNumber}}`, `{{$randomStreetAddress}}`
+- `{{$randomUrl}}`, `{{$randomUserAgent}}`
 
 ### Response Chaining
 
@@ -69,117 +76,15 @@ GET https://api.example.com/protected
 Authorization: Bearer {{authenticate.response.body.token}}
 ```
 
-## Installation
+## Library
+
+### Lib installation
 
 ```bash
 go get github.com/bmcszk/go-restclient
 ```
 
-## CLI
-
-Install the `restclient` CLI to run `.http` files from command line:
-
-```bash
-go install github.com/bmcszk/go-restclient/cmd/restclient@latest
-```
-
-```bash
-restclient -f requests.http
-```
-
-### List requests
-
-```bash
-restclient -f requests.http --list
-```
-
-### Run a single request
-
-By name (case-insensitive):
-```bash
-restclient -f requests.http -n "create user"
-```
-
-By 0-based index:
-```bash
-restclient -f requests.http -i 0
-```
-
-### Command-line variables
-
-Override variables from the command line:
-```bash
-restclient -f requests.http -D token=abc123 -D env=prod
-```
-
-### Prerequisite requests
-
-Run a request before the target (for auth token chaining):
-```bash
-restclient -f requests.http -n "get protected" -A authenticate
-```
-
-### Fail on errors
-
-Exit with code 1 on HTTP 4xx/5xx responses:
-```bash
-restclient -f requests.http -E
-```
-
-### Output formats
-
-```bash
-# Body only
-restclient -f requests.http -o body
-
-# JSON path extraction
-restclient -f requests.http -o jsonpath "data.users[0].name"
-
-# Environment variable format
-restclient -f requests.http -o env "token"
-```
-
-### CLI Flags
-
-| Short | Long | Description |
-|-------|------|-------------|
-| `-f` | `--file` | Request file path (required) |
-| `-n` | `--name` | Run request by name |
-| `-i` | `--index` | Run request by index |
-| `-e` | `--expected` | Expected response file |
-| | `--e-name` | Expected response name |
-| | `--e-index` | Expected response index |
-| `-l` | `--list` | List requests |
-| `-E` | `--fail-on-error` | Fail on 4xx/5xx |
-| `-o` | `--output` | Output format |
-| `-A` | `--after` | Prerequisite request |
-| `-D` | `--define` | Define variable (repeatable) |
-
-## Quick Start
-
-### 1. Create a `.http` file
-
-```http
-@baseUrl = https://api.example.com
-@userId = 123
-
-### Get user profile
-GET {{baseUrl}}/users/{{userId}}
-Authorization: Bearer {{authToken}}
-X-Request-ID: {{$guid}}
-
-### Create new user  
-POST {{baseUrl}}/users
-Content-Type: application/json
-
-{
-  "id": "{{$randomInt 1000 9999}}",
-  "name": "Test User",
-  "createdAt": "{{$timestamp}}"
-}
-```
-
-### 2. Execute in Go
+### Execute in Go
 
 ```go
 package main
@@ -215,30 +120,8 @@ func main() {
 }
 ```
 
-## Variable Types
-
-### Custom Variables
-```http
-@baseUrl = https://api.example.com
-@userId = 123
-
-GET {{baseUrl}}/users/{{userId}}
-```
-
-### System Variables
-- `{{$guid}}` - UUID (e.g., `123e4567-e89b-12d3-a456-426614174000`)
-- `{{$randomInt}}` or `{{$randomInt 1 100}}` - Random integer
-- `{{$timestamp}}` - Unix timestamp
-- `{{$datetime}}` or `{{$datetime "2006-01-02"}}` - Current datetime
-- `{{$processEnv VAR_NAME}}` - Environment variable
-- `{{$dotenv VAR_NAME}}` - From `.env` file
-
-### JetBrains Faker Variables
-- `{{$randomFirstName}}`, `{{$randomLastName}}`
-- `{{$randomPhoneNumber}}`, `{{$randomStreetAddress}}`
-- `{{$randomUrl}}`, `{{$randomUserAgent}}`
-
 ### Programmatic Variables (highest precedence)
+
 ```go
 client, err := restclient.NewClient(
     restclient.WithVars(map[string]interface{}{
@@ -247,6 +130,97 @@ client, err := restclient.NewClient(
     }),
 )
 ```
+
+## CLI
+
+TODO
+
+### CLI installation
+
+Install the `restclient` CLI to run `.http` files from command line:
+
+```bash
+go install github.com/bmcszk/go-restclient/cmd/restclient@latest
+```
+
+### CLI usage
+
+```bash
+restclient -f requests.http
+```
+
+### List requests
+
+```bash
+restclient -f requests.http --list
+```
+
+### Run a single request
+
+By name (case-insensitive):
+
+```bash
+restclient -f requests.http -n "create user"
+```
+
+By 0-based index:
+
+```bash
+restclient -f requests.http -i 0
+```
+
+### Command-line variables
+
+Override variables from the command line:
+
+```bash
+restclient -f requests.http -D token=abc123 -D env=prod
+```
+
+### Prerequisite requests
+
+Run a request before the target (for auth token chaining):
+
+```bash
+restclient -f requests.http -n "get protected" -A authenticate
+```
+
+### Fail on errors
+
+Exit with code 1 on HTTP 4xx/5xx responses:
+
+```bash
+restclient -f requests.http -E
+```
+
+### Output formats
+
+```bash
+# Body only
+restclient -f requests.http -o body
+
+# JSON path extraction
+restclient -f requests.http -o jsonpath "data.users[0].name"
+
+# Environment variable format
+restclient -f requests.http -o env "token"
+```
+
+### CLI Flags
+
+| Short | Long | Description |
+|-------|------|-------------|
+| `-f` | `--file` | Request file path (required) |
+| `-n` | `--name` | Run request by name |
+| `-i` | `--index` | Run request by index |
+| `-e` | `--expected` | Expected response file |
+| | `--e-name` | Expected response name |
+| | `--e-index` | Expected response index |
+| `-l` | `--list` | List requests |
+| `-E` | `--fail-on-error` | Fail on 4xx/5xx |
+| `-o` | `--output` | Output format |
+| `-A` | `--after` | Prerequisite request |
+| `-D` | `--define` | Define variable (repeatable) |
 
 ## Response Validation
 
@@ -328,11 +302,6 @@ func TestUserAPI(t *testing.T) {
 }
 ```
 
-### CI/CD Integration
-```bash
-go test ./tests/e2e/... # Runs tests using .http files
-```
-
 ## Development
 
 ### Prerequisites
@@ -341,16 +310,8 @@ go test ./tests/e2e/... # Runs tests using .http files
 ### Commands
 ```bash
 make check          # Run all checks (lint, test, build)
-make test-unit      # Run unit tests only
-go test .           # Quick test
 ```
-
-### Test Coverage
-Current coverage: 78.4% (187 tests passing)
 
 ## License
 
 MIT License
-## License
-
-MIT
