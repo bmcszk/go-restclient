@@ -133,7 +133,7 @@ client, err := restclient.NewClient(
 
 ## CLI
 
-TODO
+The `restclient` CLI runs `.http` files from the command line.
 
 ### CLI installation
 
