@@ -171,7 +171,7 @@ func TestCLI_NameAndIndexMutuallyExclusive(t *testing.T) {
 		"GET http://example.com/a\n")
 
 	out, code := runBinary(t, binary, "-f", filePath, "-n", "foo", "-i", "0")
-	assert.Equal(t, 2, code) // Kong returns 2 for mutually exclusive flags
+	assert.Equal(t, 1, code) // Kong returns 1 for validation errors
 	assert.Contains(t, out, "mutually exclusive")
 }
 

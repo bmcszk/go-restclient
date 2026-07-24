@@ -51,23 +51,7 @@ func main() {
 }
 
 func run(c cli) int {
-	if err := validateConfig(c); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return 2
-	}
-
-	client, err := newClient()
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return 1
-	}
-
-	if err := applyDefines(client, c.Define); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		return 1
-	}
-
-	parsedFile, err := client.ParseFile(c.File)
+	client, parsedFile, err := setupClient(c)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return 1
@@ -78,12 +62,7 @@ func run(c cli) int {
 		return 1
 	}
 
-	index := math.MinInt
-	if c.Index != nil {
-		index = *c.Index
-	}
-
-	responses, execErr := executeRequests(client, parsedFile, c.File, c.Name, index)
+	responses, execErr := executeRequests(client, parsedFile, c.File, c.Name, c.Index)
 	if execErr != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", execErr)
 		return 1
@@ -97,6 +76,24 @@ func run(c cli) int {
 	}
 
 	return emit(responses, c.FailOnError, c.Output)
+}
+
+func setupClient(c cli) (*restclient.Client, *restclient.ParsedFile, error) {
+	if err := validateConfig(c); err != nil {
+		return nil, nil, err
+	}
+	client, err := newClient()
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := applyDefines(client, c.Define); err != nil {
+		return nil, nil, err
+	}
+	parsedFile, err := client.ParseFile(c.File)
+	if err != nil {
+		return nil, nil, err
+	}
+	return client, parsedFile, nil
 }
 
 func validateConfig(c cli) error {
@@ -126,11 +123,11 @@ func applyDefines(client *restclient.Client, defines []string) error {
 	return nil
 }
 
-func runPrerequisite(client *restclient.Client, parsedFile *restclient.ParsedFile, filePath, after string) error {
+func runPrerequisite(client *restclient.Client, parsedFile *restclient.ParsedFile, _, after string) error {
 	if after == "" {
 		return nil
 	}
-	_, err := executeSingle(client, parsedFile, filePath, after, math.MinInt)
+	_, err := executeSingle(client, parsedFile, after, math.MinInt)
 	if err != nil {
 		return fmt.Errorf("prerequisite request %q failed: %v", after, err)
 	}
@@ -163,14 +160,29 @@ func runList(filePath string) int {
 	return 0
 }
 
-func executeRequests(client *restclient.Client, parsedFile *restclient.ParsedFile, filePath, name string, index int) ([]*restclient.Response, error) {
-	if name != "" || index != math.MinInt {
-		return executeSingle(client, parsedFile, filePath, name, index)
+func executeRequests(
+	client *restclient.Client,
+	parsedFile *restclient.ParsedFile,
+	filePath string,
+	name string,
+	index *int,
+) ([]*restclient.Response, error) {
+	idx := math.MinInt
+	if index != nil {
+		idx = *index
 	}
-	return executeAll(client, filePath)
+	if name != "" || idx != math.MinInt {
+		return executeSingle(client, parsedFile, name, idx)
+	}
+	return client.ExecuteFile(context.Background(), filePath)
 }
 
-func executeSingle(client *restclient.Client, parsedFile *restclient.ParsedFile, _, name string, index int) ([]*restclient.Response, error) {
+func executeSingle(
+	client *restclient.Client,
+	parsedFile *restclient.ParsedFile,
+	name string,
+	index int,
+) ([]*restclient.Response, error) {
 	reqIdx, err := findRequestIndex(parsedFile.Requests, name, index)
 	if err != nil {
 		return nil, err
@@ -182,26 +194,34 @@ func executeSingle(client *restclient.Client, parsedFile *restclient.ParsedFile,
 	return []*restclient.Response{resp}, nil
 }
 
-func executeAll(client *restclient.Client, filePath string) ([]*restclient.Response, error) {
-	return client.ExecuteFile(context.Background(), filePath)
+func findRequestIndex(
+	requests []*restclient.Request,
+	name string,
+	index int,
+) (int, error) {
+	if name != "" {
+		return findByName(requests, name)
+	}
+	return findByIndex(requests, index)
 }
 
-func findRequestIndex(requests []*restclient.Request, name string, index int) (int, error) {
-	if name != "" {
-		for i, r := range requests {
-			if r.Name == name {
-				return i, nil
-			}
+func findByName(requests []*restclient.Request, name string) (int, error) {
+	for i, r := range requests {
+		if r.Name == name {
+			return i, nil
 		}
-		return -1, fmt.Errorf("request name %q not found", name)
 	}
-	if index != math.MinInt {
-		if index < 0 || index >= len(requests) {
-			return -1, fmt.Errorf("request index %d out of range (file has %d requests)", index, len(requests))
-		}
-		return index, nil
+	return -1, fmt.Errorf("request name %q not found", name)
+}
+
+func findByIndex(requests []*restclient.Request, index int) (int, error) {
+	if index == math.MinInt {
+		return -1, errors.New("either -n or -i must be specified")
 	}
-	return -1, errors.New("either -n or -i must be specified")
+	if index < 0 || index >= len(requests) {
+		return -1, fmt.Errorf("request index %d out of range (file has %d requests)", index, len(requests))
+	}
+	return index, nil
 }
 
 func shouldFail(resp *restclient.Response, failOnError bool) bool {

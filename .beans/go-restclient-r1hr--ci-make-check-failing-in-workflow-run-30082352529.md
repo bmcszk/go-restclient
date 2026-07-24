@@ -1,11 +1,11 @@
 ---
 # go-restclient-r1hr
 title: 'CI: make check failing in workflow run 30082352529'
-status: in-progress
+status: completed
 type: bug
 priority: high
 created_at: 2026-07-24T09:33:34Z
-updated_at: 2026-07-24T09:34:48Z
+updated_at: 2026-07-24T09:40:26Z
 ---
 
 GitHub Actions workflow run https://github.com/bmcszk/go-restclient/actions/runs/30082352529 is failing.
