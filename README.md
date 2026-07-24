@@ -22,7 +22,7 @@ A Go library for executing HTTP requests from `.http` files and validating respo
 go get github.com/bmcszk/go-restclient
 ```
 
-### CLI
+## CLI
 
 Install the `restclient` CLI (runs a `.http` file and prints each response):
 
@@ -34,13 +34,13 @@ go install github.com/bmcszk/go-restclient/cmd/restclient@latest
 restclient -f requests.http
 ```
 
-#### List requests
+### List requests
 
 ```bash
 restclient -f requests.http --list
 ```
 
-#### Run a single request
+### Run a single request
 
 By name (case-insensitive):
 ```bash
@@ -52,7 +52,7 @@ By 0-based index:
 restclient -f requests.http -i 0
 ```
 
-#### Command-line variables
+### Command-line variables
 
 Override variables from the command line:
 ```bash
@@ -60,7 +60,7 @@ restclient -f requests.http -D token=abc123 -D env=prod
 restclient -f requests.http --define token=abc123 --define env=prod
 ```
 
-#### Prerequisite requests
+### Prerequisite requests
 
 Run a request before the target (for auth token chaining):
 ```bash
@@ -68,7 +68,7 @@ restclient -f requests.http -n "get protected" -A authenticate
 restclient -f requests.http -n "get protected" --after authenticate
 ```
 
-#### Fail on errors
+### Fail on errors
 
 Exit with code 1 on HTTP 4xx/5xx responses:
 ```bash
@@ -76,7 +76,7 @@ restclient -f requests.http -E
 restclient -f requests.http --fail-on-error
 ```
 
-#### Output formats
+### Output formats
 
 ```bash
 # Body only
@@ -90,7 +90,7 @@ restclient -f requests.http -o env "token"
 # Output: token=eyJhbGciOiJIUzI1NiIs...
 ```
 
-#### Assert responses
+### Assert responses
 
 Validate against an expected-response file (`.hresp` format):
 ```bash
@@ -104,7 +104,7 @@ restclient -f requests.http -n "login" -e responses.hresp --e-name "success"
 restclient -f requests.http -n "login" -e responses.hresp --e-index 0
 ```
 
-#### CLI Flags
+### CLI Flags
 
 | Short | Long | Description |
 |-------|------|-------------|
