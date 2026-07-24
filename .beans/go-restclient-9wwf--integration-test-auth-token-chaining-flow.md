@@ -1,11 +1,11 @@
 ---
 # go-restclient-9wwf
 title: 'Integration test: auth token chaining flow'
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-07-23T16:00:43Z
-updated_at: 2026-07-23T17:37:25Z
+updated_at: 2026-07-24T09:04:40Z
 parent: go-restclient-v0b5
 blocked_by:
     - go-restclient-mqp9

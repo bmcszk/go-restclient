@@ -1,0 +1,13 @@
+### authenticate
+POST https://echo.free.beeceptor.com/auth
+Content-Type: application/json
+
+{"user":"admin","pass":"secret"}
+
+### get protected
+GET https://echo.free.beeceptor.com/protected
+Authorization: Bearer {{authenticate.response.body.token}}
+
+### get user profile
+GET https://echo.free.beeceptor.com/profile
+Authorization: Bearer {{authenticate.response.body.access_token}}

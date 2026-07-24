@@ -1,18 +1,5 @@
 # CLI Test Report
 
-## Test Commands
-
-```bash
-# Build
-go build -o restclient ./cmd/restclient
-
-# Run all tests
-make check
-
-# Run specific test
-go test -run TestCLI_DefineFlag ./cmd/restclient/
-```
-
 ## Test Results
 
 ```
@@ -21,62 +8,134 @@ DONE 231 tests in 9.551s
 Coverage: 77.1%
 ```
 
-## Manual Test Files
+## Manual Test Commands
 
-### test_basic.http
-```http
-GET https://echo.free.beeceptor.com/api/users
-Authorization: Bearer {{$dotenv TOKEN}}
-```
-
-### test_chaining.http
-```http
-### authenticate
-POST https://echo.free.beeceptor.com/auth
-Content-Type: application/json
-
-{"user":"admin","pass":"secret"}
-
-### get protected
-GET https://echo.free.beeceptor.com/protected
-Authorization: Bearer {{authenticate.response.body.token}}
-```
-
-### test_prereq.http
-```http
-### login
-POST https://echo.free.beeceptor.com/login
-Content-Type: application/json
-
-{"user":"admin"}
-```
-
-## CLI Flags
-
-| Flag | Long | Description |
-|------|------|-------------|
-| `-f` | `--file` | Request file path |
-| `-n` | `--name` | Run request by name |
-| `-i` | `--index` | Run request by index |
-| `-e` | `--expected` | Expected response file |
-| `-l` | `--list` | List requests |
-| `-E` | `--fail-on-error` | Fail on 4xx/5xx |
-| `-o` | `--output` | Output format |
-| `-A` | `--after` | Prerequisite request |
-| `-D` | `--define` | Define variable |
-
-## Examples
+### -f/--file (required)
 
 ```bash
-# List requests
-restclient -f test.http --list
+restclient -f test_basic.http
+```
 
-# Run with variables
-restclient -f test.http -D token=abc123 -D env=prod
+### -n/--name (run by name)
 
-# Run specific request
-restclient -f test.http -n "get user"
+```bash
+restclient -f test_multi.http -n "get user"
+```
 
-# Run after prerequisite
-restclient -f test.http -n "get protected" -A authenticate
+### -i/--index (run by index)
+
+```bash
+restclient -f test_multi.http -i 0
+```
+
+### -l/--list (list requests)
+
+```bash
+restclient -f test_multi.http --list
+```
+
+### -D/--define (command-line variables)
+
+```bash
+restclient -f test_basic.http -D token=abc123 -D env=prod
+restclient -f test_basic.http --define token=abc123 --define env=prod
+```
+
+### -A/--after (prerequisite requests)
+
+```bash
+restclient -f test_chaining.http -n "get protected" -A authenticate
+```
+
+### -E/--fail-on-error (fail on 4xx/5xx)
+
+```bash
+restclient -f test_basic.http -E
+```
+
+### -o/--output (output formats)
+
+```bash
+# Body only
+restclient -f test_basic.http -o body
+
+# JSON path extraction
+restclient -f test_basic.http -o jsonpath "headers.X-Custom"
+
+# Environment variable format
+restclient -f test_basic.http -o env "token"
+```
+
+### -e/--expected (response validation)
+
+```bash
+restclient -f test_basic.http -e expected.hresp
+```
+
+### --e-name (validate specific response by name)
+
+```bash
+restclient -f test_multi.http -n "get user" -e responses.hresp --e-name "success"
+```
+
+### --e-index (validate specific response by index)
+
+```bash
+restclient -f test_multi.http -n "get user" -e responses.hresp --e-index 0
+```
+
+### -h/--help
+
+```bash
+restclient --help
+```
+
+## Error Cases
+
+### Missing file
+
+```bash
+restclient
+# Exit code: 80
+# Output: missing flags: --file=STRING
+```
+
+### Nonexistent file
+
+```bash
+restclient -f nonexistent.http
+# Exit code: 1
+# Output: error: open nonexistent.http: no such file or directory
+```
+
+### Mutually exclusive -n and -i
+
+```bash
+restclient -f test_multi.http -n "get user" -i 0
+# Exit code: 2
+# Output: error: -n and -i are mutually exclusive
+```
+
+### Request not found
+
+```bash
+restclient -f test_multi.http -n "nonexistent"
+# Exit code: 1
+# Output: error: request name "nonexistent" not found
+```
+
+### Invalid -D format
+
+```bash
+restclient -f test_basic.http -D invalid
+# Exit code: 1
+# Output: error: invalid -D/--define format: "invalid" (expected key=value)
+```
+
+### Invalid output format
+
+```bash
+restclient -f test_basic.http -o invalid
+# Exit code: 1
+# Output: error: output format must be one of: body, jsonpath, env
 ```

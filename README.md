@@ -16,15 +16,60 @@ A Go library for executing HTTP requests from `.http` files and validating respo
 - **Multiple requests per file** - Separated by `###`
 - **E2E testing ready** - Perfect for automated integration tests
 
-## Installation
+## Library
+
+Use `go-restclient` as a Go library in your code:
 
 ```bash
 go get github.com/bmcszk/go-restclient
 ```
 
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"github.com/bmcszk/go-restclient"
+)
+
+func main() {
+	client, _ := restclient.NewClient()
+	responses, err := client.ExecuteFile(context.Background(), "requests.http")
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	for _, r := range responses {
+		fmt.Println(r.StatusCode, r.Body)
+	}
+}
+```
+
+### Response Chaining
+
+Reference responses from other requests:
+
+```go
+parsedFile, _ := client.ParseFile("requests.http")
+// Execute first request
+resp1, _ := client.ExecuteRequest(ctx, parsedFile, 0)
+// {{authenticate.response.body.token}} is now available for second request
+resp2, _ := client.ExecuteRequest(ctx, parsedFile, 1)
+```
+
+### Response Validation
+
+Validate responses against `.hresp` files:
+
+```go
+responses, _ := client.ExecuteFile(ctx, "requests.http")
+err := client.ValidateResponses("expected.hresp", responses...)
+```
+
 ## CLI
 
-Install the `restclient` CLI (runs a `.http` file and prints each response):
+Install the `restclient` CLI to run `.http` files from command line:
 
 ```bash
 go install github.com/bmcszk/go-restclient/cmd/restclient@latest
@@ -129,194 +174,74 @@ Exits with code `1` if any request fails or assertion fails, `0` on success, `2`
 ### 1. Create a `.http` file
 
 ```http
-@baseUrl = https://api.example.com
-@userId = 123
+### get user
+GET https://httpbin.org/get
+Authorization: Bearer {{$dotenv TOKEN}}
 
-### Get user profile
-GET {{baseUrl}}/users/{{userId}}
-Authorization: Bearer {{authToken}}
-X-Request-ID: {{$guid}}
-
-### Create new user  
-POST {{baseUrl}}/users
+### create user
+POST https://httpbin.org/post
 Content-Type: application/json
 
 {
-  "id": "{{$randomInt 1000 9999}}",
-  "name": "Test User",
-  "createdAt": "{{$timestamp}}"
+  "name": "John",
+  "email": "john@example.com"
 }
 ```
 
-### 2. Execute in Go
+### 2. Set environment variables
+
+```bash
+export TOKEN=my-secret-token
+```
+
+### 3. Run with CLI
+
+```bash
+restclient -f requests.http
+```
+
+### 4. Or use as library
 
 ```go
 package main
 
 import (
-    "context"
-    "log"
-    "github.com/bmcszk/go-restclient"
+	"context"
+	"fmt"
+	"github.com/bmcszk/go-restclient"
 )
 
 func main() {
-    client, err := restclient.NewClient(
-        restclient.WithVars(map[string]interface{}{
-            "authToken": "your-token-here",
-        }),
-    )
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    responses, err := client.ExecuteFile(context.Background(), "requests.http")
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    for i, resp := range responses {
-        if resp.Error != nil {
-            log.Printf("Request %d failed: %v", i+1, resp.Error)
-        } else {
-            log.Printf("Request %d: %d %s", i+1, resp.StatusCode, resp.Status)
-        }
-    }
+	client, _ := restclient.NewClient()
+	responses, err := client.ExecuteFile(context.Background(), "requests.http")
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	for _, r := range responses {
+		fmt.Println(r.StatusCode, r.Body)
+	}
 }
 ```
 
-## Variable Types
+## Testing
 
-### Custom Variables
-```http
-@baseUrl = https://api.example.com
-@userId = 123
+### Run all tests
 
-GET {{baseUrl}}/users/{{userId}}
-```
-
-### System Variables
-- `{{$guid}}` - UUID (e.g., `123e4567-e89b-12d3-a456-426614174000`)
-- `{{$randomInt}}` or `{{$randomInt 1 100}}` - Random integer
-- `{{$timestamp}}` - Unix timestamp
-- `{{$datetime}}` or `{{$datetime "2006-01-02"}}` - Current datetime
-- `{{$processEnv VAR_NAME}}` - Environment variable
-- `{{$dotenv VAR_NAME}}` - From `.env` file
-
-### JetBrains Faker Variables
-- `{{$randomFirstName}}`, `{{$randomLastName}}`
-- `{{$randomPhoneNumber}}`, `{{$randomStreetAddress}}`
-- `{{$randomUrl}}`, `{{$randomUserAgent}}`
-
-### Programmatic Variables (highest precedence)
-```go
-client, err := restclient.NewClient(
-    restclient.WithVars(map[string]interface{}{
-        "userId": "override-value",
-        "authToken": "secret-token",
-    }),
-)
-```
-
-## Response Validation
-
-Create `.hresp` files to validate responses:
-
-**responses.hresp:**
-```http
-HTTP/1.1 200 OK
-Content-Type: application/json
-
-{
-  "id": "{{$anyGuid}}",
-  "name": "{{$any}}",
-  "createdAt": "{{$anyTimestamp}}"
-}
-
-###
-
-HTTP/1.1 201 Created
-Content-Type: application/json
-
-{
-  "id": "{{$regexp `\d{4}`}}",
-  "status": "created"
-}
-```
-
-**Validate in Go:**
-```go
-err := client.ValidateResponses("responses.hresp", responses...)
-if err != nil {
-    log.Fatal("Validation failed:", err)
-}
-```
-
-### Validation Placeholders
-- `{{$any}}` - Matches any text
-- `{{$regexp `pattern`}}` - Regex pattern (in backticks)
-- `{{$anyGuid}}` - UUID format
-- `{{$anyTimestamp}}` - Unix timestamp
-- `{{$anyDatetime 'format'}}` - Datetime (rfc1123, iso8601, or custom)
-
-## Client Options
-
-```go
-client, err := restclient.NewClient(
-    restclient.WithBaseURL("https://api.example.com"),
-    restclient.WithDefaultHeader("X-API-Key", "secret"),
-    restclient.WithHTTPClient(customHTTPClient),
-    restclient.WithVars(variables),
-)
-```
-
-## Compatible Syntax
-
-Works with files created for:
-- [JetBrains HTTP Client](https://www.jetbrains.com/help/idea/http-client-in-product-code-editor.html)
-- [VS Code REST Client](https://marketplace.visualstudio.com/items?itemName=humao.rest-client)
-
-📚 **[Complete HTTP Syntax Reference](docs/http_syntax.md)** - Comprehensive documentation of all supported HTTP request syntax, variables, and features.
-
-## Use Cases
-
-### Manual Testing
-Use your favorite IDE extension to test APIs during development.
-
-### Automated E2E Testing
-```go
-func TestUserAPI(t *testing.T) {
-    client, _ := restclient.NewClient(
-        restclient.WithBaseURL(testServer.URL),
-    )
-    
-    responses, err := client.ExecuteFile(context.Background(), "user_tests.http")
-    require.NoError(t, err)
-    
-    err = client.ValidateResponses("user_expected.hresp", responses...)
-    require.NoError(t, err)
-}
-```
-
-### CI/CD Integration
 ```bash
-go test ./tests/e2e/... # Runs tests using .http files
+make check
 ```
 
-## Development
+### Run specific test
 
-### Prerequisites
-- Go 1.21+
-
-### Commands
 ```bash
-make check          # Run all checks (lint, test, build)
-make test-unit      # Run unit tests only
-go test .           # Quick test
+go test -run TestCLI_DefineFlag ./cmd/restclient/
 ```
 
-### Test Coverage
-Current coverage: 78.4% (187 tests passing)
+### Test report
+
+See [docs/cli_test_report.md](docs/cli_test_report.md) for comprehensive CLI flag testing.
 
 ## License
 
-MIT License
+MIT
