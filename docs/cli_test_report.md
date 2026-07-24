@@ -13,75 +13,75 @@ Coverage: 77.1%
 ### -f/--file (required)
 
 ```bash
-restclient -f test_basic.http
+restclient -f test/fixtures/test_basic.http
 ```
 
 ### -n/--name (run by name)
 
 ```bash
-restclient -f test_multi.http -n "get user"
+restclient -f test/fixtures/test_multi.http -n "get user"
 ```
 
 ### -i/--index (run by index)
 
 ```bash
-restclient -f test_multi.http -i 0
+restclient -f test/fixtures/test_multi.http -i 0
 ```
 
 ### -l/--list (list requests)
 
 ```bash
-restclient -f test_multi.http --list
+restclient -f test/fixtures/test_multi.http --list
 ```
 
 ### -D/--define (command-line variables)
 
 ```bash
-restclient -f test_basic.http -D token=abc123 -D env=prod
-restclient -f test_basic.http --define token=abc123 --define env=prod
+restclient -f test/fixtures/test_basic.http -D token=abc123 -D env=prod
+restclient -f test/fixtures/test_basic.http --define token=abc123 --define env=prod
 ```
 
 ### -A/--after (prerequisite requests)
 
 ```bash
-restclient -f test_chaining.http -n "get protected" -A authenticate
+restclient -f test/fixtures/test_chaining.http -n "get protected" -A authenticate
 ```
 
 ### -E/--fail-on-error (fail on 4xx/5xx)
 
 ```bash
-restclient -f test_basic.http -E
+restclient -f test/fixtures/test_basic.http -E
 ```
 
 ### -o/--output (output formats)
 
 ```bash
 # Body only
-restclient -f test_basic.http -o body
+restclient -f test/fixtures/test_basic.http -o body
 
 # JSON path extraction
-restclient -f test_basic.http -o jsonpath "headers.X-Custom"
+restclient -f test/fixtures/test_basic.http -o jsonpath "headers.X-Custom"
 
 # Environment variable format
-restclient -f test_basic.http -o env "token"
+restclient -f test/fixtures/test_basic.http -o env "token"
 ```
 
 ### -e/--expected (response validation)
 
 ```bash
-restclient -f test_basic.http -e expected.hresp
+restclient -f test/fixtures/test_basic.http -e test/fixtures/expected.hresp
 ```
 
 ### --e-name (validate specific response by name)
 
 ```bash
-restclient -f test_multi.http -n "get user" -e responses.hresp --e-name "success"
+restclient -f test/fixtures/test_multi.http -n "get user" -e test/fixtures/responses.hresp --e-name "success"
 ```
 
 ### --e-index (validate specific response by index)
 
 ```bash
-restclient -f test_multi.http -n "get user" -e responses.hresp --e-index 0
+restclient -f test/fixtures/test_multi.http -n "get user" -e test/fixtures/responses.hresp --e-index 0
 ```
 
 ### -h/--help

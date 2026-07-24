@@ -1,11 +1,11 @@
 ---
 # go-restclient-o0oa
 title: 'CLI test report: comprehensive flag testing with .http files'
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-07-24T09:00:44Z
-updated_at: 2026-07-24T09:08:43Z
+updated_at: 2026-07-24T09:11:24Z
 ---
 
 The docs/cli_test_report.md is incomplete. Every flag needs to be tested with real examples.
