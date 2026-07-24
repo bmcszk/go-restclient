@@ -32,9 +32,31 @@ Header2: value2
 body content
 ```
 
-## Variable Types
+### Example
 
-### Custom Variables
+```http
+@baseUrl = https://api.example.com
+@userId = 123
+
+### Get user profile
+GET {{baseUrl}}/users/{{userId}}
+Authorization: Bearer {{authToken}}
+X-Request-ID: {{$guid}}
+
+### Create new user  
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{
+  "id": "{{$randomInt 1000 9999}}",
+  "name": "Test User",
+  "createdAt": "{{$timestamp}}"
+}
+```
+
+### Variable Types
+
+#### Custom Variables
 
 ```http
 @baseUrl = https://api.example.com
@@ -45,7 +67,7 @@ GET {{baseUrl}}/users/{{userId}}
 Authorization: Bearer {{$dotenv TOKEN}}
 ```
 
-### System Variables
+#### System Variables
 
 - `{{$guid}}` - UUID (e.g., `123e4567-e89b-12d3-a456-426614174000`)
 - `{{$randomInt}}` or `{{$randomInt 1 100}}` - Random integer
@@ -54,7 +76,7 @@ Authorization: Bearer {{$dotenv TOKEN}}
 - `{{$processEnv VAR_NAME}}` - Environment variable
 - `{{$dotenv VAR_NAME}}` - From `.env` file
 
-### JetBrains Faker Variables
+#### JetBrains Faker Variables
 
 - `{{$randomFirstName}}`, `{{$randomLastName}}`
 - `{{$randomPhoneNumber}}`, `{{$randomStreetAddress}}`
@@ -78,6 +100,8 @@ Authorization: Bearer {{authenticate.response.body.token}}
 
 ## Library
 
+Go library
+
 ### Lib installation
 
 ```bash
@@ -96,19 +120,13 @@ import (
 )
 
 func main() {
-    client, err := restclient.NewClient(
+    client, _ := restclient.NewClient(
         restclient.WithVars(map[string]interface{}{
             "authToken": "your-token-here",
         }),
     )
-    if err != nil {
-        log.Fatal(err)
-    }
 
-    responses, err := client.ExecuteFile(context.Background(), "requests.http")
-    if err != nil {
-        log.Fatal(err)
-    }
+    responses, _ := client.ExecuteFile(context.Background(), "requests.http")
 
     for i, resp := range responses {
         if resp.Error != nil {
@@ -123,7 +141,7 @@ func main() {
 ### Programmatic Variables (highest precedence)
 
 ```go
-client, err := restclient.NewClient(
+client, _ := restclient.NewClient(
     restclient.WithVars(map[string]interface{}{
         "userId": "override-value",
         "authToken": "secret-token",
@@ -209,7 +227,7 @@ restclient -f requests.http -o env "token"
 ### CLI Flags
 
 | Short | Long | Description |
-|-------|------|-------------|
+| ----- | ---- | ----------- |
 | `-f` | `--file` | Request file path (required) |
 | `-n` | `--name` | Run request by name |
 | `-i` | `--index` | Run request by index |
@@ -227,6 +245,7 @@ restclient -f requests.http -o env "token"
 Create `.hresp` files to validate responses:
 
 **responses.hresp:**
+
 ```http
 HTTP/1.1 200 OK
 Content-Type: application/json
@@ -249,6 +268,7 @@ Content-Type: application/json
 ```
 
 **Validate in Go:**
+
 ```go
 err := client.ValidateResponses("responses.hresp", responses...)
 if err != nil {
@@ -257,8 +277,9 @@ if err != nil {
 ```
 
 ### Validation Placeholders
+
 - `{{$any}}` - Matches any text
-- `{{$regexp `pattern`}}` - Regex pattern (in backticks)
+- `{{$regexp ``pattern``}}` - Regex pattern (in backticks)
 - `{{$anyGuid}}` - UUID format
 - `{{$anyTimestamp}}` - Unix timestamp
 - `{{$anyDatetime 'format'}}` - Datetime (rfc1123, iso8601, or custom)
@@ -277,6 +298,7 @@ client, err := restclient.NewClient(
 ## Compatible Syntax
 
 Works with files created for:
+
 - [JetBrains HTTP Client](https://www.jetbrains.com/help/idea/http-client-in-product-code-editor.html)
 - [VS Code REST Client](https://marketplace.visualstudio.com/items?itemName=humao.rest-client)
 
@@ -285,9 +307,11 @@ Works with files created for:
 ## Use Cases
 
 ### Manual Testing
+
 Use your favorite IDE extension to test APIs during development.
 
 ### Automated E2E Testing
+
 ```go
 func TestUserAPI(t *testing.T) {
     client, _ := restclient.NewClient(
@@ -305,9 +329,11 @@ func TestUserAPI(t *testing.T) {
 ## Development
 
 ### Prerequisites
+
 - Go 1.21+
 
 ### Commands
+
 ```bash
 make check          # Run all checks (lint, test, build)
 ```
