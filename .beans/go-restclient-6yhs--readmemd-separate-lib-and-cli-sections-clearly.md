@@ -1,11 +1,11 @@
 ---
 # go-restclient-6yhs
 title: 'README.md: Separate lib and cli sections clearly'
-status: completed
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-07-24T09:00:31Z
-updated_at: 2026-07-24T09:08:33Z
+updated_at: 2026-07-24T10:22:20Z
 ---
 
 The README should clearly state this project can be used as a library OR as a CLI.
