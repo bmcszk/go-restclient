@@ -1,11 +1,11 @@
 ---
 # go-restclient-zvxw
 title: 'CLI: Add -D/--define flag for command-line key:value variables'
-status: in-progress
+status: completed
 type: feature
 priority: normal
 created_at: 2026-07-23T19:50:11Z
-updated_at: 2026-07-24T07:07:46Z
+updated_at: 2026-07-24T08:26:05Z
 ---
 
 go-restclient-zvxw  in-progress   feature  [normal]           
