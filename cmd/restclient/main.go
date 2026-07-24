@@ -63,13 +63,7 @@ func run(c cli) int {
 		return 1
 	}
 
-	var responses []*restclient.Response
-	var execErr error
-	if c.All {
-		responses, execErr = client.ExecuteFile(context.Background(), c.File)
-	} else {
-		responses, execErr = executeRequestsOrAll(client, parsedFile, c.Name, c.Index)
-	}
+	responses, execErr := dispatchExecution(client, parsedFile, c)
 	if execErr != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", execErr)
 		return 1
@@ -83,6 +77,24 @@ func run(c cli) int {
 	}
 
 	return emit(responses, c.FailOnError, c.Output)
+}
+
+func dispatchExecution(
+	client *restclient.Client,
+	parsedFile *restclient.ParsedFile,
+	c cli,
+) ([]*restclient.Response, error) {
+	if c.All {
+		return client.ExecuteFile(context.Background(), c.File)
+	}
+	if c.Name != "" || c.Index != nil {
+		idx := math.MinInt
+		if c.Index != nil {
+			idx = *c.Index
+		}
+		return executeSingle(client, parsedFile, c.Name, idx)
+	}
+	return nil, errors.New("specify -n NAME, -i INDEX, or --all to run requests")
 }
 
 func setupClient(c cli) (*restclient.Client, *restclient.ParsedFile, error) {
@@ -167,21 +179,6 @@ func runList(filePath string) int {
 	return 0
 }
 
-func executeRequestsOrAll(
-	client *restclient.Client,
-	parsedFile *restclient.ParsedFile,
-	name string,
-	index *int,
-) ([]*restclient.Response, error) {
-	if name == "" && index == nil {
-		return nil, errors.New("specify -n NAME, -i INDEX, or --all to run requests")
-	}
-	idx := math.MinInt
-	if index != nil {
-		idx = *index
-	}
-	return executeSingle(client, parsedFile, name, idx)
-}
 
 func executeSingle(
 	client *restclient.Client,
