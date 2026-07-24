@@ -164,8 +164,12 @@ go install github.com/bmcszk/go-restclient/cmd/restclient@latest
 ### CLI usage
 
 ```bash
-restclient -f requests.http
+restclient -f requests.http --all
+restclient -f requests.http -n "get user"
+restclient -f requests.http -i 0
 ```
+
+**Note:** Without `-n`, `-i`, or `--all`, the CLI exits with an error.
 
 ### List requests
 
@@ -231,6 +235,7 @@ restclient -f requests.http -o env "token"
 | `-f` | `--file` | Request file path (required) |
 | `-n` | `--name` | Run request by name |
 | `-i` | `--index` | Run request by index |
+| | `--all` | Run all requests in file |
 | `-e` | `--expected` | Expected response file |
 | | `--e-name` | Expected response name |
 | | `--e-index` | Expected response index |
