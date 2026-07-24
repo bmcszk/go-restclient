@@ -3,6 +3,7 @@ module github.com/bmcszk/go-restclient
 go 1.21
 
 require (
+	github.com/alecthomas/kong v1.16.0
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/joho/godotenv v1.5.1
@@ -12,7 +13,6 @@ require (
 )
 
 require (
-	github.com/alecthomas/kong v1.16.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
