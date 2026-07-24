@@ -72,8 +72,8 @@ func runBinary(t *testing.T, binary string, args ...string) (string, int) {
 func TestCLI_NoArgs(t *testing.T) {
 	binary := buildBinary(t)
 	out, code := runBinary(t, binary)
-	assert.Equal(t, 2, code)
-	assert.Contains(t, out, "-f <file> is required")
+	assert.Equal(t, 80, code) // Kong exit code for missing required flag
+	assert.Contains(t, out, "missing flags: --file=STRING")
 }
 
 func TestCLI_MissingFile(t *testing.T) {
@@ -171,7 +171,7 @@ func TestCLI_NameAndIndexMutuallyExclusive(t *testing.T) {
 		"GET http://example.com/a\n")
 
 	out, code := runBinary(t, binary, "-f", filePath, "-n", "foo", "-i", "0")
-	assert.Equal(t, 2, code)
+	assert.Equal(t, 2, code) // Kong returns 2 for mutually exclusive flags
 	assert.Contains(t, out, "mutually exclusive")
 }
 
@@ -243,7 +243,7 @@ func TestCLI_NegativeIndex(t *testing.T) {
 	filePath := writeTestFile(t, dir, "test.http",
 		"GET http://example.com/a\n")
 
-	out, code := runBinary(t, binary, "-f", filePath, "-i", "-1")
+	out, code := runBinary(t, binary, "-f", filePath, "--index=-1")
 	assert.Equal(t, 1, code)
 	assert.Contains(t, out, "out of range")
 }
@@ -275,8 +275,8 @@ func TestCLI_ListUnnamed(t *testing.T) {
 func TestCLI_ListMissingFile(t *testing.T) {
 	binary := buildBinary(t)
 	out, code := runBinary(t, binary, "--list")
-	assert.Equal(t, 2, code)
-	assert.Contains(t, out, "-f <file> is required")
+	assert.Equal(t, 80, code) // Kong exit code for missing required flag
+	assert.Contains(t, out, "missing flags: --file=STRING")
 }
 
 func TestCLI_FailOnError_4xx(t *testing.T) {
