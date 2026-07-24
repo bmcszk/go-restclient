@@ -87,7 +87,6 @@ const (
 // Word list for $randomWord
 var randomWords = []string{"apple", "banana", "cherry", "date", "elderberry", "fig", "grape"}
 
-
 // resolveVariablesInText is the primary substitution engine for non-system and request-scoped system variables.
 // It iterates through placeholders like `{{varName | fallback}}` and resolves them based on a defined precedence.
 // Dynamic system variables (like {{$dotenv NAME}}) are left untouched for substituteDynamicSystemVariables.
@@ -317,10 +316,7 @@ func _applyBaseURLIfNeeded(rawURL string, clientBaseURL string) string {
 	return rawURL
 } // End of function resolveVariablesInText
 
-// isDynamicSystemVariablePlaceholder checks if a given string value is a placeholder
-// for a dynamic system variable that requires on-the-fly evaluation.
-// It returns true if the value is a system variable placeholder (e.g., "{{$randomInt}}", "{{$dotenv VAR}}")
-// AND is not already pre-evaluated in requestScopedSystemVars (like "$uuid").
+// isDynamicSystemVariablePlaceholder checks if a value is a dynamic system variable placeholder.
 func isDynamicSystemVariablePlaceholder(value string, requestScopedSystemVars map[string]string) bool {
 	if !isPlaceholderPattern(value) {
 		return isDirectSystemVarKey(value, requestScopedSystemVars)
@@ -757,15 +753,19 @@ func substituteDotEnvVariables(text string, activeDotEnvVars map[string]string) 
 func dotEnvReplacer(activeDotEnvVars map[string]string) func(string) string {
 	return func(match string) string {
 		parts := reDotEnv.FindStringSubmatch(match)
-		if len(parts) == 2 {
-			varName := parts[1]
-			if val, ok := activeDotEnvVars[varName]; ok {
-				return val
-			}
+		if len(parts) != 2 {
+			slog.Warn("Failed to parse $dotenv, returning original match", "match", match, "parts_len", len(parts))
+			return match
+		}
+		varName := parts[1]
+		val, ok := activeDotEnvVars[varName]
+		if !ok {
 			return ""
 		}
-		slog.Warn("Failed to parse $dotenv, returning original match", "match", match, "parts_len", len(parts))
-		return match
+		if val == "" {
+			slog.Warn("$dotenv value is empty", "var", varName)
+		}
+		return val
 	}
 }
 

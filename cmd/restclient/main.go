@@ -29,7 +29,7 @@ type cli struct {
 	ExpectedIndex int      `long:"e-index" help:"Expected response index" default:"-1" group:"validation"`
 	List          bool     `short:"l" long:"list" help:"List requests" group:"output"`
 	FailOnError   bool     `short:"E" long:"fail-on-error" help:"Fail on 4xx/5xx" group:"output"`
-	Output        string   `short:"o" long:"output" help:"Output format" group:"output"`
+	Output        string   `short:"o" long:"output" help:"Output format: body, jsonpath, env" group:"output"`
 	After         string   `short:"A" long:"after" help:"Prerequisite request" group:"output"`
 	Define        []string `short:"D" long:"define" help:"Define variable key=value" group:"variables"`
 }
