@@ -46,9 +46,13 @@ func (d *defineArray) Set(value string) error {
 
 func main() {
 	file := flag.String("f", "", "path to the .http / .rest request file (required)")
+	flag.StringVar(file, "file", "", "path to the .http / .rest request file (required)")
 	name := flag.String("n", "", "run only the request with this name")
+	flag.StringVar(name, "name", "", "run only the request with this name")
 	index := flag.Int("i", math.MinInt, "run only the request at this 0-based index")
+	flag.IntVar(index, "index", math.MinInt, "run only the request at this 0-based index")
 	expected := flag.String("e", "", "path to .hresp file for response assertion")
+	flag.StringVar(expected, "expected", "", "path to .hresp file for response assertion")
 	expectedName := flag.String("e-name", "", "expected response name in .hresp file to validate (for use with -n/-i)")
 	e := flag.Int("e-index", -1, "expected response 0-based index in .hresp file to validate (for use with -n/-i)")
 	expectedIndex := e
@@ -57,6 +61,7 @@ func main() {
 	failOnError := flag.Bool("fail-on-error", false, "exit with code 1 on HTTP 4xx/5xx responses")
 	flag.BoolVar(failOnError, "E", false, "exit with code 1 on HTTP 4xx/5xx responses (shorthand)")
 	output := flag.String("o", "", "output format: body, jsonpath <expr>, env <key>")
+	flag.StringVar(output, "output", "", "output format: body, jsonpath <expr>, env <key>")
 	after := flag.String("after", "", "run prerequisite request by name before target (for response references)")
 	flag.StringVar(after, "A", "", "run prerequisite request by name before target (shorthand)")
 	var defines defineArray
