@@ -55,6 +55,17 @@ func NewClient(options ...ClientOption) (*Client, error) {
 }
 
 
+// SetProgrammaticVars sets variables with highest precedence for variable substitution.
+// These override .env, OS env, file-scoped vars, and globals.
+func (c *Client) SetProgrammaticVars(vars map[string]any) {
+	if c.programmaticVars == nil {
+		c.programmaticVars = make(map[string]any)
+	}
+	for k, v := range vars {
+		c.programmaticVars[k] = v
+	}
+}
+
 // ExecuteFile parses a request file (.http, .rest), executes all requests found, and returns their responses.
 // It returns an error if the file cannot be parsed or no requests are found.
 // Individual request execution errors are stored within each Response object.
@@ -90,10 +101,9 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 	}
 
 	c.loadDotEnvVars(requestFilePath)
-	
-	// Generate file-scoped system variables once for the entire file
 	c.resolveFileScopedSystemVariables(parsedFile)
 
+	parsedFile.ResponseMap = make(map[string]*Response)
 	var responses []*Response
 	var multiErr *multierror.Error
 	osEnvGetter := func(key string) (string, bool) { return os.LookupEnv(key) }
@@ -106,10 +116,53 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 		}
 		if response != nil {
 			responses = append(responses, response)
+			storeResponse(parsedFile, restClientReq, response)
 		}
 	}
 
 	return responses, multiErr.ErrorOrNil()
+}
+
+// storeResponse saves a response in the response map keyed by request name.
+func storeResponse(parsedFile *ParsedFile, req *Request, resp *Response) {
+	if req.Name != "" {
+		parsedFile.ResponseMap[req.Name] = resp
+	}
+}
+
+// ParseFile parses the request file (.http, .rest) without executing requests.
+// Returns the parsed file with all requests, variables, and environment resolved.
+func (c *Client) ParseFile(requestFilePath string) (*ParsedFile, error) {
+	parsedFile, err := c.parseAndValidateFile(requestFilePath)
+	if err != nil {
+		return nil, err
+	}
+
+	c.loadDotEnvVars(requestFilePath)
+	c.resolveFileScopedSystemVariables(parsedFile)
+
+	parsedFile.ResponseMap = make(map[string]*Response)
+	return parsedFile, nil
+}
+
+// ExecuteRequest executes a single request from a parsed file by index.
+// The caller must first call ParseFile to obtain the parsed file.
+func (c *Client) ExecuteRequest(ctx context.Context, parsedFile *ParsedFile, index int) (*Response, error) {
+	if index < 0 || index >= len(parsedFile.Requests) {
+		return nil, fmt.Errorf("request index %d out of range (file has %d requests)", index, len(parsedFile.Requests))
+	}
+
+	osEnvGetter := func(key string) (string, bool) { return os.LookupEnv(key) }
+	restClientReq := parsedFile.Requests[index]
+	response, err := c.executeRequestWithVariables(ctx, restClientReq, parsedFile, osEnvGetter, index)
+	if err != nil {
+		if response == nil {
+			response = &Response{Request: restClientReq, Error: err}
+		}
+		return response, err
+	}
+	storeResponse(parsedFile, restClientReq, response)
+	return response, nil
 }
 
 // handleRequestExecutionError processes errors from request execution and manages error wrapping
@@ -372,7 +425,7 @@ func handleSpecialPathJoining(freshRequestURL, freshBase *url.URL) (*url.URL, er
 // Errors during execution (e.g. network, body read) are captured in Response.Error.
 // A non-nil error is returned by this function only for critical pre-execution
 // failures (e.g. nil request, bad BaseURL).
-func (c *Client) executeRequest(ctx context.Context, rcRequest *Request) (*Response, error) {
+func (c *Client) doHTTPRequest(ctx context.Context, rcRequest *Request) (*Response, error) {
 	if rcRequest == nil {
 		return nil, errors.New("cannot execute a nil request")
 	}
@@ -588,16 +641,12 @@ func (c *Client) processExternalFile(
 
 	// Apply variable substitution if requested
 	if restClientReq.ExternalFileWithVariables {
-		resolvedContent := resolveVariablesInText(
-			content,
-			c.programmaticVars,
-			restClientReq.ActiveVariables,
-			parsedFile.EnvironmentVariables,
-			parsedFile.GlobalVariables,
-			requestScopedSystemVars,
-			osEnvGetter,
-			c.currentDotEnvVars,
-		)
+		resolvedContent := resolveVariablesInText(content, resolveContext{
+			programmaticVars: c.programmaticVars, fileScopedVars: restClientReq.ActiveVariables,
+			environmentVars: parsedFile.EnvironmentVariables, globalVars: parsedFile.GlobalVariables,
+			systemVars: requestScopedSystemVars, osEnvGetter: osEnvGetter,
+			dotEnvVars: c.currentDotEnvVars, responseMap: parsedFile.ResponseMap,
+		})
 		content = substituteDynamicSystemVariables(
 			resolvedContent,
 			c.currentDotEnvVars,
@@ -704,7 +753,7 @@ func (c *Client) executeRequestWithVariables(
 	}
 
 	// Execute the HTTP request
-	resp, execErr := c.executeRequest(ctx, restClientReq)
+	resp, execErr := c.doHTTPRequest(ctx, restClientReq)
 	if execErr != nil {
 		return &Response{Request: restClientReq, Error: execErr}, nil
 	}
@@ -779,16 +828,12 @@ func (c *Client) processRegularBody(
 	requestScopedSystemVars map[string]string,
 	osEnvGetter func(string) (string, bool),
 ) string {
-	resolvedBody := resolveVariablesInText(
-		restClientReq.RawBody,
-		c.programmaticVars,
-		restClientReq.ActiveVariables,
-		parsedFile.EnvironmentVariables,
-		parsedFile.GlobalVariables,
-		requestScopedSystemVars,
-		osEnvGetter,
-		c.currentDotEnvVars,
-	)
+	resolvedBody := resolveVariablesInText(restClientReq.RawBody, resolveContext{
+		programmaticVars: c.programmaticVars, fileScopedVars: restClientReq.ActiveVariables,
+		environmentVars: parsedFile.EnvironmentVariables, globalVars: parsedFile.GlobalVariables,
+		systemVars: requestScopedSystemVars, osEnvGetter: osEnvGetter,
+		dotEnvVars: c.currentDotEnvVars, responseMap: parsedFile.ResponseMap,
+	})
 	return substituteDynamicSystemVariables(resolvedBody, c.currentDotEnvVars, c.programmaticVars)
 }
 

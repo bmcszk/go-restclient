@@ -291,6 +291,82 @@ func TestExecuteFile_GraphQLBatchQueries(t *testing.T) {
 	test.RunExecuteFile_GraphQLBatchQueries(t)
 }
 
+// ParseFile tests
+func TestParseFile_SingleRequest(t *testing.T) {
+	test.RunParseFile_SingleRequest(t)
+}
+
+func TestParseFile_MultipleRequests(t *testing.T) {
+	test.RunParseFile_MultipleRequests(t)
+}
+
+func TestParseFile_NamedRequests(t *testing.T) {
+	test.RunParseFile_NamedRequests(t)
+}
+
+func TestParseFile_NoRequests(t *testing.T) {
+	test.RunParseFile_NoRequests(t)
+}
+
+func TestParseFile_FileNotFound(t *testing.T) {
+	test.RunParseFile_FileNotFound(t)
+}
+
+// ExecuteRequest tests
+func TestExecuteRequest_ByIndex(t *testing.T) {
+	test.RunExecuteRequest_ByIndex(t)
+}
+
+func TestExecuteRequest_OutOfRange(t *testing.T) {
+	test.RunExecuteRequest_OutOfRange(t)
+}
+
+func TestExecuteRequest_NegativeIndex(t *testing.T) {
+	test.RunExecuteRequest_NegativeIndex(t)
+}
+
+func TestExecuteRequest_SecondOfThree(t *testing.T) {
+	test.RunExecuteRequest_SecondOfThree(t)
+}
+
+// Response reference tests
+func TestResponseRef_StatusCode(t *testing.T) {
+	test.RunResponseRef_StatusCode(t)
+}
+
+func TestResponseRef_BodyField(t *testing.T) {
+	test.RunResponseRef_BodyField(t)
+}
+
+func TestResponseRef_HeaderValue(t *testing.T) {
+	test.RunResponseRef_HeaderValue(t)
+}
+
+func TestResponseRef_NestedBodyField(t *testing.T) {
+	test.RunResponseRef_NestedBodyField(t)
+}
+
+func TestResponseRef_ArrayIndex(t *testing.T) {
+	test.RunResponseRef_ArrayIndex(t)
+}
+
+func TestResponseRef_MissingName(t *testing.T) {
+	test.RunResponseRef_MissingName(t)
+}
+
+func TestResponseRef_BodyWhole(t *testing.T) {
+	test.RunResponseRef_BodyWhole(t)
+}
+
+// System variable tests
+func TestSystemVar_Base64Encode(t *testing.T) {
+	test.RunSystemVar_Base64Encode(t)
+}
+
+func TestSystemVar_Base64EncodeInBody(t *testing.T) {
+	test.RunSystemVar_Base64EncodeInBody(t)
+}
+
 // Test helper tests
 func TestCreateTestFileFromTemplate_DebugOutput(t *testing.T) {
 	test.RunCreateTestFileFromTemplate_DebugOutput(t)

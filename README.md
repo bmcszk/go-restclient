@@ -12,19 +12,27 @@ A Go library for executing HTTP requests from `.http` files and validating respo
 
 - **Full JetBrains/VS Code compatibility** - Same `.http` syntax, variables, and behaviors
 - **Variable substitution** - Custom variables, environment variables, system variables (`{{$guid}}`, `{{$randomInt}}`, etc.)
+- **Response chaining** - Reference responses from other requests: `{{name.response.body.field}}`
 - **Response validation** - Compare responses against `.hresp` files with placeholders (`{{$any}}`, `{{$regexp}}`, `{{$anyGuid}}`)
 - **Multiple requests per file** - Separated by `###`
 - **E2E testing ready** - Perfect for automated integration tests
 
-## Installation
+## HTTP Files
 
-```bash
-go get github.com/bmcszk/go-restclient
+`.http` files are plain text files for defining HTTP requests. They were popularized by JetBrains IDEs (IntelliJ, PyCharm, GoLand) and are now supported by VS Code (REST Client extension) and other tools.
+
+### Request Format
+
+```http
+### Request Name
+METHOD URL
+Header1: value1
+Header2: value2
+
+body content
 ```
 
-## Quick Start
-
-### 1. Create a `.http` file
+### Example
 
 ```http
 @baseUrl = https://api.example.com
@@ -46,7 +54,61 @@ Content-Type: application/json
 }
 ```
 
-### 2. Execute in Go
+### Variable Types
+
+#### Custom Variables
+
+```http
+@baseUrl = https://api.example.com
+@userId = 123
+
+### Get User
+GET {{baseUrl}}/users/{{userId}}
+Authorization: Bearer {{$dotenv TOKEN}}
+```
+
+#### System Variables
+
+- `{{$guid}}` - UUID (e.g., `123e4567-e89b-12d3-a456-426614174000`)
+- `{{$randomInt}}` or `{{$randomInt 1 100}}` - Random integer
+- `{{$timestamp}}` - Unix timestamp
+- `{{$datetime}}` or `{{$datetime "2006-01-02"}}` - Current datetime
+- `{{$processEnv VAR_NAME}}` - Environment variable
+- `{{$dotenv VAR_NAME}}` - From `.env` file
+
+#### JetBrains Faker Variables
+
+- `{{$randomFirstName}}`, `{{$randomLastName}}`
+- `{{$randomPhoneNumber}}`, `{{$randomStreetAddress}}`
+- `{{$randomUrl}}`, `{{$randomUserAgent}}`
+
+### Response Chaining
+
+Reference responses from other requests in the same file:
+
+```http
+### Authenticate
+POST https://api.example.com/auth
+Content-Type: application/json
+
+{"user":"admin","pass":"secret"}
+
+### Get Protected
+GET https://api.example.com/protected
+Authorization: Bearer {{authenticate.response.body.token}}
+```
+
+## Library
+
+Go library
+
+### Lib installation
+
+```bash
+go get github.com/bmcszk/go-restclient
+```
+
+### Execute in Go
 
 ```go
 package main
@@ -58,19 +120,13 @@ import (
 )
 
 func main() {
-    client, err := restclient.NewClient(
+    client, _ := restclient.NewClient(
         restclient.WithVars(map[string]interface{}{
             "authToken": "your-token-here",
         }),
     )
-    if err != nil {
-        log.Fatal(err)
-    }
 
-    responses, err := client.ExecuteFile(context.Background(), "requests.http")
-    if err != nil {
-        log.Fatal(err)
-    }
+    responses, _ := client.ExecuteFile(context.Background(), "requests.http")
 
     for i, resp := range responses {
         if resp.Error != nil {
@@ -82,32 +138,10 @@ func main() {
 }
 ```
 
-## Variable Types
-
-### Custom Variables
-```http
-@baseUrl = https://api.example.com
-@userId = 123
-
-GET {{baseUrl}}/users/{{userId}}
-```
-
-### System Variables
-- `{{$guid}}` - UUID (e.g., `123e4567-e89b-12d3-a456-426614174000`)
-- `{{$randomInt}}` or `{{$randomInt 1 100}}` - Random integer
-- `{{$timestamp}}` - Unix timestamp
-- `{{$datetime}}` or `{{$datetime "2006-01-02"}}` - Current datetime
-- `{{$processEnv VAR_NAME}}` - Environment variable
-- `{{$dotenv VAR_NAME}}` - From `.env` file
-
-### JetBrains Faker Variables
-- `{{$randomFirstName}}`, `{{$randomLastName}}`
-- `{{$randomPhoneNumber}}`, `{{$randomStreetAddress}}`
-- `{{$randomUrl}}`, `{{$randomUserAgent}}`
-
 ### Programmatic Variables (highest precedence)
+
 ```go
-client, err := restclient.NewClient(
+client, _ := restclient.NewClient(
     restclient.WithVars(map[string]interface{}{
         "userId": "override-value",
         "authToken": "secret-token",
@@ -115,11 +149,108 @@ client, err := restclient.NewClient(
 )
 ```
 
+## CLI
+
+The `restclient` CLI runs `.http` files from the command line.
+
+### CLI installation
+
+Install the `restclient` CLI to run `.http` files from command line:
+
+```bash
+go install github.com/bmcszk/go-restclient/cmd/restclient@latest
+```
+
+### CLI usage
+
+```bash
+restclient -f requests.http --all
+restclient -f requests.http -n "get user"
+restclient -f requests.http -i 0
+```
+
+**Note:** Without `-n`, `-i`, or `--all`, the CLI exits with an error.
+
+### List requests
+
+```bash
+restclient -f requests.http --list
+```
+
+### Run a single request
+
+By name (case-insensitive):
+
+```bash
+restclient -f requests.http -n "create user"
+```
+
+By 0-based index:
+
+```bash
+restclient -f requests.http -i 0
+```
+
+### Command-line variables
+
+Override variables from the command line:
+
+```bash
+restclient -f requests.http -D token=abc123 -D env=prod
+```
+
+### Prerequisite requests
+
+Run a request before the target (for auth token chaining):
+
+```bash
+restclient -f requests.http -n "get protected" -A authenticate
+```
+
+### Fail on errors
+
+Exit with code 1 on HTTP 4xx/5xx responses:
+
+```bash
+restclient -f requests.http -E
+```
+
+### Output formats
+
+```bash
+# Body only
+restclient -f requests.http -o body
+
+# JSON path extraction
+restclient -f requests.http -o jsonpath "data.users[0].name"
+
+# Environment variable format
+restclient -f requests.http -o env "token"
+```
+
+### CLI Flags
+
+| Short | Long | Description |
+| ----- | ---- | ----------- |
+| `-f` | `--file` | Request file path (required) |
+| `-n` | `--name` | Run request by name |
+| `-i` | `--index` | Run request by index |
+| | `--all` | Run all requests in file |
+| `-e` | `--expected` | Expected response file |
+| | `--e-name` | Expected response name |
+| | `--e-index` | Expected response index |
+| `-l` | `--list` | List requests |
+| `-E` | `--fail-on-error` | Fail on 4xx/5xx |
+| `-o` | `--output` | Output format |
+| `-A` | `--after` | Prerequisite request |
+| `-D` | `--define` | Define variable (repeatable) |
+
 ## Response Validation
 
 Create `.hresp` files to validate responses:
 
 **responses.hresp:**
+
 ```http
 HTTP/1.1 200 OK
 Content-Type: application/json
@@ -142,6 +273,7 @@ Content-Type: application/json
 ```
 
 **Validate in Go:**
+
 ```go
 err := client.ValidateResponses("responses.hresp", responses...)
 if err != nil {
@@ -150,8 +282,9 @@ if err != nil {
 ```
 
 ### Validation Placeholders
+
 - `{{$any}}` - Matches any text
-- `{{$regexp `pattern`}}` - Regex pattern (in backticks)
+- `{{$regexp ``pattern``}}` - Regex pattern (in backticks)
 - `{{$anyGuid}}` - UUID format
 - `{{$anyTimestamp}}` - Unix timestamp
 - `{{$anyDatetime 'format'}}` - Datetime (rfc1123, iso8601, or custom)
@@ -170,6 +303,7 @@ client, err := restclient.NewClient(
 ## Compatible Syntax
 
 Works with files created for:
+
 - [JetBrains HTTP Client](https://www.jetbrains.com/help/idea/http-client-in-product-code-editor.html)
 - [VS Code REST Client](https://marketplace.visualstudio.com/items?itemName=humao.rest-client)
 
@@ -178,9 +312,11 @@ Works with files created for:
 ## Use Cases
 
 ### Manual Testing
+
 Use your favorite IDE extension to test APIs during development.
 
 ### Automated E2E Testing
+
 ```go
 func TestUserAPI(t *testing.T) {
     client, _ := restclient.NewClient(
@@ -195,25 +331,17 @@ func TestUserAPI(t *testing.T) {
 }
 ```
 
-### CI/CD Integration
-```bash
-go test ./tests/e2e/... # Runs tests using .http files
-```
-
 ## Development
 
 ### Prerequisites
+
 - Go 1.21+
 
 ### Commands
+
 ```bash
 make check          # Run all checks (lint, test, build)
-make test-unit      # Run unit tests only
-go test .           # Quick test
 ```
-
-### Test Coverage
-Current coverage: 78.4% (187 tests passing)
 
 ## License
 

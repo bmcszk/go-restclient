@@ -1,0 +1,4 @@
+### get user
+GET https://echo.free.beeceptor.com/api/users
+Authorization: Bearer {{$dotenv TOKEN}}
+X-Custom: {{custom_header}}

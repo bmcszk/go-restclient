@@ -428,7 +428,7 @@ func RunExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
 	client, _ := rc.NewClient()
 
 	// Capture current time to compare against, allowing for slight delay
-	beforeTime := time.Now().UTC().Unix()
+	beforeTimeSec := time.Now().UTC().Unix()
 
 	requestFilePath := createTestFileFromTemplate(t, "test/data/http_request_files/system_var_timestamp.http",
 		struct{ ServerURL string }{ServerURL: server.URL})
@@ -441,7 +441,7 @@ func RunExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
 	assert.NoError(t, resp.Error)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	afterTime := time.Now().UTC().Unix()
+	afterTimeSec := time.Now().UTC().Unix()
 
 	// SCENARIO-LIB-016-001: {{$timestamp}} in URL, header, body
 	// Check URL
@@ -450,14 +450,14 @@ func RunExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
 	timestampFromURLStr := urlParts[len(urlParts)-1]
 	timestampFromURL, parseErrURL := strconv.ParseInt(timestampFromURLStr, 10, 64)
 	assert.NoError(t, parseErrURL, "Timestamp from URL should be a valid integer")
-	assert.GreaterOrEqual(t, timestampFromURL, beforeTime, "Timestamp from URL should be >= time before request")
-	assert.LessOrEqual(t, timestampFromURL, afterTime, "Timestamp from URL should be <= time after request")
+	assert.GreaterOrEqual(t, timestampFromURL, beforeTimeSec, "Timestamp from URL should be >= time before request")
+	assert.LessOrEqual(t, timestampFromURL, afterTimeSec, "Timestamp from URL should be <= time after request")
 
 	// Check Header
 	timestampFromHeader, parseErrHeader := strconv.ParseInt(interceptedRequest.Header, 10, 64)
 	assert.NoError(t, parseErrHeader, "Timestamp from Header should be a valid integer")
-	assert.GreaterOrEqual(t, timestampFromHeader, beforeTime, "Timestamp from Header should be >= time before request")
-	assert.LessOrEqual(t, timestampFromHeader, afterTime, "Timestamp from Header should be <= time after request")
+	assert.GreaterOrEqual(t, timestampFromHeader, beforeTimeSec, "Header timestamp >= before request")
+	assert.LessOrEqual(t, timestampFromHeader, afterTimeSec, "Timestamp from Header should be <= time after request")
 
 	// Check Body
 	var bodyJSON map[string]string
@@ -468,15 +468,15 @@ func RunExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
 	require.True(t, ok1, "event_time not found in body")
 	timestampFromBody1, parseErrBody1 := strconv.ParseInt(timestampFromBody1Str, 10, 64)
 	assert.NoError(t, parseErrBody1, "Timestamp from body (event_time) should be valid int")
-	assert.GreaterOrEqual(t, timestampFromBody1, beforeTime)
-	assert.LessOrEqual(t, timestampFromBody1, afterTime)
+	assert.GreaterOrEqual(t, timestampFromBody1, beforeTimeSec)
+	assert.LessOrEqual(t, timestampFromBody1, afterTimeSec)
 
 	timestampFromBody2Str, ok2 := bodyJSON["processed_at"]
 	require.True(t, ok2, "processed_at not found in body")
 	timestampFromBody2, parseErrBody2 := strconv.ParseInt(timestampFromBody2Str, 10, 64)
 	assert.NoError(t, parseErrBody2, "Timestamp from body (processed_at) should be valid int")
-	assert.GreaterOrEqual(t, timestampFromBody2, beforeTime)
-	assert.LessOrEqual(t, timestampFromBody2, afterTime)
+	assert.GreaterOrEqual(t, timestampFromBody2, beforeTimeSec)
+	assert.LessOrEqual(t, timestampFromBody2, afterTimeSec)
 
 	// SCENARIO-LIB-016-002: Multiple {{$timestamp}} instances yield the same value for that pass
 	assert.Equal(t, timestampFromURL, timestampFromHeader)

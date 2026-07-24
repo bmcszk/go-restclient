@@ -2,6 +2,7 @@ package restclient
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -73,6 +74,90 @@ func (c *Client) ValidateResponses(responseFilePath string, actualResponses ...*
 	errs = c.validateResponseCounts(responseFilePath, actualResponses, expectedResponses, errs)
 	errs = c.validateResponsePairs(responseFilePath, actualResponses, expectedResponses, errs)
 	return errs.ErrorOrNil()
+}
+
+// ValidateOptions holds optional parameters for ValidateResponses.
+type ValidateOptions struct {
+	ExpectedName  string // expected response name (not yet supported)
+	ExpectedIndex int    // expected response 0-based index
+}
+
+// ValidateResponsesWithOptions validates with additional options.
+func (c *Client) ValidateResponsesWithOptions(
+	responseFilePath string,
+	opts ValidateOptions,
+	actualResponses ...*Response,
+) error {
+	expectedResponses, errs, parseErr := c.loadAndParseExpectedResponses(responseFilePath)
+
+	// If there was a critical error (file not found, etc.), return immediately
+	if parseErr != nil && errs == nil {
+		return parseErr
+	}
+
+	// Continue with validation even if parsing failed, but use empty expected responses
+	if parseErr != nil {
+		expectedResponses = nil
+	}
+
+	// If selecting a specific expected response by name or index, filter
+	if opts.ExpectedName != "" || opts.ExpectedIndex >= 0 {
+		expectedResponses, selectErr := selectExpectedResponse(expectedResponses, opts.ExpectedName, opts.ExpectedIndex)
+		if selectErr != nil {
+			return selectErr
+		}
+		// When selecting specific response, only validate that one
+		errs = c.validateSingleResponsePair(responseFilePath, actualResponses, expectedResponses, errs)
+		return errs.ErrorOrNil()
+	}
+
+	errs = c.validateResponseCounts(responseFilePath, actualResponses, expectedResponses, errs)
+	errs = c.validateResponsePairs(responseFilePath, actualResponses, expectedResponses, errs)
+	return errs.ErrorOrNil()
+}
+
+// selectExpectedResponse filters expected responses by name or index.
+func selectExpectedResponse(
+	expectedResponses []*ExpectedResponse,
+	expectedName string,
+	expectedIndex int,
+) ([]*ExpectedResponse, error) {
+	if expectedIndex >= 0 {
+		if expectedIndex < 0 || expectedIndex >= len(expectedResponses) {
+			return nil, fmt.Errorf(
+				"expected response index %d out of range (0-%d)",
+				expectedIndex, len(expectedResponses)-1)
+		}
+		return []*ExpectedResponse{expectedResponses[expectedIndex]}, nil
+	}
+
+	// expectedName not supported yet - .hresp format doesn't have named blocks
+	if expectedName != "" {
+		return nil, errors.New(
+			"-e-name not yet supported; .hresp format does not name response blocks")
+	}
+
+	return expectedResponses, nil
+}
+
+// validateSingleResponsePair validates a single actual response against expected responses.
+func (c *Client) validateSingleResponsePair(
+	responseFilePath string,
+	actualResponses []*Response,
+	expectedResponses []*ExpectedResponse,
+	errs *multierror.Error,
+) *multierror.Error {
+	if len(actualResponses) == 0 || actualResponses[0] == nil {
+		errs = multierror.Append(errs, errors.New(
+			"validation: actual response is nil"))
+		return errs
+	}
+	if len(expectedResponses) == 0 {
+		errs = multierror.Append(errs, errors.New(
+			"validation: no expected response found"))
+		return errs
+	}
+	return c.validateSingleResponse(responseFilePath, 1, actualResponses[0], expectedResponses[0], errs)
 }
 
 func (c *Client) loadAndParseExpectedResponses(

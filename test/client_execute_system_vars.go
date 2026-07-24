@@ -370,7 +370,7 @@ func RunExecuteFile_WithTimestampSystemVariable(t *testing.T) {
 	defer server.Close()
 
 	client, _ := rc.NewClient()
-	beforeTime := time.Now().UTC().Unix()
+	beforeTimeSec := time.Now().UTC().Unix()
 	requestFilePath := createTestFileFromTemplate(t, "test/data/http_request_files/system_var_timestamp.http",
 		struct{ ServerURL string }{ServerURL: server.URL})
 
@@ -383,7 +383,7 @@ func RunExecuteFile_WithTimestampSystemVariable(t *testing.T) {
 	resp := responses[0]
 	assert.NoError(t, resp.Error)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	afterTime := time.Now().UTC().Unix()
+	afterTimeSec := time.Now().UTC().Unix()
 
 	// SCENARIO-LIB-016-001
 	urlParts := strings.Split(interceptedRequest.URL, "/")
@@ -391,13 +391,13 @@ func RunExecuteFile_WithTimestampSystemVariable(t *testing.T) {
 	timestampFromURLStr := urlParts[len(urlParts)-1]
 	timestampFromURL, parseErrURL := strconv.ParseInt(timestampFromURLStr, 10, 64)
 	assert.NoError(t, parseErrURL)
-	assert.GreaterOrEqual(t, timestampFromURL, beforeTime, "Timestamp from URL should be >= time before request")
-	assert.LessOrEqual(t, timestampFromURL, afterTime, "Timestamp from URL should be <= time after request")
+	assert.GreaterOrEqual(t, timestampFromURL, beforeTimeSec, "Timestamp from URL should be >= time before request")
+	assert.LessOrEqual(t, timestampFromURL, afterTimeSec, "Timestamp from URL should be <= time after request")
 
 	timestampFromHeader, parseErrHeader := strconv.ParseInt(interceptedRequest.Header, 10, 64)
 	assert.NoError(t, parseErrHeader)
-	assert.GreaterOrEqual(t, timestampFromHeader, beforeTime, "Timestamp from Header should be >= time before request")
-	assert.LessOrEqual(t, timestampFromHeader, afterTime, "Timestamp from Header should be <= time after request")
+	assert.GreaterOrEqual(t, timestampFromHeader, beforeTimeSec, "Header timestamp >= before request")
+	assert.LessOrEqual(t, timestampFromHeader, afterTimeSec, "Timestamp from Header should be <= time after request")
 
 	var bodyJSON map[string]string
 	err = json.Unmarshal([]byte(interceptedRequest.Body), &bodyJSON)
@@ -406,15 +406,15 @@ func RunExecuteFile_WithTimestampSystemVariable(t *testing.T) {
 	require.True(t, ok1)
 	timestampFromBody1, parseErrBody1 := strconv.ParseInt(timestampFromBody1Str, 10, 64)
 	assert.NoError(t, parseErrBody1)
-	assert.GreaterOrEqual(t, timestampFromBody1, beforeTime)
-	assert.LessOrEqual(t, timestampFromBody1, afterTime)
+	assert.GreaterOrEqual(t, timestampFromBody1, beforeTimeSec)
+	assert.LessOrEqual(t, timestampFromBody1, afterTimeSec)
 
 	timestampFromBody2Str, ok2 := bodyJSON["processed_at"]
 	require.True(t, ok2)
 	timestampFromBody2, parseErrBody2 := strconv.ParseInt(timestampFromBody2Str, 10, 64)
 	assert.NoError(t, parseErrBody2)
-	assert.GreaterOrEqual(t, timestampFromBody2, beforeTime)
-	assert.LessOrEqual(t, timestampFromBody2, afterTime)
+	assert.GreaterOrEqual(t, timestampFromBody2, beforeTimeSec)
+	assert.LessOrEqual(t, timestampFromBody2, afterTimeSec)
 
 	// SCENARIO-LIB-016-002
 	assert.Equal(t, timestampFromURL, timestampFromHeader)

@@ -79,4 +79,7 @@ type ParsedFile struct {
 	// FileVariables are key-value pairs defined directly within the .http file using the `@name = value` syntax.
 	// Their scope is the current file, and they are resolved at parse time.
 	FileVariables map[string]string
+	// ResponseMap stores responses keyed by request name for cross-request chaining.
+	// Populated after each request executes in ExecuteFile.
+	ResponseMap map[string]*Response
 }

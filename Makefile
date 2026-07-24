@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: all build clean fmt lint test test-unit check help
+.PHONY: all build build-cli clean fmt lint test test-unit check help
 
 all: check
 
@@ -11,6 +11,10 @@ help: ## Display this help screen
 build: fmt lint ## Build the Go application (not typical for a library)
 	@echo "Building... (Note: Libraries are typically not "built" into a binary like this)"
 	@go build ./...
+
+build-cli: ## Build the restclient CLI binary into ./bin
+	@mkdir -p bin
+	@go build -o bin/restclient ./cmd/restclient
 
 # Format, Lint, Test
 fmt: ## Format Go source files

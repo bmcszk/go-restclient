@@ -1,0 +1,30 @@
+### get user
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "method": "GET",
+  "path": "/api/users",
+  "headers": {
+    "Authorization": "Bearer {{$dotenv TOKEN}}",
+    "X-Custom": "{{$any}}"
+  }
+}
+
+### get post
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "method": "GET",
+  "path": "/api/posts/1"
+}
+
+### create user
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "method": "POST",
+  "path": "/api/users"
+}
