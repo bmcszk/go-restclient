@@ -2,15 +2,3 @@
 GET https://echo.free.beeceptor.com/api/users
 Authorization: Bearer {{$dotenv TOKEN}}
 X-Custom: {{custom_header}}
-
-### get post
-GET https://echo.free.beeceptor.com/api/posts/1
-
-### create user
-POST https://echo.free.beeceptor.com/api/users
-Content-Type: application/json
-
-{
-  "name": "{{username}}",
-  "email": "{{email}}"
-}
