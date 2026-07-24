@@ -1,11 +1,11 @@
 ---
 # go-restclient-ollx
 title: 'Address all PR comments on PR #26'
-status: completed
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-07-24T09:33:52Z
-updated_at: 2026-07-24T09:42:03Z
+updated_at: 2026-07-24T10:04:17Z
 ---
 
 go-restclient-ollx  todo   task  [normal]         
