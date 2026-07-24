@@ -53,9 +53,12 @@ func main() {
 	e := flag.Int("e-index", -1, "expected response 0-based index in .hresp file to validate (for use with -n/-i)")
 	expectedIndex := e
 	listFlag := flag.Bool("list", false, "list named requests and indices without executing")
+	flag.BoolVar(listFlag, "l", false, "list named requests and indices without executing (shorthand)")
 	failOnError := flag.Bool("fail-on-error", false, "exit with code 1 on HTTP 4xx/5xx responses")
+	flag.BoolVar(failOnError, "E", false, "exit with code 1 on HTTP 4xx/5xx responses (shorthand)")
 	output := flag.String("o", "", "output format: body, jsonpath <expr>, env <key>")
 	after := flag.String("after", "", "run prerequisite request by name before target (for response references)")
+	flag.StringVar(after, "A", "", "run prerequisite request by name before target (shorthand)")
 	var defines defineArray
 	flag.Var(&defines, "D", "define variable key=value (repeatable)")
 	flag.Var(&defines, "define", "define variable key=value (repeatable)")
