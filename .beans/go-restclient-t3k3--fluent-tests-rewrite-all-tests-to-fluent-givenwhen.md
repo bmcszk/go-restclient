@@ -1,11 +1,11 @@
 ---
 # go-restclient-t3k3
 title: 'FLUENT-TESTS: rewrite all tests to fluent Given/When/Then DSL'
-status: in-progress
+status: completed
 type: feature
 priority: high
 created_at: 2026-09-18T14:54:32Z
-updated_at: 2026-09-18T20:53:37Z
+updated_at: 2026-09-18T21:40:30Z
 ---
 
 # Goal
@@ -160,5 +160,18 @@ make check                            → 0 lint issues + 234 tests green
 
 Constraints honored: no commit; test/data/** untouched; production (.go non-test) files
 untouched (git status clean outside test files + .beans); Makefile/.golangci.yml untouched.
+
+Residual: none.
+
+## Summary of Changes
+Entire test suite rewritten to fluent Given/When/Then DSL per go-integration-tests skill: DSL core (fluent_parts_test.go + _ext_ + _validator_) in root package restclient_test, 25 root *_test.go files, all Test names preserved, legacy two-layer Run* structure fully removed. Unit tests now live next to the code (user decision); test/ holds only fixtures.
+
+## Proof of Work (end-to-end)
+Baseline master e2d1eaf: 231 junit testcases PASS. Branch feature/fluent-tests, commits dc2ed93, e434a2a, 173147f, f3a8962, 383bb77.
+- make check (golangci-lint + gotestsum -cover ./...): Checks completed., 234 junit testcases, 0 failures (>= baseline; +3 documented subtests)
+- grep -rE 'test.Run[A-Z]' --include='*.go' . -> 0 hits
+- root *_test.go = fluent tests only; ls test/*.go -> none; root package coverage 81.2% (parity)
+- Style audit: single given/when/then chains, .and() at line ends only (grep verified), no direct helper calls in Test funcs, state in parts
+- Commits signed (ssh agent), beans files committed alongside
 
 Residual: none.

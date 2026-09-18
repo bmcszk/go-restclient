@@ -1,11 +1,11 @@
 ---
 # go-restclient-s7tj
 title: 'Task 2: migrate client tests to fluent DSL'
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-09-18T14:58:36Z
-updated_at: 2026-09-18T20:17:07Z
+updated_at: 2026-09-18T21:37:57Z
 parent: go-restclient-t3k3
 blocked_by:
     - go-restclient-l9zu
@@ -27,3 +27,6 @@ gotestsum junit: 234 testcases, 0 failures; lint 0; build/vet OK; gofmt clean on
 
 ## Batch 2c proof
 gotestsum junit: 234 testcases, 0 failures; lint 0; build/vet OK; gofmt clean on touched files. Parity: 1:1 (TestExecuteFile_WithCustomVariables uses helper to reduce cognitive complexity; two faker tests share assertFakerHeaders helper; t.Logf diagnostics dropped as batch-2b). Deleted 4 source files (client_execute_{vars,system_vars,inplace_vars,graphql}.go) and dead helpers startMockServer/parseHrespBody from client_test_helpers.go.
+
+## Final state
+All client-side batches landed (2a e434a2a, 2b 173147f, 2c f3a8962). 234 junit testcases, 0 failures, lint 0.
