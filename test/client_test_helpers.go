@@ -1,7 +1,6 @@
 package test
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -57,7 +56,6 @@ func RunCreateTestFileFromTemplate_DebugOutput(t *testing.T) {
 	// No specific assertions needed here, the goal is to observe t.Logf output from the helper.
 }
 
-
 // Helper to create a mock server
 func startMockServer(handler http.HandlerFunc) *httptest.Server {
 	return httptest.NewServer(handler)
@@ -103,19 +101,6 @@ func createTestFileFromTemplate(t *testing.T, templatePath string, data any) str
 
 	return tempFileName
 }
-
-// mockRoundTripper is a helper for mocking http.RoundTripper
-type mockRoundTripper struct {
-	RoundTripFunc func(req *http.Request) (*http.Response, error)
-}
-
-func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	if m.RoundTripFunc != nil {
-		return m.RoundTripFunc(req)
-	}
-	return nil, errors.New("RoundTripFunc not set")
-}
-
 
 // parseHrespBody reads an .hresp file and parses its content to separate
 // headers and body. It returns the parsed headers as http.Header and the body as a string.

@@ -5,7 +5,7 @@ status: todo
 type: feature
 priority: high
 created_at: 2026-09-18T14:54:32Z
-updated_at: 2026-09-18T15:03:35Z
+updated_at: 2026-09-18T16:06:28Z
 ---
 
 # Goal
@@ -77,12 +77,13 @@ a capturing server helper, time-window assertions) — following the same naming
 conventions. Migration may NOT bypass the fluent pattern (no direct helper calls in tests,
 no local test-state variables).
 
-# Layout target state
+# Layout target state (USER DECISION 2026-09-18: tests live next to code)
 
-- DSL core: `test/fluent_parts_test.go` (package test).
-- All `Test*` funcs live in `test/*_test.go` (package test), names preserved (TestNewClient,
-  TestExecuteFile_*, TestValidateResponses_*, ...).
-- Root `*_test.go` wrappers DELETED. `test/Run*` helpers DELETED as files migrate.
+- DSL core: `fluent_parts_test.go` in REPO ROOT, `package restclient_test` (moved from test/).
+- All `Test*` funcs in root `*_test.go` files, `package restclient_test`; names preserved
+  (TestNewClient, TestExecuteFile_*, TestValidateResponses_*, ...).
+- Root CWD = repo root -> fixture paths stay root-relative ("test/data/...") as in old Run* code.
+- `test/` keeps ONLY fixtures (test/data/**). Old Run* helper files and root wrappers DELETED.
 - Fixtures: prefer inline `aHttpFile` content; keep fixture files only for big/binary cases.
 - Behavior parity: every current test case keeps equivalent assertions (per-file mapping).
 
