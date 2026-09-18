@@ -1,11 +1,11 @@
 ---
 # go-restclient-t3k3
 title: 'FLUENT-TESTS: rewrite all tests to fluent Given/When/Then DSL'
-status: todo
+status: in-progress
 type: feature
 priority: high
 created_at: 2026-09-18T14:54:32Z
-updated_at: 2026-09-18T16:06:28Z
+updated_at: 2026-09-18T20:53:37Z
 ---
 
 # Goal
@@ -100,3 +100,65 @@ no local test-state variables).
 Baseline (master, e2d1eaf): `gotestsum --junitfile ... -- -cover ./...` -> DONE 231 tests,
 PASS (root pkg 81.2% coverage; test pkg = helpers only, zero Test funcs).
 Branch: feature/fluent-tests.
+
+
+## Task 3 (FINAL batch) — 2026-09-18: validator tests migration + legacy delete
+
+## Task 3 (FINAL batch) — 2026-09-18: validator tests migrated + legacy layer deleted
+
+### Summary of Changes
+
+**New DSL extensions** (`fluent_parts_validator_test.go`):
+- Given: `aResponseWith`, `aResponseWithStatus`, `aResponseFromRawHTTPFile`, `noActualResponses`,
+  `anEmptyResponseSlice`, `aNilResponse`, `anExpectedResponseFileAt`, mutators `withStatusCode`,
+  `withStatusText`, `withHeader`, `withoutHeader`, `withBody` (operate on last response)
+- When: `validateResponsesWithIndex` (wraps ValidateResponsesWithOptions, covers previously
+  untested production path — compensates for the intentionally dropped debug test)
+
+**New root test files** (all Test/subtest names byte-identical with legacy):
+- `validator_general_test.go`: WithSampleFile (10), PartialExpected (7), NilAndEmptyActuals (3), FileErrors (3)
+- `validator_status_test.go`: StatusString (5), StatusCode (5)
+- `validator_headers_test.go`: Headers (9), HeadersContain (3)
+- `validator_body_test.go`: Body_ExactMatch (4), BodyContains (2), BodyNotContains (2)
+- `validator_placeholders_test.go`: BodyRegexpPlaceholder (4), BodyAnyGuidPlaceholder (3),
+  BodyAnyTimestampPlaceholder (3), BodyAnyDatetimePlaceholder (9), BodyAnyPlaceholder (6)
+- `json_validator_test.go`: JSON_WhitespaceComparison, JSON_WithPlaceholders, JSON_WithPlaceholdersInBody
+- `validator_options_test.go`: NEW — ValidateResponsesWithOptions_OutOfRangeIndex (replaces dropped TestCreateTestFileFromTemplate_DebugOutput, covers real production path)
+- `hresp_vars_test.go` (replaced 11-line wrapper): TestExtractHrespDefines with 7 subtests,
+  now testing the REAL unexported extractHrespDefines through ValidateResponses (@defines
+  extracted + substituted into expected body; malformed/empty-name dropped; empty value → "").
+
+**Deleted**: validator_test.go, client_test.go, hresp_vars_test.go (root wrappers) +
+test/{validator_setup,validator_status,validator_headers,validator_body,validator_placeholders,
+validator_general,json_validator_tests,hresp_vars,validator_test_helpers,test_helpers,client_test_helpers}.go
+→ `ls test/*.go` empty (test/data/** fixtures untouched). TestCreateTestFileFromTemplate_DebugOutput
+dropped per task spec (only tested logging of deleted helper).
+
+**Parity notes honored**:
+- "body mismatch" ↔ "JSON content mismatch" mapping: JSON-body failures assert the real emitted
+  text ("JSON content mismatch"), non-JSON bodies assert "body mismatch"
+- SCENARIO-LIB-022-004 kept commented out (as in legacy)
+- (\z.\A) texts via backticks; empty-format name via backticks
+- dupl lint on HeadersContain/BodyAnyTimestamp similarity resolved by extracting a named
+  expected-text constant in the timestamp test (no name/coverage changes)
+
+## Proof of Work
+
+```
+go build ./...                        → exit 0
+go vet ./...                          → exit 0
+golangci-lint run ./...               → 0 issues
+gotestsum --junitfile /tmp/t3.xml -- -count=1 -cover ./...
+                                      → DONE 234 tests, junit testcases=234 (gate >= 234 met),
+                                        root coverage 82.3% (was 81.8%)
+grep -rE 'test\.Run[A-Z]' --include='*.go' . → 0 hits
+ls *_test.go                          → 25 root test files (fluent DSL + migrated tests only)
+ls test/*.go                          → empty
+gofmt -l <touched files>              → empty
+make check                            → 0 lint issues + 234 tests green
+```
+
+Constraints honored: no commit; test/data/** untouched; production (.go non-test) files
+untouched (git status clean outside test files + .beans); Makefile/.golangci.yml untouched.
+
+Residual: none.
