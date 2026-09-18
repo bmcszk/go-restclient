@@ -5,7 +5,7 @@ status: in-progress
 type: task
 priority: normal
 created_at: 2026-09-18T14:58:36Z
-updated_at: 2026-09-18T16:48:41Z
+updated_at: 2026-09-18T20:17:07Z
 parent: go-restclient-t3k3
 blocked_by:
     - go-restclient-l9zu
@@ -21,3 +21,9 @@ USER DECISION: tests live NEXT TO CODE. New fluent test files in REPO ROOT, pack
 gotestsum junit: 234 testcases, 0 failures (baseline 231 + 3 documented new subtests: TestRedirectHandling/{follows,no_redirect}, TestNewClient_WithOptions/nil_http_client_option)
 golangci-lint ./... -> 0 issues; go build/vet OK; coverage 81.2% steady
 Commit: e434a2a
+
+## Batch 2b proof
+gotestsum junit: 234 testcases, 0 failures; lint 0; build/vet OK; gofmt clean on touched files. Parity: 1:1 (2 documented equivalences: parseErrorContains without texts for FileNotFound, dropped t.Logf diagnostics). Commit: 173147f
+
+## Batch 2c proof
+gotestsum junit: 234 testcases, 0 failures; lint 0; build/vet OK; gofmt clean on touched files. Parity: 1:1 (TestExecuteFile_WithCustomVariables uses helper to reduce cognitive complexity; two faker tests share assertFakerHeaders helper; t.Logf diagnostics dropped as batch-2b). Deleted 4 source files (client_execute_{vars,system_vars,inplace_vars,graphql}.go) and dead helpers startMockServer/parseHrespBody from client_test_helpers.go.

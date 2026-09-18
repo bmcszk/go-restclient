@@ -4,15 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/transform"
+
+	rc "github.com/bmcszk/go-restclient"
 )
 
 // This file extends the fluent DSL (fluent_parts_test.go) with the entry points
@@ -82,6 +87,76 @@ func (p *parts) aTemplateFixture(dir, name string, data any) *parts {
 // aMissingFile points httpFilePath at a path that does not exist, for file-not-found tests.
 func (p *parts) aMissingFile(path string) *parts {
 	p.httpFilePath = path
+
+	return p
+}
+
+// aDotEnvFile writes content to <baseDir>/.env. The parser resolves .env relative to the
+// REQUEST FILE directory (filepath.Dir(httpFilePath)), and aHttpFile writes to p.baseDir,
+// so this works for aTempDir-based .http files. No-op safety: writing empty content is allowed.
+func (p *parts) aDotEnvFile(content string) *parts {
+	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, ".env"), []byte(content), 0644))
+	return p
+}
+
+// aDotEnvFileRemoved removes <baseDir>/.env if present (os.Remove, ignore not-exists) so a
+// previous scenario's .env cannot leak into the next subtest.
+func (p *parts) aDotEnvFileRemoved() *parts {
+	_ = os.Remove(filepath.Join(p.baseDir, ".env"))
+	return p
+}
+
+// aFixtureCopy reads the committed fixture file at repo-root-relative requestPath, applies
+// each replacement (old->new), writes result to <baseDir>/destName and makes it the http file
+// under test. Used for fixtures that need per-test substitution beyond the [[ ]] templating
+// (e.g. http-client.env.json handling) or plain copies of committed fixtures that must live
+// next to a .env file.
+func (p *parts) aFixtureCopy(requestPath, destName string, replacements map[string]string) *parts {
+	content, err := os.ReadFile(requestPath)
+	p.require.NoError(err)
+	result := string(content)
+	for old, newVal := range replacements {
+		result = strings.ReplaceAll(result, old, newVal)
+	}
+	path := filepath.Join(p.baseDir, destName)
+	p.require.NoError(os.WriteFile(path, []byte(result), 0644))
+	p.httpFilePath = path
+	return p
+}
+
+// anEnvJsonFile reads committed env template file templatePath, replaces "{{SERVER_URL}}"
+// with serverURL, writes to <baseDir>/fileName (0600). For http-client.env.json /
+// http-client.private.env.json setups.
+func (p *parts) anEnvJsonFile(fileName, templatePath, serverURL string) *parts {
+	content, err := os.ReadFile(templatePath)
+	p.require.NoError(err)
+	resolved := strings.ReplaceAll(string(content), "{{SERVER_URL}}", serverURL)
+	path := filepath.Join(p.baseDir, fileName)
+	p.require.NoError(os.WriteFile(path, []byte(resolved), 0600))
+	return p
+}
+
+// aClientWithEnvironment builds the client via rc.NewClient(rc.WithEnvironment(env)) when env
+// is not empty, else rc.NewClient(); stores it in p.client. env == "" means no environment
+// selected (the http-client.env.json lookup is skipped).
+func (p *parts) aClientWithEnvironment(env string) *parts {
+	var client *rc.Client
+	var err error
+	if env != "" {
+		client, err = rc.NewClient(rc.WithEnvironment(env))
+	} else {
+		client, err = rc.NewClient()
+	}
+	p.require.NoError(err)
+	p.client = client
+	return p
+}
+
+// aRequestFixtureAbs points the DSL at a repo-root-relative request fixture file
+// without prepending the default requestFilesDir. Used for fixtures that live
+// under subdirectories other than test/data/http_request_files.
+func (p *parts) aRequestFixtureAbs(name string) *parts {
+	p.httpFilePath = name
 
 	return p
 }
@@ -287,6 +362,18 @@ func (p *parts) capturedURLSegment(index int) *parts {
 	return p
 }
 
+// capturedURLSegmentAt appends the "/"-segment at segmentIndex (0 = segment right after the
+// leading "/") of the captured request URL path at reqIndex to the active tracking bucket.
+func (p *parts) capturedURLSegmentAt(reqIndex, segmentIndex int) *parts {
+	p.require.Greater(len(p.capturedRequests), reqIndex)
+
+	segments := strings.Split(p.capturedRequests[reqIndex].URL.Path, "/")
+	p.require.Greater(len(segments), segmentIndex, "segment %d not present", segmentIndex)
+	p.track(segments[segmentIndex])
+
+	return p
+}
+
 // capturedHeaderField appends a captured request header value at index to the active
 // tracking bucket.
 func (p *parts) capturedHeaderField(index int, key string) *parts {
@@ -399,14 +486,334 @@ func (p *parts) capturedJSONLeaf(index int, path []string) any {
 	return current
 }
 
-// dslSymbolsExt keeps the batch-2b DSL extensions referenced alongside dslSymbols
+// capturedRequestURLIs asserts p.capturedRequests[index].URL.String() equals url.
+func (p *parts) capturedRequestURLIs(index int, rawURL string) *parts {
+	p.require.Greater(len(p.capturedRequests), index)
+	p.assert.Equal(rawURL, p.capturedRequests[index].URL.String())
+
+	return p
+}
+
+// capturedRequestPathIs asserts p.capturedRequests[index].URL.Path equals path.
+func (p *parts) capturedRequestPathIs(index int, path string) *parts {
+	p.require.Greater(len(p.capturedRequests), index)
+	p.assert.Equal(path, p.capturedRequests[index].URL.Path)
+
+	return p
+}
+
+// serverReceivedHostIs asserts p.capturedRequests[index].Host equals host.
+func (p *parts) serverReceivedHostIs(index int, host string) *parts {
+	p.require.Greater(len(p.capturedRequests), index)
+	p.assert.Equal(host, p.capturedRequests[index].Host)
+
+	return p
+}
+
+// capturedJSONStringMapIs unmarshals captured body at index into map[string]string (require
+// .NoError) and asserts each key/value equals.
+func (p *parts) capturedJSONStringMapIs(index int, expected map[string]string) *parts {
+	p.require.Greater(len(p.capturedBodies), index)
+
+	var data map[string]string
+	p.require.NoError(json.Unmarshal([]byte(p.capturedBodies[index]), &data))
+
+	for key, want := range expected {
+		p.assert.Equal(want, data[key], "key %q mismatch", key)
+	}
+
+	return p
+}
+
+// requestPathMatchesCapturedPath asserts p.current().Request.URL.Path equals
+// p.capturedRequests[0].URL.Path. Generic capture-vs-request-object assertion.
+func (p *parts) requestPathMatchesCapturedPath() *parts {
+	current := p.current()
+	p.require.NotNil(current.Request)
+	p.require.Greater(len(p.capturedRequests), 0)
+	p.assert.Equal(p.capturedRequests[0].URL.Path, current.Request.URL.Path)
+
+	return p
+}
+
+// requestHeadersMatchCaptured asserts, for each given key, the selected response's
+// originating request header equals the corresponding captured server-side header.
+func (p *parts) requestHeadersMatchCaptured(keys ...string) *parts {
+	current := p.current()
+	p.require.NotNil(current.Request)
+	p.require.Greater(len(p.capturedRequests), 0)
+
+	for _, key := range keys {
+		p.assert.Equal(p.capturedRequests[0].Header.Get(key), current.Request.Headers.Get(key), "header %q", key)
+	}
+
+	return p
+}
+
+// requestRawBodyMatchesCapturedBody asserts p.current().Request.RawBody equals
+// p.capturedBodies[0]. Together with server-side tracked equality this gives full
+// 1:1 parity for body fields.
+func (p *parts) requestRawBodyMatchesCapturedBody() *parts {
+	current := p.current()
+	p.require.NotNil(current.Request)
+	p.require.Greater(len(p.capturedBodies), 0)
+	p.assert.Equal(p.capturedBodies[0], current.Request.RawBody)
+
+	return p
+}
+
+// allTrackedValuesAreValidRFC3339Timestamps asserts every value in the active bucket parses
+// with time.RFC3339Nano.
+func (p *parts) allTrackedValuesAreValidRFC3339Timestamps() *parts {
+	for _, value := range p.activeBucket() {
+		_, err := time.Parse(time.RFC3339Nano, value)
+		p.require.NoError(err, "value %q should be a valid RFC3339Nano timestamp", value)
+	}
+
+	return p
+}
+
+// allTrackedDatetimeValuesAreWithin asserts every value in the active bucket parses with
+// the given layout (layout "timestamp" means Unix seconds; time.Unix is used) and falls
+// within threshold of time.Now(). For non-timestamp layouts time.Parse is used.
+func (p *parts) allTrackedDatetimeValuesAreWithin(threshold time.Duration, layout string) *parts {
+	now := time.Now()
+	values := p.activeBucket()
+	p.require.NotEmpty(values)
+
+	for _, value := range values {
+		var parsed time.Time
+		if layout == "timestamp" {
+			ts, err := strconv.ParseInt(value, 10, 64)
+			p.require.NoError(err, "value %q should parse as integer", value)
+			parsed = time.Unix(ts, 0)
+		} else {
+			parsedTime, err := time.Parse(layout, value)
+			p.require.NoError(err, "value %q should parse with layout %q", value, layout)
+			parsed = parsedTime
+		}
+
+		p.assert.WithinDuration(now, parsed, threshold,
+			"datetime %s not within %s of now %s", parsed, threshold, now)
+	}
+
+	return p
+}
+
+// allTrackedDatetimeValuesHaveUTCZone asserts every value in the active bucket resolves to
+// time.UTC. The bucket values may be RFC1123, RFC3339 or Unix-seconds timestamps; all of
+// these resolve to a location whose UTC offset matches time.UTC.
+func (p *parts) allTrackedDatetimeValuesHaveUTCZone() *parts {
+	values := p.activeBucket()
+	p.require.NotEmpty(values)
+
+	for _, value := range values {
+		// Try RFC1123, RFC3339 and Unix-seconds in turn.
+		var parsed time.Time
+		var err error
+		if parsed, err = time.Parse(time.RFC1123, value); err != nil {
+			if parsed, err = time.Parse(time.RFC3339, value); err != nil {
+				ts, tsErr := strconv.ParseInt(value, 10, 64)
+				p.require.NoError(tsErr, "value %q should parse as integer, RFC3339 or RFC1123", value)
+				parsed = time.Unix(ts, 0).UTC()
+			}
+		}
+
+		p.assert.Equal(time.UTC, parsed.Location(), "value %q expected UTC zone", value)
+	}
+
+	return p
+}
+
+// allTrackedDatetimeValuesHaveLocalZone asserts every value in the active bucket resolves
+// to the local timezone offset. Layout "timestamp" uses time.Unix().In(time.Local) and
+// accepts any offset.
+func (p *parts) allTrackedDatetimeValuesHaveLocalZone() *parts {
+	values := p.activeBucket()
+	p.require.NotEmpty(values)
+	_, wantOffset := time.Now().In(time.Local).Zone()
+
+	for _, value := range values {
+		var parsed time.Time
+		var err error
+		if parsed, err = time.Parse(time.RFC1123, value); err != nil {
+			if parsed, err = time.Parse(time.RFC3339, value); err != nil {
+				ts, tsErr := strconv.ParseInt(value, 10, 64)
+				p.require.NoError(tsErr, "value %q should parse as integer, RFC3339 or RFC1123", value)
+				parsed = time.Unix(ts, 0).In(time.Local)
+			}
+		}
+
+		_, gotOffset := parsed.Zone()
+		p.assert.Equal(wantOffset, gotOffset,
+			"value %q expected local offset %d, got %d", value, wantOffset, gotOffset)
+	}
+
+	return p
+}
+
+// capturedJSONFieldIs requires the JSON leaf at the given path equals want.
+func (p *parts) capturedJSONFieldIs(index int, want string, path ...string) *parts {
+	leaf := p.capturedJSONLeaf(index, path)
+	switch v := leaf.(type) {
+	case string:
+		p.assert.Equal(want, v)
+	case float64:
+		p.assert.Equal(want, strconv.FormatInt(int64(v), 10))
+	default:
+		p.assert.Equal(want, fmt.Sprint(v))
+	}
+
+	return p
+}
+
+// capturedJSONFieldContains requires the JSON string leaf at the given path contains fragment.
+func (p *parts) capturedJSONFieldContains(index int, fragment string, path ...string) *parts {
+	leaf, ok := p.capturedJSONLeaf(index, path).(string)
+	p.require.True(ok, "field %v is not a string", path)
+	p.assert.Contains(leaf, fragment)
+
+	return p
+}
+
+// capturedJSONFieldMatchesRegexp asserts the JSON string leaf at the given path matches
+// pattern.
+func (p *parts) capturedJSONFieldMatchesRegexp(index int, pattern string, path ...string) *parts {
+	leaf, ok := p.capturedJSONLeaf(index, path).(string)
+	p.require.True(ok, "field %v is not a string", path)
+	p.assert.Regexp(pattern, leaf)
+
+	return p
+}
+
+// capturedJSONFieldNotContains asserts the JSON string leaf at the given path does not
+// contain fragment.
+func (p *parts) capturedJSONFieldNotContains(index int, fragment string, path ...string) *parts {
+	leaf, ok := p.capturedJSONLeaf(index, path).(string)
+	p.require.True(ok, "field %v is not a string", path)
+	p.assert.NotContains(leaf, fragment)
+
+	return p
+}
+
+// serverReceivedHeaderMatchesRegexp asserts capturedRequests[index].Header.Get(key) matches pattern.
+func (p *parts) serverReceivedHeaderMatchesRegexp(index int, key, pattern string) *parts {
+	p.require.Greater(len(p.capturedRequests), index)
+	p.assert.Regexp(pattern, p.capturedRequests[index].Header.Get(key))
+
+	return p
+}
+
+// serverReceivedHeaderNotContains asserts capturedRequests[index].Header.Get(key) does not
+// contain fragment.
+func (p *parts) serverReceivedHeaderNotContains(index int, key, fragment string) *parts {
+	p.require.Greater(len(p.capturedRequests), index)
+	p.assert.NotContains(p.capturedRequests[index].Header.Get(key), fragment)
+
+	return p
+}
+
+// serverReceivedHeaderFieldCountIs asserts the captured header value splits into n
+// whitespace-separated fields.
+func (p *parts) serverReceivedHeaderFieldCountIs(index int, key string, n int) *parts {
+	p.require.Greater(len(p.capturedRequests), index)
+	p.assert.Len(strings.Fields(p.capturedRequests[index].Header.Get(key)), n)
+
+	return p
+}
+
+// serverReceivedHeaderContains asserts capturedRequests[index].Header.Get(key) contains fragment.
+func (p *parts) serverReceivedHeaderContains(index int, key, fragment string) *parts {
+	p.require.Greater(len(p.capturedRequests), index)
+	p.assert.Contains(p.capturedRequests[index].Header.Get(key), fragment)
+
+	return p
+}
+
+// capturedRequestPathMatchesRegexp asserts capturedRequests[index].URL.Path matches pattern.
+func (p *parts) capturedRequestPathMatchesRegexp(index int, pattern string) *parts {
+	p.require.Greater(len(p.capturedRequests), index)
+	p.assert.Regexp(pattern, p.capturedRequests[index].URL.Path)
+
+	return p
+}
+
+// responsesValidateAgainst validates the executed responses against the expected file at
+// the given path and asserts the validation passes.
+func (p *parts) responsesValidateAgainst(expectedPath string) *parts {
+	p.require.NotNil(p.client)
+	p.assert.NoError(p.client.ValidateResponses(expectedPath, p.responses...))
+
+	return p
+}
+
+// firstTrackedValueIsFloatInRange asserts the first value of the active bucket parses as
+// a float within [lowest, highest].
+func (p *parts) firstTrackedValueIsFloatInRange(lowest, highest float64) *parts {
+	values := p.activeBucket()
+	p.require.NotEmpty(values)
+
+	number, err := strconv.ParseFloat(values[0], 64)
+	p.require.NoError(err, "value %q should be a float", values[0])
+	p.assert.GreaterOrEqual(number, lowest)
+	p.assert.LessOrEqual(number, highest)
+
+	return p
+}
+
+// allTrackedValuesMatchRegexp asserts every value in the active bucket matches pattern.
+func (p *parts) allTrackedValuesMatchRegexp(pattern string) *parts {
+	re := regexp.MustCompile(pattern)
+	for _, value := range p.activeBucket() {
+		p.assert.True(re.MatchString(value), "value %q should match %q", value, pattern)
+	}
+
+	return p
+}
+
+// capturedBodyContains asserts p.capturedBodies[index] contains fragment.
+func (p *parts) capturedBodyContains(index int, fragment string) *parts {
+	p.require.Greater(len(p.capturedBodies), index)
+	p.assert.Contains(p.capturedBodies[index], fragment)
+
+	return p
+}
+
+// capturedBodyMatchesRegexp asserts p.capturedBodies[index] matches pattern.
+func (p *parts) capturedBodyMatchesRegexp(index int, pattern string) *parts {
+	p.require.Greater(len(p.capturedBodies), index)
+	p.assert.Regexp(pattern, p.capturedBodies[index])
+
+	return p
+}
+
+// --- helpers ---
+
+// urlHost returns the host portion of the given URL string. Used to compute the
+// httptest server's host for assertions in http-client.env.json subtests.
+func urlHost(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+
+	return parsed.Host
+}
+
+// dslSymbolsExt keeps the batch-2b/2c DSL extensions referenced alongside dslSymbols
 // in fluent_parts_test.go.
 var _ = []any{
 	(*parts).anExternalFile,
 	(*parts).anExternalFileBytes,
 	(*parts).aFormattedRequestFixture,
 	(*parts).aTemplateFixture,
+	(*parts).aRequestFixtureAbs,
 	(*parts).aMissingFile,
+	(*parts).aDotEnvFile,
+	(*parts).aDotEnvFileRemoved,
+	(*parts).aFixtureCopy,
+	(*parts).anEnvJsonFile,
+	(*parts).aClientWithEnvironment,
 	(*parts).parsingFile,
 	(*parts).executingRequestAt,
 	(*parts).parseSucceeded,
@@ -420,12 +827,20 @@ var _ = []any{
 	(*parts).requestRawBodyIs,
 	(*parts).requestRawBodyContains,
 	(*parts).requestRawBodyMatchesRegexp,
+	(*parts).requestPathMatchesCapturedPath,
+	(*parts).requestHeadersMatchCaptured,
+	(*parts).requestRawBodyMatchesCapturedBody,
 	(*parts).serverReceivedBodyIs,
 	(*parts).serverReceivedBodyParsesAsJSON,
 	(*parts).serverReceivedLatin1BodyIs,
 	(*parts).allResponseCodesAre,
+	(*parts).capturedRequestURLIs,
+	(*parts).capturedRequestPathIs,
+	(*parts).serverReceivedHostIs,
+	(*parts).capturedJSONStringMapIs,
 	(*parts).tracking,
 	(*parts).capturedURLSegment,
+	(*parts).capturedURLSegmentAt,
 	(*parts).capturedHeaderField,
 	(*parts).capturedJSONField,
 	(*parts).capturedJSONNumberField,
@@ -433,4 +848,22 @@ var _ = []any{
 	(*parts).allTrackedValuesAreValidUUIDs,
 	(*parts).allTrackedValuesArePositiveIntegers,
 	(*parts).firstTrackedValueIsIntegerInRange,
+	(*parts).firstTrackedValueIsFloatInRange,
+	(*parts).allTrackedValuesMatchRegexp,
+	(*parts).allTrackedValuesAreValidRFC3339Timestamps,
+	(*parts).allTrackedDatetimeValuesAreWithin,
+	(*parts).allTrackedDatetimeValuesHaveUTCZone,
+	(*parts).allTrackedDatetimeValuesHaveLocalZone,
+	(*parts).capturedJSONFieldIs,
+	(*parts).capturedJSONFieldContains,
+	(*parts).capturedJSONFieldMatchesRegexp,
+	(*parts).capturedJSONFieldNotContains,
+	(*parts).serverReceivedHeaderMatchesRegexp,
+	(*parts).serverReceivedHeaderNotContains,
+	(*parts).serverReceivedHeaderFieldCountIs,
+	(*parts).serverReceivedHeaderContains,
+	(*parts).capturedRequestPathMatchesRegexp,
+	(*parts).responsesValidateAgainst,
+	(*parts).capturedBodyContains,
+	(*parts).capturedBodyMatchesRegexp,
 }
