@@ -68,13 +68,34 @@ type parts struct {
 	execErr          error
 	validationErr    error
 	cursor           int
+	// parsedFile holds the result of parsingFile for parsed-file assertions.
+	parsedFile *rc.ParsedFile
+	// parseErr holds the error returned by parsingFile.
+	parseErr error
+	// capturedBodies mirrors capturedRequests: the request body read eagerly while the
+	// handler runs, because net/http closes the original body when the handler returns.
+	capturedBodies []string
+	// trackedValues holds consistency-tracking buckets keyed by tracking name.
+	trackedValues map[string][]string
+	// activeTrack names the bucket captured* methods append into.
+	activeTrack string
+	// baseDir is the single per-test directory every given* file-writing method uses.
+	// (testing.T.TempDir creates a fresh subdirectory on every call, so external
+	// files and the .http file would otherwise land in different directories.)
+	baseDir string
 }
 
 // newParts returns the given, when and then entry points of the DSL.
 func newParts(t *testing.T) (given, when, then *parts) {
 	t.Helper()
 
-	p := &parts{T: t, require: require.New(t), assert: assert.New(t)}
+	p := &parts{
+		T:             t,
+		require:       require.New(t),
+		assert:        assert.New(t),
+		trackedValues: make(map[string][]string),
+		baseDir:       t.TempDir(),
+	}
 
 	return p, p, p
 }
@@ -97,10 +118,15 @@ func multierrorCount(err error) int {
 
 // --- Given ---
 
-// aHttpServer starts a local test server that counts every request it serves.
+// aHttpServer starts a local test server that counts every request it serves. Each request
+// body is read eagerly (and the body rewound) because net/http closes the original body as
+// soon as the handler returns, so later serverReceived* assertions can still read it.
 func (p *parts) aHttpServer(h http.HandlerFunc) *parts {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		r.Body = io.NopCloser(strings.NewReader(string(body)))
 		p.capturedRequests = append(p.capturedRequests, r)
+		p.capturedBodies = append(p.capturedBodies, string(body))
 		p.requestHits.Add(1)
 		h(w, r)
 	}))
@@ -114,7 +140,7 @@ func (p *parts) aHttpServer(h http.HandlerFunc) *parts {
 // aHttpFile writes the given .http content, replacing {{server}} with the test server URL.
 func (p *parts) aHttpFile(content string) *parts {
 	resolved := strings.ReplaceAll(content, "{{server}}", p.serverURL)
-	path := filepath.Join(p.TempDir(), "requests.http")
+	path := filepath.Join(p.baseDir, "requests.http")
 	p.require.NoError(os.WriteFile(path, []byte(resolved), 0644))
 	p.httpFilePath = path
 
@@ -138,7 +164,7 @@ func (p *parts) aHttpFileFromTemplateWithData(templateName string, data any) *pa
 	tmpl, err := template.New(templateName).Delims("[[", "]]").Parse(string(tmplContent))
 	p.require.NoError(err)
 
-	path := filepath.Join(p.TempDir(), templateName)
+	path := filepath.Join(p.baseDir, templateName)
 
 	file, err := os.Create(path)
 	p.require.NoError(err)
@@ -251,7 +277,7 @@ func (p *parts) aCookieRedirectFixture(name string) *parts {
 	tmpl, err := template.New(name).Delims("[[", "]]").Parse(string(tmplContent))
 	p.require.NoError(err)
 
-	path := filepath.Join(p.TempDir(), name)
+	path := filepath.Join(p.baseDir, name)
 
 	file, err := os.Create(path)
 	p.require.NoError(err)
@@ -275,7 +301,7 @@ func (p *parts) anUploadsFixtureCopy() *parts {
 
 	resolved := strings.ReplaceAll(string(content), "< ./test/data/request_body/", "< test/data/request_body/")
 	resolved = strings.ReplaceAll(resolved, "[[.ServerURL]]", p.serverURL)
-	path := filepath.Join(p.TempDir(), "multipart_file_uploads.http")
+	path := filepath.Join(p.baseDir, "multipart_file_uploads.http")
 
 	p.require.NoError(os.WriteFile(path, []byte(resolved), 0644))
 	p.httpFilePath = path
@@ -346,7 +372,7 @@ func (p *parts) aFreshCookieCheck() *parts {
 
 // expectedResponseFile writes the given .hresp content as the expected responses file.
 func (p *parts) expectedResponseFile(content string) *parts {
-	path := filepath.Join(p.TempDir(), "expected.hresp")
+	path := filepath.Join(p.baseDir, "expected.hresp")
 	p.require.NoError(os.WriteFile(path, []byte(content), 0644))
 	p.expectedFilePath = path
 
@@ -724,7 +750,8 @@ func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 }
 
 // dslSymbols keeps every DSL entry point referenced so the unused linter stays
-// quiet in this definitions-only file until tests adopt the DSL.
+// quiet in this definitions-only file until tests adopt the DSL. The batch-2b
+// extensions live in fluent_parts_ext_test.go (dslSymbolsExt).
 var _ = []any{
 	newParts,
 	(*parts).and,

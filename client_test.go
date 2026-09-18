@@ -7,42 +7,6 @@ import (
 )
 
 // Edge case tests
-func TestExecuteFile_InvalidMethodInFile(t *testing.T) {
-	test.RunExecuteFile_InvalidMethodInFile(t)
-}
-
-func TestExecuteFile_IgnoreEmptyBlocks_Client(t *testing.T) {
-	test.RunExecuteFile_IgnoreEmptyBlocks_Client(t)
-}
-
-// External file tests
-func TestExecuteFile_ExternalFileWithVariables(t *testing.T) {
-	test.RunExecuteFile_ExternalFileWithVariables(t)
-}
-
-func TestExecuteFile_ExternalFileWithoutVariables(t *testing.T) {
-	test.RunExecuteFile_ExternalFileWithoutVariables(t)
-}
-
-func TestClientExecuteFileWithEncoding(t *testing.T) {
-	test.RunClientExecuteFileWithEncoding(t)
-}
-
-func TestExecuteFile_ExternalFileWithEncoding(t *testing.T) {
-	test.RunExecuteFile_ExternalFileWithEncoding(t)
-}
-
-func TestExecuteFile_ExternalFileWithVariablesAndEncoding(t *testing.T) {
-	test.RunExecuteFile_ExternalFileWithVariablesAndEncoding(t)
-}
-
-func TestExecuteFile_WithRestExtension(t *testing.T) {
-	test.RunExecuteFile_WithRestExtension(t)
-}
-
-func TestExecuteFile_ExternalFileNotFound(t *testing.T) {
-	test.RunExecuteFile_ExternalFileNotFound(t)
-}
 
 // Variable handling tests
 func TestExecuteFile_WithCustomVariables(t *testing.T) {
@@ -110,12 +74,33 @@ func TestExecuteFile_WithRandomIntSystemVariable(t *testing.T) {
 	test.RunExecuteFile_WithRandomIntSystemVariable(t)
 }
 
-func TestExecuteFile_UuidVariableConsistency(t *testing.T) {
-	test.TestExecuteFile_UuidVariableConsistency(t)
+// GraphQL tests
+func TestExecuteFile_GraphQLBasicQuery(t *testing.T) {
+	test.RunExecuteFile_GraphQLBasicQuery(t)
 }
 
-func TestExecuteFile_MultipleSystemVarsConsistency(t *testing.T) {
-	test.TestExecuteFile_MultipleSystemVarsConsistency(t)
+func TestExecuteFile_GraphQLQueryWithVariables(t *testing.T) {
+	test.RunExecuteFile_GraphQLQueryWithVariables(t)
+}
+
+func TestExecuteFile_GraphQLMutation(t *testing.T) {
+	test.RunExecuteFile_GraphQLMutation(t)
+}
+
+func TestExecuteFile_GraphQLFragments(t *testing.T) {
+	test.RunExecuteFile_GraphQLFragments(t)
+}
+
+func TestExecuteFile_GraphQLIntrospection(t *testing.T) {
+	test.RunExecuteFile_GraphQLIntrospection(t)
+}
+
+func TestExecuteFile_GraphQLErrorHandling(t *testing.T) {
+	test.RunExecuteFile_GraphQLErrorHandling(t)
+}
+
+func TestExecuteFile_GraphQLBatchQueries(t *testing.T) {
+	test.RunExecuteFile_GraphQLBatchQueries(t)
 }
 
 // In-place variable tests
@@ -188,109 +173,6 @@ func TestExecuteFile_InPlace_VariableDefinedByRandomInt(t *testing.T) {
 }
 
 // GraphQL tests
-func TestExecuteFile_GraphQLBasicQuery(t *testing.T) {
-	test.RunExecuteFile_GraphQLBasicQuery(t)
-}
-
-func TestExecuteFile_GraphQLQueryWithVariables(t *testing.T) {
-	test.RunExecuteFile_GraphQLQueryWithVariables(t)
-}
-
-func TestExecuteFile_GraphQLMutation(t *testing.T) {
-	test.RunExecuteFile_GraphQLMutation(t)
-}
-
-func TestExecuteFile_GraphQLFragments(t *testing.T) {
-	test.RunExecuteFile_GraphQLFragments(t)
-}
-
-func TestExecuteFile_GraphQLIntrospection(t *testing.T) {
-	test.RunExecuteFile_GraphQLIntrospection(t)
-}
-
-func TestExecuteFile_GraphQLErrorHandling(t *testing.T) {
-	test.RunExecuteFile_GraphQLErrorHandling(t)
-}
-
-func TestExecuteFile_GraphQLBatchQueries(t *testing.T) {
-	test.RunExecuteFile_GraphQLBatchQueries(t)
-}
-
-// ParseFile tests
-func TestParseFile_SingleRequest(t *testing.T) {
-	test.RunParseFile_SingleRequest(t)
-}
-
-func TestParseFile_MultipleRequests(t *testing.T) {
-	test.RunParseFile_MultipleRequests(t)
-}
-
-func TestParseFile_NamedRequests(t *testing.T) {
-	test.RunParseFile_NamedRequests(t)
-}
-
-func TestParseFile_NoRequests(t *testing.T) {
-	test.RunParseFile_NoRequests(t)
-}
-
-func TestParseFile_FileNotFound(t *testing.T) {
-	test.RunParseFile_FileNotFound(t)
-}
-
-// ExecuteRequest tests
-func TestExecuteRequest_ByIndex(t *testing.T) {
-	test.RunExecuteRequest_ByIndex(t)
-}
-
-func TestExecuteRequest_OutOfRange(t *testing.T) {
-	test.RunExecuteRequest_OutOfRange(t)
-}
-
-func TestExecuteRequest_NegativeIndex(t *testing.T) {
-	test.RunExecuteRequest_NegativeIndex(t)
-}
-
-func TestExecuteRequest_SecondOfThree(t *testing.T) {
-	test.RunExecuteRequest_SecondOfThree(t)
-}
-
-// Response reference tests
-func TestResponseRef_StatusCode(t *testing.T) {
-	test.RunResponseRef_StatusCode(t)
-}
-
-func TestResponseRef_BodyField(t *testing.T) {
-	test.RunResponseRef_BodyField(t)
-}
-
-func TestResponseRef_HeaderValue(t *testing.T) {
-	test.RunResponseRef_HeaderValue(t)
-}
-
-func TestResponseRef_NestedBodyField(t *testing.T) {
-	test.RunResponseRef_NestedBodyField(t)
-}
-
-func TestResponseRef_ArrayIndex(t *testing.T) {
-	test.RunResponseRef_ArrayIndex(t)
-}
-
-func TestResponseRef_MissingName(t *testing.T) {
-	test.RunResponseRef_MissingName(t)
-}
-
-func TestResponseRef_BodyWhole(t *testing.T) {
-	test.RunResponseRef_BodyWhole(t)
-}
-
-// System variable tests
-func TestSystemVar_Base64Encode(t *testing.T) {
-	test.RunSystemVar_Base64Encode(t)
-}
-
-func TestSystemVar_Base64EncodeInBody(t *testing.T) {
-	test.RunSystemVar_Base64EncodeInBody(t)
-}
 
 // Test helper tests
 func TestCreateTestFileFromTemplate_DebugOutput(t *testing.T) {
