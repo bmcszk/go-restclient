@@ -5,26 +5,6 @@ import (
 	"testing"
 )
 
-func (p *parts) parsedRequestRefs(i int, wantName string, wantForce bool) *parts {
-	p.require.Greater(len(p.parsedFile.Requests), i)
-	req := p.parsedFile.Requests[i]
-	p.require.NotEmpty(req.Refs, "request %d has no refs", i)
-
-	found := false
-	for _, ref := range req.Refs {
-		if ref.Name == wantName {
-			p.assert.Equal(wantForce, ref.Force,
-				"ref %q force flag (expected %v)", wantName, wantForce)
-			found = true
-
-			break
-		}
-	}
-	p.require.True(found, "request %d missing ref %q", i, wantName)
-
-	return p
-}
-
 func TestExecuteFile_RequestRefs_ParserRecordsRefAndForceRef(t *testing.T) {
 	given, when, then := newParts(t)
 
