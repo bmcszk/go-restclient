@@ -281,6 +281,7 @@ func (c *Client) ParseFile(requestFilePath string) (*ParsedFile, error) {
 
 // ExecuteRequest executes a single request from a parsed file by index.
 // The caller must first call ParseFile to obtain the parsed file.
+// @ref/@forceRef dependencies of the request are resolved depth-first before execution.
 func (c *Client) ExecuteRequest(ctx context.Context, parsedFile *ParsedFile, index int) (*Response, error) {
 	if index < 0 || index >= len(parsedFile.Requests) {
 		return nil, fmt.Errorf("request index %d out of range (file has %d requests)", index, len(parsedFile.Requests))
@@ -288,6 +289,9 @@ func (c *Client) ExecuteRequest(ctx context.Context, parsedFile *ParsedFile, ind
 
 	osEnvGetter := func(key string) (string, bool) { return os.LookupEnv(key) }
 	restClientReq := parsedFile.Requests[index]
+	if err := c.resolveRequestRefs(ctx, restClientReq, parsedFile, newRefExecutionState(), osEnvGetter); err != nil {
+		return nil, err
+	}
 	response, err := c.executeRequestWithVariables(ctx, restClientReq, parsedFile, osEnvGetter, index)
 	if err != nil {
 		if response == nil {
