@@ -194,3 +194,72 @@ func TestExecuteFile_RequestRefs_RefResponseUsableInReferencingRequest(t *testin
 		serverReceivedHeaderValue(1, "X-Via", "text/plain; charset=utf-8").and().
 		capturedBodyContains(1, `"statusRef":"200"`)
 }
+
+// TestExecuteFile_RequestImports_CrossFileRefAndVars verifies `@import ./file.http` exposes
+// the imported file's file-global variables and named requests to the importing file:
+// the importing request substitutes `{{importedBase}}` in the URL and
+// `{{token.response.body.token}}` in a header from the imported named request.
+func TestExecuteFile_RequestImports_CrossFileRefAndVars(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aTemplateFixture("http_request_files", "refs_import_def.http",
+			struct{ ServerURL string }{ServerURL: given.serverURL}).and().
+		aTemplateFixture("http_request_files", "refs_import_use.http",
+			struct{ ServerURL string }{ServerURL: given.serverURL}).and().
+		aClient()
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		requestCount(2).and().
+		serverReceivedMethodAndPath(0, http.MethodPost, "/token").and().
+		serverReceivedMethodAndPath(1, http.MethodPost, "/users").and().
+		serverReceivedHeaderValue(1, "X-Token", "tok-9")
+}
+
+// TestExecuteFile_RequestImports_MissingFileFails verifies an `@import` pointing at a file
+// that does not exist produces an error naming the missing path.
+func TestExecuteFile_RequestImports_MissingFileFails(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aTemplateFixture("http_request_files", "refs_import_missing.http",
+			struct{ ServerURL string }{ServerURL: given.serverURL}).and().
+		aClient()
+
+	when.
+		executeFile()
+
+	then.
+		errorContains("does_not_exist.http")
+}
+
+// TestExecuteFile_RequestImports_ImportedRequestRefCached verifies the `@ref` cache semantics
+// carry over to imported-file named requests: two importing requests both referencing the
+// same imported named request run the imported request exactly once.
+func TestExecuteFile_RequestImports_ImportedRequestRefCached(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aTemplateFixture("http_request_files", "refs_import_def.http",
+			struct{ ServerURL string }{ServerURL: given.serverURL}).and().
+		aTemplateFixture("http_request_files", "refs_import_use_cache.http",
+			struct{ ServerURL string }{ServerURL: given.serverURL}).and().
+		aClient()
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		requestCount(3).and().
+		capturedRequestPathIs(0, "/token").and().
+		capturedRequestPathIs(1, "/users/a").and().
+		capturedRequestPathIs(2, "/users/b")
+}

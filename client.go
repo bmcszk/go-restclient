@@ -108,6 +108,10 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 	refState := newRefExecutionState()
 
 	for i, restClientReq := range parsedFile.Requests {
+		// @import'd requests run only when invoked via @ref/@forceRef from a local request.
+		if restClientReq.Imported {
+			continue
+		}
 		c.runOneRequest(ctx, restClientReq, i, parsedFile, refState, osEnvGetter, &responses, &multiErr)
 	}
 

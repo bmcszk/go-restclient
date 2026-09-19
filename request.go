@@ -69,6 +69,11 @@ type Request struct {
 
 	// Refs lists declared @ref/@forceRef dependencies, in declaration order.
 	Refs []RequestRef
+
+	// Imported marks a request that came from an @import'd file. The executor
+	// skips such requests in the main loop; they run only when pulled in by
+	// @ref/@forceRef from a request in the importing file.
+	Imported bool
 }
 
 // ParsedFile represents all content parsed from a single .rest or .http file.

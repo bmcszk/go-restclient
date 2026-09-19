@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -45,6 +46,12 @@ type requestParserState struct {
 	// Multi-line query parameter support
 	queryParams        []string // Accumulated query parameters from multi-line syntax
 	parsingQueryParams bool     // Flag to indicate we're collecting query parameters
+
+	// importedParsedFiles collects the ParsedFile of every `# @import` directive
+	// encountered while parsing the current file. They are appended to
+	// parsedFile.Requests (and marked Imported=true) at finalize time so that
+	// local request indices remain stable.
+	importedParsedFiles []*ParsedFile
 }
 
 // processFileLines reads and processes all lines from the reader
@@ -99,6 +106,16 @@ func finalizeParseResults(parserState *requestParserState) {
 
 	for k, v := range parserState.currentFileVariables {
 		parserState.parsedFile.FileVariables[k] = v
+	}
+
+	// Append imported-file requests AFTER local ones so local indices stay stable.
+	// Imported requests are skipped by the executor's main loop and only run when
+	// pulled in by an @ref/@forceRef from a local request.
+	for _, imported := range parserState.importedParsedFiles {
+		for _, req := range imported.Requests {
+			req.Imported = true
+			parserState.parsedFile.Requests = append(parserState.parsedFile.Requests, req)
+		}
 	}
 }
 
@@ -273,6 +290,9 @@ func (p *requestParserState) processCommentDirectives(commentContent string) err
 	if p.handleTimeoutDirective(commentContent) {
 		return nil
 	}
+	if handled, err := p.handleImportDirective(commentContent); handled {
+		return err
+	}
 	return p.handleRefDirective(commentContent) // Other comment content - no special handling needed
 }
 
@@ -322,6 +342,37 @@ func (p *requestParserState) handleRefDirective(commentContent string) error {
 		return p.appendRef("@ref", commentContent[len("@ref "):])
 	}
 	return nil
+}
+
+// handleImportDirective resolves `# @import <relative-path>` against the current
+// file's directory, parses the imported file (reusing parseRequestFile's import
+// stack for cycle detection), merges the imported file's file-global variables
+// into the current scope with local definitions winning on clash, and stashes
+// the imported ParsedFile for append-after-localize at finalize time.
+// It returns handled=true when the comment is an @import directive (whether or
+// not it produced an error).
+func (p *requestParserState) handleImportDirective(commentContent string) (bool, error) {
+	const prefix = "@import"
+	if !strings.HasPrefix(commentContent, prefix) {
+		return false, nil
+	}
+	raw := strings.TrimSpace(commentContent[len(prefix):])
+	if raw == "" {
+		return true, errors.New("@import directive requires a path")
+	}
+	importedPath := filepath.Join(filepath.Dir(p.filePath), raw)
+	imported, err := parseRequestFile(importedPath, p.client, p.importStack)
+	if err != nil {
+		return true, fmt.Errorf("@import %s: %w", raw, err)
+	}
+	for k, v := range imported.FileVariables {
+		if _, already := p.currentFileVariables[k]; already {
+			continue
+		}
+		p.currentFileVariables[k] = v
+	}
+	p.importedParsedFiles = append(p.importedParsedFiles, imported)
+	return true, nil
 }
 
 func (p *requestParserState) appendRef(directive, raw string) error {
