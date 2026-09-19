@@ -8,7 +8,7 @@ tags:
     - epic
     - httpyac-parity
 created_at: 2026-09-19T14:14:52Z
-updated_at: 2026-09-19T14:16:10Z
+updated_at: 2026-09-19T14:42:39Z
 ---
 
 ## Goal
@@ -28,3 +28,7 @@ Declarative request referencing so `.http` files express prerequisite chains (lo
 - [ ] Referenced responses addressable via existing `{{name.response.*}}` syntax
 - [ ] Works in library (`ExecuteFile`) and CLI (`-n` triggers its ref chain, `--all`)
 - [ ] Docs updated (`docs/http_syntax.md`, README)
+
+## Progress
+
+- [x] go-restclient-n6cb parser+executor (PR #37, commit f372bd3)
