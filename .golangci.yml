@@ -25,6 +25,7 @@ linters:
         linters:
           - errcheck
           - unparam
+          - dupl
   settings:
     revive:
       enable-all-rules: true

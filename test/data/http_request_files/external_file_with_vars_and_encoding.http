@@ -1,0 +1,8 @@
+@name = TestName
+@id = 12345
+
+### External File with Variable Substitution and Encoding
+POST [[.ServerURL]]/post
+Content-Type: text/plain; charset=iso-8859-1
+
+<@latin1 ./vars_latin1.txt

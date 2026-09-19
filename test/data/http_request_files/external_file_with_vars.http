@@ -1,0 +1,9 @@
+@userId = user123
+@userName = John Doe
+@env = testing
+
+### External File with Variable Substitution
+POST [[.ServerURL]]/post
+Content-Type: application/json
+
+<@ test_vars.json

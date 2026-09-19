@@ -1,0 +1,4 @@
+POST [[.ServerURL]]/post
+Content-Type: application/json
+
+< test_static.json

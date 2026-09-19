@@ -1,0 +1,6 @@
+{
+  "userId": "{{userId}}",
+  "name": "{{userName}}",
+  "timestamp": "{{$timestamp}}",
+  "environment": "{{env}}"
+}
