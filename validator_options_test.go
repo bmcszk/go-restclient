@@ -8,6 +8,7 @@ import "testing"
 // production path was not exercised by the legacy validator tests; adding
 // fluent coverage here brings the migrated suite to the gate-mandated count
 // after the intentional drop of TestCreateTestFileFromTemplate_DebugOutput.
+
 func TestValidateResponsesWithOptions_OutOfRangeIndex(t *testing.T) {
 	given, when, then := newParts(t)
 

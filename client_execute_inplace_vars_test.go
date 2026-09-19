@@ -1,4 +1,3 @@
-// Code in this file is migrated from test/client_execute_inplace_vars.go (all RunExecuteFile_InPlace_*).
 package restclient_test
 
 import (
@@ -10,6 +9,7 @@ import (
 )
 
 // TestExecuteFile_InPlace_SimpleVariableInURL: In-Place Variables - Simple Definition and URL Substitution.
+
 func TestExecuteFile_InPlace_SimpleVariableInURL(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -382,7 +382,6 @@ func TestExecuteFile_InPlace_Malformed_NoNameEqualsValue(t *testing.T) {
 
 // TestExecuteFile_InPlace_VariableDefinedByDotEnvSystemVariable: In-Place - {{$dotenv VAR}}.
 //
-// The fixture directory contains the .env file with DOTENV_VAR_FOR_SYSTEM_TEST=actual_dotenv_value.
 // The .http file references it via {{$dotenv}}. capturedRequestPathIs asserts the substitution.
 func TestExecuteFile_InPlace_VariableDefinedByDotEnvSystemVariable(t *testing.T) {
 	given, when, then := newParts(t)

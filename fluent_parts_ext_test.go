@@ -20,11 +20,8 @@ import (
 	rc "github.com/bmcszk/go-restclient"
 )
 
-// This file extends the fluent DSL (fluent_parts_test.go) with the entry points
 // introduced by the batch-2b test migration. Same conventions: state lives in parts,
 // assertions come from parts.require / parts.assert, .and() stays at end of line.
-
-// --- Given ---
 
 // anExternalFile writes content to <baseDir>/name. The content is stored verbatim; no
 // {{server}} substitution happens. The written file becomes the request file under test
@@ -46,7 +43,6 @@ func (p *parts) anExternalFileBytes(name string, data []byte) *parts {
 // aFormattedRequestFixture reads a committed request fixture containing %s placeholders,
 // applies fmt.Sprintf with the given substitutions in order and writes the result to a
 // temp file that becomes the .http file under test. Fixtures are looked up in
-// requestFilesDir first, then in test/data/execute_file_ignore_empty_blocks.
 func (p *parts) aFormattedRequestFixture(name string, substitutions ...string) *parts {
 	baseContent, err := os.ReadFile(filepath.Join(requestFilesDir, name))
 	if err != nil {
@@ -92,7 +88,6 @@ func (p *parts) aMissingFile(path string) *parts {
 }
 
 // aDotEnvFile writes content to <baseDir>/.env. The parser resolves .env relative to the
-// REQUEST FILE directory (filepath.Dir(httpFilePath)), and aHttpFile writes to p.baseDir,
 // so this works for aTempDir-based .http files. No-op safety: writing empty content is allowed.
 func (p *parts) aDotEnvFile(content string) *parts {
 	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, ".env"), []byte(content), 0644))
@@ -107,7 +102,6 @@ func (p *parts) aDotEnvFileRemoved() *parts {
 }
 
 // aFixtureCopy reads the committed fixture file at repo-root-relative requestPath, applies
-// each replacement (old->new), writes result to <baseDir>/destName and makes it the http file
 // under test. Used for fixtures that need per-test substitution beyond the [[ ]] templating
 // (e.g. http-client.env.json handling) or plain copies of committed fixtures that must live
 // next to a .env file.
@@ -166,8 +160,6 @@ func (p *parts) writeTempFile(name, content string) {
 	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, name), []byte(content), 0644))
 }
 
-// --- When ---
-
 // parsingFile parses the .http file without executing any request.
 func (p *parts) parsingFile() *parts {
 	p.require.NotNil(p.client)
@@ -189,8 +181,6 @@ func (p *parts) executingRequestAt(index int) *parts {
 
 	return p
 }
-
-// --- Then ---
 
 // parseSucceeded asserts the file was parsed without error.
 func (p *parts) parseSucceeded() *parts {
@@ -244,8 +234,6 @@ func (p *parts) parsedRequestRawURLIs(i int, rawURL string) *parts {
 	return p
 }
 
-// requestURLContains asserts every given fragment appears in the URL of the selected
-// response's originating request.
 func (p *parts) requestURLContains(fragments ...string) *parts {
 	current := p.current()
 	p.require.NotNil(current.Request)
@@ -257,7 +245,6 @@ func (p *parts) requestURLContains(fragments ...string) *parts {
 	return p
 }
 
-// requestHeaderIs asserts a header value of the selected response's originating request.
 func (p *parts) requestHeaderIs(key, value string) *parts {
 	current := p.current()
 	p.require.NotNil(current.Request)
@@ -266,7 +253,6 @@ func (p *parts) requestHeaderIs(key, value string) *parts {
 	return p
 }
 
-// requestRawBodyIs asserts the exact raw body of the selected response's originating request.
 func (p *parts) requestRawBodyIs(body string) *parts {
 	current := p.current()
 	p.require.NotNil(current.Request)
@@ -274,9 +260,6 @@ func (p *parts) requestRawBodyIs(body string) *parts {
 
 	return p
 }
-
-// requestRawBodyContains asserts every given fragment appears in the raw body of the
-// selected response's originating request.
 func (p *parts) requestRawBodyContains(fragments ...string) *parts {
 	current := p.current()
 	p.require.NotNil(current.Request)
@@ -288,8 +271,6 @@ func (p *parts) requestRawBodyContains(fragments ...string) *parts {
 	return p
 }
 
-// requestRawBodyMatchesRegexp asserts the raw body of the selected response's originating
-// request matches the given regular expression.
 func (p *parts) requestRawBodyMatchesRegexp(pattern string) *parts {
 	current := p.current()
 	p.require.NotNil(current.Request)
@@ -328,7 +309,6 @@ func (p *parts) serverReceivedLatin1BodyIs(index int, body string) *parts {
 	return p
 }
 
-// allResponseCodesAre asserts every captured response has the given status code.
 func (p *parts) allResponseCodesAre(code int) *parts {
 	p.require.NotEmpty(p.responses)
 
@@ -350,9 +330,6 @@ func (p *parts) tracking(name string) *parts {
 
 	return p
 }
-
-// capturedURLSegment appends the last "/"-segment of the captured request URL path at
-// index to the active tracking bucket.
 func (p *parts) capturedURLSegment(index int) *parts {
 	p.require.Greater(len(p.capturedRequests), index)
 
@@ -361,9 +338,6 @@ func (p *parts) capturedURLSegment(index int) *parts {
 
 	return p
 }
-
-// capturedURLSegmentAt appends the "/"-segment at segmentIndex (0 = segment right after the
-// leading "/") of the captured request URL path at reqIndex to the active tracking bucket.
 func (p *parts) capturedURLSegmentAt(reqIndex, segmentIndex int) *parts {
 	p.require.Greater(len(p.capturedRequests), reqIndex)
 
@@ -373,18 +347,12 @@ func (p *parts) capturedURLSegmentAt(reqIndex, segmentIndex int) *parts {
 
 	return p
 }
-
-// capturedHeaderField appends a captured request header value at index to the active
-// tracking bucket.
 func (p *parts) capturedHeaderField(index int, key string) *parts {
 	p.require.Greater(len(p.capturedRequests), index)
 	p.track(p.capturedRequests[index].Header.Get(key))
 
 	return p
 }
-
-// capturedJSONField walks the given path through the captured JSON body at index and
-// appends the string leaf to the active tracking bucket.
 func (p *parts) capturedJSONField(index int, path ...string) *parts {
 	leaf, ok := p.capturedJSONLeaf(index, path).(string)
 	p.require.True(ok, "field %v is not a string", path)
@@ -392,9 +360,6 @@ func (p *parts) capturedJSONField(index int, path ...string) *parts {
 
 	return p
 }
-
-// capturedJSONNumberField walks the given path through the captured JSON body at index,
-// expects a numeric leaf and appends it formatted as an integer to the active bucket.
 func (p *parts) capturedJSONNumberField(index int, path ...string) *parts {
 	value, ok := p.capturedJSONLeaf(index, path).(float64)
 	p.require.True(ok, "field %v is not a number", path)
@@ -403,7 +368,6 @@ func (p *parts) capturedJSONNumberField(index int, path ...string) *parts {
 	return p
 }
 
-// allTrackedValuesEqual asserts every value tracked in the active bucket equals the first.
 func (p *parts) allTrackedValuesEqual() *parts {
 	values := p.activeBucket()
 	p.require.NotEmpty(values)
@@ -415,7 +379,6 @@ func (p *parts) allTrackedValuesEqual() *parts {
 	return p
 }
 
-// allTrackedValuesAreValidUUIDs asserts every value in the active bucket parses as a UUID.
 func (p *parts) allTrackedValuesAreValidUUIDs() *parts {
 	for _, value := range p.activeBucket() {
 		_, err := uuid.Parse(value)
@@ -424,9 +387,6 @@ func (p *parts) allTrackedValuesAreValidUUIDs() *parts {
 
 	return p
 }
-
-// allTrackedValuesArePositiveIntegers asserts every value in the active bucket parses as
-// an integer greater than zero.
 func (p *parts) allTrackedValuesArePositiveIntegers() *parts {
 	for _, value := range p.activeBucket() {
 		number, err := strconv.ParseInt(value, 10, 64)
@@ -466,8 +426,6 @@ func (p *parts) track(value string) {
 	p.trackedValues[p.activeTrack] = append(p.trackedValues[p.activeTrack], value)
 }
 
-// capturedJSONLeaf walks the given path through the captured JSON body at index and
-// returns the leaf value, requiring every step to resolve.
 func (p *parts) capturedJSONLeaf(index int, path []string) any {
 	p.require.Greater(len(p.capturedBodies), index)
 
@@ -486,7 +444,6 @@ func (p *parts) capturedJSONLeaf(index int, path []string) any {
 	return current
 }
 
-// capturedRequestURLIs asserts p.capturedRequests[index].URL.String() equals url.
 func (p *parts) capturedRequestURLIs(index int, rawURL string) *parts {
 	p.require.Greater(len(p.capturedRequests), index)
 	p.assert.Equal(rawURL, p.capturedRequests[index].URL.String())
@@ -494,7 +451,6 @@ func (p *parts) capturedRequestURLIs(index int, rawURL string) *parts {
 	return p
 }
 
-// capturedRequestPathIs asserts p.capturedRequests[index].URL.Path equals path.
 func (p *parts) capturedRequestPathIs(index int, path string) *parts {
 	p.require.Greater(len(p.capturedRequests), index)
 	p.assert.Equal(path, p.capturedRequests[index].URL.Path)
@@ -510,7 +466,6 @@ func (p *parts) serverReceivedHostIs(index int, host string) *parts {
 	return p
 }
 
-// capturedJSONStringMapIs unmarshals captured body at index into map[string]string (require
 // .NoError) and asserts each key/value equals.
 func (p *parts) capturedJSONStringMapIs(index int, expected map[string]string) *parts {
 	p.require.Greater(len(p.capturedBodies), index)
@@ -524,9 +479,6 @@ func (p *parts) capturedJSONStringMapIs(index int, expected map[string]string) *
 
 	return p
 }
-
-// requestPathMatchesCapturedPath asserts p.current().Request.URL.Path equals
-// p.capturedRequests[0].URL.Path. Generic capture-vs-request-object assertion.
 func (p *parts) requestPathMatchesCapturedPath() *parts {
 	current := p.current()
 	p.require.NotNil(current.Request)
@@ -535,9 +487,6 @@ func (p *parts) requestPathMatchesCapturedPath() *parts {
 
 	return p
 }
-
-// requestHeadersMatchCaptured asserts, for each given key, the selected response's
-// originating request header equals the corresponding captured server-side header.
 func (p *parts) requestHeadersMatchCaptured(keys ...string) *parts {
 	current := p.current()
 	p.require.NotNil(current.Request)
@@ -550,7 +499,6 @@ func (p *parts) requestHeadersMatchCaptured(keys ...string) *parts {
 	return p
 }
 
-// requestRawBodyMatchesCapturedBody asserts p.current().Request.RawBody equals
 // p.capturedBodies[0]. Together with server-side tracked equality this gives full
 // 1:1 parity for body fields.
 func (p *parts) requestRawBodyMatchesCapturedBody() *parts {
@@ -561,9 +509,6 @@ func (p *parts) requestRawBodyMatchesCapturedBody() *parts {
 
 	return p
 }
-
-// allTrackedValuesAreValidRFC3339Timestamps asserts every value in the active bucket parses
-// with time.RFC3339Nano.
 func (p *parts) allTrackedValuesAreValidRFC3339Timestamps() *parts {
 	for _, value := range p.activeBucket() {
 		_, err := time.Parse(time.RFC3339Nano, value)
@@ -573,7 +518,6 @@ func (p *parts) allTrackedValuesAreValidRFC3339Timestamps() *parts {
 	return p
 }
 
-// allTrackedDatetimeValuesAreWithin asserts every value in the active bucket parses with
 // the given layout (layout "timestamp" means Unix seconds; time.Unix is used) and falls
 // within threshold of time.Now(). For non-timestamp layouts time.Parse is used.
 func (p *parts) allTrackedDatetimeValuesAreWithin(threshold time.Duration, layout string) *parts {
@@ -600,7 +544,6 @@ func (p *parts) allTrackedDatetimeValuesAreWithin(threshold time.Duration, layou
 	return p
 }
 
-// allTrackedDatetimeValuesHaveUTCZone asserts every value in the active bucket resolves to
 // time.UTC. The bucket values may be RFC1123, RFC3339 or Unix-seconds timestamps; all of
 // these resolve to a location whose UTC offset matches time.UTC.
 func (p *parts) allTrackedDatetimeValuesHaveUTCZone() *parts {
@@ -625,7 +568,6 @@ func (p *parts) allTrackedDatetimeValuesHaveUTCZone() *parts {
 	return p
 }
 
-// allTrackedDatetimeValuesHaveLocalZone asserts every value in the active bucket resolves
 // to the local timezone offset. Layout "timestamp" uses time.Unix().In(time.Local) and
 // accepts any offset.
 func (p *parts) allTrackedDatetimeValuesHaveLocalZone() *parts {
@@ -652,7 +594,6 @@ func (p *parts) allTrackedDatetimeValuesHaveLocalZone() *parts {
 	return p
 }
 
-// capturedJSONFieldIs requires the JSON leaf at the given path equals want.
 func (p *parts) capturedJSONFieldIs(index int, want string, path ...string) *parts {
 	leaf := p.capturedJSONLeaf(index, path)
 	switch v := leaf.(type) {
@@ -667,7 +608,6 @@ func (p *parts) capturedJSONFieldIs(index int, want string, path ...string) *par
 	return p
 }
 
-// capturedJSONFieldContains requires the JSON string leaf at the given path contains fragment.
 func (p *parts) capturedJSONFieldContains(index int, fragment string, path ...string) *parts {
 	leaf, ok := p.capturedJSONLeaf(index, path).(string)
 	p.require.True(ok, "field %v is not a string", path)
@@ -675,9 +615,6 @@ func (p *parts) capturedJSONFieldContains(index int, fragment string, path ...st
 
 	return p
 }
-
-// capturedJSONFieldMatchesRegexp asserts the JSON string leaf at the given path matches
-// pattern.
 func (p *parts) capturedJSONFieldMatchesRegexp(index int, pattern string, path ...string) *parts {
 	leaf, ok := p.capturedJSONLeaf(index, path).(string)
 	p.require.True(ok, "field %v is not a string", path)
@@ -685,9 +622,6 @@ func (p *parts) capturedJSONFieldMatchesRegexp(index int, pattern string, path .
 
 	return p
 }
-
-// capturedJSONFieldNotContains asserts the JSON string leaf at the given path does not
-// contain fragment.
 func (p *parts) capturedJSONFieldNotContains(index int, fragment string, path ...string) *parts {
 	leaf, ok := p.capturedJSONLeaf(index, path).(string)
 	p.require.True(ok, "field %v is not a string", path)
@@ -730,16 +664,12 @@ func (p *parts) serverReceivedHeaderContains(index int, key, fragment string) *p
 	return p
 }
 
-// capturedRequestPathMatchesRegexp asserts capturedRequests[index].URL.Path matches pattern.
 func (p *parts) capturedRequestPathMatchesRegexp(index int, pattern string) *parts {
 	p.require.Greater(len(p.capturedRequests), index)
 	p.assert.Regexp(pattern, p.capturedRequests[index].URL.Path)
 
 	return p
 }
-
-// responsesValidateAgainst validates the executed responses against the expected file at
-// the given path and asserts the validation passes.
 func (p *parts) responsesValidateAgainst(expectedPath string) *parts {
 	p.require.NotNil(p.client)
 	p.assert.NoError(p.client.ValidateResponses(expectedPath, p.responses...))
@@ -761,7 +691,6 @@ func (p *parts) firstTrackedValueIsFloatInRange(lowest, highest float64) *parts 
 	return p
 }
 
-// allTrackedValuesMatchRegexp asserts every value in the active bucket matches pattern.
 func (p *parts) allTrackedValuesMatchRegexp(pattern string) *parts {
 	re := regexp.MustCompile(pattern)
 	for _, value := range p.activeBucket() {
@@ -771,7 +700,6 @@ func (p *parts) allTrackedValuesMatchRegexp(pattern string) *parts {
 	return p
 }
 
-// capturedBodyContains asserts p.capturedBodies[index] contains fragment.
 func (p *parts) capturedBodyContains(index int, fragment string) *parts {
 	p.require.Greater(len(p.capturedBodies), index)
 	p.assert.Contains(p.capturedBodies[index], fragment)
@@ -779,15 +707,92 @@ func (p *parts) capturedBodyContains(index int, fragment string) *parts {
 	return p
 }
 
-// capturedBodyMatchesRegexp asserts p.capturedBodies[index] matches pattern.
+// aHttpFileWithExternalFileEncoding writes a short request body that points at the named
+// external file with the given encoding directive (e.g. "latin1", "utf-8", "ascii"), and
+// stores the raw encoded content in an external file of the given name. The fixture request
+// body is rendered with [[.ServerURL]] substituted for the running test server. Encapsulating
+// the transform.Bytes encoding step here keeps the test func free of bytes/encoder logic.
+func (p *parts) aHttpFileWithExternalFileEncoding(
+	encodingName, externalFileName string, rawUTF8Content []byte, encoder transform.Transformer,
+) *parts {
+	var encoded []byte
+	if encoder != nil {
+		var err error
+		encoded, _, err = transform.Bytes(encoder, rawUTF8Content)
+		p.require.NoError(err)
+	} else {
+		encoded = rawUTF8Content
+	}
+
+	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, externalFileName), encoded, 0644))
+
+	return p.aHttpFileFromTemplateWithData("external_file_encoding.http",
+		struct {
+			ServerURL    string
+			EncodingName string
+			ExternalName string
+		}{p.serverURL, encodingName, externalFileName})
+}
+
+// aHttpFileWithExternalFile writes a short request body that points at the named external
+// file via <@, and stores the given JSON content in the external file. Replaces the older
+// inline fmt.Sprintf(...) + inline JSON literal in test funcs (see PR review comments 4/5).
+func (p *parts) aHttpFileWithExternalFile(externalFileName, externalFileContent string) *parts {
+	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, externalFileName), []byte(externalFileContent), 0644))
+
+	return p.aHttpFileFromTemplate("external_file_with_vars.http")
+}
+
+// aHttpFileWithExternalFileStatic writes a short request body that points at the named
+// external file via < (no @: NO variable substitution). Used by tests that need the raw
+// external file bytes verbatim (PR review comment 4 generalization).
+func (p *parts) aHttpFileWithExternalFileStatic(externalFileName, externalFileContent string) *parts {
+	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, externalFileName), []byte(externalFileContent), 0644))
+
+	return p.aHttpFileFromTemplate("external_file_static.http")
+}
+
+// fakerHeaderRule describes one header validation rule for the faker tests.
+// fieldCount == -1 (or 0) skips the field-count check. containsCheck != "" switches the
+// check from regex-match to substring-contain (and skips the field-count check too).
+type fakerHeaderRule struct {
+	key           string
+	pattern       string
+	fieldCount    int
+	containsCheck string
+}
+
+// serverReceivedFakerHeaders applies the standard set of faker-header assertions (regex
+// match + NotContains "{{" + optional field-count or contains check) to the captured request
+// at reqIndex, for every rule in rules. This is the single DSL entry point for faker header
+// validation across all faker-data tests; tests pass an inline []fakerHeaderRule literal.
+func (p *parts) serverReceivedFakerHeaders(reqIndex int, rules []fakerHeaderRule) *parts {
+	p.require.Greater(len(p.capturedRequests), reqIndex)
+
+	for _, rule := range rules {
+		got := p.capturedRequests[reqIndex].Header.Get(rule.key)
+		if rule.containsCheck != "" {
+			p.assert.Contains(got, rule.containsCheck)
+			p.assert.NotContains(got, "{{")
+			continue
+		}
+
+		p.assert.Regexp(rule.pattern, got)
+		p.assert.NotContains(got, "{{")
+		if rule.fieldCount > 0 {
+			p.assert.Len(strings.Fields(got), rule.fieldCount)
+		}
+	}
+
+	return p
+}
+
 func (p *parts) capturedBodyMatchesRegexp(index int, pattern string) *parts {
 	p.require.Greater(len(p.capturedBodies), index)
 	p.assert.Regexp(pattern, p.capturedBodies[index])
 
 	return p
 }
-
-// --- helpers ---
 
 // urlHost returns the host portion of the given URL string. Used to compute the
 // httptest server's host for assertions in http-client.env.json subtests.
@@ -866,4 +871,8 @@ var _ = []any{
 	(*parts).responsesValidateAgainst,
 	(*parts).capturedBodyContains,
 	(*parts).capturedBodyMatchesRegexp,
+	(*parts).aHttpFileWithExternalFileEncoding,
+	(*parts).aHttpFileWithExternalFile,
+	(*parts).aHttpFileWithExternalFileStatic,
+	(*parts).serverReceivedFakerHeaders,
 }

@@ -9,6 +9,7 @@ import (
 
 // TestExecuteFile_UuidVariableConsistency tests that a variable defined as
 // @scenarioId = {{$uuid}} maintains the same value throughout all uses in the file.
+
 func TestExecuteFile_UuidVariableConsistency(t *testing.T) {
 	given, when, then := newParts(t)
 

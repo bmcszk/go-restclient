@@ -1,0 +1,5 @@
+### External File with UTF-8 Encoding
+POST [[.ServerURL]]/post
+Content-Type: text/plain
+
+<@utf-8 ./test_encoding.txt

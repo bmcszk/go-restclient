@@ -1,4 +1,3 @@
-// Code in this file is migrated from test/client_execute_vars.go (RunExecuteFile_WithCustomVariables,
 // RunExecuteFile_WithProcessEnvSystemVariable, RunExecuteFile_WithDotEnvSystemVariable,
 // RunExecuteFile_WithProgrammaticVariables, RunExecuteFile_WithLocalDatetimeSystemVariable,
 // RunExecuteFile_VariableFunctionConsistency, RunExecuteFile_WithHttpClientEnvJson,
@@ -16,6 +15,7 @@ import (
 )
 
 // TestExecuteFile_WithCustomVariables: Custom Variables: Basic Definition and Substitution.
+
 func TestExecuteFile_WithCustomVariables(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -46,9 +46,6 @@ func TestExecuteFile_WithCustomVariables(t *testing.T) {
 		responseBodyIs("response for items ()")
 }
 
-// respondToCustomVariablesRequest dispatches the per-path response logic for the custom-
-// variables mock server. Extracted from the test func to keep cognitive complexity below
-// the revive threshold; it is only called from inside TestExecuteFile_WithCustomVariables.
 func respondToCustomVariablesRequest(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/users/testuser123":
@@ -114,81 +111,65 @@ func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
 		serverReceivedHeaderValue(0, "Cache-Control", "{{$processEnv UNDEFINED_CACHE_VAR_SHOULD_BE_EMPTY}}")
 }
 
-// TestExecuteFile_WithDotEnvSystemVariable: System Variables {{$dotenv.VAR_NAME}}.
-//
-// Two subtests are preserved with their original names. Each subtest creates fresh
-// parts so the .env file state from a previous scenario cannot leak.
-func TestExecuteFile_WithDotEnvSystemVariable(t *testing.T) {
-	t.Run("Scenario 1: .env file exists and variable is present", func(t *testing.T) {
-		given, when, then := newParts(t)
+// TestExecuteFile_WithDotEnvSystemVariable_Scenario1_EnvFileExists: System Variables {{$dotenv.VAR_NAME}}.
+// .env file exists and both DOTENV_VAR1 and DOTENV_VAR2 are present.
+func TestExecuteFile_WithDotEnvSystemVariable_Scenario1_EnvFileExists(t *testing.T) {
+	given, when, then := newParts(t)
 
-		given.
-			aDotEnvFileRemoved().and().
-			aDotEnvFile("DOTENV_VAR1=dotenv_value_one\nDOTENV_VAR2=another val from dotenv").and().
-			aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
-				w.WriteHeader(http.StatusOK)
-				_, _ = fmt.Fprint(w, "ok")
-			}).and().
-			aHttpFile(fmt.Sprintf(`
-GET %s/path-{{$dotenv DOTENV_VAR1}}/data
-Content-Type: application/json
-X-Dotenv-Value: {{$dotenv DOTENV_VAR2}}
+	given.
+		aDotEnvFileRemoved().and().
+		aDotEnvFile("DOTENV_VAR1=dotenv_value_one\nDOTENV_VAR2=another val from dotenv").and().
+		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "ok")
+		}).and().
+		aHttpFileFromTemplate("system_var_dotenv_present.http").and().
+		aClient()
 
-{
-  "payload": "{{$dotenv DOTENV_VAR1}}",
-  "missing_payload": "{{$dotenv MISSING_DOTENV_VAR}}"
-}`, given.serverURL)).and().
-			aClient()
+	when.
+		executeFile()
 
-		when.
-			executeFile()
+	then.
+		responseCount(1).and().
+		noError().and().
+		responseAt(0).and().
+		responseHasNoError().and().
+		responseCode(http.StatusOK).and().
+		capturedRequestURLIs(0, "/path-dotenv_value_one/data").and().
+		serverReceivedHeaderValue(0, "X-Dotenv-Value", "another val from dotenv").and().
+		capturedJSONStringMapIs(0, map[string]string{
+			"payload":         "dotenv_value_one",
+			"missing_payload": "",
+		})
+}
 
-		then.
-			responseCount(1).and().
-			noError().and().
-			responseAt(0).and().
-			responseHasNoError().and().
-			responseCode(http.StatusOK).and().
-			capturedRequestURLIs(0, "/path-dotenv_value_one/data").and().
-			serverReceivedHeaderValue(0, "X-Dotenv-Value", "another val from dotenv").and().
-			capturedJSONStringMapIs(0, map[string]string{
-				"payload":         "dotenv_value_one",
-				"missing_payload": "",
-			})
-	})
+// TestExecuteFile_WithDotEnvSystemVariable_Scenario2_EnvFileMissing: System Variables {{$dotenv.VAR_NAME}}.
+// No .env file: all {{$dotenv.*}} variables resolve to empty strings.
+func TestExecuteFile_WithDotEnvSystemVariable_Scenario2_EnvFileMissing(t *testing.T) {
+	given, when, then := newParts(t)
 
-	t.Run("Scenario 2: .env file does not exist", func(t *testing.T) {
-		given, when, then := newParts(t)
+	given.
+		aDotEnvFileRemoved().and().
+		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "ok")
+		}).and().
+		aHttpFileFromTemplate("system_var_dotenv_missing.http").and().
+		aClient()
 
-		given.
-			aDotEnvFileRemoved().and().
-			aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
-				w.WriteHeader(http.StatusOK)
-				_, _ = fmt.Fprint(w, "ok")
-			}).and().
-			aHttpFile(fmt.Sprintf(`
-GET %s/path-{{$dotenv DOTENV_VAR_SHOULD_BE_EMPTY}}/data
-User-Agent: test-client
+	when.
+		executeFile()
 
-{
-  "payload": "{{$dotenv DOTENV_VAR_ALSO_EMPTY}}"
-}`, given.serverURL)).and().
-			aClient()
-
-		when.
-			executeFile()
-
-		then.
-			responseCount(1).and().
-			noError().and().
-			responseAt(0).and().
-			responseHasNoError().and().
-			responseCode(http.StatusOK).and().
-			capturedRequestURLIs(0, "/path-/data").and().
-			capturedJSONStringMapIs(0, map[string]string{
-				"payload": "",
-			})
-	})
+	then.
+		responseCount(1).and().
+		noError().and().
+		responseAt(0).and().
+		responseHasNoError().and().
+		responseCode(http.StatusOK).and().
+		capturedRequestURLIs(0, "/path-/data").and().
+		capturedJSONStringMapIs(0, map[string]string{
+			"payload": "",
+		})
 }
 
 // TestExecuteFile_WithProgrammaticVariables: Programmatic Variable Injection.
@@ -278,10 +259,6 @@ func runTimestampConsistencyAssertions(t *testing.T) {
 }
 
 // TestExecuteFile_VariableFunctionConsistency: Variable Function Consistency (Internal).
-//
-// Server-side tracking already proves all values are equal pairwise. The
-// request-object equality is verified by requestPathMatchesCapturedPath +
-// requestHeadersMatchCaptured + requestRawBodyMatchesCapturedBody (parity 1:1).
 func TestExecuteFile_VariableFunctionConsistency(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -324,74 +301,72 @@ func TestExecuteFile_VariableFunctionConsistency(t *testing.T) {
 		requestRawBodyMatchesCapturedBody()
 }
 
-// TestExecuteFile_WithHttpClientEnvJson: Environment Configuration Files (http-client.env.json).
-//
-// Two subtests preserved with their exact original names. Each subtest builds its
-// own server + client (batch-2b subtest pattern) so the http-client.env.json file
-// state is fully isolated.
-func TestExecuteFile_WithHttpClientEnvJson(t *testing.T) {
-	t.Run("SCENARIO-LIB-018-004: no env selected, file exists", func(t *testing.T) {
-		given, when, then := newParts(t)
+// TestExecuteFile_WithHttpClientEnvJson_NoEnvSelected: Environment Configuration Files (http-client.env.json).
+// SCENARIO-LIB-018-004: env == "" means the http-client.env.json lookup is skipped, so
+// {{host}} in the request body is left as a literal placeholder.
+func TestExecuteFile_WithHttpClientEnvJson_NoEnvSelected(t *testing.T) {
+	given, when, then := newParts(t)
 
-		given.
-			aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
-				w.WriteHeader(http.StatusOK)
-				_, _ = fmt.Fprint(w, "ok")
-			}).and().
-			anEnvJsonFile("http-client.env.json",
-				"test/data/execute_file_httpclientenv/no_env_selected_env_template.json", given.serverURL).and().
-			aFixtureCopy("test/data/execute_file_httpclientenv/no_env_selected_request.http",
-				"request.http", nil).and().
-			aClientWithEnvironment("")
+	given.
+		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "ok")
+		}).and().
+		anEnvJsonFile("http-client.env.json",
+			"test/data/execute_file_httpclientenv/no_env_selected_env_template.json", given.serverURL).and().
+		aFixtureCopy("test/data/execute_file_httpclientenv/no_env_selected_request.http",
+			"request.http", nil).and().
+		aClientWithEnvironment("")
 
-		when.
-			executeFile()
+	when.
+		executeFile()
 
-		then.
-			errorContains("unsupported protocol scheme \"\"").and().
-			responseCount(1).and().
-			responseAt(0).and().
-			responseHasError("unsupported protocol scheme \"\"").and().
-			requestRawURLContains("{{host}}")
-	})
+	then.
+		errorContains("unsupported protocol scheme \"\"").and().
+		responseCount(1).and().
+		responseAt(0).and().
+		responseHasError("unsupported protocol scheme \"\"").and().
+		requestRawURLContains("{{host}}")
+}
 
-	t.Run("SCENARIO-LIB-018-005: private env overrides public env", func(t *testing.T) {
-		given, when, then := newParts(t)
+// TestExecuteFile_WithHttpClientEnvJson_PrivateOverridesPublic: Environment Configuration Files.
+// SCENARIO-LIB-018-005: when both http-client.env.json and http-client.private.env.json
+// exist and an env is selected, the private file's values override the public ones.
+func TestExecuteFile_WithHttpClientEnvJson_PrivateOverridesPublic(t *testing.T) {
+	given, when, then := newParts(t)
 
-		given.
-			aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
-				w.WriteHeader(http.StatusOK)
-				_, _ = fmt.Fprint(w, "ok")
-			})
+	given.
+		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "ok")
+		})
 
-		// serverURL is now populated; compute the expected host for assertions.
-		expectedHost := urlHost(given.serverURL)
+	expectedHost := urlHost(given.serverURL)
 
-		given.
-			anEnvJsonFile("http-client.env.json",
-				"test/data/execute_file_httpclientenv/private_overrides_public_env_template.json",
-				given.serverURL).and().
-			anEnvJsonFile("http-client.private.env.json",
-				"test/data/execute_file_httpclientenv/private_overrides_private_env.json",
-				given.serverURL).and().
-			aFixtureCopy("test/data/execute_file_httpclientenv/private_overrides_request.http",
-				"request.http", nil).and().
-			aClientWithEnvironment("dev")
+	given.
+		anEnvJsonFile("http-client.env.json",
+			"test/data/execute_file_httpclientenv/private_overrides_public_env_template.json",
+			given.serverURL).and().
+		anEnvJsonFile("http-client.private.env.json",
+			"test/data/execute_file_httpclientenv/private_overrides_private_env.json",
+			given.serverURL).and().
+		aFixtureCopy("test/data/execute_file_httpclientenv/private_overrides_request.http",
+			"request.http", nil).and().
+		aClientWithEnvironment("dev")
 
-		when.
-			executeFile()
+	when.
+		executeFile()
 
-		then.
-			responseCount(1).and().
-			noError().and().
-			responseAt(0).and().
-			responseHasNoError().and().
-			responseCode(http.StatusOK).and().
-			serverReceivedHostIs(0, expectedHost).and().
-			capturedRequestPathIs(0, "/test").and().
-			serverReceivedHeaderValue(0, "X-Custom-Header", "private_override_value").and().
-			serverReceivedJSONBody(0, `{"public":"public_value","private_only":"private_specific_value"}`)
-	})
+	then.
+		responseCount(1).and().
+		noError().and().
+		responseAt(0).and().
+		responseHasNoError().and().
+		responseCode(http.StatusOK).and().
+		serverReceivedHostIs(0, expectedHost).and().
+		capturedRequestPathIs(0, "/test").and().
+		serverReceivedHeaderValue(0, "X-Custom-Header", "private_override_value").and().
+		serverReceivedJSONBody(0, `{"public":"public_value","private_only":"private_specific_value"}`)
 }
 
 // TestExecuteFile_WithIndirectEnvironmentVariables: Indirect Environment Variable Lookup

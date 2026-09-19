@@ -1,4 +1,3 @@
-// Code in this file is migrated from test/client_execute_graphql.go (RunExecuteFile_GraphQL*).
 package restclient_test
 
 import (
@@ -23,6 +22,7 @@ type graphqlError struct {
 }
 
 // TestExecuteFile_GraphQLBasicQuery tests basic GraphQL query execution.
+
 func TestExecuteFile_GraphQLBasicQuery(t *testing.T) {
 	given, when, then := newParts(t)
 

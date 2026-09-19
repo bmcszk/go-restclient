@@ -1,0 +1,3 @@
+### Test Request with .rest extension
+GET [[.ServerURL]]/get_test_rest_extension
+X-Test-Header-Rest: rest-extension-test-value

@@ -7,6 +7,7 @@ import (
 
 // TestValidateResponses_JSON_WhitespaceComparison verifies that the validator
 // treats JSON with different whitespace / indentation / key ordering as equal.
+
 func TestValidateResponses_JSON_WhitespaceComparison(t *testing.T) {
 	given, when, then := newParts(t)
 

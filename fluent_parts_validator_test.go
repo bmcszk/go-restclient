@@ -10,7 +10,6 @@ import (
 	rc "github.com/bmcszk/go-restclient"
 )
 
-// This file extends the fluent DSL with the entry points used by the migrated
 // validator tests (batch 3). The validator tests never execute HTTP requests:
 // they hand-construct rc.Response values and call p.client.ValidateResponses
 // against a fixture file, so the given-methods below populate p.responses
@@ -20,10 +19,7 @@ import (
 // Same conventions: state lives in parts, assertions use parts.require /
 // parts.assert, .and() stays at end of line.
 
-// --- Given (validator-specific) ---
-
 // aResponseWith appends a hand-constructed rc.Response to p.responses. Body and
-// BodyString are populated (and Body set to []byte(body)) only when body != "".
 // The statusText is used verbatim as rc.Response.Status.
 func (p *parts) aResponseWith(statusCode int, statusText, body string, headers http.Header) *parts {
 	resp := &rc.Response{
@@ -47,7 +43,6 @@ func (p *parts) aResponseWithStatus(statusCode int, statusText string) *parts {
 // aResponseFromRawHTTPFile reads a raw HTTP response from a file at the given
 // repo-root-relative path, parses it with http.ReadResponse, and appends a
 // fully populated rc.Response (StatusCode, Status, Proto, Headers clone, Body,
-// BodyString) to p.responses.
 func (p *parts) aResponseFromRawHTTPFile(path string) *parts {
 	content, err := os.ReadFile(path)
 	p.require.NoError(err, "read raw http file %s", path)
@@ -148,7 +143,6 @@ func (p *parts) aNilResponse() *parts {
 }
 
 // anExpectedResponseFileAt sets p.expectedFilePath verbatim. Used to point at a
-// nonexistent file for the missing-file error case (anExpectedResponseFixture
 // always prepends the committed-fixture directory).
 func (p *parts) anExpectedResponseFileAt(path string) *parts {
 	p.expectedFilePath = path

@@ -8,6 +8,7 @@ import (
 // TestExecuteFile_MultipleSystemVarsConsistency tests that multiple system variables
 // defined in file-scoped variables maintain consistency across all requests in the file.
 // Capture paths verified against test/data/system_variables/multiple_system_vars_consistency.http.
+
 func TestExecuteFile_MultipleSystemVarsConsistency(t *testing.T) {
 	given, when, then := newParts(t)
 

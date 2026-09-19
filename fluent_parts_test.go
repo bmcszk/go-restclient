@@ -2,6 +2,7 @@ package restclient_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -24,14 +25,11 @@ import (
 )
 
 const (
-	// requestFilesDir is the committed request-fixture directory relative to the repo root.
 	requestFilesDir = "test/data/http_request_files"
 
-	// responseFilesDir is the committed expected-response fixture directory relative to the repo root.
 	responseFilesDir = "test/data/http_response_files"
 )
 
-// clientConfigSnapshot records the options applied via aClientWithDefaults for later assertion.
 type clientConfigSnapshot struct {
 	baseURL     string
 	headerKey   string
@@ -40,7 +38,6 @@ type clientConfigSnapshot struct {
 }
 
 // parts is the shared state for the fluent Given/When/Then test DSL.
-// The same instance is handed out as given, when and then.
 type parts struct {
 	*testing.T
 	require   *require.Assertions
@@ -48,22 +45,18 @@ type parts struct {
 	client    *rc.Client
 	servers   []*httptest.Server
 	serverURL string
-	// requestHits backs the requestCount assertion; a field and method cannot
 	// share the name requestCount in Go.
 	requestHits atomic.Int64
-	// capturedRequests records every request served by the most recent aHttpServer.
 	capturedRequests []*http.Request
 	// intercepted holds the outgoing request captured by aMockTransportClient.
 	intercepted *http.Request
 	// cookieCheck records whether the cookie test server received its cookie back.
 	cookieCheck bool
-	// clientConfig records the options applied via aClientWithDefaults for later assertion.
 	clientConfig clientConfigSnapshot
 	// activeServerVars holds the scheme/host/port variables of the running test server.
 	activeServerVars map[string]any
 	httpFilePath     string
 	expectedFilePath string
-	programmaticVars map[string]any
 	responses        []*rc.Response
 	execErr          error
 	validationErr    error
@@ -72,7 +65,6 @@ type parts struct {
 	parsedFile *rc.ParsedFile
 	// parseErr holds the error returned by parsingFile.
 	parseErr error
-	// capturedBodies mirrors capturedRequests: the request body read eagerly while the
 	// handler runs, because net/http closes the original body when the handler returns.
 	capturedBodies []string
 	// trackedValues holds consistency-tracking buckets keyed by tracking name.
@@ -99,8 +91,6 @@ func newParts(t *testing.T) (given, when, then *parts) {
 
 	return p, p, p
 }
-
-// and keeps the fluent chain readable.
 func (p *parts) and() *parts { return p }
 
 // multierrorCount counts the wrapped errors inside err.
@@ -115,8 +105,6 @@ func multierrorCount(err error) int {
 
 	return 1
 }
-
-// --- Given ---
 
 // aHttpServer starts a local test server that counts every request it serves. Each request
 // body is read eagerly (and the body rewound) because net/http closes the original body as
@@ -195,15 +183,6 @@ func (p *parts) aClient(opts ...rc.ClientOption) *parts {
 	client, err := rc.NewClient(opts...)
 	p.require.NoError(err)
 	p.client = client
-
-	return p
-}
-
-// withProgrammaticVars sets programmatic variables on the client.
-func (p *parts) withProgrammaticVars(vars map[string]any) *parts {
-	p.require.NotNil(p.client)
-	p.client.SetProgrammaticVars(vars)
-	p.programmaticVars = vars
 
 	return p
 }
@@ -379,39 +358,10 @@ func (p *parts) expectedResponseFile(content string) *parts {
 	return p
 }
 
-// --- When ---
-
 // executeFile runs every request in the .http file.
 func (p *parts) executeFile() *parts {
 	p.require.NotNil(p.client)
 	p.responses, p.execErr = p.client.ExecuteFile(context.Background(), p.httpFilePath)
-
-	return p
-}
-
-// sendingRequest executes the named request from the .http file.
-func (p *parts) sendingRequest(name string) *parts {
-	p.require.NotNil(p.client)
-
-	parsed, err := p.client.ParseFile(p.httpFilePath)
-	p.require.NoError(err)
-
-	index := -1
-	for i, req := range parsed.Requests {
-		if req.Name == name {
-			index = i
-
-			break
-		}
-	}
-
-	if index < 0 {
-		p.Fatalf("request %q not found in %s", name, p.httpFilePath)
-	}
-
-	resp, execErr := p.client.ExecuteRequest(context.Background(), parsed, index)
-	p.responses = append(p.responses, resp)
-	p.execErr = execErr
 
 	return p
 }
@@ -423,9 +373,6 @@ func (p *parts) validateResponses() *parts {
 	return p
 }
 
-// --- Then ---
-
-// responseAt selects the response the following assertions operate on.
 func (p *parts) responseAt(i int) *parts {
 	p.cursor = i
 
@@ -439,35 +386,24 @@ func (p *parts) current() *rc.Response {
 	return p.responses[p.cursor]
 }
 
-// responseCode asserts the status code of the selected response.
 func (p *parts) responseCode(code int) *parts {
 	p.require.Equal(code, p.current().StatusCode)
 
 	return p
 }
 
-// responseContains asserts the body of the selected response contains s.
 func (p *parts) responseContains(s string) *parts {
 	p.require.Contains(p.current().BodyString, s)
 
 	return p
 }
 
-// responseNotContains asserts the body of the selected response does not contain s.
-func (p *parts) responseNotContains(s string) *parts {
-	p.require.NotContains(p.current().BodyString, s)
-
-	return p
-}
-
-// responseBodyIs asserts the exact body of the selected response.
 func (p *parts) responseBodyIs(s string) *parts {
 	p.require.Equal(s, p.current().BodyString)
 
 	return p
 }
 
-// responseHeader asserts the value of a header of the selected response.
 func (p *parts) responseHeader(k, v string) *parts {
 	p.require.Equal(v, p.current().Headers.Get(k))
 
@@ -481,22 +417,17 @@ func (p *parts) executionSucceeded() *parts {
 	return p
 }
 
-// responseCount asserts how many responses the execution produced.
 func (p *parts) responseCount(n int) *parts {
 	p.require.Len(p.responses, n)
 
 	return p
 }
 
-// responseHasNoError asserts the selected response carries no execution error.
 func (p *parts) responseHasNoError() *parts {
 	p.require.NoError(p.current().Error)
 
 	return p
 }
-
-// responseHasError asserts the selected response carries an execution error mentioning
-// every given text.
 func (p *parts) responseHasError(texts ...string) *parts {
 	p.require.Error(p.current().Error)
 
@@ -507,58 +438,48 @@ func (p *parts) responseHasError(texts ...string) *parts {
 	return p
 }
 
-// responseHeaderValues asserts the exact values of a multi-value response header.
 func (p *parts) responseHeaderValues(key string, values ...string) *parts {
 	p.require.Equal(values, p.current().Headers[key])
 
 	return p
 }
 
-// responseHeaderEmpty asserts a header is absent from the selected response.
 func (p *parts) responseHeaderEmpty(key string) *parts {
 	p.require.Empty(p.current().Headers.Get(key))
 
 	return p
 }
 
-// clientBaseURLIs asserts the client's base URL equals the recorded configured value.
 func (p *parts) clientBaseURLIs(_ string) *parts {
 	p.require.Equal(p.clientConfig.baseURL, p.client.BaseURL)
 
 	return p
 }
 
-// clientBaseURLIsEmpty asserts the client has no base URL configured.
 func (p *parts) clientBaseURLIsEmpty() *parts {
 	p.assert.Empty(p.client.BaseURL)
 
 	return p
 }
 
-// clientDefaultHeaderIs asserts a client default header equals the recorded configured value.
 func (p *parts) clientDefaultHeaderIs(key, _ string) *parts {
 	p.require.Equal(p.clientConfig.headerValue, p.client.DefaultHeaders.Get(key))
 
 	return p
 }
 
-// clientExists asserts a client was built successfully and is not nil.
 func (p *parts) clientExists() *parts {
 	p.require.NotNil(p.client)
 
 	return p
 }
 
-// clientDefaultHeadersEmpty asserts the client has initialized but empty default headers.
 func (p *parts) clientDefaultHeadersEmpty() *parts {
 	p.require.NotNil(p.client.DefaultHeaders)
 	p.assert.Empty(p.client.DefaultHeaders)
 
 	return p
 }
-
-// clientRequestInterceptorCaptures asserts the outgoing request was intercepted and its
-// method and URL match the given values.
 func (p *parts) clientRequestInterceptorCaptures(method, wantURL string) *parts {
 	p.require.NotNil(p.intercepted)
 	p.assert.Equal(method, p.intercepted.Method)
@@ -567,7 +488,6 @@ func (p *parts) clientRequestInterceptorCaptures(method, wantURL string) *parts 
 	return p
 }
 
-// clientSentNoHeaders asserts the intercepted outgoing request carried no headers.
 func (p *parts) clientSentNoHeaders() *parts {
 	p.require.NotNil(p.intercepted)
 	p.assert.Empty(p.intercepted.Header)
@@ -619,33 +539,29 @@ func (p *parts) serverReceivedHeaderValue(index int, key, value string) *parts {
 	return p
 }
 
-// serverReceivedFormValue asserts a form field value at the given server-hit index.
-func (p *parts) serverReceivedFormValue(index int, field, value string) *parts {
-	p.require.Greater(len(p.capturedRequests), index)
-	p.assert.Equal(value, p.capturedRequests[index].FormValue(field))
-
-	return p
+// aJsonEchoServer returns an http.HandlerFunc that accepts POST /<path> with Content-Type
+// application/json, parses the body as JSON, echoes it back wrapped in {"json": ...}, and
+// responds 200 OK with Content-Type application/json. Used by external-file tests so the
+func (p *parts) aJsonEchoServer() *parts {
+	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
+		var data map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&data)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{"json": data})
+	})
 }
 
-// serverReceivedUploadedFile asserts a multipart file upload at the given server-hit index:
-// the form file must exist with the expected filename and content type.
-func (p *parts) serverReceivedUploadedFile(index int, fieldName, filename, contentType string) *parts {
-	p.require.Greater(len(p.capturedRequests), index)
-
-	p.require.NoError(p.capturedRequests[index].ParseMultipartForm(32 << 20)) // 32MB max
-
-	file, header, err := p.capturedRequests[index].FormFile(fieldName)
-	p.require.NoError(err)
-	defer func() { _ = file.Close() }()
-
-	p.assert.Equal(filename, header.Filename)
-	p.assert.Equal(contentType, header.Header.Get("Content-Type"))
-
-	return p
+// aRestExtensionServer is the dedicated handler for the .rest extension test: it serves
+// GET <path> with the given X-* header and returns 200 OK with a JSON body. The DSL method
+// hides the if/t.Errorf cascades (see PR review comment 6) — assertions live in
+// serverReceived* helpers that read capturedRequests.
+func (p *parts) aRestExtensionServer() *parts {
+	return p.aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status": "ok from .rest"}`))
+	})
 }
-
-// requestRawURLContains asserts every given fragment appears in the raw URL string of the
-// selected response's originating request.
 func (p *parts) requestRawURLContains(fragments ...string) *parts {
 	current := p.current()
 	p.require.NotNil(current.Request)
@@ -656,9 +572,6 @@ func (p *parts) requestRawURLContains(fragments ...string) *parts {
 
 	return p
 }
-
-// responsesValidateAgainstFixture validates the executed responses against the committed
-// expected-response fixture named name and asserts the validation passes.
 func (p *parts) responsesValidateAgainstFixture(name string) *parts {
 	path := filepath.Join(responseFilesDir, name)
 	p.assert.NoError(p.client.ValidateResponses(path, p.responses...))
@@ -666,7 +579,6 @@ func (p *parts) responsesValidateAgainstFixture(name string) *parts {
 	return p
 }
 
-// capturedRequestCount asserts how many distinct requests reached the test server.
 func (p *parts) capturedRequestCount(n int) *parts {
 	p.require.Equal(n, len(p.capturedRequests))
 
@@ -701,14 +613,6 @@ func (p *parts) errorContains(texts ...string) *parts {
 	return p
 }
 
-// errorCount asserts the number of errors returned by the execution.
-func (p *parts) errorCount(n int) *parts {
-	p.require.Equal(n, multierrorCount(p.execErr))
-
-	return p
-}
-
-// requestCount asserts how many requests hit the test server.
 func (p *parts) requestCount(n int64) *parts {
 	p.require.Equal(n, p.requestHits.Load())
 
@@ -770,18 +674,15 @@ var _ = []any{
 	(*parts).aCookieJarClient,
 	(*parts).aNoRedirectClient,
 	(*parts).aFreshCookieCheck,
-	(*parts).withProgrammaticVars,
 	(*parts).withEnv,
 	(*parts).withServerAddressVars,
 	(*parts).expectedResponseFile,
 	(*parts).executeFile,
-	(*parts).sendingRequest,
 	(*parts).validateResponses,
 	(*parts).responseAt,
 	(*parts).current,
 	(*parts).responseCode,
 	(*parts).responseContains,
-	(*parts).responseNotContains,
 	(*parts).responseBodyIs,
 	(*parts).responseHeader,
 	(*parts).responseHeaderValues,
@@ -802,7 +703,6 @@ var _ = []any{
 	(*parts).executionSucceeded,
 	(*parts).noError,
 	(*parts).errorContains,
-	(*parts).errorCount,
 	(*parts).requestCount,
 	(*parts).validationSucceeds,
 	(*parts).validationFails,
@@ -810,8 +710,8 @@ var _ = []any{
 	(*parts).serverReceivedMethodAndPath,
 	(*parts).serverReceivedJSONBody,
 	(*parts).serverReceivedHeaderValue,
-	(*parts).serverReceivedFormValue,
-	(*parts).serverReceivedUploadedFile,
+	(*parts).aJsonEchoServer,
+	(*parts).aRestExtensionServer,
 	(*parts).requestRawURLContains,
 	(*parts).responsesValidateAgainstFixture,
 }
