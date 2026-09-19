@@ -1,0 +1,6 @@
+@importedBase = users
+
+### token
+POST [[.ServerURL]]/token
+
+{"token":"tok-9"}

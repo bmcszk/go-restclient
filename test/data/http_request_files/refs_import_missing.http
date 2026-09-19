@@ -1,0 +1,3 @@
+# @import ./does_not_exist.http
+
+GET [[.ServerURL]]/ping

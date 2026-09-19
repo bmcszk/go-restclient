@@ -380,6 +380,49 @@ func TestCLI_DefineFlagMultiple(t *testing.T) {
 	assert.Equal(t, 0, code)
 }
 
+func TestCLI_NameSelectRunsRefChain(t *testing.T) {
+	var paths []string
+	server := startMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, "ok")
+	})
+	defer server.Close()
+
+	binary := buildBinary(t)
+	dir := t.TempDir()
+	filePath := writeTestFile(t, dir, "test.http",
+		fmt.Sprintf("### get protected\n# @ref login\nGET %s/protected\n###\n### login\nPOST %s/login\n",
+			server.URL, server.URL))
+
+	out, code := runBinary(t, binary, "-f", filePath, "-n", "get protected")
+	assert.Equal(t, 0, code, "stdout=%s", out)
+	assert.Equal(t, []string{"/login", "/protected"}, paths,
+		"@ref login must run before target even though login is declared later")
+}
+
+func TestCLI_AfterComposableWithRefChain(t *testing.T) {
+	var paths []string
+	server := startMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, "ok")
+	})
+	defer server.Close()
+
+	binary := buildBinary(t)
+	dir := t.TempDir()
+	filePath := writeTestFile(t, dir, "test.http",
+		fmt.Sprintf("### get protected\n# @ref login\nGET %s/protected\n"+
+			"###\n### login\nPOST %s/login\n###\n### health\nGET %s/health\n",
+			server.URL, server.URL, server.URL))
+
+	out, code := runBinary(t, binary, "-f", filePath, "-n", "get protected", "-A", "health")
+	assert.Equal(t, 0, code, "stdout=%s", out)
+	assert.Equal(t, []string{"/health", "/login", "/protected"}, paths,
+		"-A health runs first, then ref chain, then target")
+}
+
 func TestCLI_DefineFlagInvalid(t *testing.T) {
 	binary := buildBinary(t)
 	dir := t.TempDir()

@@ -15,6 +15,12 @@ type Script struct {
 	IsExternal bool   // True if the script is from an external file.
 }
 
+// RequestRef is a declared @ref/@forceRef dependency on another named request.
+type RequestRef struct {
+	Name  string
+	Force bool
+}
+
 // Request represents a parsed HTTP request from a .rest file.
 type Request struct {
 	// Name is an optional identifier for the request.
@@ -25,10 +31,10 @@ type Request struct {
 	URL          *url.URL // Parsed URL, potentially after variable substitution
 	HTTPVersion  string   // e.g., "HTTP/1.1"
 	Headers      http.Header
-	Body         io.Reader                     // For streaming body content after processing
+	Body         io.Reader // For streaming body content after processing
 	// Store the raw body string as read from the file, before variable substitution
-	RawBody      string
-	GetBody      func() (io.ReadCloser, error) // For http.Request.GetBody compatibility
+	RawBody string
+	GetBody func() (io.ReadCloser, error) // For http.Request.GetBody compatibility
 
 	// ActiveVariables are variables resolved at the time of request execution,
 	// sourced from environment, global scope (from previous scripts), and pre-request scripts.
@@ -60,6 +66,14 @@ type Request struct {
 	ExternalFileEncoding string
 	// ExternalFileWithVariables indicates if the external file should have variable substitution applied (<@ syntax)
 	ExternalFileWithVariables bool
+
+	// Refs lists declared @ref/@forceRef dependencies, in declaration order.
+	Refs []RequestRef
+
+	// Imported marks a request that came from an @import'd file. The executor
+	// skips such requests in the main loop; they run only when pulled in by
+	// @ref/@forceRef from a request in the importing file.
+	Imported bool
 }
 
 // ParsedFile represents all content parsed from a single .rest or .http file.
