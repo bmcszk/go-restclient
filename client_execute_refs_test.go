@@ -1,6 +1,7 @@
 package restclient_test
 
 import (
+	"net/http"
 	"testing"
 )
 
@@ -142,4 +143,54 @@ func TestExecuteFile_RequestRefs_UnknownRefFails(t *testing.T) {
 
 	then.
 		errorContains("ghost")
+}
+
+// TestExecuteFile_RequestRefs_TransitiveChain verifies the executor resolves a 3-deep
+// @ref chain depth-first: requesting `a` (which refs `b`, which refs `c`) must execute
+// `c`, then `b`, then `a`, with each ref still using the cache-only `# @ref` semantics.
+func TestExecuteFile_RequestRefs_TransitiveChain(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aTemplateFixture("http_request_files", "refs_transitive.http",
+			struct{ ServerURL string }{ServerURL: given.serverURL}).and().
+		aClient()
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		requestCount(3).and().
+		capturedRequestPathIs(0, "/c").and().
+		capturedRequestPathIs(1, "/b").and().
+		capturedRequestPathIs(2, "/a")
+}
+
+// TestExecuteFile_RequestRefs_RefResponseUsableInReferencingRequest verifies that
+// the `@ref`-ed request runs before the referencing request even when the referencing
+// request appears FIRST in the file, and that its response variables
+// (`{{name.response.body.x}}`, `{{name.response.headers.X}}`, `{{name.response.status}}`)
+// resolve correctly in the referencing request.
+func TestExecuteFile_RequestRefs_RefResponseUsableInReferencingRequest(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aTemplateFixture("http_request_files", "refs_respvar.http",
+			struct{ ServerURL string }{ServerURL: given.serverURL}).and().
+		aClient()
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		requestCount(2).and().
+		serverReceivedMethodAndPath(0, http.MethodPost, "/login").and().
+		serverReceivedMethodAndPath(1, http.MethodPost, "/use").and().
+		serverReceivedHeaderValue(1, "X-Trace", "tok-123").and().
+		serverReceivedHeaderValue(1, "X-Via", "text/plain; charset=utf-8").and().
+		capturedBodyContains(1, `"statusRef":"200"`)
 }
