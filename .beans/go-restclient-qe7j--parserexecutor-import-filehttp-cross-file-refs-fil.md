@@ -1,11 +1,11 @@
 ---
 # go-restclient-qe7j
 title: 'Parser+executor: @import ./file.http (cross-file refs + file-global vars)'
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-09-19T14:16:10Z
-updated_at: 2026-09-19T14:16:10Z
+updated_at: 2026-09-19T18:08:59Z
 parent: go-restclient-8y9h
 blocked_by:
     - go-restclient-maez

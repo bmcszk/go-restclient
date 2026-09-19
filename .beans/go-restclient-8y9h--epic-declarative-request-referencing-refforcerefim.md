@@ -8,7 +8,7 @@ tags:
     - epic
     - httpyac-parity
 created_at: 2026-09-19T14:14:52Z
-updated_at: 2026-09-19T17:45:40Z
+updated_at: 2026-09-19T18:08:59Z
 ---
 
 ## Goal
@@ -35,3 +35,6 @@ Declarative request referencing so `.http` files express prerequisite chains (lo
 
 
 - [x] go-restclient-maez executor criteria pinned (commit 2fc0a01)
+
+
+- [x] go-restclient-68op CLI ref chain (commit 644985f)
