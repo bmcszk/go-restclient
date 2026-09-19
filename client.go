@@ -118,8 +118,7 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 	return responses, multiErr.ErrorOrNil()
 }
 
-// runOneRequest executes a single request (and its @ref/@forceRef dependencies) and
-// appends the response to responses, recording errors into multiErr.
+// runOneRequest executes one request plus its @ref/@forceRef deps.
 func (c *Client) runOneRequest(
 	ctx context.Context,
 	restClientReq *Request,
@@ -175,9 +174,7 @@ func (s *refExecutionState) pushStack(name string) func() {
 	return func() { delete(s.onStack, name) }
 }
 
-// resolveRequestRefs resolves @ref/@forceRef dependencies of req depth-first.
-// force=true refs always re-execute; force=false refs reuse the cached response.
-// Cycles and unknown names surface as errors naming the offending request.
+// resolveRequestRefs resolves refs depth-first; @ref caches, @forceRef re-runs.
 func (c *Client) resolveRequestRefs(
 	ctx context.Context,
 	req *Request,

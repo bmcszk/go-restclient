@@ -47,10 +47,7 @@ type requestParserState struct {
 	queryParams        []string // Accumulated query parameters from multi-line syntax
 	parsingQueryParams bool     // Flag to indicate we're collecting query parameters
 
-	// importedParsedFiles collects the ParsedFile of every `# @import` directive
-	// encountered while parsing the current file. They are appended to
-	// parsedFile.Requests (and marked Imported=true) at finalize time so that
-	// local request indices remain stable.
+	// @import'd ParsedFiles; appended to Requests at finalize (Imported=true).
 	importedParsedFiles []*ParsedFile
 }
 
@@ -108,9 +105,7 @@ func finalizeParseResults(parserState *requestParserState) {
 		parserState.parsedFile.FileVariables[k] = v
 	}
 
-	// Append imported-file requests AFTER local ones so local indices stay stable.
-	// Imported requests are skipped by the executor's main loop and only run when
-	// pulled in by an @ref/@forceRef from a local request.
+	// append after locals: stable indices for ExecuteRequest.
 	for _, imported := range parserState.importedParsedFiles {
 		for _, req := range imported.Requests {
 			req.Imported = true
@@ -333,7 +328,6 @@ func (p *requestParserState) handleTimeoutDirective(commentContent string) bool 
 }
 
 // handleRefDirective processes @ref and @forceRef directives.
-// Empty ref name produces a parse error naming the directive.
 func (p *requestParserState) handleRefDirective(commentContent string) error {
 	if strings.HasPrefix(commentContent, "@forceRef ") {
 		return p.appendRef("@forceRef", commentContent[len("@forceRef "):])
@@ -344,13 +338,7 @@ func (p *requestParserState) handleRefDirective(commentContent string) error {
 	return nil
 }
 
-// handleImportDirective resolves `# @import <relative-path>` against the current
-// file's directory, parses the imported file (reusing parseRequestFile's import
-// stack for cycle detection), merges the imported file's file-global variables
-// into the current scope with local definitions winning on clash, and stashes
-// the imported ParsedFile for append-after-localize at finalize time.
-// It returns handled=true when the comment is an @import directive (whether or
-// not it produced an error).
+// handleImportDirective parses `# @import <path>`, merges its vars/requests.
 func (p *requestParserState) handleImportDirective(commentContent string) (bool, error) {
 	const prefix = "@import"
 	if !strings.HasPrefix(commentContent, prefix) {
