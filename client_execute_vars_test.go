@@ -6,7 +6,6 @@ package restclient_test
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"testing"
 	"time"
@@ -20,8 +19,14 @@ func TestExecuteFile_WithCustomVariables(t *testing.T) {
 	given, when, then := newParts(t)
 
 	given.
-		aHttpServer(func(w http.ResponseWriter, r *http.Request) {
-			respondToCustomVariablesRequest(w, r)
+		aCannedServer(map[string]cannedRoute{
+			"/users/testuser123": {method: http.MethodPost, code: http.StatusOK, body: "response for user testuser123"},
+			"/products/testuser123": {
+				method: http.MethodGet,
+				code:   http.StatusOK,
+				body:   "response from products/testuser123",
+			},
+			"/items/": {method: http.MethodGet, code: http.StatusOK, body: "response for items ()"},
 		}).and().
 		aHttpFileFromTemplate("custom_variables.http").and().
 		aClient()
@@ -44,35 +49,6 @@ func TestExecuteFile_WithCustomVariables(t *testing.T) {
 		responseHasNoError().and().
 		responseCode(http.StatusOK).and().
 		responseBodyIs("response for items ()")
-}
-
-func respondToCustomVariablesRequest(w http.ResponseWriter, r *http.Request) {
-	switch r.URL.Path {
-	case "/users/testuser123":
-		if r.Method != http.MethodPost {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		_, _ = io.ReadAll(r.Body)
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "response for user testuser123")
-	case "/products/testuser123":
-		if r.Method != http.MethodGet {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "response from products/testuser123")
-	case "/items/":
-		if r.Method != http.MethodGet {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "response for items ()")
-	default:
-		w.WriteHeader(http.StatusNotFound)
-	}
 }
 
 // TestExecuteFile_WithProcessEnvSystemVariable: System Variables {{$processEnv.VAR_NAME}}.
@@ -218,15 +194,6 @@ func TestExecuteFile_WithProgrammaticVariables(t *testing.T) {
 // $timestamp fixture. The time window before/after ExecuteFile is captured via
 // local vars (parity-preserving; batch-2a precedent).
 func TestExecuteFile_WithLocalDatetimeSystemVariable(t *testing.T) {
-	runTimestampConsistencyAssertions(t)
-}
-
-// runTimestampConsistencyAssertions is the shared body of
-// TestExecuteFile_WithLocalDatetimeSystemVariable and
-// TestExecuteFile_WithTimestampSystemVariable. Both legacy tests use the same
-// system_var_timestamp.http fixture with identical consistency checks.
-func runTimestampConsistencyAssertions(t *testing.T) {
-	t.Helper()
 	given, when, then := newParts(t)
 
 	given.

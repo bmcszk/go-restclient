@@ -2,6 +2,7 @@ package restclient_test
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -15,7 +16,7 @@ func TestExecuteFile_UuidVariableConsistency(t *testing.T) {
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, r *http.Request) {
-			body, _ := readAllBody(r)
+			body, _ := io.ReadAll(r.Body)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 

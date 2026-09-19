@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -144,6 +146,60 @@ func (p *parts) aClientWithEnvironment(env string) *parts {
 	p.require.NoError(err)
 	p.client = client
 	return p
+}
+
+// cannedRoute is one route of aCannedServer: required request method, canned status
+// code and response body. validJSON additionally requires the request body to pass
+// json.Valid (400 otherwise).
+type cannedRoute struct {
+	method    string
+	code      int
+	body      string
+	validJSON bool
+}
+
+// serveCannedRoute writes the cannedRoute response for r: 405 on method mismatch,
+// 400 on validJSON with an unparseable body. The caller handled unknown paths.
+func serveCannedRoute(w http.ResponseWriter, r *http.Request, route cannedRoute) {
+	if r.Method != route.method {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+
+		return
+	}
+	if route.validJSON {
+		body, _ := io.ReadAll(r.Body)
+		if !json.Valid(body) {
+			w.WriteHeader(http.StatusBadRequest)
+
+			return
+		}
+	}
+	w.WriteHeader(route.code)
+	_, _ = fmt.Fprint(w, route.body)
+}
+
+// aCannedServer serves a fixed routing table of canned responses: exact path lookup,
+// 405 on method mismatch, 404 for unknown paths. Replaces multi-path handler vars.
+func (p *parts) aCannedServer(routes map[string]cannedRoute) *parts {
+	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
+		route, ok := routes[r.URL.Path]
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+
+			return
+		}
+		serveCannedRoute(w, r, route)
+	})
+}
+
+// anEchoServer echoes the request body back verbatim with 200 OK — for tests that only
+// need a round-tripped body (e.g. external-file encoding round trips).
+func (p *parts) anEchoServer() *parts {
+	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(body)
+	})
 }
 
 // aRequestFixtureAbs points the DSL at a repo-root-relative request fixture file
@@ -871,6 +927,8 @@ var _ = []any{
 	(*parts).responsesValidateAgainst,
 	(*parts).capturedBodyContains,
 	(*parts).capturedBodyMatchesRegexp,
+	(*parts).aCannedServer,
+	(*parts).anEchoServer,
 	(*parts).aHttpFileWithExternalFileEncoding,
 	(*parts).aHttpFileWithExternalFile,
 	(*parts).aHttpFileWithExternalFileStatic,

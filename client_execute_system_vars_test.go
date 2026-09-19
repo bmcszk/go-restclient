@@ -129,7 +129,35 @@ func TestExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
 
 // TestExecuteFile_WithTimestampSystemVariable: System Variables {{$timestamp}}.
 func TestExecuteFile_WithTimestampSystemVariable(t *testing.T) {
-	runTimestampConsistencyAssertions(t)
+	given, when, then := newParts(t)
+
+	given.
+		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "ok")
+		}).and().
+		aHttpFileFromTemplate("system_var_timestamp.http").and().
+		aClient()
+
+	beforeSec := time.Now().UTC().Unix()
+	when.
+		executeFile()
+	afterSec := time.Now().UTC().Unix()
+
+	then.
+		responseCount(1).and().
+		noError().and().
+		responseAt(0).and().
+		responseHasNoError().and().
+		responseCode(http.StatusOK).and().
+		tracking("timestamp").and().
+		capturedURLSegment(0).and().
+		capturedHeaderField(0, "X-Request-Time").and().
+		capturedJSONField(0, "event_time").and().
+		capturedJSONField(0, "processed_at").and().
+		allTrackedValuesEqual().and().
+		firstTrackedValueIsIntegerInRange(beforeSec, afterSec).and().
+		allTrackedValuesArePositiveIntegers()
 }
 
 // TestExecuteFile_WithRandomIntSystemVariable_ValidMinMaxArgs: System Variables {{$randomInt [MIN MAX]}}.

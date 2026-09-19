@@ -1,58 +1,9 @@
 package restclient_test
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"testing"
 )
-
-// ignoreEmptyBlocksHandler serves the shared mock behavior for every
-// TestExecuteFile_IgnoreEmptyBlocks_* scenario; it is plain test data. Method
-// checks use plain comparisons because a package-level handler has no *testing.T.
-var ignoreEmptyBlocksHandler = func(w http.ResponseWriter, r *http.Request) {
-	switch r.URL.Path {
-	case "/first":
-		if r.Method != http.MethodGet {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "response from /first")
-	case "/second":
-		if r.Method != http.MethodGet {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "response from /second")
-	case "/req1":
-		if r.Method != http.MethodGet {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-
-			return
-		}
-		w.WriteHeader(http.StatusAccepted)
-		_, _ = fmt.Fprint(w, "response from /req1")
-	case "/req2":
-		if r.Method != http.MethodPost {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-
-			return
-		}
-		if body, err := readAllBody(r); err != nil || !json.Valid(body) {
-			w.WriteHeader(http.StatusBadRequest)
-
-			return
-		}
-		w.WriteHeader(http.StatusCreated)
-		_, _ = fmt.Fprint(w, "response from /req2")
-	default:
-		w.WriteHeader(http.StatusNotFound)
-	}
-}
 
 func TestExecuteFile_InvalidMethodInFile(t *testing.T) {
 	given, when, then := newParts(t)
@@ -79,7 +30,9 @@ func TestExecuteFile_IgnoreEmptyBlocks_ValidThenCommentOnly(t *testing.T) {
 	given, when, then := newParts(t)
 
 	given.
-		aHttpServer(ignoreEmptyBlocksHandler).and().
+		aCannedServer(map[string]cannedRoute{
+			"/first": {method: http.MethodGet, code: http.StatusOK, body: "response from /first"},
+		}).and().
 		aFormattedRequestFixture("scenario_004_template.http", "{{server}}").and().
 		aClient()
 
@@ -98,7 +51,9 @@ func TestExecuteFile_IgnoreEmptyBlocks_CommentOnlyThenValid(t *testing.T) {
 	given, when, then := newParts(t)
 
 	given.
-		aHttpServer(ignoreEmptyBlocksHandler).and().
+		aCannedServer(map[string]cannedRoute{
+			"/second": {method: http.MethodGet, code: http.StatusOK, body: "response from /second"},
+		}).and().
 		aFormattedRequestFixture("scenario_005_template.http", "{{server}}").and().
 		aClient()
 
@@ -117,7 +72,10 @@ func TestExecuteFile_IgnoreEmptyBlocks_TwoValidAcrossCommentBlock(t *testing.T) 
 	given, when, then := newParts(t)
 
 	given.
-		aHttpServer(ignoreEmptyBlocksHandler).and().
+		aCannedServer(map[string]cannedRoute{
+			"/req1": {method: http.MethodGet, code: http.StatusAccepted, body: "response from /req1"},
+			"/req2": {method: http.MethodPost, code: http.StatusCreated, body: "response from /req2", validJSON: true},
+		}).and().
 		aFormattedRequestFixture("scenario_006_template.http", "{{server}}", "{{server}}").and().
 		aClient()
 

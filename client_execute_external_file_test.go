@@ -6,25 +6,9 @@ import (
 	"testing"
 
 	"golang.org/x/text/encoding/charmap"
-	"golang.org/x/text/transform"
 
 	rc "github.com/bmcszk/go-restclient"
 )
-
-// readAllBody reads and returns the whole request body.
-func readAllBody(r *http.Request) ([]byte, error) {
-	return io.ReadAll(r.Body)
-}
-
-// latin1Encoder returns the ISO-8859-1 encoder used by the external-file-encoding tests.
-func latin1Encoder() transform.Transformer {
-	return charmap.ISO8859_1.NewEncoder()
-}
-
-// cp1252Encoder returns the Windows-1252 encoder used by the external-file-encoding tests.
-func cp1252Encoder() transform.Transformer {
-	return charmap.Windows1252.NewEncoder()
-}
 
 func TestExecuteFile_ExternalFileWithVariables(t *testing.T) {
 	given, when, then := newParts(t)
@@ -96,13 +80,9 @@ func TestExecuteFile_ExternalFileWithEncoding_Latin1(t *testing.T) {
 	given, when, then := newParts(t)
 
 	given.
-		aHttpServer(func(w http.ResponseWriter, r *http.Request) {
-			body, _ := readAllBody(r)
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write(body)
-		}).and().
+		anEchoServer().and().
 		aHttpFileWithExternalFileEncoding("latin1", "encoded_body.txt",
-			[]byte("Hällo Wörld! Ñice to meet you. ?"), latin1Encoder()).and().
+			[]byte("Hällo Wörld! Ñice to meet you. ?"), charmap.ISO8859_1.NewEncoder()).and().
 		aClient()
 
 	when.
@@ -120,13 +100,9 @@ func TestExecuteFile_ExternalFileWithEncoding_CP1252(t *testing.T) {
 	given, when, then := newParts(t)
 
 	given.
-		aHttpServer(func(w http.ResponseWriter, r *http.Request) {
-			body, _ := readAllBody(r)
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write(body)
-		}).and().
+		anEchoServer().and().
 		aHttpFileWithExternalFileEncoding("cp1252", "encoded_body.txt",
-			[]byte("Hällo Wörld! Ñice to meet you. €™"), cp1252Encoder()).and().
+			[]byte("Hällo Wörld! Ñice to meet you. €™"), charmap.Windows1252.NewEncoder()).and().
 		aClient()
 
 	when.
@@ -144,11 +120,7 @@ func TestExecuteFile_ExternalFileWithEncoding_ASCII(t *testing.T) {
 	given, when, then := newParts(t)
 
 	given.
-		aHttpServer(func(w http.ResponseWriter, r *http.Request) {
-			body, _ := readAllBody(r)
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write(body)
-		}).and().
+		anEchoServer().and().
 		aHttpFileWithExternalFileEncoding("ascii", "encoded_body.txt",
 			[]byte("Hello World! Nice to meet you."), nil).and().
 		aClient()
@@ -168,11 +140,7 @@ func TestExecuteFile_ExternalFileWithEncoding_UTF8(t *testing.T) {
 	given, when, then := newParts(t)
 
 	given.
-		aHttpServer(func(w http.ResponseWriter, r *http.Request) {
-			body, _ := readAllBody(r)
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write(body)
-		}).and().
+		anEchoServer().and().
 		aHttpFileWithExternalFileEncoding("utf-8", "encoded_body.txt",
 			[]byte("Hällo Wörld! Ñice to meet you. €😊"), nil).and().
 		aClient()
@@ -192,7 +160,7 @@ func TestExecuteFile_ExternalFileWithEncoding(t *testing.T) {
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, r *http.Request) {
-			body, _ := readAllBody(r)
+			body, _ := io.ReadAll(r.Body)
 			w.Header().Set("Content-Type", "text/plain")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write(body)
