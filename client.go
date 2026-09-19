@@ -23,7 +23,6 @@ import (
 	"golang.org/x/text/encoding/unicode"
 )
 
-
 // Client is the main struct for interacting with the REST client library.
 // It holds configuration like the HTTP client, base URL, default headers,
 // and programmatic variables for substitution.
@@ -54,7 +53,6 @@ func NewClient(options ...ClientOption) (*Client, error) {
 	return c, nil
 }
 
-
 // SetProgrammaticVars sets variables with highest precedence for variable substitution.
 // These override .env, OS env, file-scoped vars, and globals.
 func (c *Client) SetProgrammaticVars(vars map[string]any) {
@@ -82,7 +80,7 @@ func (c *Client) SetProgrammaticVars(vars map[string]any) {
 //     uniqueness if needed across multiple requests in the same file, but consistency within a single request.
 //   - For each part of the request (URL, headers, body):
 //     a. `resolveVariablesInText` is called. For {{variableName}} placeholders
-//        (where 'variableName' does not start with '$'),
+//     (where 'variableName' does not start with '$'),
 //     the precedence is: Client programmatic vars > file-scoped `@vars` (rcRequest.ActiveVariables) >
 //     Environment vars (parsedFile.EnvironmentVariables) > Global vars (parsedFile.GlobalVariables) >
 //     OS env vars > .env vars > fallback.
@@ -107,20 +105,156 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 	var responses []*Response
 	var multiErr *multierror.Error
 	osEnvGetter := func(key string) (string, bool) { return os.LookupEnv(key) }
+	refState := newRefExecutionState()
 
 	for i, restClientReq := range parsedFile.Requests {
-		response, err := c.executeRequestWithVariables(ctx, restClientReq, parsedFile, osEnvGetter, i)
-		response, shouldSkip := c.handleRequestExecutionError(response, err, restClientReq, i, &multiErr)
-		if shouldSkip {
-			continue
-		}
-		if response != nil {
-			responses = append(responses, response)
-			storeResponse(parsedFile, restClientReq, response)
-		}
+		c.runOneRequest(ctx, restClientReq, i, parsedFile, refState, osEnvGetter, &responses, &multiErr)
 	}
 
 	return responses, multiErr.ErrorOrNil()
+}
+
+// runOneRequest executes a single request (and its @ref/@forceRef dependencies) and
+// appends the response to responses, recording errors into multiErr.
+func (c *Client) runOneRequest(
+	ctx context.Context,
+	restClientReq *Request,
+	index int,
+	parsedFile *ParsedFile,
+	refState *refExecutionState,
+	osEnvGetter func(string) (string, bool),
+	responses *[]*Response,
+	multiErr **multierror.Error,
+) {
+	if refState.alreadyExecuted(restClientReq.Name) {
+		return
+	}
+	if err := c.resolveRequestRefs(ctx, restClientReq, parsedFile, refState, osEnvGetter); err != nil {
+		*multiErr = multierror.Append(*multiErr, err)
+		return
+	}
+	response, err := c.executeRequestWithVariables(ctx, restClientReq, parsedFile, osEnvGetter, index)
+	response, shouldSkip := c.handleRequestExecutionError(response, err, restClientReq, index, multiErr)
+	if shouldSkip || response == nil {
+		return
+	}
+	*responses = append(*responses, response)
+	storeResponse(parsedFile, restClientReq, response)
+	refState.recordExecuted(restClientReq.Name, response)
+}
+
+// refExecutionState tracks per-ExecuteFile execution of @ref/@forceRef dependencies.
+type refExecutionState struct {
+	executed map[string]*Response // name -> most recent response
+	onStack  map[string]bool      // names currently being resolved (cycle detection)
+}
+
+func newRefExecutionState() *refExecutionState {
+	return &refExecutionState{
+		executed: make(map[string]*Response),
+		onStack:  make(map[string]bool),
+	}
+}
+
+func (s *refExecutionState) alreadyExecuted(name string) bool {
+	return name != "" && s.executed[name] != nil
+}
+
+func (s *refExecutionState) recordExecuted(name string, resp *Response) {
+	if name != "" && resp != nil {
+		s.executed[name] = resp
+	}
+}
+
+func (s *refExecutionState) pushStack(name string) func() {
+	s.onStack[name] = true
+	return func() { delete(s.onStack, name) }
+}
+
+// resolveRequestRefs resolves @ref/@forceRef dependencies of req depth-first.
+// force=true refs always re-execute; force=false refs reuse the cached response.
+// Cycles and unknown names surface as errors naming the offending request.
+func (c *Client) resolveRequestRefs(
+	ctx context.Context,
+	req *Request,
+	parsedFile *ParsedFile,
+	state *refExecutionState,
+	osEnvGetter func(string) (string, bool),
+) error {
+	for _, ref := range req.Refs {
+		if refCacheReuseable(ref, state) {
+			continue
+		}
+		if err := c.executeReferencedRequest(ctx, ref, parsedFile, state, osEnvGetter); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func refCacheReuseable(ref RequestRef, state *refExecutionState) bool {
+	return !ref.Force && state.executed[ref.Name] != nil
+}
+
+func (c *Client) executeReferencedRequest(
+	ctx context.Context,
+	ref RequestRef,
+	parsedFile *ParsedFile,
+	state *refExecutionState,
+	osEnvGetter func(string) (string, bool),
+) error {
+	if state.onStack[ref.Name] {
+		return fmt.Errorf("cycle detected in @ref graph involving request %q", ref.Name)
+	}
+	target := findRequestByName(parsedFile, ref.Name)
+	if target == nil {
+		return fmt.Errorf("unknown referenced request %q", ref.Name)
+	}
+
+	popStack := state.pushStack(ref.Name)
+	defer popStack()
+
+	if err := c.resolveRequestRefs(ctx, target, parsedFile, state, osEnvGetter); err != nil {
+		return err
+	}
+	if !ref.Force && state.executed[ref.Name] != nil {
+		return nil
+	}
+	c.runAndCacheReferenced(ctx, target, ref.Name, parsedFile, state, osEnvGetter)
+	return nil
+}
+
+func findRequestByName(parsedFile *ParsedFile, name string) *Request {
+	for _, r := range parsedFile.Requests {
+		if r.Name == name {
+			return r
+		}
+	}
+	return nil
+}
+
+func (c *Client) runAndCacheReferenced(
+	ctx context.Context,
+	target *Request,
+	name string,
+	parsedFile *ParsedFile,
+	state *refExecutionState,
+	osEnvGetter func(string) (string, bool),
+) {
+	response, _ := c.executeRequestWithVariables(ctx, target, parsedFile, osEnvGetter, requestIndex(parsedFile, target))
+	state.recordExecuted(name, response)
+	if response != nil {
+		storeResponse(parsedFile, target, response)
+	}
+}
+
+func requestIndex(parsedFile *ParsedFile, target *Request) int {
+	for i, r := range parsedFile.Requests {
+		if r == target {
+			return i
+		}
+	}
+	return -1
 }
 
 // storeResponse saves a response in the response map keyed by request name.
@@ -181,7 +315,7 @@ func (c *Client) handleRequestExecutionError(
 		}
 		response = ensureResponseExists(response, restClientReq)
 	}
-	
+
 	c.wrapResponseError(response, restClientReq, index, multiErr)
 	return response, false
 }
@@ -251,21 +385,21 @@ func (c *Client) resolveFileScopedSystemVariables(parsedFile *ParsedFile) {
 
 	// Generate file-scoped system variables once for the entire file
 	fileScopedSystemVars := c.generateRequestScopedSystemVariables()
-	
+
 	// Resolve file-scoped variables and track resolved ones
 	resolvedVariables := c.resolveFileVariables(parsedFile, fileScopedSystemVars)
-	
+
 	// Update all requests' ActiveVariables to reflect the resolved values
 	c.updateRequestActiveVariables(parsedFile.Requests, resolvedVariables)
 }
 
 // resolveFileVariables processes each file-scoped variable that contains system variable placeholders
 func (c *Client) resolveFileVariables(
-	parsedFile *ParsedFile, 
+	parsedFile *ParsedFile,
 	fileScopedSystemVars map[string]string,
 ) map[string]string {
 	resolvedVariables := make(map[string]string)
-	
+
 	for varName, varValue := range parsedFile.FileVariables {
 		if isSystemVariablePlaceholder(varValue) {
 			resolvedValue := resolveSystemVariablePlaceholder(
@@ -274,7 +408,7 @@ func (c *Client) resolveFileVariables(
 			resolvedVariables[varName] = resolvedValue
 		}
 	}
-	
+
 	return resolvedVariables
 }
 
@@ -290,7 +424,7 @@ func (*Client) updateSingleRequestActiveVariables(request *Request, resolvedVari
 	if request.ActiveVariables == nil {
 		return
 	}
-	
+
 	for varName, resolvedValue := range resolvedVariables {
 		if _, exists := request.ActiveVariables[varName]; exists {
 			request.ActiveVariables[varName] = resolvedValue
@@ -303,25 +437,25 @@ func isSystemVariablePlaceholder(value string) bool {
 	if !strings.HasPrefix(value, "{{") || !strings.HasSuffix(value, "}}") {
 		return false
 	}
-	
+
 	innerDirective := strings.TrimSpace(value[2 : len(value)-2])
 	return strings.HasPrefix(innerDirective, "$")
 }
 
 // resolveSystemVariablePlaceholder resolves a system variable placeholder to its value
 func resolveSystemVariablePlaceholder(
-	placeholder string, 
-	systemVars map[string]string, 
-	dotEnvVars map[string]string, 
+	placeholder string,
+	systemVars map[string]string,
+	dotEnvVars map[string]string,
 	programmaticVars map[string]any,
 ) string {
 	innerDirective := strings.TrimSpace(placeholder[2 : len(placeholder)-2])
-	
+
 	// Check if it's a simple system variable that we have pre-generated
 	if val, ok := systemVars[innerDirective]; ok {
 		return val
 	}
-	
+
 	// For dynamic system variables, use the existing substitution logic
 	return substituteDynamicSystemVariables(placeholder, dotEnvVars, programmaticVars)
 }

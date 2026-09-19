@@ -1,0 +1,6 @@
+### a
+# @ref login
+GET [[.ServerURL]]/protected
+
+### login
+POST [[.ServerURL]]/login

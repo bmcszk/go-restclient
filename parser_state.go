@@ -273,7 +273,7 @@ func (p *requestParserState) processCommentDirectives(commentContent string) err
 	if p.handleTimeoutDirective(commentContent) {
 		return nil
 	}
-	return nil // Other comment content - no special handling needed
+	return p.handleRefDirective(commentContent) // Other comment content - no special handling needed
 }
 
 // handleNameDirective processes @name directives
@@ -310,6 +310,27 @@ func (p *requestParserState) handleTimeoutDirective(commentContent string) bool 
 		return true
 	}
 	return false
+}
+
+// handleRefDirective processes @ref and @forceRef directives.
+// Empty ref name produces a parse error naming the directive.
+func (p *requestParserState) handleRefDirective(commentContent string) error {
+	if strings.HasPrefix(commentContent, "@forceRef ") {
+		return p.appendRef("@forceRef", commentContent[len("@forceRef "):])
+	}
+	if strings.HasPrefix(commentContent, "@ref ") {
+		return p.appendRef("@ref", commentContent[len("@ref "):])
+	}
+	return nil
+}
+
+func (p *requestParserState) appendRef(directive, raw string) error {
+	name := strings.TrimSpace(raw)
+	if name == "" {
+		return fmt.Errorf("missing reference name in %s directive", directive)
+	}
+	p.currentRequest.Refs = append(p.currentRequest.Refs, RequestRef{Name: name, Force: directive == "@forceRef"})
+	return nil
 }
 
 // handleEmptyLine processes an empty line, which can be used to separate headers from body
