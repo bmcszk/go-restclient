@@ -1,11 +1,11 @@
 ---
 # go-restclient-68op
 title: 'CLI+vars: -n triggers ref chain; composability with -A'
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-09-19T14:16:10Z
-updated_at: 2026-09-19T14:16:10Z
+updated_at: 2026-09-19T17:45:40Z
 parent: go-restclient-8y9h
 blocked_by:
     - go-restclient-maez
