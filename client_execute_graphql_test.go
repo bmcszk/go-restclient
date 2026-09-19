@@ -1,25 +1,11 @@
 package restclient_test
 
 import (
-	"encoding/json"
 	"net/http"
 	"testing"
 
 	rc "github.com/bmcszk/go-restclient"
 )
-
-// graphqlResponse is the mocked server response body for GraphQL requests.
-type graphqlResponse struct {
-	Data   any            `json:"data,omitempty"`
-	Errors []graphqlError `json:"errors,omitempty"`
-}
-
-// graphqlError mirrors the GraphQL error entry shape.
-type graphqlError struct {
-	Message   string `json:"message"`
-	Locations []any  `json:"locations,omitempty"`
-	Path      []any  `json:"path,omitempty"`
-}
 
 // TestExecuteFile_GraphQLBasicQuery tests basic GraphQL query execution.
 
@@ -27,18 +13,14 @@ func TestExecuteFile_GraphQLBasicQuery(t *testing.T) {
 	given, when, then := newParts(t)
 
 	given.
-		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_ = writeGraphQLResponse(w, graphqlResponse{
-				Data: map[string]any{
-					"user": map[string]any{
-						"id":    "123",
-						"name":  "John Doe",
-						"email": "john@example.com",
-					},
+		aGraphQLServer(graphqlResponse{
+			Data: map[string]any{
+				"user": map[string]any{
+					"id":    "123",
+					"name":  "John Doe",
+					"email": "john@example.com",
 				},
-			})
+			},
 		}).and().
 		aTemplateFixture("graphql", "basic_query.http",
 			struct{ ServerURL string }{ServerURL: given.serverURL}).and().
@@ -64,19 +46,15 @@ func TestExecuteFile_GraphQLQueryWithVariables(t *testing.T) {
 	given, when, then := newParts(t)
 
 	given.
-		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_ = writeGraphQLResponse(w, graphqlResponse{
-				Data: map[string]any{
-					"user": map[string]any{
-						"id":        "456",
-						"name":      "Jane Smith",
-						"email":     "jane@example.com",
-						"createdAt": "2023-01-01T00:00:00Z",
-					},
+		aGraphQLServer(graphqlResponse{
+			Data: map[string]any{
+				"user": map[string]any{
+					"id":        "456",
+					"name":      "Jane Smith",
+					"email":     "jane@example.com",
+					"createdAt": "2023-01-01T00:00:00Z",
 				},
-			})
+			},
 		}).and().
 		aTemplateFixture("graphql", "query_with_variables.http",
 			struct{ ServerURL string }{ServerURL: given.serverURL}).and().
@@ -100,18 +78,14 @@ func TestExecuteFile_GraphQLMutation(t *testing.T) {
 	given, when, then := newParts(t)
 
 	given.
-		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_ = writeGraphQLResponse(w, graphqlResponse{
-				Data: map[string]any{
-					"createUser": map[string]any{
-						"id":    "789",
-						"name":  "New User",
-						"email": "newuser@example.com",
-					},
+		aGraphQLServer(graphqlResponse{
+			Data: map[string]any{
+				"createUser": map[string]any{
+					"id":    "789",
+					"name":  "New User",
+					"email": "newuser@example.com",
 				},
-			})
+			},
 		}).and().
 		aTemplateFixture("graphql", "mutation.http",
 			struct{ ServerURL string }{ServerURL: given.serverURL}).and().
@@ -139,23 +113,19 @@ func TestExecuteFile_GraphQLFragments(t *testing.T) {
 	given, when, then := newParts(t)
 
 	given.
-		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_ = writeGraphQLResponse(w, graphqlResponse{
-				Data: map[string]any{
-					"users": []map[string]any{
-						{"id": "1", "name": "User 1", "email": "user1@example.com",
-							"createdAt": "2023-01-01T00:00:00Z"},
-						{"id": "2", "name": "User 2", "email": "user2@example.com",
-							"createdAt": "2023-01-02T00:00:00Z"},
-					},
-					"activeUsers": []map[string]any{
-						{"id": "1", "name": "User 1", "email": "user1@example.com",
-							"createdAt": "2023-01-01T00:00:00Z"},
-					},
+		aGraphQLServer(graphqlResponse{
+			Data: map[string]any{
+				"users": []map[string]any{
+					{"id": "1", "name": "User 1", "email": "user1@example.com",
+						"createdAt": "2023-01-01T00:00:00Z"},
+					{"id": "2", "name": "User 2", "email": "user2@example.com",
+						"createdAt": "2023-01-02T00:00:00Z"},
 				},
-			})
+				"activeUsers": []map[string]any{
+					{"id": "1", "name": "User 1", "email": "user1@example.com",
+						"createdAt": "2023-01-01T00:00:00Z"},
+				},
+			},
 		}).and().
 		aTemplateFixture("graphql", "fragments.http",
 			struct{ ServerURL string }{ServerURL: given.serverURL}).and().
@@ -180,19 +150,15 @@ func TestExecuteFile_GraphQLIntrospection(t *testing.T) {
 	given, when, then := newParts(t)
 
 	given.
-		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_ = writeGraphQLResponse(w, graphqlResponse{
-				Data: map[string]any{
-					"__schema": map[string]any{
-						"queryType":        map[string]any{"name": "Query"},
-						"mutationType":     map[string]any{"name": "Mutation"},
-						"subscriptionType": nil,
-						"types":            []any{},
-					},
+		aGraphQLServer(graphqlResponse{
+			Data: map[string]any{
+				"__schema": map[string]any{
+					"queryType":        map[string]any{"name": "Query"},
+					"mutationType":     map[string]any{"name": "Mutation"},
+					"subscriptionType": nil,
+					"types":            []any{},
 				},
-			})
+			},
 		}).and().
 		aTemplateFixture("graphql", "introspection.http",
 			struct{ ServerURL string }{ServerURL: given.serverURL}).and().
@@ -217,17 +183,13 @@ func TestExecuteFile_GraphQLErrorHandling(t *testing.T) {
 	given, when, then := newParts(t)
 
 	given.
-		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK) // GraphQL errors are still HTTP 200
-			_ = writeGraphQLResponse(w, graphqlResponse{
-				Errors: []graphqlError{
-					{
-						Message: "Cannot query field 'nonExistentField' on type 'Query'",
-						Path:    []any{"nonExistentField"},
-					},
+		aGraphQLServer(graphqlResponse{
+			Errors: []graphqlError{
+				{
+					Message: "Cannot query field 'nonExistentField' on type 'Query'",
+					Path:    []any{"nonExistentField"},
 				},
-			})
+			},
 		}).and().
 		aTemplateFixture("graphql", "error_handling.http",
 			struct{ ServerURL string }{ServerURL: given.serverURL}).and().
@@ -253,25 +215,21 @@ func TestExecuteFile_GraphQLBatchQueries(t *testing.T) {
 	given, when, then := newParts(t)
 
 	given.
-		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_ = writeGraphQLResponse(w, []graphqlResponse{
-				{
-					Data: map[string]any{
-						"user": map[string]any{"id": "123", "name": "John Doe"},
+		aGraphQLServer(
+			graphqlResponse{
+				Data: map[string]any{
+					"user": map[string]any{"id": "123", "name": "John Doe"},
+				},
+			},
+			graphqlResponse{
+				Data: map[string]any{
+					"posts": []map[string]any{
+						{"id": "1", "title": "Post 1"},
+						{"id": "2", "title": "Post 2"},
 					},
 				},
-				{
-					Data: map[string]any{
-						"posts": []map[string]any{
-							{"id": "1", "title": "Post 1"},
-							{"id": "2", "title": "Post 2"},
-						},
-					},
-				},
-			})
-		}).and().
+			},
+		).and().
 		aTemplateFixture("graphql", "batch_queries.http",
 			struct{ ServerURL string }{ServerURL: given.serverURL}).and().
 		aClient()
@@ -290,9 +248,4 @@ func TestExecuteFile_GraphQLBatchQueries(t *testing.T) {
 		capturedBodyContains(0, "query GetPosts").and().
 		capturedBodyContains(0, `"id": "123"`).and().
 		capturedBodyMatchesRegexp(0, `(?s)\[.*query GetPosts.*\]`)
-}
-
-// writeGraphQLResponse encodes v as JSON into the response writer.
-func writeGraphQLResponse(w http.ResponseWriter, v any) error {
-	return json.NewEncoder(w).Encode(v)
 }

@@ -37,10 +37,6 @@ func TestExecuteFile_SingleRequest(t *testing.T) {
 		responseBodyIs("user data")
 }
 
-// from a single .http file (http_syntax.md "Request Separation").
-// 'test/data/http_request_files/multiple_requests.http', collect all responses, and
-// optionally validate them against
-// 'test/data/http_response_files/client_multiple_requests_expected.hresp'.
 func TestExecuteFile_MultipleRequests(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -110,10 +106,6 @@ func TestExecuteFile_RequestWithError(t *testing.T) {
 		responseBodyIs("good response")
 }
 
-// no valid requests found (http_syntax.md).
-// 'test/data/http_request_files/parse_error.http' (which is expected to be empty or
-// syntactically invalid to the point of yielding no requests) cannot be successfully
-// parsed into executable requests.
 func TestExecuteFile_ParseError(t *testing.T) {
 	given, when, then := newParts(t)
 

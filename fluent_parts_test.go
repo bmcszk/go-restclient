@@ -2,19 +2,12 @@ package restclient_test
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
-	"net/http/cookiejar"
 	"net/http/httptest"
-	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
-	"text/template"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
@@ -30,6 +23,8 @@ const (
 	responseFilesDir = "test/data/http_response_files"
 )
 
+// clientConfigSnapshot records the client options asserted by clientBaseURLIs /
+// clientDefaultHeaderIs after aClientWithDefaults runs.
 type clientConfigSnapshot struct {
 	baseURL     string
 	headerKey   string
@@ -46,12 +41,12 @@ type parts struct {
 	servers   []*httptest.Server
 	serverURL string
 	// share the name requestCount in Go.
-	requestHits atomic.Int64
+	requestHits      atomic.Int64
 	capturedRequests []*http.Request
 	// intercepted holds the outgoing request captured by aMockTransportClient.
 	intercepted *http.Request
 	// cookieCheck records whether the cookie test server received its cookie back.
-	cookieCheck bool
+	cookieCheck  bool
 	clientConfig clientConfigSnapshot
 	// activeServerVars holds the scheme/host/port variables of the running test server.
 	activeServerVars map[string]any
@@ -91,6 +86,7 @@ func newParts(t *testing.T) (given, when, then *parts) {
 
 	return p, p, p
 }
+
 func (p *parts) and() *parts { return p }
 
 // multierrorCount counts the wrapped errors inside err.
@@ -106,9 +102,7 @@ func multierrorCount(err error) int {
 	return 1
 }
 
-// aHttpServer starts a local test server that counts every request it serves. Each request
-// body is read eagerly (and the body rewound) because net/http closes the original body as
-// soon as the handler returns, so later serverReceived* assertions can still read it.
+// aHttpServer counts requests; bodies are read eagerly because net/http closes them on return.
 func (p *parts) aHttpServer(h http.HandlerFunc) *parts {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -125,235 +119,11 @@ func (p *parts) aHttpServer(h http.HandlerFunc) *parts {
 	return p
 }
 
-// aHttpFile writes the given .http content, replacing {{server}} with the test server URL.
-func (p *parts) aHttpFile(content string) *parts {
-	resolved := strings.ReplaceAll(content, "{{server}}", p.serverURL)
-	path := filepath.Join(p.baseDir, "requests.http")
-	p.require.NoError(os.WriteFile(path, []byte(resolved), 0644))
-	p.httpFilePath = path
-
-	return p
-}
-
-// aHttpFileFromTemplate renders a committed request fixture template with the test server
-// URL ([[.ServerURL]] delimiters) and stores the processed file path for execution.
-func (p *parts) aHttpFileFromTemplate(templateName string) *parts {
-	p.require.NotEmpty(p.serverURL)
-
-	return p.aHttpFileFromTemplateWithData(templateName, struct{ ServerURL string }{ServerURL: p.serverURL})
-}
-
-// aHttpFileFromTemplateWithData renders a committed request fixture template with the given
-// template data ([[ ]] delimiters) and stores the processed file path for execution.
-func (p *parts) aHttpFileFromTemplateWithData(templateName string, data any) *parts {
-	tmplContent, err := os.ReadFile(filepath.Join(requestFilesDir, templateName))
-	p.require.NoError(err)
-
-	tmpl, err := template.New(templateName).Delims("[[", "]]").Parse(string(tmplContent))
-	p.require.NoError(err)
-
-	path := filepath.Join(p.baseDir, templateName)
-
-	file, err := os.Create(path)
-	p.require.NoError(err)
-	p.require.NoError(tmpl.Execute(file, data))
-	p.require.NoError(file.Close())
-
-	p.httpFilePath = path
-
-	return p
-}
-
-// aRequestFixture points the DSL at a committed request fixture file without templating.
-func (p *parts) aRequestFixture(name string) *parts {
-	p.httpFilePath = filepath.Join(requestFilesDir, name)
-
-	return p
-}
-
-// anExpectedResponseFixture points the DSL at a committed expected-response fixture file.
-func (p *parts) anExpectedResponseFixture(name string) *parts {
-	p.expectedFilePath = filepath.Join(responseFilesDir, name)
-
-	return p
-}
-
 // aClient builds the restclient under test with the given options.
 func (p *parts) aClient(opts ...rc.ClientOption) *parts {
 	client, err := rc.NewClient(opts...)
 	p.require.NoError(err)
 	p.client = client
-
-	return p
-}
-
-// withServerAddressVars rebuilds the client with scheme/host/port variables from the
-// running test server. The map is kept in parts.activeServerVars so later client
-// rebuilds (cookie jar, no-redirect) can reuse the same variables.
-func (p *parts) withServerAddressVars() *parts {
-	parsed, err := url.Parse(p.serverURL)
-	p.require.NoError(err)
-
-	p.activeServerVars = map[string]any{
-		"scheme": parsed.Scheme,
-		"host":   parsed.Hostname(),
-		"port":   parsed.Port(),
-	}
-
-	return p.aClient(rc.WithVars(p.activeServerVars))
-}
-
-// withEnv sets an environment variable for the duration of the test.
-func (p *parts) withEnv(k, v string) *parts {
-	p.Setenv(k, v)
-
-	return p
-}
-
-// aClientWithDefaults builds the client under test from the parts-recorded config options:
-// a 15s-timeout HTTP client, a base URL and one default header. The recorded values are
-// stored in parts.clientConfig for later assertion.
-func (p *parts) aClientWithDefaults() *parts {
-	p.clientConfig = clientConfigSnapshot{
-		baseURL:     "https://api.example.com",
-		headerKey:   "X-Default",
-		headerValue: "DefaultValue",
-		httpTimeout: 15 * time.Second,
-	}
-
-	return p.aClient(
-		rc.WithHTTPClient(&http.Client{Timeout: p.clientConfig.httpTimeout}),
-		rc.WithBaseURL(p.clientConfig.baseURL),
-		rc.WithDefaultHeader(p.clientConfig.headerKey, p.clientConfig.headerValue),
-	)
-}
-
-// aMockTransportClient builds the client under test with a mock round tripper that
-// records the outgoing request into parts.intercepted and answers 200 with a fixed body.
-func (p *parts) aMockTransportClient() *parts {
-	transport := &mockRoundTripper{
-		RoundTripFunc: func(req *http.Request) (*http.Response, error) {
-			p.intercepted = req.Clone(req.Context())
-
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader("mocked response")),
-				Header:     make(http.Header),
-			}, nil
-		},
-	}
-
-	return p.aClient(rc.WithHTTPClient(&http.Client{Transport: transport}))
-}
-
-// aCookieRedirectFixture renders the named committed cookie/redirect fixture into a temp
-// file. The fixture's {{scheme}}/{{host}}/{{port}} placeholders are resolved at request
-// time from client variables, so the text/template pass needs no data.
-func (p *parts) aCookieRedirectFixture(name string) *parts {
-	tmplContent, err := os.ReadFile(filepath.Join("test", "data", "cookies_redirects", name))
-	p.require.NoError(err)
-
-	tmpl, err := template.New(name).Delims("[[", "]]").Parse(string(tmplContent))
-	p.require.NoError(err)
-
-	path := filepath.Join(p.baseDir, name)
-
-	file, err := os.Create(path)
-	p.require.NoError(err)
-	p.require.NoError(tmpl.Execute(file, nil))
-	p.require.NoError(file.Close())
-
-	p.httpFilePath = path
-
-	return p
-}
-
-// anUploadsFixtureCopy copies the committed multipart fixture into a temp file with the
-// [[.ServerURL]] token replaced by the running test server URL and the < file references
-// rewritten from ./test/data/request_body/... to repo-root-relative paths that resolve
-// from the working directory.
-func (p *parts) anUploadsFixtureCopy() *parts {
-	p.require.NotEmpty(p.serverURL)
-
-	content, err := os.ReadFile(filepath.Join("test", "data", "http_request_files", "multipart_file_uploads.http"))
-	p.require.NoError(err)
-
-	resolved := strings.ReplaceAll(string(content), "< ./test/data/request_body/", "< test/data/request_body/")
-	resolved = strings.ReplaceAll(resolved, "[[.ServerURL]]", p.serverURL)
-	path := filepath.Join(p.baseDir, "multipart_file_uploads.http")
-
-	p.require.NoError(os.WriteFile(path, []byte(resolved), 0644))
-	p.httpFilePath = path
-
-	return p
-}
-
-// aCookieTestServer starts the cookie test server: /set-cookie sets test-cookie=test-value,
-// /check-cookie flips parts.cookieCheck when it receives the cookie back.
-func (p *parts) aCookieTestServer() *parts {
-	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/set-cookie":
-			http.SetCookie(w, &http.Cookie{Name: "test-cookie", Value: "test-value"})
-			w.WriteHeader(http.StatusOK)
-		case "/check-cookie":
-			if cookie, err := r.Cookie("test-cookie"); err == nil && cookie.Value == "test-value" {
-				p.cookieCheck = true
-			}
-			w.WriteHeader(http.StatusOK)
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	})
-}
-
-// aRedirectTestServer starts the redirect test server: /redirect issues a 302 to /target,
-// /target answers 200 with body "Target page".
-func (p *parts) aRedirectTestServer() *parts {
-	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/redirect":
-			http.Redirect(w, r, "/target", http.StatusFound)
-		case "/target":
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("Target page"))
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	})
-}
-
-// aCookieJarClient rebuilds the client with a fresh cookie jar.
-func (p *parts) aCookieJarClient() *parts {
-	jar, err := cookiejar.New(nil)
-	p.require.NoError(err)
-
-	return p.aClient(rc.WithVars(p.activeServerVars), rc.WithHTTPClient(&http.Client{Jar: jar}))
-}
-
-// aNoRedirectClient rebuilds the client with an HTTP client that refuses to follow redirects.
-func (p *parts) aNoRedirectClient() *parts {
-	noRedirectHTTPClient := &http.Client{
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-
-	return p.aClient(rc.WithVars(p.activeServerVars), rc.WithHTTPClient(noRedirectHTTPClient))
-}
-
-// aFreshCookieCheck resets the cookie check flag before a scenario runs.
-func (p *parts) aFreshCookieCheck() *parts {
-	p.cookieCheck = false
-
-	return p
-}
-
-// expectedResponseFile writes the given .hresp content as the expected responses file.
-func (p *parts) expectedResponseFile(content string) *parts {
-	path := filepath.Join(p.baseDir, "expected.hresp")
-	p.require.NoError(os.WriteFile(path, []byte(content), 0644))
-	p.expectedFilePath = path
 
 	return p
 }
@@ -410,177 +180,40 @@ func (p *parts) responseHeader(k, v string) *parts {
 	return p
 }
 
-// executionSucceeded asserts the file execution reported no error.
-func (p *parts) executionSucceeded() *parts {
-	p.require.NoError(p.execErr)
-
-	return p
-}
-
 func (p *parts) responseCount(n int) *parts {
 	p.require.Len(p.responses, n)
 
 	return p
 }
 
-func (p *parts) responseHasNoError() *parts {
-	p.require.NoError(p.current().Error)
-
-	return p
-}
-func (p *parts) responseHasError(texts ...string) *parts {
-	p.require.Error(p.current().Error)
-
-	for _, text := range texts {
-		p.require.Contains(p.current().Error.Error(), text)
-	}
-
-	return p
-}
-
+// responseHeaderValues asserts the Headers value for key equals values.
 func (p *parts) responseHeaderValues(key string, values ...string) *parts {
 	p.require.Equal(values, p.current().Headers[key])
 
 	return p
 }
 
+// responseHeaderEmpty asserts the Headers value for key is empty.
 func (p *parts) responseHeaderEmpty(key string) *parts {
 	p.require.Empty(p.current().Headers.Get(key))
 
 	return p
 }
 
-func (p *parts) clientBaseURLIs(_ string) *parts {
-	p.require.Equal(p.clientConfig.baseURL, p.client.BaseURL)
+// responseHasNoError asserts the current response has no error.
+func (p *parts) responseHasNoError() *parts {
+	p.require.NoError(p.current().Error)
 
 	return p
 }
 
-func (p *parts) clientBaseURLIsEmpty() *parts {
-	p.assert.Empty(p.client.BaseURL)
+// responseHasError asserts the current response carries an error mentioning every text.
+func (p *parts) responseHasError(texts ...string) *parts {
+	p.require.Error(p.current().Error)
 
-	return p
-}
-
-func (p *parts) clientDefaultHeaderIs(key, _ string) *parts {
-	p.require.Equal(p.clientConfig.headerValue, p.client.DefaultHeaders.Get(key))
-
-	return p
-}
-
-func (p *parts) clientExists() *parts {
-	p.require.NotNil(p.client)
-
-	return p
-}
-
-func (p *parts) clientDefaultHeadersEmpty() *parts {
-	p.require.NotNil(p.client.DefaultHeaders)
-	p.assert.Empty(p.client.DefaultHeaders)
-
-	return p
-}
-func (p *parts) clientRequestInterceptorCaptures(method, wantURL string) *parts {
-	p.require.NotNil(p.intercepted)
-	p.assert.Equal(method, p.intercepted.Method)
-	p.assert.Equal(wantURL, p.intercepted.URL.String())
-
-	return p
-}
-
-func (p *parts) clientSentNoHeaders() *parts {
-	p.require.NotNil(p.intercepted)
-	p.assert.Empty(p.intercepted.Header)
-
-	return p
-}
-
-// cookieWasStored asserts the cookie server received its cookie back.
-func (p *parts) cookieWasStored() *parts {
-	p.assert.True(p.cookieCheck, "cookie check assertion failed")
-
-	return p
-}
-
-// cookieWasNotStored asserts the cookie server did not receive the cookie back.
-func (p *parts) cookieWasNotStored() *parts {
-	p.assert.False(p.cookieCheck, "cookie check assertion failed")
-
-	return p
-}
-
-// serverReceivedMethodAndPath asserts the request at the given server-hit index used the
-// expected HTTP method and path.
-func (p *parts) serverReceivedMethodAndPath(index int, method, path string) *parts {
-	p.require.Greater(len(p.capturedRequests), index)
-	p.assert.Equal(method, p.capturedRequests[index].Method)
-	p.assert.Equal(path, p.capturedRequests[index].URL.Path)
-
-	return p
-}
-
-// serverReceivedJSONBody asserts the request body at the given server-hit index equals the
-// expected JSON regardless of key order or whitespace.
-func (p *parts) serverReceivedJSONBody(index int, expectedJSON string) *parts {
-	p.require.Greater(len(p.capturedRequests), index)
-
-	body, err := io.ReadAll(p.capturedRequests[index].Body)
-	p.require.NoError(err)
-	p.assert.JSONEq(expectedJSON, string(body))
-
-	return p
-}
-
-// serverReceivedHeaderValue asserts a request header value at the given server-hit index.
-func (p *parts) serverReceivedHeaderValue(index int, key, value string) *parts {
-	p.require.Greater(len(p.capturedRequests), index)
-	p.assert.Equal(value, p.capturedRequests[index].Header.Get(key))
-
-	return p
-}
-
-// aJsonEchoServer returns an http.HandlerFunc that accepts POST /<path> with Content-Type
-// application/json, parses the body as JSON, echoes it back wrapped in {"json": ...}, and
-// responds 200 OK with Content-Type application/json. Used by external-file tests so the
-func (p *parts) aJsonEchoServer() *parts {
-	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
-		var data map[string]any
-		_ = json.NewDecoder(r.Body).Decode(&data)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]any{"json": data})
-	})
-}
-
-// aRestExtensionServer is the dedicated handler for the .rest extension test: it serves
-// GET <path> with the given X-* header and returns 200 OK with a JSON body. The DSL method
-// hides the if/t.Errorf cascades (see PR review comment 6) — assertions live in
-// serverReceived* helpers that read capturedRequests.
-func (p *parts) aRestExtensionServer() *parts {
-	return p.aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status": "ok from .rest"}`))
-	})
-}
-func (p *parts) requestRawURLContains(fragments ...string) *parts {
-	current := p.current()
-	p.require.NotNil(current.Request)
-
-	for _, fragment := range fragments {
-		p.assert.Contains(current.Request.RawURLString, fragment)
+	for _, text := range texts {
+		p.require.Contains(p.current().Error.Error(), text)
 	}
-
-	return p
-}
-func (p *parts) responsesValidateAgainstFixture(name string) *parts {
-	path := filepath.Join(responseFilesDir, name)
-	p.assert.NoError(p.client.ValidateResponses(path, p.responses...))
-
-	return p
-}
-
-func (p *parts) capturedRequestCount(n int) *parts {
-	p.require.Equal(n, len(p.capturedRequests))
 
 	return p
 }
@@ -617,101 +250,4 @@ func (p *parts) requestCount(n int64) *parts {
 	p.require.Equal(n, p.requestHits.Load())
 
 	return p
-}
-
-// validationSucceeds asserts the response validation passed.
-func (p *parts) validationSucceeds() *parts {
-	p.require.NoError(p.validationErr)
-
-	return p
-}
-
-// validationFails asserts the response validation failed with count errors mentioning every text.
-func (p *parts) validationFails(count int, texts ...string) *parts {
-	p.require.Error(p.validationErr)
-
-	p.require.Equal(count, multierrorCount(p.validationErr))
-
-	for _, text := range texts {
-		p.require.Contains(p.validationErr.Error(), text)
-	}
-
-	return p
-}
-
-// mockRoundTripper adapts a function into an http.RoundTripper for the DSL.
-type mockRoundTripper struct {
-	RoundTripFunc func(req *http.Request) (*http.Response, error)
-}
-
-// RoundTrip delegates to the configured function.
-func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	if m.RoundTripFunc != nil {
-		return m.RoundTripFunc(req)
-	}
-
-	return nil, errors.New("RoundTripFunc not set")
-}
-
-// dslSymbols keeps every DSL entry point referenced so the unused linter stays
-// quiet in this definitions-only file until tests adopt the DSL. The batch-2b
-// extensions live in fluent_parts_ext_test.go (dslSymbolsExt).
-var _ = []any{
-	newParts,
-	(*parts).and,
-	(*parts).aHttpServer,
-	(*parts).aHttpFile,
-	(*parts).aHttpFileFromTemplate,
-	(*parts).aHttpFileFromTemplateWithData,
-	(*parts).aRequestFixture,
-	(*parts).anExpectedResponseFixture,
-	(*parts).aClient,
-	(*parts).aClientWithDefaults,
-	(*parts).aMockTransportClient,
-	(*parts).aCookieRedirectFixture,
-	(*parts).aCookieTestServer,
-	(*parts).aRedirectTestServer,
-	(*parts).aCookieJarClient,
-	(*parts).aNoRedirectClient,
-	(*parts).aFreshCookieCheck,
-	(*parts).withEnv,
-	(*parts).withServerAddressVars,
-	(*parts).expectedResponseFile,
-	(*parts).executeFile,
-	(*parts).validateResponses,
-	(*parts).responseAt,
-	(*parts).current,
-	(*parts).responseCode,
-	(*parts).responseContains,
-	(*parts).responseBodyIs,
-	(*parts).responseHeader,
-	(*parts).responseHeaderValues,
-	(*parts).responseHeaderEmpty,
-	(*parts).clientBaseURLIs,
-	(*parts).clientBaseURLIsEmpty,
-	(*parts).clientDefaultHeaderIs,
-	(*parts).clientExists,
-	(*parts).clientDefaultHeadersEmpty,
-	(*parts).clientRequestInterceptorCaptures,
-	(*parts).clientSentNoHeaders,
-	(*parts).cookieWasStored,
-	(*parts).cookieWasNotStored,
-	(*parts).responseHasNoError,
-	(*parts).responseHasError,
-	(*parts).responseCount,
-	(*parts).capturedRequestCount,
-	(*parts).executionSucceeded,
-	(*parts).noError,
-	(*parts).errorContains,
-	(*parts).requestCount,
-	(*parts).validationSucceeds,
-	(*parts).validationFails,
-	(*parts).anUploadsFixtureCopy,
-	(*parts).serverReceivedMethodAndPath,
-	(*parts).serverReceivedJSONBody,
-	(*parts).serverReceivedHeaderValue,
-	(*parts).aJsonEchoServer,
-	(*parts).aRestExtensionServer,
-	(*parts).requestRawURLContains,
-	(*parts).responsesValidateAgainstFixture,
 }

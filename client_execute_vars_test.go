@@ -1,7 +1,3 @@
-// RunExecuteFile_WithProcessEnvSystemVariable, RunExecuteFile_WithDotEnvSystemVariable,
-// RunExecuteFile_WithProgrammaticVariables, RunExecuteFile_WithLocalDatetimeSystemVariable,
-// RunExecuteFile_VariableFunctionConsistency, RunExecuteFile_WithHttpClientEnvJson,
-// RunExecuteFile_WithExtendedRandomSystemVariables, RunExecuteFile_WithIndirectEnvironmentVariables).
 package restclient_test
 
 import (
@@ -423,6 +419,3 @@ func TestExecuteFile_WithExtendedRandomSystemVariables(t *testing.T) {
 		capturedJSONField(0, "randEmail").and().
 		allTrackedValuesMatchRegexp(`^[a-zA-Z0-9_]+@[a-zA-Z]+\.[a-zA-Z]{2,3}$`)
 }
-
-// Silence unused imports.
-var _ = time.Time{}

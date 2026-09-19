@@ -15,12 +15,7 @@ func TestExecuteFile_ExternalFileWithVariables(t *testing.T) {
 
 	given.
 		aJsonEchoServer().and().
-		aHttpFileWithExternalFile("test_vars.json", `{
-  "userId": "{{userId}}",
-  "name": "{{userName}}",
-  "timestamp": "{{$timestamp}}",
-  "environment": "{{env}}"
-}`).and().
+		aHttpFileWithExternalFileFixture("test_vars.json").and().
 		aClient(rc.WithVars(map[string]any{"userName": "Override Name"}))
 
 	when.
@@ -48,11 +43,7 @@ func TestExecuteFile_ExternalFileWithoutVariables(t *testing.T) {
 
 	given.
 		aJsonEchoServer().and().
-		aHttpFileWithExternalFileStatic("test_static.json", `{
-  "userId": "{{userId}}",
-  "name": "{{userName}}",
-  "literal": "this should stay as-is"
-}`).and().
+		aHttpFileWithExternalFileStaticFixture("test_static.json").and().
 		aClient()
 
 	when.

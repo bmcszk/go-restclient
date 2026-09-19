@@ -6,21 +6,14 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	rc "github.com/bmcszk/go-restclient"
 )
 
-// validator tests (batch 3). The validator tests never execute HTTP requests:
-// they hand-construct rc.Response values and call p.client.ValidateResponses
-// against a fixture file, so the given-methods below populate p.responses
-// directly. validateResponses (from fluent_parts_test.go) then operates on
-// those responses unchanged.
-//
-// Same conventions: state lives in parts, assertions use parts.require /
-// parts.assert, .and() stays at end of line.
+// Validator DSL: builds rc.Response values directly, never executes HTTP requests.
 
-// aResponseWith appends a hand-constructed rc.Response to p.responses. Body and
-// The statusText is used verbatim as rc.Response.Status.
+// aResponseWith appends a hand-constructed rc.Response to p.responses.
 func (p *parts) aResponseWith(statusCode int, statusText, body string, headers http.Header) *parts {
 	resp := &rc.Response{
 		StatusCode: statusCode,
@@ -40,9 +33,7 @@ func (p *parts) aResponseWithStatus(statusCode int, statusText string) *parts {
 	return p.aResponseWith(statusCode, statusText, "", nil)
 }
 
-// aResponseFromRawHTTPFile reads a raw HTTP response from a file at the given
-// repo-root-relative path, parses it with http.ReadResponse, and appends a
-// fully populated rc.Response (StatusCode, Status, Proto, Headers clone, Body,
+// aResponseFromRawHTTPFile parses a raw HTTP response file into a rc.Response.
 func (p *parts) aResponseFromRawHTTPFile(path string) *parts {
 	content, err := os.ReadFile(path)
 	p.require.NoError(err, "read raw http file %s", path)
@@ -150,14 +141,64 @@ func (p *parts) anExpectedResponseFileAt(path string) *parts {
 	return p
 }
 
-// validateResponsesWithIndex calls client.ValidateResponsesWithOptions with the
-// given expected index (selecting a single expected response). The result is
-// stored in p.validationErr for assertions.
+// validateResponsesWithIndex calls ValidateResponsesWithOptions with one expected index.
 func (p *parts) validateResponsesWithIndex(index int) *parts {
 	p.validationErr = p.client.ValidateResponsesWithOptions(
 		p.expectedFilePath,
 		rc.ValidateOptions{ExpectedIndex: index},
 		p.responses...,
 	)
+	return p
+}
+
+// expectedResponseFile writes the given .hresp content as the expected responses file.
+func (p *parts) expectedResponseFile(content string) *parts {
+	path := filepath.Join(p.baseDir, "expected.hresp")
+	p.require.NoError(os.WriteFile(path, []byte(content), 0644))
+	p.expectedFilePath = path
+
+	return p
+}
+
+// validationSucceeds asserts the response validation passed.
+func (p *parts) validationSucceeds() *parts {
+	p.require.NoError(p.validationErr)
+
+	return p
+}
+
+// validationFails asserts the response validation failed with count errors mentioning every text.
+func (p *parts) validationFails(count int, texts ...string) *parts {
+	p.require.Error(p.validationErr)
+
+	p.require.Equal(count, multierrorCount(p.validationErr))
+
+	for _, text := range texts {
+		p.require.Contains(p.validationErr.Error(), text)
+	}
+
+	return p
+}
+
+// responsesValidateAgainstFixture validates responses against a committed response-files fixture.
+func (p *parts) responsesValidateAgainstFixture(name string) *parts {
+	path := filepath.Join(responseFilesDir, name)
+	p.assert.NoError(p.client.ValidateResponses(path, p.responses...))
+
+	return p
+}
+
+// responsesValidateAgainst validates responses against an explicit .hresp path.
+func (p *parts) responsesValidateAgainst(expectedPath string) *parts {
+	p.require.NotNil(p.client)
+	p.assert.NoError(p.client.ValidateResponses(expectedPath, p.responses...))
+
+	return p
+}
+
+// anExpectedResponseFixture points the DSL at a committed expected-response fixture file.
+func (p *parts) anExpectedResponseFixture(name string) *parts {
+	p.expectedFilePath = filepath.Join(responseFilesDir, name)
+
 	return p
 }

@@ -403,22 +403,3 @@ func TestValidateResponses_FileErrors_MalformedStatus(t *testing.T) {
 			"invalid status code",
 			"mismatch in number of responses: got 1 actual, but expected 0")
 }
-
-// dslSymbolsValidator keeps every validator-DSL extension referenced so the
-// `unused` linter stays quiet in this definitions-only file until tests adopt
-// the DSL.
-var _ = []any{
-	(*parts).aResponseWith,
-	(*parts).aResponseWithStatus,
-	(*parts).aResponseFromRawHTTPFile,
-	(*parts).withStatusCode,
-	(*parts).withStatusText,
-	(*parts).withHeader,
-	(*parts).withoutHeader,
-	(*parts).withBody,
-	(*parts).noActualResponses,
-	(*parts).anEmptyResponseSlice,
-	(*parts).aNilResponse,
-	(*parts).anExpectedResponseFileAt,
-	(*parts).validateResponsesWithIndex,
-}

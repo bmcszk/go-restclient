@@ -3,20 +3,17 @@ package restclient_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 	"text/template"
 	"time"
 
-	"github.com/google/uuid"
-	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/transform"
 
 	rc "github.com/bmcszk/go-restclient"
@@ -25,9 +22,7 @@ import (
 // introduced by the batch-2b test migration. Same conventions: state lives in parts,
 // assertions come from parts.require / parts.assert, .and() stays at end of line.
 
-// anExternalFile writes content to <baseDir>/name. The content is stored verbatim; no
-// {{server}} substitution happens. The written file becomes the request file under test
-// (e.g. for .rest extension tests) — combine with aHttpFile when it is only a body file.
+// anExternalFile writes the request file under test verbatim to <baseDir>/name.
 func (p *parts) anExternalFile(name, content string) *parts {
 	p.writeTempFile(name, content)
 	p.httpFilePath = filepath.Join(p.baseDir, name)
@@ -35,16 +30,7 @@ func (p *parts) anExternalFile(name, content string) *parts {
 	return p
 }
 
-// anExternalFileBytes writes raw bytes to <baseDir>/name (e.g. latin1-encoded bodies).
-func (p *parts) anExternalFileBytes(name string, data []byte) *parts {
-	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, name), data, 0644))
-
-	return p
-}
-
-// aFormattedRequestFixture reads a committed request fixture containing %s placeholders,
-// applies fmt.Sprintf with the given substitutions in order and writes the result to a
-// temp file that becomes the .http file under test. Fixtures are looked up in
+// aFormattedRequestFixture renders a committed %s-placeholder fixture with fmt.Sprintf.
 func (p *parts) aFormattedRequestFixture(name string, substitutions ...string) *parts {
 	baseContent, err := os.ReadFile(filepath.Join(requestFilesDir, name))
 	if err != nil {
@@ -60,9 +46,7 @@ func (p *parts) aFormattedRequestFixture(name string, substitutions ...string) *
 	return p.aHttpFile(fmt.Sprintf(string(baseContent), args...))
 }
 
-// aTemplateFixture reads a committed template from test/data/<dir>/<name>, renders it
-// with [[ ]] delimiters and the given data, and stores the processed file path.
-// Generalizes aHttpFileFromTemplate to fixture directories beyond http_request_files.
+// aTemplateFixture renders a committed test/data/<dir> template with [[ ]] delimiters.
 func (p *parts) aTemplateFixture(dir, name string, data any) *parts {
 	tmplContent, err := os.ReadFile(filepath.Join("test", "data", dir, name))
 	p.require.NoError(err)
@@ -103,10 +87,7 @@ func (p *parts) aDotEnvFileRemoved() *parts {
 	return p
 }
 
-// aFixtureCopy reads the committed fixture file at repo-root-relative requestPath, applies
-// under test. Used for fixtures that need per-test substitution beyond the [[ ]] templating
-// (e.g. http-client.env.json handling) or plain copies of committed fixtures that must live
-// next to a .env file.
+// aFixtureCopy copies a committed fixture into baseDir, applying text replacements.
 func (p *parts) aFixtureCopy(requestPath, destName string, replacements map[string]string) *parts {
 	content, err := os.ReadFile(requestPath)
 	p.require.NoError(err)
@@ -120,9 +101,7 @@ func (p *parts) aFixtureCopy(requestPath, destName string, replacements map[stri
 	return p
 }
 
-// anEnvJsonFile reads committed env template file templatePath, replaces "{{SERVER_URL}}"
-// with serverURL, writes to <baseDir>/fileName (0600). For http-client.env.json /
-// http-client.private.env.json setups.
+// anEnvJsonFile writes a committed env-json template with {{SERVER_URL}} resolved.
 func (p *parts) anEnvJsonFile(fileName, templatePath, serverURL string) *parts {
 	content, err := os.ReadFile(templatePath)
 	p.require.NoError(err)
@@ -132,9 +111,7 @@ func (p *parts) anEnvJsonFile(fileName, templatePath, serverURL string) *parts {
 	return p
 }
 
-// aClientWithEnvironment builds the client via rc.NewClient(rc.WithEnvironment(env)) when env
-// is not empty, else rc.NewClient(); stores it in p.client. env == "" means no environment
-// selected (the http-client.env.json lookup is skipped).
+// aClientWithEnvironment builds the client with WithEnvironment unless env is empty.
 func (p *parts) aClientWithEnvironment(env string) *parts {
 	var client *rc.Client
 	var err error
@@ -148,9 +125,7 @@ func (p *parts) aClientWithEnvironment(env string) *parts {
 	return p
 }
 
-// cannedRoute is one route of aCannedServer: required request method, canned status
-// code and response body. validJSON additionally requires the request body to pass
-// json.Valid (400 otherwise).
+// cannedRoute is one aCannedServer route; validJSON also requires a json.Valid body.
 type cannedRoute struct {
 	method    string
 	code      int
@@ -202,9 +177,7 @@ func (p *parts) anEchoServer() *parts {
 	})
 }
 
-// aRequestFixtureAbs points the DSL at a repo-root-relative request fixture file
-// without prepending the default requestFilesDir. Used for fixtures that live
-// under subdirectories other than test/data/http_request_files.
+// aRequestFixtureAbs points the DSL at a repo-root-relative request fixture path.
 func (p *parts) aRequestFixtureAbs(name string) *parts {
 	p.httpFilePath = name
 
@@ -290,484 +263,18 @@ func (p *parts) parsedRequestRawURLIs(i int, rawURL string) *parts {
 	return p
 }
 
-func (p *parts) requestURLContains(fragments ...string) *parts {
-	current := p.current()
-	p.require.NotNil(current.Request)
-
-	for _, fragment := range fragments {
-		p.assert.Contains(current.Request.URL.String(), fragment)
+// urlHost returns the host portion of the given URL string. Used to compute the
+// httptest server's host for assertions in http-client.env.json subtests.
+func urlHost(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
 	}
 
-	return p
+	return parsed.Host
 }
 
-func (p *parts) requestHeaderIs(key, value string) *parts {
-	current := p.current()
-	p.require.NotNil(current.Request)
-	p.assert.Equal(value, current.Request.Headers.Get(key))
-
-	return p
-}
-
-func (p *parts) requestRawBodyIs(body string) *parts {
-	current := p.current()
-	p.require.NotNil(current.Request)
-	p.assert.Equal(body, current.Request.RawBody)
-
-	return p
-}
-func (p *parts) requestRawBodyContains(fragments ...string) *parts {
-	current := p.current()
-	p.require.NotNil(current.Request)
-
-	for _, fragment := range fragments {
-		p.assert.Contains(current.Request.RawBody, fragment)
-	}
-
-	return p
-}
-
-func (p *parts) requestRawBodyMatchesRegexp(pattern string) *parts {
-	current := p.current()
-	p.require.NotNil(current.Request)
-	p.assert.Regexp(pattern, current.Request.RawBody)
-
-	return p
-}
-
-// serverReceivedBodyIs asserts the exact body captured for the server hit at index.
-func (p *parts) serverReceivedBodyIs(index int, body string) *parts {
-	p.require.Greater(len(p.capturedBodies), index)
-	p.assert.Equal(body, p.capturedBodies[index])
-
-	return p
-}
-
-// serverReceivedBodyParsesAsJSON asserts the captured body at index is valid JSON.
-func (p *parts) serverReceivedBodyParsesAsJSON(index int) *parts {
-	p.require.Greater(len(p.capturedBodies), index)
-
-	var data map[string]any
-	p.require.NoError(json.Unmarshal([]byte(p.capturedBodies[index]), &data))
-
-	return p
-}
-
-// serverReceivedLatin1BodyIs asserts the captured body at index equals the expected text
-// after decoding it from ISO-8859-1.
-func (p *parts) serverReceivedLatin1BodyIs(index int, body string) *parts {
-	p.require.Greater(len(p.capturedBodies), index)
-
-	decoded, _, err := transform.Bytes(charmap.ISO8859_1.NewDecoder(), []byte(p.capturedBodies[index]))
-	p.require.NoError(err)
-	p.assert.Equal(body, string(decoded))
-
-	return p
-}
-
-func (p *parts) allResponseCodesAre(code int) *parts {
-	p.require.NotEmpty(p.responses)
-
-	for i, resp := range p.responses {
-		p.require.Equal(code, resp.StatusCode, "response %d", i)
-	}
-
-	return p
-}
-
-// tracking starts (or resumes) a named consistency-tracking bucket for the captured*
-// assertion methods that follow.
-func (p *parts) tracking(name string) *parts {
-	p.activeTrack = name
-
-	if _, ok := p.trackedValues[name]; !ok {
-		p.trackedValues[name] = []string{}
-	}
-
-	return p
-}
-func (p *parts) capturedURLSegment(index int) *parts {
-	p.require.Greater(len(p.capturedRequests), index)
-
-	segments := strings.Split(p.capturedRequests[index].URL.Path, "/")
-	p.track(segments[len(segments)-1])
-
-	return p
-}
-func (p *parts) capturedURLSegmentAt(reqIndex, segmentIndex int) *parts {
-	p.require.Greater(len(p.capturedRequests), reqIndex)
-
-	segments := strings.Split(p.capturedRequests[reqIndex].URL.Path, "/")
-	p.require.Greater(len(segments), segmentIndex, "segment %d not present", segmentIndex)
-	p.track(segments[segmentIndex])
-
-	return p
-}
-func (p *parts) capturedHeaderField(index int, key string) *parts {
-	p.require.Greater(len(p.capturedRequests), index)
-	p.track(p.capturedRequests[index].Header.Get(key))
-
-	return p
-}
-func (p *parts) capturedJSONField(index int, path ...string) *parts {
-	leaf, ok := p.capturedJSONLeaf(index, path).(string)
-	p.require.True(ok, "field %v is not a string", path)
-	p.track(leaf)
-
-	return p
-}
-func (p *parts) capturedJSONNumberField(index int, path ...string) *parts {
-	value, ok := p.capturedJSONLeaf(index, path).(float64)
-	p.require.True(ok, "field %v is not a number", path)
-	p.track(strconv.FormatInt(int64(value), 10))
-
-	return p
-}
-
-func (p *parts) allTrackedValuesEqual() *parts {
-	values := p.activeBucket()
-	p.require.NotEmpty(values)
-
-	for i, value := range values {
-		p.assert.Equal(values[0], value, "tracked value %d", i)
-	}
-
-	return p
-}
-
-func (p *parts) allTrackedValuesAreValidUUIDs() *parts {
-	for _, value := range p.activeBucket() {
-		_, err := uuid.Parse(value)
-		p.require.NoError(err, "value %q should be a valid UUID", value)
-	}
-
-	return p
-}
-func (p *parts) allTrackedValuesArePositiveIntegers() *parts {
-	for _, value := range p.activeBucket() {
-		number, err := strconv.ParseInt(value, 10, 64)
-		p.require.NoError(err, "value %q should be an integer", value)
-		p.require.Greater(number, int64(0), "value %q should be positive", value)
-	}
-
-	return p
-}
-
-// firstTrackedValueIsIntegerInRange asserts the first value of the active bucket parses as
-// an integer within [lowest, highest].
-func (p *parts) firstTrackedValueIsIntegerInRange(lowest, highest int64) *parts {
-	values := p.activeBucket()
-	p.require.NotEmpty(values)
-
-	number, err := strconv.ParseInt(values[0], 10, 64)
-	p.require.NoError(err, "value %q should be an integer", values[0])
-	p.require.GreaterOrEqual(number, lowest)
-	p.require.LessOrEqual(number, highest)
-
-	return p
-}
-
-// activeBucket returns the values of the currently active tracking bucket.
-func (p *parts) activeBucket() []string {
-	p.require.NotEmpty(p.activeTrack)
-
-	values, ok := p.trackedValues[p.activeTrack]
-	p.require.True(ok, "no tracking bucket named %q", p.activeTrack)
-
-	return values
-}
-
-// track appends a captured value to the active tracking bucket.
-func (p *parts) track(value string) {
-	p.trackedValues[p.activeTrack] = append(p.trackedValues[p.activeTrack], value)
-}
-
-func (p *parts) capturedJSONLeaf(index int, path []string) any {
-	p.require.Greater(len(p.capturedBodies), index)
-
-	var data map[string]any
-	p.require.NoError(json.Unmarshal([]byte(p.capturedBodies[index]), &data))
-
-	var current any = data
-	for _, step := range path {
-		asMap, ok := current.(map[string]any)
-		p.require.True(ok, "field %v not found in body of request %d", path, index)
-
-		current, ok = asMap[step]
-		p.require.True(ok, "field %v not found in body of request %d", path, index)
-	}
-
-	return current
-}
-
-func (p *parts) capturedRequestURLIs(index int, rawURL string) *parts {
-	p.require.Greater(len(p.capturedRequests), index)
-	p.assert.Equal(rawURL, p.capturedRequests[index].URL.String())
-
-	return p
-}
-
-func (p *parts) capturedRequestPathIs(index int, path string) *parts {
-	p.require.Greater(len(p.capturedRequests), index)
-	p.assert.Equal(path, p.capturedRequests[index].URL.Path)
-
-	return p
-}
-
-// serverReceivedHostIs asserts p.capturedRequests[index].Host equals host.
-func (p *parts) serverReceivedHostIs(index int, host string) *parts {
-	p.require.Greater(len(p.capturedRequests), index)
-	p.assert.Equal(host, p.capturedRequests[index].Host)
-
-	return p
-}
-
-// .NoError) and asserts each key/value equals.
-func (p *parts) capturedJSONStringMapIs(index int, expected map[string]string) *parts {
-	p.require.Greater(len(p.capturedBodies), index)
-
-	var data map[string]string
-	p.require.NoError(json.Unmarshal([]byte(p.capturedBodies[index]), &data))
-
-	for key, want := range expected {
-		p.assert.Equal(want, data[key], "key %q mismatch", key)
-	}
-
-	return p
-}
-func (p *parts) requestPathMatchesCapturedPath() *parts {
-	current := p.current()
-	p.require.NotNil(current.Request)
-	p.require.Greater(len(p.capturedRequests), 0)
-	p.assert.Equal(p.capturedRequests[0].URL.Path, current.Request.URL.Path)
-
-	return p
-}
-func (p *parts) requestHeadersMatchCaptured(keys ...string) *parts {
-	current := p.current()
-	p.require.NotNil(current.Request)
-	p.require.Greater(len(p.capturedRequests), 0)
-
-	for _, key := range keys {
-		p.assert.Equal(p.capturedRequests[0].Header.Get(key), current.Request.Headers.Get(key), "header %q", key)
-	}
-
-	return p
-}
-
-// p.capturedBodies[0]. Together with server-side tracked equality this gives full
-// 1:1 parity for body fields.
-func (p *parts) requestRawBodyMatchesCapturedBody() *parts {
-	current := p.current()
-	p.require.NotNil(current.Request)
-	p.require.Greater(len(p.capturedBodies), 0)
-	p.assert.Equal(p.capturedBodies[0], current.Request.RawBody)
-
-	return p
-}
-func (p *parts) allTrackedValuesAreValidRFC3339Timestamps() *parts {
-	for _, value := range p.activeBucket() {
-		_, err := time.Parse(time.RFC3339Nano, value)
-		p.require.NoError(err, "value %q should be a valid RFC3339Nano timestamp", value)
-	}
-
-	return p
-}
-
-// the given layout (layout "timestamp" means Unix seconds; time.Unix is used) and falls
-// within threshold of time.Now(). For non-timestamp layouts time.Parse is used.
-func (p *parts) allTrackedDatetimeValuesAreWithin(threshold time.Duration, layout string) *parts {
-	now := time.Now()
-	values := p.activeBucket()
-	p.require.NotEmpty(values)
-
-	for _, value := range values {
-		var parsed time.Time
-		if layout == "timestamp" {
-			ts, err := strconv.ParseInt(value, 10, 64)
-			p.require.NoError(err, "value %q should parse as integer", value)
-			parsed = time.Unix(ts, 0)
-		} else {
-			parsedTime, err := time.Parse(layout, value)
-			p.require.NoError(err, "value %q should parse with layout %q", value, layout)
-			parsed = parsedTime
-		}
-
-		p.assert.WithinDuration(now, parsed, threshold,
-			"datetime %s not within %s of now %s", parsed, threshold, now)
-	}
-
-	return p
-}
-
-// time.UTC. The bucket values may be RFC1123, RFC3339 or Unix-seconds timestamps; all of
-// these resolve to a location whose UTC offset matches time.UTC.
-func (p *parts) allTrackedDatetimeValuesHaveUTCZone() *parts {
-	values := p.activeBucket()
-	p.require.NotEmpty(values)
-
-	for _, value := range values {
-		// Try RFC1123, RFC3339 and Unix-seconds in turn.
-		var parsed time.Time
-		var err error
-		if parsed, err = time.Parse(time.RFC1123, value); err != nil {
-			if parsed, err = time.Parse(time.RFC3339, value); err != nil {
-				ts, tsErr := strconv.ParseInt(value, 10, 64)
-				p.require.NoError(tsErr, "value %q should parse as integer, RFC3339 or RFC1123", value)
-				parsed = time.Unix(ts, 0).UTC()
-			}
-		}
-
-		p.assert.Equal(time.UTC, parsed.Location(), "value %q expected UTC zone", value)
-	}
-
-	return p
-}
-
-// to the local timezone offset. Layout "timestamp" uses time.Unix().In(time.Local) and
-// accepts any offset.
-func (p *parts) allTrackedDatetimeValuesHaveLocalZone() *parts {
-	values := p.activeBucket()
-	p.require.NotEmpty(values)
-	_, wantOffset := time.Now().In(time.Local).Zone()
-
-	for _, value := range values {
-		var parsed time.Time
-		var err error
-		if parsed, err = time.Parse(time.RFC1123, value); err != nil {
-			if parsed, err = time.Parse(time.RFC3339, value); err != nil {
-				ts, tsErr := strconv.ParseInt(value, 10, 64)
-				p.require.NoError(tsErr, "value %q should parse as integer, RFC3339 or RFC1123", value)
-				parsed = time.Unix(ts, 0).In(time.Local)
-			}
-		}
-
-		_, gotOffset := parsed.Zone()
-		p.assert.Equal(wantOffset, gotOffset,
-			"value %q expected local offset %d, got %d", value, wantOffset, gotOffset)
-	}
-
-	return p
-}
-
-func (p *parts) capturedJSONFieldIs(index int, want string, path ...string) *parts {
-	leaf := p.capturedJSONLeaf(index, path)
-	switch v := leaf.(type) {
-	case string:
-		p.assert.Equal(want, v)
-	case float64:
-		p.assert.Equal(want, strconv.FormatInt(int64(v), 10))
-	default:
-		p.assert.Equal(want, fmt.Sprint(v))
-	}
-
-	return p
-}
-
-func (p *parts) capturedJSONFieldContains(index int, fragment string, path ...string) *parts {
-	leaf, ok := p.capturedJSONLeaf(index, path).(string)
-	p.require.True(ok, "field %v is not a string", path)
-	p.assert.Contains(leaf, fragment)
-
-	return p
-}
-func (p *parts) capturedJSONFieldMatchesRegexp(index int, pattern string, path ...string) *parts {
-	leaf, ok := p.capturedJSONLeaf(index, path).(string)
-	p.require.True(ok, "field %v is not a string", path)
-	p.assert.Regexp(pattern, leaf)
-
-	return p
-}
-func (p *parts) capturedJSONFieldNotContains(index int, fragment string, path ...string) *parts {
-	leaf, ok := p.capturedJSONLeaf(index, path).(string)
-	p.require.True(ok, "field %v is not a string", path)
-	p.assert.NotContains(leaf, fragment)
-
-	return p
-}
-
-// serverReceivedHeaderMatchesRegexp asserts capturedRequests[index].Header.Get(key) matches pattern.
-func (p *parts) serverReceivedHeaderMatchesRegexp(index int, key, pattern string) *parts {
-	p.require.Greater(len(p.capturedRequests), index)
-	p.assert.Regexp(pattern, p.capturedRequests[index].Header.Get(key))
-
-	return p
-}
-
-// serverReceivedHeaderNotContains asserts capturedRequests[index].Header.Get(key) does not
-// contain fragment.
-func (p *parts) serverReceivedHeaderNotContains(index int, key, fragment string) *parts {
-	p.require.Greater(len(p.capturedRequests), index)
-	p.assert.NotContains(p.capturedRequests[index].Header.Get(key), fragment)
-
-	return p
-}
-
-// serverReceivedHeaderFieldCountIs asserts the captured header value splits into n
-// whitespace-separated fields.
-func (p *parts) serverReceivedHeaderFieldCountIs(index int, key string, n int) *parts {
-	p.require.Greater(len(p.capturedRequests), index)
-	p.assert.Len(strings.Fields(p.capturedRequests[index].Header.Get(key)), n)
-
-	return p
-}
-
-// serverReceivedHeaderContains asserts capturedRequests[index].Header.Get(key) contains fragment.
-func (p *parts) serverReceivedHeaderContains(index int, key, fragment string) *parts {
-	p.require.Greater(len(p.capturedRequests), index)
-	p.assert.Contains(p.capturedRequests[index].Header.Get(key), fragment)
-
-	return p
-}
-
-func (p *parts) capturedRequestPathMatchesRegexp(index int, pattern string) *parts {
-	p.require.Greater(len(p.capturedRequests), index)
-	p.assert.Regexp(pattern, p.capturedRequests[index].URL.Path)
-
-	return p
-}
-func (p *parts) responsesValidateAgainst(expectedPath string) *parts {
-	p.require.NotNil(p.client)
-	p.assert.NoError(p.client.ValidateResponses(expectedPath, p.responses...))
-
-	return p
-}
-
-// firstTrackedValueIsFloatInRange asserts the first value of the active bucket parses as
-// a float within [lowest, highest].
-func (p *parts) firstTrackedValueIsFloatInRange(lowest, highest float64) *parts {
-	values := p.activeBucket()
-	p.require.NotEmpty(values)
-
-	number, err := strconv.ParseFloat(values[0], 64)
-	p.require.NoError(err, "value %q should be a float", values[0])
-	p.assert.GreaterOrEqual(number, lowest)
-	p.assert.LessOrEqual(number, highest)
-
-	return p
-}
-
-func (p *parts) allTrackedValuesMatchRegexp(pattern string) *parts {
-	re := regexp.MustCompile(pattern)
-	for _, value := range p.activeBucket() {
-		p.assert.True(re.MatchString(value), "value %q should match %q", value, pattern)
-	}
-
-	return p
-}
-
-func (p *parts) capturedBodyContains(index int, fragment string) *parts {
-	p.require.Greater(len(p.capturedBodies), index)
-	p.assert.Contains(p.capturedBodies[index], fragment)
-
-	return p
-}
-
-// aHttpFileWithExternalFileEncoding writes a short request body that points at the named
-// external file with the given encoding directive (e.g. "latin1", "utf-8", "ascii"), and
-// stores the raw encoded content in an external file of the given name. The fixture request
-// body is rendered with [[.ServerURL]] substituted for the running test server. Encapsulating
-// the transform.Bytes encoding step here keeps the test func free of bytes/encoder logic.
+// aHttpFileWithExternalFileEncoding writes the external file in the given encoding and a <@ request for it.
 func (p *parts) aHttpFileWithExternalFileEncoding(
 	encodingName, externalFileName string, rawUTF8Content []byte, encoder transform.Transformer,
 ) *parts {
@@ -791,8 +298,7 @@ func (p *parts) aHttpFileWithExternalFileEncoding(
 }
 
 // aHttpFileWithExternalFile writes a short request body that points at the named external
-// file via <@, and stores the given JSON content in the external file. Replaces the older
-// inline fmt.Sprintf(...) + inline JSON literal in test funcs (see PR review comments 4/5).
+// file via <@, and stores the given JSON content in the external file.
 func (p *parts) aHttpFileWithExternalFile(externalFileName, externalFileContent string) *parts {
 	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, externalFileName), []byte(externalFileContent), 0644))
 
@@ -800,17 +306,34 @@ func (p *parts) aHttpFileWithExternalFile(externalFileName, externalFileContent 
 }
 
 // aHttpFileWithExternalFileStatic writes a short request body that points at the named
-// external file via < (no @: NO variable substitution). Used by tests that need the raw
-// external file bytes verbatim (PR review comment 4 generalization).
+// external file via < (no @: NO variable substitution).
 func (p *parts) aHttpFileWithExternalFileStatic(externalFileName, externalFileContent string) *parts {
 	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, externalFileName), []byte(externalFileContent), 0644))
 
 	return p.aHttpFileFromTemplate("external_file_static.http")
 }
 
-// fakerHeaderRule describes one header validation rule for the faker tests.
-// fieldCount == -1 (or 0) skips the field-count check. containsCheck != "" switches the
-// check from regex-match to substring-contain (and skips the field-count check too).
+const externalFilesFixtureDir = "test/data/external_files"
+
+// aHttpFileWithExternalFileFixture loads the committed external-file fixture via <@.
+func (p *parts) aHttpFileWithExternalFileFixture(externalFileName string) *parts {
+	src := filepath.Join(externalFilesFixtureDir, externalFileName)
+	content, err := os.ReadFile(src)
+	p.require.NoError(err)
+
+	return p.aHttpFileWithExternalFile(externalFileName, string(content))
+}
+
+// aHttpFileWithExternalFileStaticFixture is the no-substitution < counterpart.
+func (p *parts) aHttpFileWithExternalFileStaticFixture(externalFileName string) *parts {
+	src := filepath.Join(externalFilesFixtureDir, externalFileName)
+	content, err := os.ReadFile(src)
+	p.require.NoError(err)
+
+	return p.aHttpFileWithExternalFileStatic(externalFileName, string(content))
+}
+
+// fakerHeaderRule is one faker-header rule; containsCheck wins over pattern+fieldCount.
 type fakerHeaderRule struct {
 	key           string
 	pattern       string
@@ -818,10 +341,8 @@ type fakerHeaderRule struct {
 	containsCheck string
 }
 
-// serverReceivedFakerHeaders applies the standard set of faker-header assertions (regex
-// match + NotContains "{{" + optional field-count or contains check) to the captured request
-// at reqIndex, for every rule in rules. This is the single DSL entry point for faker header
-// validation across all faker-data tests; tests pass an inline []fakerHeaderRule literal.
+// serverReceivedFakerHeaders applies the standard set of faker-header assertions to the
+// captured request at reqIndex, for every rule in rules.
 func (p *parts) serverReceivedFakerHeaders(reqIndex int, rules []fakerHeaderRule) *parts {
 	p.require.Greater(len(p.capturedRequests), reqIndex)
 
@@ -843,94 +364,258 @@ func (p *parts) serverReceivedFakerHeaders(reqIndex int, rules []fakerHeaderRule
 	return p
 }
 
-func (p *parts) capturedBodyMatchesRegexp(index int, pattern string) *parts {
-	p.require.Greater(len(p.capturedBodies), index)
-	p.assert.Regexp(pattern, p.capturedBodies[index])
+// aHttpFile writes the given .http content, replacing {{server}} with the test server URL.
+func (p *parts) aHttpFile(content string) *parts {
+	resolved := strings.ReplaceAll(content, "{{server}}", p.serverURL)
+	path := filepath.Join(p.baseDir, "requests.http")
+	p.require.NoError(os.WriteFile(path, []byte(resolved), 0644))
+	p.httpFilePath = path
 
 	return p
 }
 
-// urlHost returns the host portion of the given URL string. Used to compute the
-// httptest server's host for assertions in http-client.env.json subtests.
-func urlHost(rawURL string) string {
-	parsed, err := url.Parse(rawURL)
-	if err != nil {
-		return ""
-	}
+// aHttpFileFromTemplate renders a committed request fixture template with the test server
+// URL ([[.ServerURL]] delimiters) and stores the processed file path for execution.
+func (p *parts) aHttpFileFromTemplate(templateName string) *parts {
+	p.require.NotEmpty(p.serverURL)
 
-	return parsed.Host
+	return p.aHttpFileFromTemplateWithData(templateName, struct{ ServerURL string }{ServerURL: p.serverURL})
 }
 
-// dslSymbolsExt keeps the batch-2b/2c DSL extensions referenced alongside dslSymbols
-// in fluent_parts_test.go.
-var _ = []any{
-	(*parts).anExternalFile,
-	(*parts).anExternalFileBytes,
-	(*parts).aFormattedRequestFixture,
-	(*parts).aTemplateFixture,
-	(*parts).aRequestFixtureAbs,
-	(*parts).aMissingFile,
-	(*parts).aDotEnvFile,
-	(*parts).aDotEnvFileRemoved,
-	(*parts).aFixtureCopy,
-	(*parts).anEnvJsonFile,
-	(*parts).aClientWithEnvironment,
-	(*parts).parsingFile,
-	(*parts).executingRequestAt,
-	(*parts).parseSucceeded,
-	(*parts).parseErrorContains,
-	(*parts).parsedRequestCount,
-	(*parts).parsedRequestMethod,
-	(*parts).parsedRequestName,
-	(*parts).parsedRequestRawURLIs,
-	(*parts).requestURLContains,
-	(*parts).requestHeaderIs,
-	(*parts).requestRawBodyIs,
-	(*parts).requestRawBodyContains,
-	(*parts).requestRawBodyMatchesRegexp,
-	(*parts).requestPathMatchesCapturedPath,
-	(*parts).requestHeadersMatchCaptured,
-	(*parts).requestRawBodyMatchesCapturedBody,
-	(*parts).serverReceivedBodyIs,
-	(*parts).serverReceivedBodyParsesAsJSON,
-	(*parts).serverReceivedLatin1BodyIs,
-	(*parts).allResponseCodesAre,
-	(*parts).capturedRequestURLIs,
-	(*parts).capturedRequestPathIs,
-	(*parts).serverReceivedHostIs,
-	(*parts).capturedJSONStringMapIs,
-	(*parts).tracking,
-	(*parts).capturedURLSegment,
-	(*parts).capturedURLSegmentAt,
-	(*parts).capturedHeaderField,
-	(*parts).capturedJSONField,
-	(*parts).capturedJSONNumberField,
-	(*parts).allTrackedValuesEqual,
-	(*parts).allTrackedValuesAreValidUUIDs,
-	(*parts).allTrackedValuesArePositiveIntegers,
-	(*parts).firstTrackedValueIsIntegerInRange,
-	(*parts).firstTrackedValueIsFloatInRange,
-	(*parts).allTrackedValuesMatchRegexp,
-	(*parts).allTrackedValuesAreValidRFC3339Timestamps,
-	(*parts).allTrackedDatetimeValuesAreWithin,
-	(*parts).allTrackedDatetimeValuesHaveUTCZone,
-	(*parts).allTrackedDatetimeValuesHaveLocalZone,
-	(*parts).capturedJSONFieldIs,
-	(*parts).capturedJSONFieldContains,
-	(*parts).capturedJSONFieldMatchesRegexp,
-	(*parts).capturedJSONFieldNotContains,
-	(*parts).serverReceivedHeaderMatchesRegexp,
-	(*parts).serverReceivedHeaderNotContains,
-	(*parts).serverReceivedHeaderFieldCountIs,
-	(*parts).serverReceivedHeaderContains,
-	(*parts).capturedRequestPathMatchesRegexp,
-	(*parts).responsesValidateAgainst,
-	(*parts).capturedBodyContains,
-	(*parts).capturedBodyMatchesRegexp,
-	(*parts).aCannedServer,
-	(*parts).anEchoServer,
-	(*parts).aHttpFileWithExternalFileEncoding,
-	(*parts).aHttpFileWithExternalFile,
-	(*parts).aHttpFileWithExternalFileStatic,
-	(*parts).serverReceivedFakerHeaders,
+// aHttpFileFromTemplateWithData renders a committed request fixture template with the given
+// template data ([[ ]] delimiters) and stores the processed file path for execution.
+func (p *parts) aHttpFileFromTemplateWithData(templateName string, data any) *parts {
+	tmplContent, err := os.ReadFile(filepath.Join(requestFilesDir, templateName))
+	p.require.NoError(err)
+
+	tmpl, err := template.New(templateName).Delims("[[", "]]").Parse(string(tmplContent))
+	p.require.NoError(err)
+
+	path := filepath.Join(p.baseDir, templateName)
+
+	file, err := os.Create(path)
+	p.require.NoError(err)
+	p.require.NoError(tmpl.Execute(file, data))
+	p.require.NoError(file.Close())
+
+	p.httpFilePath = path
+
+	return p
+}
+
+// aRequestFixture points the DSL at a committed request fixture file without templating.
+func (p *parts) aRequestFixture(name string) *parts {
+	p.httpFilePath = filepath.Join(requestFilesDir, name)
+
+	return p
+}
+
+// withServerAddressVars stores scheme/host/port vars and rebuilds the client with them.
+func (p *parts) withServerAddressVars() *parts {
+	parsed, err := url.Parse(p.serverURL)
+	p.require.NoError(err)
+
+	p.activeServerVars = map[string]any{
+		"scheme": parsed.Scheme,
+		"host":   parsed.Hostname(),
+		"port":   parsed.Port(),
+	}
+
+	return p.aClient(rc.WithVars(p.activeServerVars))
+}
+
+// withEnv sets an environment variable for the duration of the test.
+func (p *parts) withEnv(k, v string) *parts {
+	p.Setenv(k, v)
+
+	return p
+}
+
+// aClientWithDefaults builds a client from fixed defaults recorded in parts.clientConfig.
+func (p *parts) aClientWithDefaults() *parts {
+	p.clientConfig = clientConfigSnapshot{
+		baseURL:     "https://api.example.com",
+		headerKey:   "X-Default",
+		headerValue: "DefaultValue",
+		httpTimeout: 15 * time.Second,
+	}
+
+	return p.aClient(
+		rc.WithHTTPClient(&http.Client{Timeout: p.clientConfig.httpTimeout}),
+		rc.WithBaseURL(p.clientConfig.baseURL),
+		rc.WithDefaultHeader(p.clientConfig.headerKey, p.clientConfig.headerValue),
+	)
+}
+
+// aMockTransportClient builds the client under test with a mock round tripper that
+// records the outgoing request into parts.intercepted and answers 200 with a fixed body.
+func (p *parts) aMockTransportClient() *parts {
+	transport := &mockRoundTripper{
+		RoundTripFunc: func(req *http.Request) (*http.Response, error) {
+			p.intercepted = req.Clone(req.Context())
+
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader("mocked response")),
+				Header:     make(http.Header),
+			}, nil
+		},
+	}
+
+	return p.aClient(rc.WithHTTPClient(&http.Client{Transport: transport}))
+}
+
+// aCookieRedirectFixture renders a committed cookie/redirect template into baseDir.
+func (p *parts) aCookieRedirectFixture(name string) *parts {
+	tmplContent, err := os.ReadFile(filepath.Join("test", "data", "cookies_redirects", name))
+	p.require.NoError(err)
+
+	tmpl, err := template.New(name).Delims("[[", "]]").Parse(string(tmplContent))
+	p.require.NoError(err)
+
+	path := filepath.Join(p.baseDir, name)
+
+	file, err := os.Create(path)
+	p.require.NoError(err)
+	p.require.NoError(tmpl.Execute(file, nil))
+	p.require.NoError(file.Close())
+
+	p.httpFilePath = path
+
+	return p
+}
+
+// anUploadsFixtureCopy copies the multipart fixture with server URL and < paths resolved.
+func (p *parts) anUploadsFixtureCopy() *parts {
+	p.require.NotEmpty(p.serverURL)
+
+	content, err := os.ReadFile(filepath.Join("test", "data", "http_request_files", "multipart_file_uploads.http"))
+	p.require.NoError(err)
+
+	resolved := strings.ReplaceAll(string(content), "< ./test/data/request_body/", "< test/data/request_body/")
+	resolved = strings.ReplaceAll(resolved, "[[.ServerURL]]", p.serverURL)
+	path := filepath.Join(p.baseDir, "multipart_file_uploads.http")
+
+	p.require.NoError(os.WriteFile(path, []byte(resolved), 0644))
+	p.httpFilePath = path
+
+	return p
+}
+
+// clientBaseURLIs asserts the client's BaseURL matches the recorded config snapshot.
+func (p *parts) clientBaseURLIs(_ string) *parts {
+	p.require.Equal(p.clientConfig.baseURL, p.client.BaseURL)
+
+	return p
+}
+
+// clientBaseURLIsEmpty asserts the client's BaseURL is empty.
+func (p *parts) clientBaseURLIsEmpty() *parts {
+	p.assert.Empty(p.client.BaseURL)
+
+	return p
+}
+
+// clientDefaultHeaderIs asserts the client's DefaultHeaders value for key equals the
+// recorded config snapshot.
+func (p *parts) clientDefaultHeaderIs(key, _ string) *parts {
+	p.require.Equal(p.clientConfig.headerValue, p.client.DefaultHeaders.Get(key))
+
+	return p
+}
+
+// clientExists asserts the client is non-nil.
+func (p *parts) clientExists() *parts {
+	p.require.NotNil(p.client)
+
+	return p
+}
+
+// clientDefaultHeadersEmpty asserts the client's DefaultHeaders map is non-nil and empty.
+func (p *parts) clientDefaultHeadersEmpty() *parts {
+	p.require.NotNil(p.client.DefaultHeaders)
+	p.assert.Empty(p.client.DefaultHeaders)
+
+	return p
+}
+
+// clientRequestInterceptorCaptures asserts the request captured by aMockTransportClient
+// has the given method and full URL.
+func (p *parts) clientRequestInterceptorCaptures(method, wantURL string) *parts {
+	p.require.NotNil(p.intercepted)
+	p.assert.Equal(method, p.intercepted.Method)
+	p.assert.Equal(wantURL, p.intercepted.URL.String())
+
+	return p
+}
+
+// clientSentNoHeaders asserts the request captured by aMockTransportClient sent no headers.
+func (p *parts) clientSentNoHeaders() *parts {
+	p.require.NotNil(p.intercepted)
+	p.assert.Empty(p.intercepted.Header)
+
+	return p
+}
+
+// serverReceivedMethodAndPath asserts the request at the given server-hit index used the
+// expected HTTP method and path.
+func (p *parts) serverReceivedMethodAndPath(index int, method, path string) *parts {
+	p.require.Greater(len(p.capturedRequests), index)
+	p.assert.Equal(method, p.capturedRequests[index].Method)
+	p.assert.Equal(path, p.capturedRequests[index].URL.Path)
+
+	return p
+}
+
+// serverReceivedJSONBody asserts the request body at the given server-hit index equals the
+// expected JSON regardless of key order or whitespace.
+func (p *parts) serverReceivedJSONBody(index int, expectedJSON string) *parts {
+	p.require.Greater(len(p.capturedRequests), index)
+
+	body, err := io.ReadAll(p.capturedRequests[index].Body)
+	p.require.NoError(err)
+	p.assert.JSONEq(expectedJSON, string(body))
+
+	return p
+}
+
+// serverReceivedHeaderValue asserts a request header value at the given server-hit index.
+func (p *parts) serverReceivedHeaderValue(index int, key, value string) *parts {
+	p.require.Greater(len(p.capturedRequests), index)
+	p.assert.Equal(value, p.capturedRequests[index].Header.Get(key))
+
+	return p
+}
+
+// requestRawURLContains asserts the current request's RawURLString contains every fragment.
+func (p *parts) requestRawURLContains(fragments ...string) *parts {
+	current := p.current()
+	p.require.NotNil(current.Request)
+
+	for _, fragment := range fragments {
+		p.assert.Contains(current.Request.RawURLString, fragment)
+	}
+
+	return p
+}
+
+// capturedRequestCount asserts how many requests the test server received.
+func (p *parts) capturedRequestCount(n int) *parts {
+	p.require.Equal(n, len(p.capturedRequests))
+
+	return p
+}
+
+// mockRoundTripper adapts a function into an http.RoundTripper for the DSL.
+type mockRoundTripper struct {
+	RoundTripFunc func(req *http.Request) (*http.Response, error)
+}
+
+// RoundTrip delegates to the configured function.
+func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	if m.RoundTripFunc != nil {
+		return m.RoundTripFunc(req)
+	}
+
+	return nil, errors.New("RoundTripFunc not set")
 }

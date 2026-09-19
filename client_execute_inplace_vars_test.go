@@ -187,11 +187,7 @@ func TestExecuteFile_InPlace_VariableSubstitutionInBody(t *testing.T) {
 		serverReceivedJSONBody(0, `{"id":"user123","status":"active"}`)
 }
 
-// TestExecuteFile_InPlace_VariableDefinedBySystemVariable: In-Place - Referencing System Variables.
-//
-// The legacy asserts pathSegments[0] is a 36-char UUID (not literal placeholder),
-// pathSegments[1] == "resource". capturedRequestPathMatchesRegexp gives the
-// shape check (36-char segment + "resource").
+// TestExecuteFile_InPlace_VariableDefinedBySystemVariable covers pathSegments[0] being a 36-char UUID plus "resource".
 func TestExecuteFile_InPlace_VariableDefinedBySystemVariable(t *testing.T) {
 	given, when, then := newParts(t)
 
