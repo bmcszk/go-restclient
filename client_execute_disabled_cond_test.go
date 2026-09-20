@@ -6,8 +6,7 @@ import (
 	rc "github.com/bmcszk/go-restclient"
 )
 
-// TestParseFile_ConditionalDisabledWithBang_TogglesPlainDisabled: parser stores the
-// conditional expression text after `!` and does NOT set the plain Disabled flag.
+// parser stores the conditional expression text after `!` and does NOT set the plain Disabled flag.
 func TestParseFile_ConditionalDisabledWithBang_TogglesPlainDisabled(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -26,8 +25,7 @@ GET https://example.com/api`).and().
 		parsedRequestDisabledExpr(0, "true")
 }
 
-// TestExecuteFile_ConditionalDisabled_TruthyExprSkips: `flag=true` -> request skipped,
-// the test server receives zero hits, response entry is marked Skipped.
+// `flag=true` -> request skipped; the test server receives zero hits, response entry is marked Skipped.
 func TestExecuteFile_ConditionalDisabled_TruthyExprSkips(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -46,8 +44,7 @@ func TestExecuteFile_ConditionalDisabled_TruthyExprSkips(t *testing.T) {
 		capturedRequestCount(0)
 }
 
-// TestExecuteFile_ConditionalDisabled_FalsyExprRuns: `flag=false` -> request runs,
-// the test server receives one hit, response entry is NOT marked Skipped.
+// `flag=false` -> request runs; the test server receives one hit, response entry is NOT marked Skipped.
 func TestExecuteFile_ConditionalDisabled_FalsyExprRuns(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -66,7 +63,7 @@ func TestExecuteFile_ConditionalDisabled_FalsyExprRuns(t *testing.T) {
 		capturedRequestCount(1)
 }
 
-// TestExecuteFile_ConditionalDisabled_ZeroIsFalsy: numeric `flag=0` -> request runs.
+// numeric `flag=0` -> request runs.
 func TestExecuteFile_ConditionalDisabled_ZeroIsFalsy(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -85,7 +82,7 @@ func TestExecuteFile_ConditionalDisabled_ZeroIsFalsy(t *testing.T) {
 		capturedRequestCount(1)
 }
 
-// TestExecuteFile_ConditionalDisabled_NumberOneIsTruthy: numeric `flag=1` -> request skipped.
+// numeric `flag=1` -> request skipped.
 func TestExecuteFile_ConditionalDisabled_NumberOneIsTruthy(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -104,7 +101,7 @@ func TestExecuteFile_ConditionalDisabled_NumberOneIsTruthy(t *testing.T) {
 		capturedRequestCount(0)
 }
 
-// TestExecuteFile_ConditionalDisabled_EmptyStringRuns: substituted expr is empty -> request runs.
+// substituted expr is empty -> request runs.
 func TestExecuteFile_ConditionalDisabled_EmptyStringRuns(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -123,8 +120,7 @@ func TestExecuteFile_ConditionalDisabled_EmptyStringRuns(t *testing.T) {
 		capturedRequestCount(1)
 }
 
-// TestExecuteFile_ConditionalDisabled_NonEmptySkips: substituted expr is any non-empty
-// non-"true"/non-zero string -> request skipped.
+// substituted expr is any non-empty non-"true"/non-zero string -> request skipped.
 func TestExecuteFile_ConditionalDisabled_NonEmptySkips(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -143,8 +139,7 @@ func TestExecuteFile_ConditionalDisabled_NonEmptySkips(t *testing.T) {
 		capturedRequestCount(0)
 }
 
-// TestExecuteFile_ConditionalDisabled_UnknownVariableErrors: `{{missing}}` references an
-// undefined variable; execution must surface an error naming the variable, NOT skip silently.
+// `{{missing}}` references an undefined variable; execution must surface an error naming it, NOT skip silently.
 func TestExecuteFile_ConditionalDisabled_UnknownVariableErrors(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -160,7 +155,7 @@ func TestExecuteFile_ConditionalDisabled_UnknownVariableErrors(t *testing.T) {
 		errorContains("undefined variable", "missing")
 }
 
-// TestExecuteFile_ConditionalDisabled_CaseInsensitiveTrue: `flag="TRUE"` -> request skipped.
+// `flag="TRUE"` -> request skipped (case-insensitive truthy).
 func TestExecuteFile_ConditionalDisabled_CaseInsensitiveTrue(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -179,7 +174,7 @@ func TestExecuteFile_ConditionalDisabled_CaseInsensitiveTrue(t *testing.T) {
 		capturedRequestCount(0)
 }
 
-// TestExecuteFile_ConditionalDisabled_CaseInsensitiveFalse: `flag="False"` -> request runs.
+// `flag="False"` -> request runs (case-insensitive falsy).
 func TestExecuteFile_ConditionalDisabled_CaseInsensitiveFalse(t *testing.T) {
 	given, when, then := newParts(t)
 

@@ -428,8 +428,7 @@ func (p *parts) capturedRequestPathMatchesRegexp(index int, pattern string) *par
 	return p
 }
 
-// gapBetweenCapturedRequestTimesAtLeast asserts the gap between captured-request times at indices
-// i and j is at least minGap (caller controls direction: i < j for forward, i > j for reverse).
+// gapBetweenCapturedRequestTimesAtLeast asserts captured-request times[ j] - [i] >= minGap.
 func (p *parts) gapBetweenCapturedRequestTimesAtLeast(i, j int, minGap time.Duration) *parts {
 	p.require.Greater(len(p.capturedRequestTimes), i, "no captured-request time at index %d", i)
 	p.require.Greater(len(p.capturedRequestTimes), j, "no captured-request time at index %d", j)

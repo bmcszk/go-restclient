@@ -7,7 +7,7 @@ import (
 	rc "github.com/bmcszk/go-restclient"
 )
 
-// TestParseFile_LoopForLiteralStoresCount: `# @loop for 3` parses and stores the literal count.
+// `# @loop for 3` parses and stores the literal count.
 func TestParseFile_LoopForLiteralStoresCount(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -25,7 +25,7 @@ GET https://example.com/loop`).and().
 		parsedRequestLoopCount(0, 3)
 }
 
-// TestParseFile_LoopForVariableStoresExpression: `# @loop for {{n}}` parses and stores the raw expression.
+// `# @loop for {{n}}` parses and stores the raw expression.
 func TestParseFile_LoopForVariableStoresExpression(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -43,8 +43,7 @@ GET https://example.com/loop`).and().
 		parsedRequestLoopExpr(0, "{{n}}")
 }
 
-// TestParseFile_LoopOfCollectionStoresCollectionRef: `# @loop for item of items` parses and stores
-// the collection variable name.
+// `# @loop for item of items` parses and stores the collection variable name.
 func TestParseFile_LoopOfCollectionStoresCollectionRef(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -60,7 +59,7 @@ func TestParseFile_LoopOfCollectionStoresCollectionRef(t *testing.T) {
 		parsedRequestLoopCollection(0, "items")
 }
 
-// TestExecuteFile_LoopForLiteralRunsNTimes: `# @loop for 3` sends the request exactly 3 times.
+// `# @loop for 3` sends the request exactly 3 times.
 func TestExecuteFile_LoopForLiteralRunsNTimes(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -79,7 +78,7 @@ GET {{server}}/loop`).and().
 		capturedRequestCount(3)
 }
 
-// TestExecuteFile_LoopForVariableRunsNTimes: `# @loop for {{n}}` resolves n at runtime and runs that many times.
+// `# @loop for {{n}}` resolves n at runtime and runs that many times.
 func TestExecuteFile_LoopForVariableRunsNTimes(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -98,8 +97,7 @@ GET {{server}}/loop`).and().
 		capturedRequestCount(2)
 }
 
-// TestExecuteFile_LoopZeroOrNegativeIsNoop: loop counts of 0 and negative values produce zero
-// HTTP requests, zero response entries, and no execution error.
+// loop counts of 0 and negative values produce zero HTTP requests, zero response entries, and no execution error.
 func TestExecuteFile_LoopZeroOrNegativeIsNoop(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -117,8 +115,7 @@ func TestExecuteFile_LoopZeroOrNegativeIsNoop(t *testing.T) {
 		responseCount(0)
 }
 
-// TestExecuteFile_LoopOfCollectionRunsPerElement: a 2-element collection produces 2 hits with
-// `{{item.name}}` substituted per element.
+// a 2-element collection produces 2 hits with `{{item.name}}` substituted per element.
 func TestExecuteFile_LoopOfCollectionRunsPerElement(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -142,7 +139,7 @@ func TestExecuteFile_LoopOfCollectionRunsPerElement(t *testing.T) {
 		capturedJSONFieldIs(1, "second", "name")
 }
 
-// TestExecuteFile_LoopIndexOfCollectionAvailable: per-iteration `{{$index}}` is substituted as the 0-based index.
+// per-iteration `{{$index}}` is substituted as the 0-based index.
 func TestExecuteFile_LoopIndexOfCollectionAvailable(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -166,8 +163,7 @@ func TestExecuteFile_LoopIndexOfCollectionAvailable(t *testing.T) {
 		capturedJSONFieldIs(1, "1", "i")
 }
 
-// TestExecuteFile_LoopNamedResponsesAddressableAsNameN: a named looped request exposes its responses
-// as name0, name1, ... addressable by subsequent requests via `{{nameN.response.body.X}}`.
+// named looped request exposes responses as name0, name1, ... addressable via `{{nameN.response.body.X}}`.
 func TestExecuteFile_LoopNamedResponsesAddressableAsNameN(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -187,8 +183,7 @@ func TestExecuteFile_LoopNamedResponsesAddressableAsNameN(t *testing.T) {
 		serverReceivedHeaderValue(2, "X-Loop1", "1")
 }
 
-// TestExecuteFile_LoopEmptyCollectionIsNoop: an empty collection produces zero HTTP requests and
-// zero response entries with no execution error.
+// an empty collection produces zero HTTP requests and zero response entries with no execution error.
 func TestExecuteFile_LoopEmptyCollectionIsNoop(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -206,8 +201,7 @@ func TestExecuteFile_LoopEmptyCollectionIsNoop(t *testing.T) {
 		responseCount(0)
 }
 
-// TestExecuteFile_LoopNonArrayCollectionErrors: a non-array collection variable yields a clear
-// execution error naming the collection.
+// a non-array collection variable yields a clear execution error naming the collection.
 func TestExecuteFile_LoopNonArrayCollectionErrors(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -223,8 +217,7 @@ func TestExecuteFile_LoopNonArrayCollectionErrors(t *testing.T) {
 		errorContains("@loop", "items")
 }
 
-// TestExecuteFile_LoopUnknownCollectionVarErrors: a collection variable that is never defined
-// yields a runtime error naming the missing variable.
+// a collection variable that is never defined yields a runtime error naming the missing variable.
 func TestExecuteFile_LoopUnknownCollectionVarErrors(t *testing.T) {
 	given, when, then := newParts(t)
 

@@ -91,19 +91,3 @@ GET https://disabled.invalid/api`).and().
 	then.
 		noError()
 }
-
-// requestSkipped asserts the response at index i is marked as skipped.
-func (p *parts) requestSkipped(i int) *parts {
-	p.require.Greater(len(p.responses), i)
-	p.assert.True(p.responses[i].Skipped)
-
-	return p
-}
-
-// requestExecuted asserts the response at index i is not marked as skipped.
-func (p *parts) requestExecuted(i int) *parts {
-	p.require.Greater(len(p.responses), i)
-	p.assert.False(p.responses[i].Skipped)
-
-	return p
-}

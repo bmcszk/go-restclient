@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// TestParseFile_SleepDirectiveStoresDuration: `# @sleep 250` parses and stores 250ms duration.
+// `# @sleep 250` parses and stores 250ms duration.
 func TestParseFile_SleepDirectiveStoresDuration(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -23,7 +23,7 @@ GET https://example.com/api`).and().
 		parsedRequestSleep(0, 250*time.Millisecond)
 }
 
-// TestParseFile_SleepDirectiveSlashSlashStyle: `// @sleep 250` also parses (mirror of disabled).
+// `// @sleep 250` also parses (mirror of disabled).
 func TestParseFile_SleepDirectiveSlashSlashStyle(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -41,8 +41,7 @@ GET https://example.com/api`).and().
 		parsedRequestSleep(0, 250*time.Millisecond)
 }
 
-// TestParseFile_SleepInvalidArgErrors: @sleep with a non-integer, negative, or missing argument must
-// fail to parse; we don't pin the exact wording, only that parsing fails and the error names the directive.
+// @sleep with non-integer/negative/missing arg must fail to parse; check parse failure + directive named in error.
 func TestParseFile_SleepInvalidArgErrors(t *testing.T) {
 	t.Run("non_numeric", func(t *testing.T) {
 		given, when, then := newParts(t)
@@ -78,8 +77,7 @@ GET https://example.com/api`).and().
 	})
 }
 
-// TestExecuteFile_SleepWaitsBeforeSend: a single request with `# @sleep 200` must take at least
-// ~200ms before sending; we measure total elapsed around executeFile with a loose lower bound.
+// single request with `# @sleep 200` must take >= ~200ms before sending; measure elapsed with loose lower bound.
 func TestExecuteFile_SleepWaitsBeforeSend(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -103,7 +101,7 @@ GET {{server}}/slow`).and().
 		"@sleep 200 should delay send; elapsed=%s", elapsed)
 }
 
-// TestExecuteFile_SleepZeroIsNoop: `@sleep 0` is a valid no-op — runs immediately, no error, 1 hit.
+// `@sleep 0` is a valid no-op — runs immediately, no error, 1 hit.
 func TestExecuteFile_SleepZeroIsNoop(t *testing.T) {
 	given, when, then := newParts(t)
 
@@ -127,8 +125,7 @@ GET {{server}}/instant`).and().
 		"@sleep 0 should be a no-op; elapsed=%s", elapsed)
 }
 
-// TestExecuteFile_SleepAppliesPerRequest: two requests, only the second has `# @sleep 200`; assert
-// the inter-request gap between server-side timestamps is at least ~200ms.
+// two requests, only second has `# @sleep 200`; inter-request gap between server-side timestamps >= ~200ms.
 func TestExecuteFile_SleepAppliesPerRequest(t *testing.T) {
 	given, when, then := newParts(t)
 

@@ -8,7 +8,6 @@ import (
 )
 
 // handleLoopDirective parses `# @loop for <rest>` into LoopFor/LoopExpr/LoopCollection/LoopItemName.
-// Exactly one of LoopFor, LoopExpr, LoopCollection is set; LoopItemName is set only for `name of coll`.
 func (p *requestParserState) handleLoopDirective(commentContent string) (bool, error) {
 	const prefix = "@loop"
 	if !strings.HasPrefix(commentContent, prefix) {
@@ -21,8 +20,7 @@ func (p *requestParserState) handleLoopDirective(commentContent string) (bool, e
 	return p.parseLoopArg(arg)
 }
 
-// extractLoopArg strips the `for ` clause and the surrounding whitespace; returns an error when
-// the directive is missing the required `for` clause or argument.
+// extractLoopArg strips the `for ` clause and surrounding whitespace.
 func extractLoopArg(rest string) (string, error) {
 	rest = strings.TrimSpace(rest)
 	if !strings.HasPrefix(rest, "for ") {
@@ -86,8 +84,7 @@ func (p *requestParserState) setLoopCount(arg string) (bool, error) {
 	return true, nil
 }
 
-// snapshotLoopState snapshots pre-substitution body/headers so loop iterations can be
-// re-substituted from originals instead of last iteration's output.
+// snapshotLoopState snapshots pre-substitution body/headers so loop iterations can be re-substituted from originals.
 func (*requestParserState) snapshotLoopState(req *Request) {
 	if req.LoopDeclared {
 		req.loopOriginalRawBody = req.RawBody

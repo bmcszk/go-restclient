@@ -325,8 +325,7 @@ func (p *requestParserState) handleNoCookieJarDirective(commentContent string) b
 	return false
 }
 
-// handleDisabledDirective parses `@disabled`; `@disabled !<expr>` stores a conditional
-// expression, any other trailing text is a parse error.
+// handleDisabledDirective parses `@disabled`; `@disabled !<expr>` stores a conditional expression.
 func (p *requestParserState) handleDisabledDirective(commentContent string) (bool, error) {
 	const prefix = "@disabled"
 	if !strings.HasPrefix(commentContent, prefix) {

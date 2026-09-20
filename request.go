@@ -58,8 +58,7 @@ type Request struct {
 	NoCookieJar bool
 	// Disabled indicates that this request should be skipped at execution time (from @disabled directive)
 	Disabled bool
-	// DisabledExpr stores a conditional @disabled !<expr> argument; evaluated (after variable
-	// substitution) at execution time to decide whether to skip (from @disabled ! directive)
+	// DisabledExpr stores a conditional @disabled !<expr> argument; evaluated at execution time to skip.
 	DisabledExpr string
 	// Timeout specifies a custom timeout for this request (from @timeout directive)
 	Timeout time.Duration
@@ -67,28 +66,22 @@ type Request struct {
 	SleepDuration time.Duration
 	// LoopFor is a literal iteration count from `# @loop for N` (N >= 0; 0/negative = no-op at execute time)
 	LoopFor int
-	// LoopDeclared is true when any @loop directive (for N / for {{var}} / for item of coll) was
-	// parsed on this request. Needed because LoopFor=0 is otherwise indistinguishable from "no @loop".
+	// LoopDeclared is true when any @loop directive was parsed on this request.
 	LoopDeclared bool
 	// LoopExpr is the raw `{{var}}` expression from `# @loop for {{var}}`; resolved at execute time
 	LoopExpr string
 	// LoopCollection names the collection variable from `# @loop for item of <coll>`; resolved at execute time
 	LoopCollection string
-	// LoopItemName is the per-iteration item alias from `# @loop for <itemName> of <coll>`; empty otherwise.
-	// The canonical binding `item` is always set in addition to this alias.
+	// LoopItemName is the per-iteration item alias from `# @loop for <itemName> of <coll>`.
 	LoopItemName string
 
-	// loopIterationIndex is the 0-based iteration counter set transiently by the executor for each
-	// iteration of a looped request; zero when not in a loop. Exposed via {{$index}}.
+	// loopIterationIndex is the 0-based iteration counter set transiently by the executor; exposed via {{$index}}.
 	loopIterationIndex int
-	// loopIterationValue is the current iteration value set transiently by the executor for each
-	// iteration of a `for item of collection` loop; nil when not in a loop or for `for N` loops.
+	// loopIterationValue is the current iteration value set transiently by the executor; nil for `for N` loops.
 	loopIterationValue any
-	// loopOriginalRawBody is a snapshot of the parse-time RawBody so each loop iteration can be
-	// re-substituted against the original placeholders. Empty when no @loop is active.
+	// loopOriginalRawBody is a snapshot of the parse-time RawBody for loop re-substitution.
 	loopOriginalRawBody string
-	// loopOriginalHeaders is a snapshot of the parse-time Headers so each loop iteration can be
-	// re-substituted against the original placeholders. Empty when no @loop is active.
+	// loopOriginalHeaders is a snapshot of the parse-time Headers for loop re-substitution.
 	loopOriginalHeaders http.Header
 
 	// External file body configuration

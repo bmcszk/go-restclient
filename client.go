@@ -339,9 +339,6 @@ func (c *Client) ExecuteRequest(ctx context.Context, parsedFile *ParsedFile, ind
 }
 
 // executeAndStoreRequest executes the request and stores the response in the file's response map.
-// For looped requests, delegates to executeLoopAndStore: runs every iteration, stores each under
-// `nameN`, and returns the first iteration's response (so plain `name` addressing resolves to name0).
-// For no-op loops (N<=0 / empty collection), returns nil, nil (no response entry, no error).
 func (c *Client) executeAndStoreRequest(
 	ctx context.Context,
 	restClientReq *Request,
@@ -578,7 +575,7 @@ func (c *Client) prepareRequestURL(rcRequest *Request) error {
 	}
 
 	var err error
-	rcRequest.URL, err = c._resolveRequestURL(c.BaseURL, rcRequest.URL, rcRequest.RawURLString)
+	rcRequest.URL, err = c.resolveRequestURL(c.BaseURL, rcRequest.URL, rcRequest.RawURLString)
 	return err
 }
 

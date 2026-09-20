@@ -279,8 +279,7 @@ func (p *parts) parsedRequestSleep(i int, want time.Duration) *parts {
 	return p
 }
 
-// parsedRequestDisabledExpr asserts the parsed request at index i carries the
-// conditional @disabled expression (stored after the `!`) equal to want.
+// parsedRequestDisabledExpr asserts the conditional @disabled expression (after `!`) at index i equals want.
 func (p *parts) parsedRequestDisabledExpr(i int, want string) *parts {
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(want, p.parsedFile.Requests[i].DisabledExpr)
@@ -288,8 +287,7 @@ func (p *parts) parsedRequestDisabledExpr(i int, want string) *parts {
 	return p
 }
 
-// parsedRequestLoopCount asserts the parsed request at index i carries a literal
-// @loop for N directive with the given count.
+// parsedRequestLoopCount asserts the literal `@loop for N` count on the parsed request at index i.
 func (p *parts) parsedRequestLoopCount(i int, want int) *parts {
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(want, p.parsedFile.Requests[i].LoopFor)
@@ -297,8 +295,7 @@ func (p *parts) parsedRequestLoopCount(i int, want int) *parts {
 	return p
 }
 
-// parsedRequestLoopExpr asserts the parsed request at index i carries a variable
-// @loop for {{expr}} directive with the given raw expression.
+// parsedRequestLoopExpr asserts the raw expression on `@loop for {{expr}}` of the parsed request at index i.
 func (p *parts) parsedRequestLoopExpr(i int, want string) *parts {
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(want, p.parsedFile.Requests[i].LoopExpr)
@@ -306,8 +303,7 @@ func (p *parts) parsedRequestLoopExpr(i int, want string) *parts {
 	return p
 }
 
-// parsedRequestLoopCollection asserts the parsed request at index i carries a
-// @loop for item of collection directive referencing the given collection variable name.
+// parsedRequestLoopCollection asserts the collection name on `@loop for item of collection` at index i.
 func (p *parts) parsedRequestLoopCollection(i int, want string) *parts {
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(want, p.parsedFile.Requests[i].LoopCollection)
@@ -674,6 +670,22 @@ func (p *parts) requestRawURLContains(fragments ...string) *parts {
 // capturedRequestCount asserts how many requests the test server received.
 func (p *parts) capturedRequestCount(n int) *parts {
 	p.require.Equal(n, len(p.capturedRequests))
+
+	return p
+}
+
+// requestSkipped asserts the response at index i is marked as skipped.
+func (p *parts) requestSkipped(i int) *parts {
+	p.require.Greater(len(p.responses), i)
+	p.assert.True(p.responses[i].Skipped)
+
+	return p
+}
+
+// requestExecuted asserts the response at index i is not marked as skipped.
+func (p *parts) requestExecuted(i int) *parts {
+	p.require.Greater(len(p.responses), i)
+	p.assert.False(p.responses[i].Skipped)
 
 	return p
 }

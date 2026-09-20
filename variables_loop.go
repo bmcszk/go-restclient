@@ -6,8 +6,7 @@ import (
 	"strings"
 )
 
-// resolveLoopItemReference resolves a single loop item reference like `item`, `item.name`, or
-// `alias.sub[0].field` against the per-iteration binding map. Returns "" when no match.
+// resolveLoopItemReference resolves a loop item ref like `item`, `item.name`, or `alias.sub[0].field`.
 func resolveLoopItemReference(varName string, aliases map[string]any) string {
 	if len(aliases) == 0 {
 		return ""

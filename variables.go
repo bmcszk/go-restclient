@@ -98,8 +98,7 @@ type resolveContext struct {
 	osEnvGetter      func(string) (string, bool)
 	dotEnvVars       map[string]string
 	responseMap      map[string]*Response
-	// loopItemAliases binds per-iteration item values keyed by alias (always contains "item",
-	// and additionally LoopItemName when set). nil when no loop iteration is active.
+	// loopItemAliases binds per-iteration item values by alias (always has "item", plus LoopItemName).
 	loopItemAliases map[string]any
 	// loopIndex is the current 0-based iteration index; -1 when no loop iteration is active.
 	loopIndex int
@@ -153,8 +152,7 @@ type variableResolverContext struct {
 	loopIndex               int
 }
 
-// resolveSpecialPlaceholder handles $-system variables, response references and loop-item
-// references. Returns (value, true) when the placeholder is fully resolved, ("", false) otherwise.
+// resolveSpecialPlaceholder handles $-system vars, response refs, and loop-item refs.
 func resolveSpecialPlaceholder(varName, match string, ctx variableResolverContext) (string, bool) {
 	if strings.HasPrefix(varName, "$") {
 		// $index inside a loop iteration resolves to the 0-based iteration index.
@@ -177,8 +175,7 @@ func resolveVariablePlaceholder(match string, ctx variableResolverContext) strin
 	directive := strings.TrimSpace(match[2 : len(match)-2])
 	varName, fallbackValue, hasFallback := parseVariableDirective(directive)
 
-	// System vars, response references and loop-item references take precedence
-	// over regular variables; resolved==true means the placeholder is fully handled.
+	// System vars, response references and loop-item references take precedence over regular variables.
 	if resolved, ok := resolveSpecialPlaceholder(varName, match, ctx); ok {
 		return resolved
 	}
@@ -312,9 +309,9 @@ func resolveFromMap(varName string, varMap map[string]string) string {
 	return ""
 }
 
-// _applyBaseURLIfNeeded attempts to prepend a base URL to a raw URL string
+// applyBaseURLIfNeeded attempts to prepend a base URL to a raw URL string
 // if the raw URL doesn't have a scheme and a non-empty clientBaseURL is provided.
-func _applyBaseURLIfNeeded(rawURL string, clientBaseURL string) string {
+func applyBaseURLIfNeeded(rawURL string, clientBaseURL string) string {
 	if strings.Contains(rawURL, "://") || clientBaseURL == "" {
 		return rawURL // No need to apply base URL
 	}
@@ -527,7 +524,7 @@ func processURLSubstitution(rcRequest *Request, varMaps variableMaps,
 		return nil, fmt.Errorf("URL is empty after variable substitution (original: %s)", rcRequest.RawURLString)
 	}
 
-	substitutedRawURL = _applyBaseURLIfNeeded(substitutedRawURL, clientBaseURL)
+	substitutedRawURL = applyBaseURLIfNeeded(substitutedRawURL, clientBaseURL)
 
 	finalParsedURL, parseErr := url.Parse(substitutedRawURL)
 	if parseErr != nil {
@@ -565,8 +562,7 @@ func processHeaderSubstitution(rcRequest *Request, varMaps variableMaps,
 	}
 }
 
-// currentLoopBindings returns the per-iteration item alias map and index for the substitution
-// engine, derived from the Request's transient loop state. nil/-1 means no loop is active.
+// currentLoopBindings returns the per-iteration item alias map and index; nil/-1 means no loop.
 func currentLoopBindings(rcRequest *Request) (map[string]any, int) {
 	if rcRequest == nil {
 		return nil, -1
@@ -583,8 +579,8 @@ func currentLoopBindings(rcRequest *Request) (map[string]any, int) {
 	return map[string]any{"item": rcRequest.loopIterationValue}, rcRequest.loopIterationIndex
 }
 
-// _parseLength extracts an optional length argument from a regex match.
-func _parseLength(match string, re *regexp.Regexp, defaultLength int) (int, bool) {
+// parseLength extracts an optional length argument from a regex match.
+func parseLength(match string, re *regexp.Regexp, defaultLength int) (int, bool) {
 	parts := re.FindStringSubmatch(match)
 	if len(parts) > 1 && parts[1] != "" {
 		parsedLen, err := strconv.Atoi(parts[1])
@@ -596,8 +592,8 @@ func _parseLength(match string, re *regexp.Regexp, defaultLength int) (int, bool
 	return defaultLength, true
 }
 
-// _parseRangeInt extracts optional min and max integer arguments.
-func _parseRangeInt(match string, re *regexp.Regexp, defaultMin, defaultMax int) (minVal, maxVal int, ok bool) {
+// parseRangeInt extracts optional min and max integer arguments.
+func parseRangeInt(match string, re *regexp.Regexp, defaultMin, defaultMax int) (minVal, maxVal int, ok bool) {
 	parts := re.FindStringSubmatch(match)
 	if len(parts) == 3 && parts[1] != "" && parts[2] != "" {
 		minVal, errMin := strconv.Atoi(parts[1])
@@ -610,8 +606,8 @@ func _parseRangeInt(match string, re *regexp.Regexp, defaultMin, defaultMax int)
 	return defaultMin, defaultMax, true
 }
 
-// _parseRangeFloat extracts optional min and max float arguments.
-func _parseRangeFloat(
+// parseRangeFloat extracts optional min and max float arguments.
+func parseRangeFloat(
 	match string,
 	re *regexp.Regexp,
 	defaultMin, defaultMax float64,
@@ -628,10 +624,10 @@ func _parseRangeFloat(
 	return defaultMin, defaultMax, true
 }
 
-// _substituteRandomIntFunc returns a function for ReplaceAllStringFunc to generate random integers.
-func _substituteRandomIntFunc(re *regexp.Regexp, defaultMin, defaultMax int) func(string) string {
+// substituteRandomIntFunc returns a function for ReplaceAllStringFunc to generate random integers.
+func substituteRandomIntFunc(re *regexp.Regexp, defaultMin, defaultMax int) func(string) string {
 	return func(match string) string {
-		minVal, maxVal, ok := _parseRangeInt(match, re, defaultMin, defaultMax)
+		minVal, maxVal, ok := parseRangeInt(match, re, defaultMin, defaultMax)
 		if !ok {
 			return match // Malformed range
 		}
@@ -639,10 +635,10 @@ func _substituteRandomIntFunc(re *regexp.Regexp, defaultMin, defaultMax int) fun
 	}
 }
 
-// _substituteRandomFloatFunc returns a function for ReplaceAllStringFunc to generate random floats.
-func _substituteRandomFloatFunc(re *regexp.Regexp, defaultMin, defaultMax float64) func(string) string {
+// substituteRandomFloatFunc returns a function for ReplaceAllStringFunc to generate random floats.
+func substituteRandomFloatFunc(re *regexp.Regexp, defaultMin, defaultMax float64) func(string) string {
 	return func(match string) string {
-		minVal, maxVal, ok := _parseRangeFloat(match, re, defaultMin, defaultMax)
+		minVal, maxVal, ok := parseRangeFloat(match, re, defaultMin, defaultMax)
 		if !ok {
 			return match // Malformed range
 		}
@@ -650,28 +646,28 @@ func _substituteRandomFloatFunc(re *regexp.Regexp, defaultMin, defaultMax float6
 	}
 }
 
-// _substituteRandomLengthCharsetFunc returns a function for ReplaceAllStringFunc to generate
+// substituteRandomLengthCharsetFunc returns a function for ReplaceAllStringFunc to generate
 // random strings from a charset.
-func _substituteRandomLengthCharsetFunc(re *regexp.Regexp, charset string) func(string) string {
+func substituteRandomLengthCharsetFunc(re *regexp.Regexp, charset string) func(string) string {
 	return func(match string) string {
-		length, ok := _parseLength(match, re, defaultRandomLength)
+		length, ok := parseLength(match, re, defaultRandomLength)
 		if !ok { // Invalid length format
 			return match
 		}
 		if length == 0 { // Explicit request for empty string
 			return ""
 		}
-		if length < 0 { // Should be caught by _parseLength, but defensive
+		if length < 0 { // Should be caught by parseLength, but defensive
 			return match
 		}
 		return randomStringFromCharset(length, charset)
 	}
 }
 
-// _substituteRandomHexHelper is a specific helper for $randomHex and $random.hexadecimal.
-func _substituteRandomHexHelper(re *regexp.Regexp, defaultLength int) func(string) string {
+// substituteRandomHexHelper is a specific helper for $randomHex and $random.hexadecimal.
+func substituteRandomHexHelper(re *regexp.Regexp, defaultLength int) func(string) string {
 	return func(match string) string {
-		length, ok := _parseLength(match, re, defaultLength)
+		length, ok := parseLength(match, re, defaultLength)
 		if !ok || length < 0 {
 			return match
 		}
@@ -694,8 +690,8 @@ func generateRandomHexString(length int, fallbackMatch string) string {
 	return hexStr[:length]
 }
 
-// _substituteDateTimeVariables handles the substitution of $datetime and $localDatetime variables.
-func _substituteDateTimeVariables(text string) string {
+// substituteDateTimeVariables handles the substitution of $datetime and $localDatetime variables.
+func substituteDateTimeVariables(text string) string {
 	reDateTimeRelated := regexp.MustCompile(`{{\$(datetime|localDatetime)((?:\s*(?:\"[^\"]*\"|[^\"\s}]+))*)\s*}}`)
 	return reDateTimeRelated.ReplaceAllStringFunc(text, processDateTimeMatch)
 }
@@ -769,7 +765,7 @@ func substituteDynamicSystemVariables(
 	text = substituteDotEnvVariables(text, activeDotEnvVars)
 	text = substituteProcessEnvVariables(text)
 	text = substituteProcessEnvIndirect(text, programmaticVars)
-	text = _substituteDateTimeVariables(text)
+	text = substituteDateTimeVariables(text)
 	text = substituteBase64Encode(text)
 	return text
 }

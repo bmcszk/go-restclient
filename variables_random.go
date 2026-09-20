@@ -12,36 +12,36 @@ import (
 func substituteRandomVariables(text string, programmaticVars map[string]any) string {
 	// Integer types
 	text = reRandomInt.ReplaceAllStringFunc(text,
-		_substituteRandomIntFunc(reRandomInt, defaultRandomMinInt, defaultRandomMaxInt))
+		substituteRandomIntFunc(reRandomInt, defaultRandomMinInt, defaultRandomMaxInt))
 	text = reRandomDotInteger.ReplaceAllStringFunc(text,
-		_substituteRandomIntFunc(reRandomDotInteger, defaultRandomMinInt, defaultRandomMaxInt))
+		substituteRandomIntFunc(reRandomDotInteger, defaultRandomMinInt, defaultRandomMaxInt))
 
 	// Float types
 	text = reRandomFloat.ReplaceAllStringFunc(text,
-		_substituteRandomFloatFunc(reRandomFloat, defaultRandomMinFloat, defaultRandomMaxFloat))
+		substituteRandomFloatFunc(reRandomFloat, defaultRandomMinFloat, defaultRandomMaxFloat))
 	text = reRandomDotFloat.ReplaceAllStringFunc(text,
-		_substituteRandomFloatFunc(reRandomDotFloat, defaultRandomMinFloat, defaultRandomMaxFloat))
+		substituteRandomFloatFunc(reRandomDotFloat, defaultRandomMinFloat, defaultRandomMaxFloat))
 
 	// Boolean
 	text = strings.ReplaceAll(text, "{{$randomBoolean}}", strconv.FormatBool(rand.Intn(2) == 0))
 
 	// Hexadecimal
-	text = reRandomHex.ReplaceAllStringFunc(text, _substituteRandomHexHelper(reRandomHex, defaultRandomHexLength))
+	text = reRandomHex.ReplaceAllStringFunc(text, substituteRandomHexHelper(reRandomHex, defaultRandomHexLength))
 	text = reRandomDotHexadecimal.ReplaceAllStringFunc(text,
-		_substituteRandomHexHelper(reRandomDotHexadecimal, defaultRandomHexLength))
+		substituteRandomHexHelper(reRandomDotHexadecimal, defaultRandomHexLength))
 
 	// Alphabetic / Alphanumeric
 	text = reRandomDotAlphabetic.ReplaceAllStringFunc(text,
-		_substituteRandomLengthCharsetFunc(reRandomDotAlphabetic, charsetAlphabetic))
+		substituteRandomLengthCharsetFunc(reRandomDotAlphabetic, charsetAlphabetic))
 	// Uses underscore
 	text = reRandomAlphaNumeric.ReplaceAllStringFunc(text,
-		_substituteRandomLengthCharsetFunc(reRandomAlphaNumeric, charsetAlphaNumericWithExtra))
+		substituteRandomLengthCharsetFunc(reRandomAlphaNumeric, charsetAlphaNumericWithExtra))
 	// No underscore
 	text = reRandomDotAlphanumeric.ReplaceAllStringFunc(text,
-		_substituteRandomLengthCharsetFunc(reRandomDotAlphanumeric, charsetAlphaNumeric))
+		substituteRandomLengthCharsetFunc(reRandomDotAlphanumeric, charsetAlphaNumeric))
 
 	// General Random String
-	text = reRandomString.ReplaceAllStringFunc(text, _substituteRandomLengthCharsetFunc(reRandomString, charsetFull))
+	text = reRandomString.ReplaceAllStringFunc(text, substituteRandomLengthCharsetFunc(reRandomString, charsetFull))
 
 	// Email
 	emailGenerator := func() string {
@@ -71,9 +71,9 @@ func substituteRandomVariables(text string, programmaticVars map[string]any) str
 	// UUID
 	text = strings.ReplaceAll(text, "{{$randomUUID}}", uuid.New().String())
 
-	// Password (uses programmaticVars, so it calls the existing _substituteRandomPasswordFunc with modification)
+	// Password (uses programmaticVars, so it calls the existing substituteRandomPasswordFunc with modification)
 	text = reRandomPassword.ReplaceAllStringFunc(text, func(match string) string {
-		return _substituteRandomPasswordFunc(match, programmaticVars)
+		return substituteRandomPasswordFunc(match, programmaticVars)
 	})
 
 	// Color
@@ -91,9 +91,8 @@ func substituteRandomVariables(text string, programmaticVars map[string]any) str
 	return text
 }
 
-// _substituteRandomPasswordFunc handles the substitution of $randomPassword.* variables.
-// It now accepts programmaticVars to allow charset overrides.
-func _substituteRandomPasswordFunc(match string, programmaticVars map[string]any) string {
+// substituteRandomPasswordFunc handles $randomPassword.* substitution; programmaticVars enables charset overrides.
+func substituteRandomPasswordFunc(match string, programmaticVars map[string]any) string {
 	length := parsePasswordLength(match)
 	if length < 0 {
 		return match // Malformed length

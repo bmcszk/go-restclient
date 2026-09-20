@@ -7,12 +7,7 @@ import (
 	"strings"
 )
 
-// evaluateDisabledExpr decides whether a conditional @disabled !<expr> should skip
-// the request. expr is run through the standard {{var}} substitution used for URLs
-// and bodies; the resolved string is evaluated as truthy when it equals the
-// case-insensitive literal "true", a non-zero number, or any other non-empty string
-// that is not the case-insensitive literal "false". A reference to an undefined
-// variable surfaces as an error instead of being silently treated as a non-match.
+// evaluateDisabledExpr returns the truthiness of a substituted @disabled !<expr>.
 func (c *Client) evaluateDisabledExpr(
 	expr string,
 	parsedFile *ParsedFile,
@@ -41,10 +36,7 @@ func (c *Client) evaluateDisabledExpr(
 	return computeDisabledTruthiness(resolved), nil
 }
 
-// findFirstUndefinedDisabledExprVar returns the first {{name}} reference in expr that
-// cannot be resolved through the standard variable sources, or "" when all references
-// are resolvable. System variable references ($prefix) are skipped; their handling
-// is delegated to the substitution engine.
+// findFirstUndefinedDisabledExprVar returns the first unresolvable {{name}} in expr, or "".
 func findFirstUndefinedDisabledExprVar(expr string, rctx resolveContext) string {
 	re := regexp.MustCompile(`{{\s*([^}]+?)\s*}}`)
 	for _, match := range re.FindAllStringSubmatch(expr, -1) {
@@ -63,9 +55,7 @@ func findFirstUndefinedDisabledExprVar(expr string, rctx resolveContext) string 
 	return ""
 }
 
-// disabledExprVariableExists checks whether varName can be resolved through any of
-// the standard variable sources (programmatic, file-scoped, environment, global,
-// OS env, .env).
+// disabledExprVariableExists reports whether varName resolves through any standard variable source.
 func disabledExprVariableExists(varName string, rctx resolveContext) bool {
 	lookups := []func(string) bool{
 		func(v string) bool { _, ok := rctx.programmaticVars[v]; return ok },
@@ -87,8 +77,7 @@ func disabledExprVariableExists(varName string, rctx resolveContext) bool {
 	return false
 }
 
-// fileScopedVarExists preserves the nil-map guard of the original lookup so the
-// rewrite has identical semantics in every reachable path.
+// fileScopedVarExists reports whether m (nil-safe) contains @v.
 func fileScopedVarExists(m map[string]string, v string) bool {
 	if m == nil {
 		return false
@@ -97,10 +86,7 @@ func fileScopedVarExists(m map[string]string, v string) bool {
 	return ok
 }
 
-// computeDisabledTruthiness applies the @disabled truthiness rules to a substituted
-// string: case-insensitive "true" is truthy, case-insensitive "false" is falsy, a
-// numeric value is truthy when non-zero, any other non-empty string is truthy, and
-// the empty string is falsy.
+// computeDisabledTruthiness applies @disabled rules: true/non-zero/non-empty are truthy; false/zero/empty are falsy.
 func computeDisabledTruthiness(s string) bool {
 	switch strings.ToLower(s) {
 	case "true":

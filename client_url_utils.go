@@ -45,11 +45,8 @@ func joinURLPaths(base *url.URL, requestURL *url.URL) *url.URL {
 	return finalResolvedURL
 }
 
-// _resolveRequestURL resolves the final request URL based on the client's BaseURL,
-// the request's initial URL (if parsed),
-// and the request's RawURLString (if initial URL parsing was deferred).
-// It returns the resolved URL or an error.
-func (*Client) _resolveRequestURL(
+// resolveRequestURL returns the request URL resolved against BaseURL, or an error.
+func (*Client) resolveRequestURL(
 	baseURLStr string,
 	initialRequestURL *url.URL,
 	rawRequestURLStr string,

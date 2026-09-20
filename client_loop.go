@@ -12,18 +12,13 @@ import (
 	"net/http"
 )
 
-// loopIteration carries the per-iteration state needed by variable substitution and response
-// storage when expanding a `@loop for N` / `for {{var}}` / `for item of coll` request.
+// loopIteration carries the per-iteration state for `@loop` request expansion.
 type loopIteration struct {
 	index int // 0-based iteration index, exposed via {{$index}}
 	item  any // current iteration value (nil for `for N` loops)
 }
 
 // runRequestWithLoops handles the loop expansion of a single request during ExecuteFile.
-// Resolves iterations and refs. Returns true when the request was fully handled by the loop path
-// (no-op loop, loop error, or all iterations executed) so the caller can skip its single-run tail.
-// Returns false only for non-loop requests after their refs have been resolved, leaving the caller
-// to execute the single-run tail.
 func (c *Client) runRequestWithLoops(
 	ctx context.Context,
 	restClientReq *Request,
@@ -60,9 +55,6 @@ func (c *Client) runRequestWithLoops(
 }
 
 // executeLoopAndStore handles the loop expansion of a single request during ExecuteRequest.
-// Returns nil response and nil error for no-op loops (N<=0 / empty collection). For executed
-// iterations, stores each under `nameN` and returns the first iteration's response so plain `name`
-// addressing resolves to name0.
 func (c *Client) executeLoopAndStore(
 	ctx context.Context,
 	restClientReq *Request,
@@ -84,8 +76,7 @@ func (c *Client) executeLoopAndStore(
 	return first, nil
 }
 
-// runLoopIterationsForStore runs every loop iteration, stores each under `nameN`, and returns the
-// first iteration's response (used by ExecuteRequest where the caller wants a single response).
+// runLoopIterationsForStore runs each loop iteration, stores each under `nameN`, returns the first response.
 func (c *Client) runLoopIterationsForStore(
 	ctx context.Context,
 	restClientReq *Request,
@@ -132,9 +123,6 @@ func (c *Client) runOneLoopIteration(
 }
 
 // resolveLoopIterations computes the iteration values for a looped request at execution time.
-// Returns an empty slice and nil error for no-op loops (N<=0, empty collection, undefined {{var}} that
-// resolves to <=0); returns nil and a non-nil error for fatal config errors (non-numeric expr,
-// non-array collection, undefined collection variable).
 func (c *Client) resolveLoopIterations(
 	req *Request,
 	parsedFile *ParsedFile,
@@ -160,8 +148,7 @@ func iterateByCount(n int) []loopIteration {
 	return out
 }
 
-// resolveLoopExprIterations resolves the @loop `{{var}}` expression to an iteration count and
-// builds the corresponding iterations; no-op for resolved counts <= 0.
+// resolveLoopExprIterations resolves @loop `{{var}}` to an iteration count and builds iterations.
 func (c *Client) resolveLoopExprIterations(
 	expr string,
 	parsedFile *ParsedFile,
@@ -178,8 +165,7 @@ func (c *Client) resolveLoopExprIterations(
 	return iterateByCount(n), nil
 }
 
-// resolveLoopCollectionIterations resolves the @loop collection variable and builds iterations
-// for each element; no-op for empty collections.
+// resolveLoopCollectionIterations resolves the @loop collection variable and builds iterations for each element.
 func (c *Client) resolveLoopCollectionIterations(
 	collName string,
 	parsedFile *ParsedFile,
@@ -201,7 +187,6 @@ func (c *Client) resolveLoopCollectionIterations(
 }
 
 // resolveLoopExprCount resolves a `{{var}}` expression to a non-negative integer iteration count.
-// Mirrors evaluateDisabledExpr's resolution path so file/programmatic/env vars are all available.
 func (c *Client) resolveLoopExprCount(
 	expr string,
 	parsedFile *ParsedFile,
@@ -236,7 +221,6 @@ func (c *Client) resolveLoopExprCount(
 }
 
 // resolveLoopCollection looks up a collection variable and decodes it into a slice of any.
-// Missing variable -> error naming the var; non-array -> error mentioning the var.
 func (c *Client) resolveLoopCollection(
 	collName string,
 	parsedFile *ParsedFile,
@@ -269,8 +253,7 @@ func (c *Client) loopResolveContext(
 	}
 }
 
-// decodeCollectionValue decodes a resolved collection variable into a []any. Supports []any,
-// []string (lifted to []any), and JSON-encoded strings.
+// decodeCollectionValue decodes a resolved collection variable into []any; supports []any, []string, JSON strings.
 func decodeCollectionValue(val any, collName string) ([]any, error) {
 	switch x := val.(type) {
 	case []any:
@@ -292,8 +275,7 @@ func liftStrings(x []string) []any {
 	return out
 }
 
-// decodeStringCollection parses a JSON-encoded string collection, or returns an empty slice for
-// empty input or an error when the string is not a JSON array.
+// decodeStringCollection parses a JSON-encoded string collection, returning an empty slice for empty input.
 func decodeStringCollection(s string, collName string) ([]any, error) {
 	trimmed := strings.TrimSpace(s)
 	if trimmed == "" {
@@ -309,8 +291,7 @@ func decodeStringCollection(s string, collName string) ([]any, error) {
 	return arr, nil
 }
 
-// lookupCollectionVar searches the same variable sources as the @disabled expr resolver but
-// returns the raw value (any) so collections can be JSON-decoded by the caller.
+// lookupCollectionVar searches the same variable sources as the @disabled expr resolver.
 func lookupCollectionVar(name string, rctx resolveContext) (any, bool) {
 	if v, ok := rctx.programmaticVars[name]; ok {
 		return v, true
@@ -330,8 +311,7 @@ func lookupCollectionVar(name string, rctx resolveContext) (any, bool) {
 	return lookupFromOSEnv(rctx, name)
 }
 
-// stringMapLookup returns the value for key from a string map; small wrapper to keep the lookup
-// chain above readable.
+// stringMapLookup returns the value for name from a string map; small wrapper for the lookup chain.
 func stringMapLookup(m map[string]string, name string) (string, bool) {
 	v, ok := m[name]
 	return v, ok
@@ -381,8 +361,7 @@ func (c *Client) runLoopIterations(
 	req.loopIterationValue = nil
 }
 
-// resetLoopIterationState restores RawBody / Headers to the parse-time snapshot so the next
-// iteration is substituted against the original placeholders instead of last iteration's output.
+// resetLoopIterationState restores RawBody / Headers to the parse-time snapshot for re-substitution.
 func resetLoopIterationState(req *Request) {
 	if req.loopOriginalRawBody != "" || req.ExternalFilePath == "" {
 		req.RawBody = req.loopOriginalRawBody
