@@ -23,5 +23,5 @@
 - Coverage required for all changes
 
 ## Fluent test DSL
-- Test DSL + guideline: ~/.agents/skills/go-integration-tests/references/fluent-testing-guideline.md (binding for any test change: given/when/then, state in parts, .and() end of line, comments <= 1 line whole diff, fixtures under test/data/, no linter-appeasement var _ blocks).
+- Test DSL + guideline: docs/fluent-testing-guideline.md (binding for any test change: given/when/then, state in parts, .and() end of line, comments <= 1 line whole diff, fixtures under test/data/, no linter-appeasement var _ blocks).
 - Existing DSL surface lives in fluent_parts_*.test.go files (core/ext/capture/validator/graphql/cookies_redirects).
