@@ -41,40 +41,40 @@ GET https://example.com/api`).and().
 		parsedRequestSleep(0, 250*time.Millisecond)
 }
 
-// @sleep with non-integer/negative/missing arg must fail to parse; check parse failure + directive named in error.
-func TestParseFile_SleepInvalidArgErrors(t *testing.T) {
-	t.Run("non_numeric", func(t *testing.T) {
-		given, when, then := newParts(t)
-		given.
-			aHttpFile(`### sleeping
+// TestParseFile_SleepNonNumericArgErrors verifies @sleep with a non-numeric arg fails to parse and names the directive.
+func TestParseFile_SleepNonNumericArgErrors(t *testing.T) {
+	given, when, then := newParts(t)
+	given.
+		aHttpFile(`### sleeping
 # @sleep abc
 GET https://example.com/api`).and().
-			aClient()
-		when.parsingFile()
-		then.parseErrorContains("@sleep")
-	})
+		aClient()
+	when.parsingFile()
+	then.parseErrorContains("@sleep")
+}
 
-	t.Run("negative", func(t *testing.T) {
-		given, when, then := newParts(t)
-		given.
-			aHttpFile(`### sleeping
+// TestParseFile_SleepNegativeArgErrors verifies @sleep with a negative arg fails to parse and names the directive.
+func TestParseFile_SleepNegativeArgErrors(t *testing.T) {
+	given, when, then := newParts(t)
+	given.
+		aHttpFile(`### sleeping
 # @sleep -5
 GET https://example.com/api`).and().
-			aClient()
-		when.parsingFile()
-		then.parseErrorContains("@sleep")
-	})
+		aClient()
+	when.parsingFile()
+	then.parseErrorContains("@sleep")
+}
 
-	t.Run("no_arg", func(t *testing.T) {
-		given, when, then := newParts(t)
-		given.
-			aHttpFile(`### sleeping
+// TestParseFile_SleepMissingArgErrors verifies @sleep with no arg fails to parse and names the directive.
+func TestParseFile_SleepMissingArgErrors(t *testing.T) {
+	given, when, then := newParts(t)
+	given.
+		aHttpFile(`### sleeping
 # @sleep
 GET https://example.com/api`).and().
-			aClient()
-		when.parsingFile()
-		then.parseErrorContains("@sleep")
-	})
+		aClient()
+	when.parsingFile()
+	then.parseErrorContains("@sleep")
 }
 
 // single request with `# @sleep 200` must take >= ~200ms before sending; measure elapsed with loose lower bound.

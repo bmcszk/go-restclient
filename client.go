@@ -111,13 +111,13 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 		if restClientReq.Imported {
 			continue
 		}
-		c.runOneRequest(ctx, restClientReq, i, parsedFile, refState, osEnvGetter, &responses, &multiErr)
+		multiErr = c.runOneRequest(ctx, restClientReq, i, parsedFile, refState, osEnvGetter, &responses, multiErr)
 	}
 
 	return responses, multiErr.ErrorOrNil()
 }
 
-// runOneRequest executes one request plus its @ref/@forceRef deps.
+// runOneRequest executes one request plus its @ref/@forceRef deps and returns the appended multiErr.
 func (c *Client) runOneRequest(
 	ctx context.Context,
 	restClientReq *Request,
@@ -126,36 +126,39 @@ func (c *Client) runOneRequest(
 	refState *refExecutionState,
 	osEnvGetter func(string) (string, bool),
 	responses *[]*Response,
-	multiErr **multierror.Error,
-) {
+	multiErr *multierror.Error,
+) *multierror.Error {
 	if refState.alreadyExecuted(restClientReq.Name) {
-		return
+		return multiErr
 	}
 	skip, err := c.skipRequest(restClientReq, parsedFile, osEnvGetter)
 	if err != nil {
-		*multiErr = multierror.Append(*multiErr, fmt.Errorf("evaluating @disabled: %w", err))
-		return
+		return multierror.Append(multiErr, fmt.Errorf("evaluating @disabled: %w", err))
 	}
 	if skip {
 		skipped := &Response{Request: restClientReq, Skipped: true}
 		*responses = append(*responses, skipped)
 		storeResponse(parsedFile, restClientReq, skipped)
-		return
+		return multiErr
 	}
-	if c.runRequestWithLoops(ctx, restClientReq, index, parsedFile, refState, osEnvGetter, responses, multiErr) {
-		return
+	if handled, loopErr := c.runRequestWithLoops(
+		ctx, restClientReq, index, parsedFile, refState, osEnvGetter, responses,
+	); handled {
+		return multierror.Append(multiErr, loopErr)
 	}
 	if restClientReq.SleepDuration > 0 {
 		time.Sleep(restClientReq.SleepDuration)
 	}
 	response, err := c.executeRequestWithVariables(ctx, restClientReq, parsedFile, osEnvGetter, index)
-	response, shouldSkip := c.handleRequestExecutionError(response, err, restClientReq, index, multiErr)
+	response, shouldSkip, combinedErr := c.handleRequestExecutionError(response, err, restClientReq, index)
+	multiErr = multierror.Append(multiErr, combinedErr)
 	if shouldSkip || response == nil {
-		return
+		return multiErr
 	}
 	*responses = append(*responses, response)
 	storeResponse(parsedFile, restClientReq, response)
 	refState.recordExecuted(restClientReq.Name, response)
+	return multiErr
 }
 
 // isLoopedRequest returns true when the request declares any @loop directive.
@@ -360,25 +363,22 @@ func (c *Client) executeAndStoreRequest(
 	return response, nil
 }
 
-// handleRequestExecutionError processes errors from request execution and manages error wrapping
-// Returns the processed response and a boolean indicating if the request should be skipped
+// handleRequestExecutionError processes errors from request execution; returns (response, shouldSkip, combined error).
 func (c *Client) handleRequestExecutionError(
 	response *Response,
 	err error,
 	restClientReq *Request,
 	index int,
-	multiErr **multierror.Error,
-) (*Response, bool) {
+) (*Response, bool, error) {
 	if err != nil {
-		*multiErr = multierror.Append(*multiErr, err)
 		if shouldSkipRequest(response, err) {
-			return nil, true
+			return nil, true, err
 		}
 		response = ensureResponseExists(response, restClientReq)
 	}
 
-	c.wrapResponseError(response, restClientReq, index, multiErr)
-	return response, false
+	wrappedErr := c.wrapResponseError(response, restClientReq, index)
+	return response, false, multierror.Append(err, wrappedErr).ErrorOrNil()
 }
 
 // shouldSkipRequest determines if a request should be skipped based on error type
@@ -396,23 +396,22 @@ func ensureResponseExists(response *Response, restClientReq *Request) *Response 
 	return response
 }
 
-// wrapResponseError wraps response errors for logging
+// wrapResponseError returns a wrapped error describing the request's failed processing, or nil when nothing to wrap.
 func (*Client) wrapResponseError(
 	response *Response,
 	restClientReq *Request,
 	index int,
-	multiErr **multierror.Error,
-) {
-	if response != nil && response.Error != nil {
-		urlForError := restClientReq.RawURLString
-		if restClientReq.URL != nil {
-			urlForError = restClientReq.URL.String()
-		}
-		wrappedErr := fmt.Errorf(
-			"request %d (%s %s) processing resulted in error: %w",
-			index+1, restClientReq.Method, urlForError, response.Error)
-		*multiErr = multierror.Append(*multiErr, wrappedErr)
+) error {
+	if response == nil || response.Error == nil {
+		return nil
 	}
+	urlForError := restClientReq.RawURLString
+	if restClientReq.URL != nil {
+		urlForError = restClientReq.URL.String()
+	}
+	return fmt.Errorf(
+		"request %d (%s %s) processing resulted in error: %w",
+		index+1, restClientReq.Method, urlForError, response.Error)
 }
 
 // End of function resolveVariablesInText

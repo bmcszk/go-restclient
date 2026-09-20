@@ -4,12 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/hashicorp/go-multierror"
-	"net/http"
 )
 
 // loopIteration carries the per-iteration state for `@loop` request expansion.
@@ -18,7 +16,7 @@ type loopIteration struct {
 	item  any // current iteration value (nil for `for N` loops)
 }
 
-// runRequestWithLoops handles the loop expansion of a single request during ExecuteFile.
+// runRequestWithLoops handles the loop expansion of a single request during ExecuteFile; returns (handled, err).
 func (c *Client) runRequestWithLoops(
 	ctx context.Context,
 	restClientReq *Request,
@@ -27,36 +25,32 @@ func (c *Client) runRequestWithLoops(
 	refState *refExecutionState,
 	osEnvGetter func(string) (string, bool),
 	responses *[]*Response,
-	multiErr **multierror.Error,
-) (handled bool) {
-	iterations, err := c.resolveLoopIterations(restClientReq, parsedFile, osEnvGetter)
-	if err != nil {
-		*multiErr = multierror.Append(*multiErr, err)
-		return true
+) (handled bool, err error) {
+	iterations, iterErr := c.resolveLoopIterations(restClientReq, parsedFile, osEnvGetter)
+	if iterErr != nil {
+		return true, iterErr
 	}
 	isLooped := c.isLoopedRequest(restClientReq)
 	if isLooped && len(iterations) == 0 {
 		// No-op loop (N<=0 / empty collection): no refs, no response entries, no error.
-		return true
+		return true, nil
 	}
-	if err := c.resolveRequestRefs(ctx, restClientReq, parsedFile, refState, osEnvGetter); err != nil {
-		*multiErr = multierror.Append(*multiErr, err)
-		return true
+	if refErr := c.resolveRequestRefs(ctx, restClientReq, parsedFile, refState, osEnvGetter); refErr != nil {
+		return true, refErr
 	}
 	if !isLooped {
-		return false
+		return false, nil
 	}
-	iterResponses, err := c.runLoopIterations(ctx, restClientReq, iterations, parsedFile, osEnvGetter, index)
-	if err != nil {
-		*multiErr = multierror.Append(*multiErr, err)
-		return true
+	iterResponses, loopErr := c.runLoopIterations(ctx, restClientReq, iterations, parsedFile, osEnvGetter, index)
+	if loopErr != nil {
+		return true, loopErr
 	}
 	*responses = append(*responses, iterResponses...)
 	// Plain name addressing resolves to the first iteration's response (zero-based name0).
 	if resp := parsedFile.ResponseMap[loopResponseName(restClientReq.Name, 0)]; resp != nil {
 		refState.recordExecuted(restClientReq.Name, resp)
 	}
-	return true
+	return true, nil
 }
 
 // executeLoopAndStore handles the loop expansion of a single request during ExecuteRequest.
