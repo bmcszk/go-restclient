@@ -8,7 +8,6 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -132,7 +131,12 @@ func (c *Client) runOneRequest(
 	if refState.alreadyExecuted(restClientReq.Name) {
 		return
 	}
-	if restClientReq.Disabled {
+	skip, err := c.skipRequest(restClientReq, parsedFile, osEnvGetter)
+	if err != nil {
+		*multiErr = multierror.Append(*multiErr, fmt.Errorf("evaluating @disabled: %w", err))
+		return
+	}
+	if skip {
 		skipped := &Response{Request: restClientReq, Skipped: true}
 		*responses = append(*responses, skipped)
 		storeResponse(parsedFile, restClientReq, skipped)
@@ -150,6 +154,21 @@ func (c *Client) runOneRequest(
 	*responses = append(*responses, response)
 	storeResponse(parsedFile, restClientReq, response)
 	refState.recordExecuted(restClientReq.Name, response)
+}
+
+// skipRequest decides @disabled / @disabled !<expr> skipping; returns (skip, err).
+func (c *Client) skipRequest(
+	restClientReq *Request,
+	parsedFile *ParsedFile,
+	osEnvGetter func(string) (string, bool),
+) (bool, error) {
+	if restClientReq.Disabled {
+		return true, nil
+	}
+	if restClientReq.DisabledExpr == "" {
+		return false, nil
+	}
+	return c.evaluateDisabledExpr(restClientReq.DisabledExpr, parsedFile, restClientReq, osEnvGetter)
 }
 
 // refExecutionState tracks per-ExecuteFile execution of @ref/@forceRef dependencies.
@@ -296,12 +315,27 @@ func (c *Client) ExecuteRequest(ctx context.Context, parsedFile *ParsedFile, ind
 
 	osEnvGetter := func(key string) (string, bool) { return os.LookupEnv(key) }
 	restClientReq := parsedFile.Requests[index]
-	if restClientReq.Disabled {
+	skip, err := c.skipRequest(restClientReq, parsedFile, osEnvGetter)
+	if err != nil {
+		return nil, fmt.Errorf("evaluating @disabled: %w", err)
+	}
+	if skip {
 		return &Response{Request: restClientReq, Skipped: true}, nil
 	}
 	if err := c.resolveRequestRefs(ctx, restClientReq, parsedFile, newRefExecutionState(), osEnvGetter); err != nil {
 		return nil, err
 	}
+	return c.executeAndStoreRequest(ctx, restClientReq, parsedFile, osEnvGetter, index)
+}
+
+// executeAndStoreRequest executes the request and stores the response in the file's response map.
+func (c *Client) executeAndStoreRequest(
+	ctx context.Context,
+	restClientReq *Request,
+	parsedFile *ParsedFile,
+	osEnvGetter func(string) (string, bool),
+	index int,
+) (*Response, error) {
 	response, err := c.executeRequestWithVariables(ctx, restClientReq, parsedFile, osEnvGetter, index)
 	if err != nil {
 		if response == nil {
@@ -472,101 +506,6 @@ func resolveSystemVariablePlaceholder(
 
 	// For dynamic system variables, use the existing substitution logic
 	return substituteDynamicSystemVariables(placeholder, dotEnvVars, programmaticVars)
-}
-
-// _resolveRequestURL resolves the final request URL based on the client's BaseURL and the request's URL.
-// It returns the resolved URL or an error if the BaseURL is invalid or requestURL is nil.
-// _resolveRequestURL resolves the final request URL based on the client's BaseURL,
-// the request's initial URL (if parsed),
-// and the request's RawURLString (if initial URL parsing was deferred).
-// It returns the resolved URL or an error.
-func (*Client) _resolveRequestURL(
-	baseURLStr string,
-	initialRequestURL *url.URL,
-	rawRequestURLStr string,
-) (*url.URL, error) {
-	currentRequestURL, err := determineCurrentRequestURL(initialRequestURL, rawRequestURLStr)
-	if err != nil {
-		return nil, err
-	}
-
-	freshRequestURL, err := sanitizeRequestURL(currentRequestURL)
-	if err != nil {
-		return nil, err
-	}
-
-	return resolveWithBaseURL(freshRequestURL, baseURLStr)
-}
-
-// determineCurrentRequestURL determines which URL to use for processing
-func determineCurrentRequestURL(initialRequestURL *url.URL, rawRequestURLStr string) (*url.URL, error) {
-	if initialRequestURL != nil {
-		return initialRequestURL, nil
-	}
-	if rawRequestURLStr != "" {
-		parsedRawURL, err := url.Parse(rawRequestURLStr)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"failed to parse rawRequestURLString '%s' after variable expansion: %w",
-				rawRequestURLStr, err)
-		}
-		return parsedRawURL, nil
-	}
-	return nil, errors.New("request URL is unexpectedly nil and rawRequestURLString is empty")
-}
-
-// sanitizeRequestURL re-parses a URL to ensure it's valid
-func sanitizeRequestURL(currentRequestURL *url.URL) (*url.URL, error) {
-	currentRequestURLStr := currentRequestURL.String()
-	freshRequestURL, err := url.Parse(currentRequestURLStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to re-parse current requestURL string '%s': %w", currentRequestURLStr, err)
-	}
-	return freshRequestURL, nil
-}
-
-// resolveWithBaseURL resolves a request URL against a base URL
-func resolveWithBaseURL(freshRequestURL *url.URL, baseURLStr string) (*url.URL, error) {
-	if freshRequestURL.IsAbs() {
-		return freshRequestURL, nil
-	}
-	if baseURLStr == "" {
-		return freshRequestURL, nil
-	}
-
-	freshBase, err := parseAndSanitizeBaseURL(baseURLStr)
-	if err != nil {
-		return nil, err
-	}
-
-	return handleSpecialPathJoining(freshRequestURL, freshBase)
-}
-
-// parseAndSanitizeBaseURL parses and sanitizes a base URL
-func parseAndSanitizeBaseURL(baseURLStr string) (*url.URL, error) {
-	base, err := url.Parse(baseURLStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid BaseURL %s: %w", baseURLStr, err)
-	}
-
-	baseStr := base.String()
-	freshBase, err := url.Parse(baseStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to re-parse base URL string '%s': %w", baseStr, err)
-	}
-	return freshBase, nil
-}
-
-// handleSpecialPathJoining handles special cases for URL path joining
-func handleSpecialPathJoining(freshRequestURL, freshBase *url.URL) (*url.URL, error) {
-	if strings.HasPrefix(freshRequestURL.Path, "/") && freshBase.Path != "" && freshBase.Path != "/" {
-		finalResolvedURL := joinURLPaths(freshBase, freshRequestURL)
-		if finalResolvedURL == nil {
-			return nil, fmt.Errorf("failed to join URL paths: %s and %s", freshBase.Path, freshRequestURL.Path)
-		}
-		return finalResolvedURL, nil
-	}
-	return freshBase.ResolveReference(freshRequestURL), nil
 }
 
 // executeRequest sends a given Request and returns the Response.

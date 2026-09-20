@@ -321,17 +321,22 @@ func (p *requestParserState) handleNoCookieJarDirective(commentContent string) b
 	return false
 }
 
-// handleDisabledDirective parses `@disabled`; any trailing text is a parse error.
+// handleDisabledDirective parses `@disabled`; `@disabled !<expr>` stores a conditional
+// expression, any other trailing text is a parse error.
 func (p *requestParserState) handleDisabledDirective(commentContent string) (bool, error) {
 	const prefix = "@disabled"
 	if !strings.HasPrefix(commentContent, prefix) {
 		return false, nil
 	}
 	rest := strings.TrimSpace(commentContent[len(prefix):])
-	if rest != "" {
+	if rest == "" {
+		p.currentRequest.Disabled = true
+		return true, nil
+	}
+	if !strings.HasPrefix(rest, "!") {
 		return true, fmt.Errorf("@disabled directive takes no arguments (got %q)", rest)
 	}
-	p.currentRequest.Disabled = true
+	p.currentRequest.DisabledExpr = strings.TrimSpace(rest[1:])
 
 	return true, nil
 }

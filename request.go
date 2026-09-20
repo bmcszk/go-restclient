@@ -58,6 +58,9 @@ type Request struct {
 	NoCookieJar bool
 	// Disabled indicates that this request should be skipped at execution time (from @disabled directive)
 	Disabled bool
+	// DisabledExpr stores a conditional @disabled !<expr> argument; evaluated (after variable
+	// substitution) at execution time to decide whether to skip (from @disabled ! directive)
+	DisabledExpr string
 	// Timeout specifies a custom timeout for this request (from @timeout directive)
 	Timeout time.Duration
 

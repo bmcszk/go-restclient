@@ -271,6 +271,15 @@ func (p *parts) parsedRequestDisabled(i int, want bool) *parts {
 	return p
 }
 
+// parsedRequestDisabledExpr asserts the parsed request at index i carries the
+// conditional @disabled expression (stored after the `!`) equal to want.
+func (p *parts) parsedRequestDisabledExpr(i int, want string) *parts {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(want, p.parsedFile.Requests[i].DisabledExpr)
+
+	return p
+}
+
 // parsedRequestRefs asserts the parsed request at index i declares a @ref/@forceRef entry.
 func (p *parts) parsedRequestRefs(i int, wantName string, wantForce bool) *parts {
 	p.require.Greater(len(p.parsedFile.Requests), i)
