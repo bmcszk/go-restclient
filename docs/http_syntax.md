@@ -754,6 +754,142 @@ Request referencing works in every execution path:
 The ref cache is per execution call, not global. Two separate `ExecuteFile`
 calls on the same file re-execute every `@ref` independently.
 
+## Execution Control Directives
+
+Per-request directives that control **whether** and **how often** a request
+runs, in addition to the referencing directives above. All four directives
+(`@disabled`, `@disabled !<expr>`, `@sleep`, `@loop`) are written as `# @…`
+(or `// @…`) comment lines on the request they apply to, just like `@name`
+and `@ref`.
+
+### Skipping a request unconditionally with `@disabled`
+
+```http
+### legacy ping
+# @name legacyPing
+# @disabled
+GET https://example.com/api/legacy
+```
+
+- `# @disabled` accepts **no arguments**. Any trailing text is a parse error:
+  `@disabled directive takes no arguments (got "some-text")`.
+- The request is **skipped**: no HTTP call is sent, but the response slice
+  still grows by one entry with `Response.Skipped == true`,
+  `StatusCode == 0`, and `Error == nil`. Index positions stay stable so
+  later `--index` / array access keeps working.
+- `{{name.response.*}}` of a skipped request resolves to **empty** — chained
+  placeholders get a zero value instead of an error.
+- In the CLI the request prints as `### <name>\n  SKIP` and is **not**
+  counted as a failure (independent of `--fail-on-error`).
+
+### Skipping a request conditionally with `@disabled !<expr>`
+
+```http
+### guarded
+# @name guarded
+# @disabled !{{skipFlag}}
+GET https://example.com/api/optional
+```
+
+- `<expr>` runs through the standard `{{var}}` substitution used for URLs
+  and bodies (programmatic vars → file-scoped → environment → global → OS
+  env → .env). The resulting string is then tested for truthiness per the
+  table below.
+- If any `{{var}}` inside the expr cannot be resolved, evaluation fails with
+  `undefined variable "<name>" in @disabled expr` — the request is **not**
+  silently skipped, you find out about the typo.
+- When the result is **truthy** the request is skipped (same semantics as
+  `@disabled`); when it is **falsy** the request runs normally.
+
+#### Truthiness rules
+
+| Result of substitution | Outcome |
+|------------------------|---------|
+| case-insensitive `true` | truthy → request skipped |
+| case-insensitive `false` | falsy → request runs |
+| numeric `0` (integer or float) | falsy → request runs |
+| numeric non-zero | truthy → request skipped |
+| empty string | falsy → request runs |
+| any other non-empty string | truthy → request skipped |
+
+### Pausing before send with `@sleep`
+
+```http
+### poll
+# @name poll
+# @sleep 1500
+GET https://example.com/api/poll
+```
+
+- `@sleep <ms>` pauses for `<ms>` milliseconds **after** `@ref` resolution
+  and **before** the HTTP call is sent.
+- `<ms>` must be a non-negative integer: `0` is a no-op, negative,
+  non-numeric, or missing values are a parse error:
+  `@sleep directive requires a non-negative integer milliseconds argument`.
+- Per-request; pairs naturally with `@loop` to throttle each iteration.
+- Sleep itself never produces an error response and is not affected by
+  `--fail-on-error`.
+
+### Running a request multiple times with `@loop`
+
+Three forms, all written on the request they apply to:
+
+```http
+### ping N times
+# @name ping
+# @loop for 3
+GET https://example.com/api/ping?i={{$index}}
+
+### ping each id
+# @name pingId
+# @loop for id of ids
+GET https://example.com/api/items/{{id}}
+
+### ping N from a variable
+# @name pingVar
+# @loop for {{pingCount}}
+GET https://example.com/api/ping
+```
+
+- `@loop for <N>` — integer literal; runs the request exactly `N` times.
+- `@loop for {{var}}` — runs the request a number of times equal to the
+  resolved `{{var}}` (numeric value, not a collection).
+- `@loop for <item> of <collectionVar>` — runs once per element of the named
+  collection (array/slice from `WithVars`, file-scoped vars, etc.). Per
+  iteration, `{{item}}` (or your chosen alias) is bound to the current
+  element; `{{item.field}}` works for nested data.
+- Every iteration also exposes `{{$index}}` (0-based) and re-runs the
+  standard substitution placeholders against the iteration's request-scoped
+  system variables.
+
+#### Iteration addressing for `nameN`
+
+Each iteration's response is stored under `name0`, `name1`, `name2`, …:
+
+```http
+# @ref ping.response.body[0].status    # → first iteration (name0)
+# @ref pingId2.response.body[1].status # → second iteration (name2)
+```
+
+- Plain `name` addressing resolves to the **first** iteration's response
+  (`name0`). This makes chained placeholders like
+  `{{ping.response.body.ok}}` keep working without numbering.
+- `nameN` (where `N` is a non-negative integer) addresses that exact
+  iteration's response.
+
+#### No-op loops, errors, and undefined variables
+
+- `N <= 0` or an empty collection produces **no** response entries and
+  **no** error — the request is silently skipped as if it were disabled.
+- A non-numeric value where an integer is required (e.g. `@loop for foo`
+  without `{{}}` and without `of`) is a parse error:
+  `@loop directive expects integer, {{var}} or `name of collection` (got: foo)`.
+- A non-array collection (string, map, scalar) is an execution error:
+  `@loop collection variable "ids" is not an array`.
+- An undefined collection variable (e.g. `@loop for x of nope` when `nope`
+  is not set) errors out:
+  `undefined variable "nope" in @loop collection`.
+
 ## Response Body Validation Placeholders
 
 For expected response validation (applicable in `.hresp` files):

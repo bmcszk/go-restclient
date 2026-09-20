@@ -14,6 +14,9 @@ A Go library for executing HTTP requests from `.http` files and validating respo
 - **Variable substitution** - Custom variables, environment variables, system variables (`{{$guid}}`, `{{$randomInt}}`, etc.)
 - **Response chaining** - Reference responses from other requests: `{{name.response.body.field}}`
 - **Request referencing** — `@ref` / `@forceRef` chains with per-run caching and `@import` across files
+- **Skip requests** — `@disabled` to skip unconditionally, `@disabled !<expr>` to skip on a truthy `{{var}}` expression
+- **Pause before send** — `@sleep <ms>` per-request delay after refs resolve, before the HTTP call
+- **Loop requests** — `@loop for N`, `@loop for {{var}}`, or `@loop for <item> of <collection>` with `{{$index}}`, per-iteration item alias, and `nameN` response addressing
 - **Response validation** - Compare responses against `.hresp` files with placeholders (`{{$any}}`, `{{$regexp}}`, `{{$anyGuid}}`)
 - **Multiple requests per file** - Separated by `###`
 - **E2E testing ready** - Perfect for automated integration tests
