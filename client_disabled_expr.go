@@ -14,17 +14,7 @@ func (c *Client) evaluateDisabledExpr(
 	restClientReq *Request,
 	osEnvGetter func(string) (string, bool),
 ) (bool, error) {
-	requestScopedSystemVars := c.generateRequestScopedSystemVariables()
-	rctx := resolveContext{
-		programmaticVars: c.programmaticVars,
-		fileScopedVars:   restClientReq.ActiveVariables,
-		environmentVars:  parsedFile.EnvironmentVariables,
-		globalVars:       parsedFile.GlobalVariables,
-		systemVars:       requestScopedSystemVars,
-		osEnvGetter:      osEnvGetter,
-		dotEnvVars:       c.currentDotEnvVars,
-		responseMap:      parsedFile.ResponseMap,
-	}
+	rctx := c.directiveResolveContext(parsedFile, restClientReq, osEnvGetter)
 
 	if missing := findFirstUndefinedDisabledExprVar(expr, rctx); missing != "" {
 		return false, fmt.Errorf("undefined variable %q in @disabled expr", missing)
@@ -48,42 +38,34 @@ func findFirstUndefinedDisabledExprVar(expr string, rctx resolveContext) string 
 		if strings.HasPrefix(varName, "$") {
 			continue
 		}
-		if !disabledExprVariableExists(varName, rctx) {
+		if _, ok := lookupVar(varName, rctx); !ok {
 			return varName
 		}
 	}
 	return ""
 }
 
-// disabledExprVariableExists reports whether varName resolves through any standard variable source.
-func disabledExprVariableExists(varName string, rctx resolveContext) bool {
-	lookups := []func(string) bool{
-		func(v string) bool { _, ok := rctx.programmaticVars[v]; return ok },
-		func(v string) bool { return fileScopedVarExists(rctx.fileScopedVars, v) },
-		func(v string) bool { _, ok := rctx.environmentVars[v]; return ok },
-		func(v string) bool { _, ok := rctx.globalVars[v]; return ok },
-		func(v string) bool { _, ok := rctx.dotEnvVars[v]; return ok },
+// lookupVar resolves name through the standard variable sources, nil-safe.
+func lookupVar(name string, rctx resolveContext) (any, bool) {
+	if v, ok := rctx.programmaticVars[name]; ok {
+		return v, true
 	}
-	for _, has := range lookups {
-		if has(varName) {
-			return true
-		}
+	if v, ok := rctx.fileScopedVars["@"+name]; ok {
+		return v, true
 	}
-	if rctx.osEnvGetter != nil {
-		if _, ok := rctx.osEnvGetter(varName); ok {
-			return true
-		}
+	if v, ok := rctx.environmentVars[name]; ok {
+		return v, true
 	}
-	return false
-}
-
-// fileScopedVarExists reports whether m (nil-safe) contains @v.
-func fileScopedVarExists(m map[string]string, v string) bool {
-	if m == nil {
-		return false
+	if v, ok := rctx.globalVars[name]; ok {
+		return v, true
 	}
-	_, ok := m["@"+v]
-	return ok
+	if v, ok := rctx.dotEnvVars[name]; ok {
+		return v, true
+	}
+	if rctx.osEnvGetter == nil {
+		return nil, false
+	}
+	return rctx.osEnvGetter(name)
 }
 
 // computeDisabledTruthiness applies @disabled rules: true/non-zero/non-empty are truthy; false/zero/empty are falsy.

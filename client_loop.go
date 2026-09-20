@@ -46,7 +46,12 @@ func (c *Client) runRequestWithLoops(
 	if !isLooped {
 		return false
 	}
-	c.runLoopIterations(ctx, restClientReq, iterations, parsedFile, osEnvGetter, index, responses, multiErr)
+	iterResponses, err := c.runLoopIterations(ctx, restClientReq, iterations, parsedFile, osEnvGetter, index)
+	if err != nil {
+		*multiErr = multierror.Append(*multiErr, err)
+		return true
+	}
+	*responses = append(*responses, iterResponses...)
 	// Plain name addressing resolves to the first iteration's response (zero-based name0).
 	if resp := parsedFile.ResponseMap[loopResponseName(restClientReq.Name, 0)]; resp != nil {
 		refState.recordExecuted(restClientReq.Name, resp)
@@ -70,56 +75,13 @@ func (c *Client) executeLoopAndStore(
 		// No-op loop (N<=0 / empty collection): no response entries, no error.
 		return nil, nil
 	}
-	first := c.runLoopIterationsForStore(ctx, restClientReq, iterations, parsedFile, osEnvGetter, index)
+	iterResponses, runErr := c.runLoopIterations(ctx, restClientReq, iterations, parsedFile, osEnvGetter, index)
 	restClientReq.loopIterationIndex = 0
 	restClientReq.loopIterationValue = nil
-	return first, nil
-}
-
-// runLoopIterationsForStore runs each loop iteration, stores each under `nameN`, returns the first response.
-func (c *Client) runLoopIterationsForStore(
-	ctx context.Context,
-	restClientReq *Request,
-	iterations []loopIteration,
-	parsedFile *ParsedFile,
-	osEnvGetter func(string) (string, bool),
-	index int,
-) *Response {
-	var first *Response
-	for i, iter := range iterations {
-		restClientReq.loopIterationIndex = iter.index
-		restClientReq.loopIterationValue = iter.item
-		resetLoopIterationState(restClientReq)
-		sleepFirstIteration(restClientReq, i)
-		resp := c.runOneLoopIteration(ctx, restClientReq, parsedFile, osEnvGetter, index)
-		storeLoopResponse(parsedFile, restClientReq, i, resp)
-		if i == 0 {
-			first = resp
-		}
+	if runErr != nil {
+		return &Response{Request: restClientReq, Error: runErr}, runErr
 	}
-	return first
-}
-
-// sleepFirstIteration applies the @sleep directive before the first iteration only.
-func sleepFirstIteration(req *Request, i int) {
-	if i == 0 && req.SleepDuration > 0 {
-		time.Sleep(req.SleepDuration)
-	}
-}
-
-// runOneLoopIteration executes a single loop iteration, ensuring a non-nil *Response on exec error.
-func (c *Client) runOneLoopIteration(
-	ctx context.Context,
-	restClientReq *Request,
-	parsedFile *ParsedFile,
-	osEnvGetter func(string) (string, bool),
-	index int,
-) *Response {
-	resp, execErr := c.executeRequestWithVariables(ctx, restClientReq, parsedFile, osEnvGetter, index)
-	if execErr != nil && resp == nil {
-		resp = &Response{Request: restClientReq, Error: execErr}
-	}
-	return resp
+	return iterResponses[0], nil
 }
 
 // resolveLoopIterations computes the iteration values for a looped request at execution time.
@@ -193,17 +155,7 @@ func (c *Client) resolveLoopExprCount(
 	restClientReq *Request,
 	osEnvGetter func(string) (string, bool),
 ) (int, error) {
-	requestScopedSystemVars := c.generateRequestScopedSystemVariables()
-	rctx := resolveContext{
-		programmaticVars: c.programmaticVars,
-		fileScopedVars:   restClientReq.ActiveVariables,
-		environmentVars:  parsedFile.EnvironmentVariables,
-		globalVars:       parsedFile.GlobalVariables,
-		systemVars:       requestScopedSystemVars,
-		osEnvGetter:      osEnvGetter,
-		dotEnvVars:       c.currentDotEnvVars,
-		responseMap:      parsedFile.ResponseMap,
-	}
+	rctx := c.directiveResolveContext(parsedFile, restClientReq, osEnvGetter)
 	if missing := findFirstUndefinedDisabledExprVar(expr, rctx); missing != "" {
 		return 0, fmt.Errorf("undefined variable %q in @loop expression", missing)
 	}
@@ -227,16 +179,16 @@ func (c *Client) resolveLoopCollection(
 	restClientReq *Request,
 	osEnvGetter func(string) (string, bool),
 ) ([]any, error) {
-	rctx := c.loopResolveContext(parsedFile, restClientReq, osEnvGetter)
-	val, ok := lookupCollectionVar(collName, rctx)
+	rctx := c.directiveResolveContext(parsedFile, restClientReq, osEnvGetter)
+	val, ok := lookupVar(collName, rctx)
 	if !ok {
 		return nil, fmt.Errorf("undefined variable %q in @loop collection", collName)
 	}
 	return decodeCollectionValue(val, collName)
 }
 
-// loopResolveContext builds the resolveContext used for @loop variable lookups.
-func (c *Client) loopResolveContext(
+// directiveResolveContext builds the resolveContext used for directive variable lookups (@disabled, @loop).
+func (c *Client) directiveResolveContext(
 	parsedFile *ParsedFile,
 	restClientReq *Request,
 	osEnvGetter func(string) (string, bool),
@@ -285,52 +237,13 @@ func decodeStringCollection(s string, collName string) ([]any, error) {
 		return nil, fmt.Errorf("@loop collection variable %q is not an array", collName)
 	}
 	var arr []any
-	if err := decodeJSONInto(trimmed, &arr); err != nil {
+	if err := json.Unmarshal([]byte(trimmed), &arr); err != nil {
 		return nil, fmt.Errorf("@loop collection variable %q is not a JSON array: %w", collName, err)
 	}
 	return arr, nil
 }
 
-// lookupCollectionVar searches the same variable sources as the @disabled expr resolver.
-func lookupCollectionVar(name string, rctx resolveContext) (any, bool) {
-	if v, ok := rctx.programmaticVars[name]; ok {
-		return v, true
-	}
-	if v, ok := rctx.fileScopedVars["@"+name]; ok {
-		return v, true
-	}
-	if v, ok := stringMapLookup(rctx.environmentVars, name); ok {
-		return v, true
-	}
-	if v, ok := stringMapLookup(rctx.globalVars, name); ok {
-		return v, true
-	}
-	if v, ok := stringMapLookup(rctx.dotEnvVars, name); ok {
-		return v, true
-	}
-	return lookupFromOSEnv(rctx, name)
-}
-
-// stringMapLookup returns the value for name from a string map; small wrapper for the lookup chain.
-func stringMapLookup(m map[string]string, name string) (string, bool) {
-	v, ok := m[name]
-	return v, ok
-}
-
-// lookupFromOSEnv probes the OS environment getter when configured.
-func lookupFromOSEnv(rctx resolveContext, name string) (any, bool) {
-	if rctx.osEnvGetter == nil {
-		return nil, false
-	}
-	return rctx.osEnvGetter(name)
-}
-
-// decodeJSONInto wraps encoding/json's Unmarshal for clarity in this file's callers.
-func decodeJSONInto(data string, into any) error {
-	return json.Unmarshal([]byte(data), into)
-}
-
-// runLoopIterations executes each iteration of a looped request and stores the responses.
+// runLoopIterations executes each loop iteration, stores each under nameN; aborts on first iteration error.
 func (c *Client) runLoopIterations(
 	ctx context.Context,
 	req *Request,
@@ -338,27 +251,48 @@ func (c *Client) runLoopIterations(
 	parsedFile *ParsedFile,
 	osEnvGetter func(string) (string, bool),
 	index int,
-	responses *[]*Response,
-	multiErr **multierror.Error,
-) {
+) ([]*Response, error) {
+	var responses []*Response
 	for i, iter := range iterations {
-		req.loopIterationIndex = iter.index
-		req.loopIterationValue = iter.item
-		resetLoopIterationState(req)
-		if i == 0 && req.SleepDuration > 0 {
-			time.Sleep(req.SleepDuration)
+		resp, err := c.runLoopIteration(ctx, req, parsedFile, osEnvGetter, index, i, iter)
+		if err != nil {
+			return responses, err
 		}
-		response, err := c.executeRequestWithVariables(ctx, req, parsedFile, osEnvGetter, index)
-		response, shouldSkip := c.handleRequestExecutionError(response, err, req, index, multiErr)
-		if shouldSkip || response == nil {
-			continue
+		if resp != nil {
+			responses = append(responses, resp)
 		}
-		*responses = append(*responses, response)
-		storeLoopResponse(parsedFile, req, i, response)
 	}
-	// Clear transient loop state so the request looks un-looped after iteration ends.
-	req.loopIterationIndex = 0
-	req.loopIterationValue = nil
+	return responses, nil
+}
+
+// runLoopIteration executes a single loop iteration and stores its response under nameN.
+func (c *Client) runLoopIteration(
+	ctx context.Context,
+	req *Request,
+	parsedFile *ParsedFile,
+	osEnvGetter func(string) (string, bool),
+	index int,
+	i int,
+	iter loopIteration,
+) (*Response, error) {
+	req.loopIterationIndex = iter.index
+	req.loopIterationValue = iter.item
+	resetLoopIterationState(req)
+	if i == 0 && req.SleepDuration > 0 {
+		time.Sleep(req.SleepDuration)
+	}
+	resp, execErr := c.executeRequestWithVariables(ctx, req, parsedFile, osEnvGetter, index)
+	if execErr != nil {
+		if resp == nil {
+			resp = &Response{Request: req, Error: execErr}
+		}
+		storeLoopResponse(parsedFile, req, i, resp)
+		return nil, fmt.Errorf("request %q: %w", req.Name, execErr)
+	}
+	if resp != nil {
+		storeLoopResponse(parsedFile, req, i, resp)
+	}
+	return resp, nil
 }
 
 // resetLoopIterationState restores RawBody / Headers to the parse-time snapshot for re-substitution.
