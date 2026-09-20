@@ -1,11 +1,11 @@
 ---
 # go-restclient-eeft
 title: 'Directive: @sleep <ms>'
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-09-19T14:16:10Z
-updated_at: 2026-09-19T14:16:10Z
+updated_at: 2026-09-20T16:50:30Z
 parent: go-restclient-p988
 ---
 
