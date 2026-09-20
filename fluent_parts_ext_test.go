@@ -288,6 +288,33 @@ func (p *parts) parsedRequestDisabledExpr(i int, want string) *parts {
 	return p
 }
 
+// parsedRequestLoopCount asserts the parsed request at index i carries a literal
+// @loop for N directive with the given count.
+func (p *parts) parsedRequestLoopCount(i int, want int) *parts {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(want, p.parsedFile.Requests[i].LoopFor)
+
+	return p
+}
+
+// parsedRequestLoopExpr asserts the parsed request at index i carries a variable
+// @loop for {{expr}} directive with the given raw expression.
+func (p *parts) parsedRequestLoopExpr(i int, want string) *parts {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(want, p.parsedFile.Requests[i].LoopExpr)
+
+	return p
+}
+
+// parsedRequestLoopCollection asserts the parsed request at index i carries a
+// @loop for item of collection directive referencing the given collection variable name.
+func (p *parts) parsedRequestLoopCollection(i int, want string) *parts {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(want, p.parsedFile.Requests[i].LoopCollection)
+
+	return p
+}
+
 // parsedRequestRefs asserts the parsed request at index i declares a @ref/@forceRef entry.
 func (p *parts) parsedRequestRefs(i int, wantName string, wantForce bool) *parts {
 	p.require.Greater(len(p.parsedFile.Requests), i)
@@ -422,9 +449,8 @@ func (p *parts) aHttpFile(content string) *parts {
 
 // aHttpFileFromTemplate renders a committed request fixture template with the test server
 // URL ([[.ServerURL]] delimiters) and stores the processed file path for execution.
+// serverURL may be empty for parse-only fixtures; the template still renders (URL stays relative).
 func (p *parts) aHttpFileFromTemplate(templateName string) *parts {
-	p.require.NotEmpty(p.serverURL)
-
 	return p.aHttpFileFromTemplateWithData(templateName, struct{ ServerURL string }{ServerURL: p.serverURL})
 }
 

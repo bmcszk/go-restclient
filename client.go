@@ -142,8 +142,7 @@ func (c *Client) runOneRequest(
 		storeResponse(parsedFile, restClientReq, skipped)
 		return
 	}
-	if err := c.resolveRequestRefs(ctx, restClientReq, parsedFile, refState, osEnvGetter); err != nil {
-		*multiErr = multierror.Append(*multiErr, err)
+	if c.runRequestWithLoops(ctx, restClientReq, index, parsedFile, refState, osEnvGetter, responses, multiErr) {
 		return
 	}
 	if restClientReq.SleepDuration > 0 {
@@ -157,6 +156,11 @@ func (c *Client) runOneRequest(
 	*responses = append(*responses, response)
 	storeResponse(parsedFile, restClientReq, response)
 	refState.recordExecuted(restClientReq.Name, response)
+}
+
+// isLoopedRequest returns true when the request declares any @loop directive.
+func (*Client) isLoopedRequest(req *Request) bool {
+	return req.LoopDeclared
 }
 
 // skipRequest decides @disabled / @disabled !<expr> skipping; returns (skip, err).
@@ -335,6 +339,9 @@ func (c *Client) ExecuteRequest(ctx context.Context, parsedFile *ParsedFile, ind
 }
 
 // executeAndStoreRequest executes the request and stores the response in the file's response map.
+// For looped requests, delegates to executeLoopAndStore: runs every iteration, stores each under
+// `nameN`, and returns the first iteration's response (so plain `name` addressing resolves to name0).
+// For no-op loops (N<=0 / empty collection), returns nil, nil (no response entry, no error).
 func (c *Client) executeAndStoreRequest(
 	ctx context.Context,
 	restClientReq *Request,
@@ -342,6 +349,9 @@ func (c *Client) executeAndStoreRequest(
 	osEnvGetter func(string) (string, bool),
 	index int,
 ) (*Response, error) {
+	if c.isLoopedRequest(restClientReq) {
+		return c.executeLoopAndStore(ctx, restClientReq, parsedFile, osEnvGetter, index)
+	}
 	response, err := c.executeRequestWithVariables(ctx, restClientReq, parsedFile, osEnvGetter, index)
 	if err != nil {
 		if response == nil {
@@ -734,11 +744,13 @@ func (c *Client) processExternalFile(
 
 	// Apply variable substitution if requested
 	if restClientReq.ExternalFileWithVariables {
+		loopAliases, loopIndex := currentLoopBindings(restClientReq)
 		resolvedContent := resolveVariablesInText(content, resolveContext{
 			programmaticVars: c.programmaticVars, fileScopedVars: restClientReq.ActiveVariables,
 			environmentVars: parsedFile.EnvironmentVariables, globalVars: parsedFile.GlobalVariables,
 			systemVars: requestScopedSystemVars, osEnvGetter: osEnvGetter,
 			dotEnvVars: c.currentDotEnvVars, responseMap: parsedFile.ResponseMap,
+			loopItemAliases: loopAliases, loopIndex: loopIndex,
 		})
 		content = substituteDynamicSystemVariables(
 			resolvedContent,
@@ -921,11 +933,13 @@ func (c *Client) processRegularBody(
 	requestScopedSystemVars map[string]string,
 	osEnvGetter func(string) (string, bool),
 ) string {
+	loopAliases, loopIndex := currentLoopBindings(restClientReq)
 	resolvedBody := resolveVariablesInText(restClientReq.RawBody, resolveContext{
 		programmaticVars: c.programmaticVars, fileScopedVars: restClientReq.ActiveVariables,
 		environmentVars: parsedFile.EnvironmentVariables, globalVars: parsedFile.GlobalVariables,
 		systemVars: requestScopedSystemVars, osEnvGetter: osEnvGetter,
 		dotEnvVars: c.currentDotEnvVars, responseMap: parsedFile.ResponseMap,
+		loopItemAliases: loopAliases, loopIndex: loopIndex,
 	})
 	return substituteDynamicSystemVariables(resolvedBody, c.currentDotEnvVars, c.programmaticVars)
 }

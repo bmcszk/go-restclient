@@ -273,26 +273,27 @@ func (*requestParserState) isCommentedSeparator(commentContent string) bool {
 
 // processCommentDirectives processes various comment directives
 func (p *requestParserState) processCommentDirectives(commentContent string) error {
-	if p.handleNameDirective(commentContent) {
-		return nil
+	boolDirectives := []func(string) bool{
+		p.handleNameDirective,
+		p.handleNoRedirectDirective,
+		p.handleNoCookieJarDirective,
+		p.handleTimeoutDirective,
 	}
-	if p.handleNoRedirectDirective(commentContent) {
-		return nil
+	for _, handle := range boolDirectives {
+		if handle(commentContent) {
+			return nil
+		}
 	}
-	if p.handleNoCookieJarDirective(commentContent) {
-		return nil
+	errDirectives := []func(string) (bool, error){
+		p.handleDisabledDirective,
+		p.handleSleepDirective,
+		p.handleLoopDirective,
+		p.handleImportDirective,
 	}
-	if handled, err := p.handleDisabledDirective(commentContent); handled {
-		return err
-	}
-	if p.handleTimeoutDirective(commentContent) {
-		return nil
-	}
-	if handled, err := p.handleSleepDirective(commentContent); handled {
-		return err
-	}
-	if handled, err := p.handleImportDirective(commentContent); handled {
-		return err
+	for _, handle := range errDirectives {
+		if handled, err := handle(commentContent); handled {
+			return err
+		}
 	}
 	return p.handleRefDirective(commentContent) // Other comment content - no special handling needed
 }
@@ -604,6 +605,8 @@ func (p *requestParserState) finalizeCurrentRequest() {
 			rawBody := strings.Join(p.bodyLines, "\n") // Use \n as per HTTP spec for line endings in body
 			p.currentRequest.RawBody = rawBody
 		}
+		// Snapshot pre-substitution state so loop iterations can be re-substituted from originals.
+		p.snapshotLoopState(p.currentRequest)
 		// Note: p.currentRequest.Body (io.Reader) will be set by the consumer (e.g., Send) after variable substitution
 
 		// Populate ActiveVariables for this request from currentFileVariables

@@ -1,0 +1,7 @@
+### zero
+# @loop for 0
+GET [[.ServerURL]]/zero
+
+### negative
+# @loop for -3
+GET [[.ServerURL]]/negative

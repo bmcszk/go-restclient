@@ -1,0 +1,6 @@
+### loop
+# @loop for item of items
+POST [[.ServerURL]]/items
+Content-Type: application/json
+
+{"i": "{{$index}}", "name": "{{item.name}}"}
