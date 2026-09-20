@@ -13,6 +13,7 @@ A Go library for executing HTTP requests from `.http` files and validating respo
 - **Full JetBrains/VS Code compatibility** - Same `.http` syntax, variables, and behaviors
 - **Variable substitution** - Custom variables, environment variables, system variables (`{{$guid}}`, `{{$randomInt}}`, etc.)
 - **Response chaining** - Reference responses from other requests: `{{name.response.body.field}}`
+- **Request referencing** — `@ref` / `@forceRef` chains with per-run caching and `@import` across files
 - **Response validation** - Compare responses against `.hresp` files with placeholders (`{{$any}}`, `{{$regexp}}`, `{{$anyGuid}}`)
 - **Multiple requests per file** - Separated by `###`
 - **E2E testing ready** - Perfect for automated integration tests
@@ -96,6 +97,26 @@ Content-Type: application/json
 ### Get Protected
 GET https://api.example.com/protected
 Authorization: Bearer {{authenticate.response.body.token}}
+```
+
+### Request Referencing
+
+Run a request before the current one with `@ref` (cached per run) or
+`@forceRef` (always re-executes). Share named requests across files with
+`# @import ./other.http`:
+
+```http
+### login
+# @name login
+POST https://api.example.com/auth
+Content-Type: application/json
+
+{"user":"admin","pass":"secret"}
+
+### use login
+# @ref login
+GET https://api.example.com/protected
+Authorization: Bearer {{login.response.body.token}}
 ```
 
 ## Library

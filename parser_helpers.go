@@ -9,7 +9,6 @@ import (
 	"unicode"
 )
 
-
 // Helper functions extracted from parser.go to reduce file size
 
 // isPotentialRequestLine checks if a line could be a request line
@@ -263,11 +262,11 @@ func (*responseParserState) isComment(trimmedLine string) bool {
 // handleRequestSeparator processes request separator lines
 func (s *responseParserState) handleRequestSeparator() {
 	s.processedAnyLine = true
-	
+
 	if s.hasResponseContent() {
 		s.finalizeCurrentResponse()
 	}
-	
+
 	s.resetForNewResponse()
 }
 
@@ -308,7 +307,7 @@ func (s *responseParserState) processContentLine(originalLine, trimmedLine strin
 	}
 
 	// Skip empty lines when we haven't parsed a status line yet
-	if trimmedLine == "" && (s.currentExpectedResponse.Status == nil || 
+	if trimmedLine == "" && (s.currentExpectedResponse.Status == nil ||
 		*s.currentExpectedResponse.Status == "") && s.currentExpectedResponse.StatusCode == nil {
 		return nil
 	}

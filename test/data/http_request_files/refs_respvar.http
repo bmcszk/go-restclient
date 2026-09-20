@@ -1,0 +1,12 @@
+### use
+# @ref login
+POST [[.ServerURL]]/use
+X-Trace: {{login.response.body.token}}
+X-Via: {{login.response.headers.Content-Type}}
+
+{"statusRef":"{{login.response.status}}"}
+###
+# @name login
+POST [[.ServerURL]]/login
+
+{"token":"tok-123"}

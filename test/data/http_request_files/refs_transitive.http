@@ -1,0 +1,10 @@
+### a
+# @ref b
+GET [[.ServerURL]]/a
+
+### b
+# @ref c
+GET [[.ServerURL]]/b
+
+### c
+GET [[.ServerURL]]/c
