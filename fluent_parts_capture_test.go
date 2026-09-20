@@ -428,6 +428,17 @@ func (p *parts) capturedRequestPathMatchesRegexp(index int, pattern string) *par
 	return p
 }
 
+// gapBetweenCapturedRequestTimesAtLeast asserts the gap between captured-request times at indices
+// i and j is at least minGap (caller controls direction: i < j for forward, i > j for reverse).
+func (p *parts) gapBetweenCapturedRequestTimesAtLeast(i, j int, minGap time.Duration) *parts {
+	p.require.Greater(len(p.capturedRequestTimes), i, "no captured-request time at index %d", i)
+	p.require.Greater(len(p.capturedRequestTimes), j, "no captured-request time at index %d", j)
+	p.assert.GreaterOrEqual(p.capturedRequestTimes[j].Sub(p.capturedRequestTimes[i]), minGap,
+		"gap between captured-request times %d→%d was below %s", i, j, minGap)
+
+	return p
+}
+
 // firstTrackedValueIsFloatInRange asserts the first value of the active bucket parses as
 // a float within [lowest, highest].
 func (p *parts) firstTrackedValueIsFloatInRange(lowest, highest float64) *parts {

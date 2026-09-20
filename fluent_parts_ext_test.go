@@ -271,6 +271,14 @@ func (p *parts) parsedRequestDisabled(i int, want bool) *parts {
 	return p
 }
 
+// parsedRequestSleep asserts the parsed request at index i has SleepDuration set to want.
+func (p *parts) parsedRequestSleep(i int, want time.Duration) *parts {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(want, p.parsedFile.Requests[i].SleepDuration)
+
+	return p
+}
+
 // parsedRequestDisabledExpr asserts the parsed request at index i carries the
 // conditional @disabled expression (stored after the `!`) equal to want.
 func (p *parts) parsedRequestDisabledExpr(i int, want string) *parts {

@@ -288,6 +288,9 @@ func (p *requestParserState) processCommentDirectives(commentContent string) err
 	if p.handleTimeoutDirective(commentContent) {
 		return nil
 	}
+	if handled, err := p.handleSleepDirective(commentContent); handled {
+		return err
+	}
 	if handled, err := p.handleImportDirective(commentContent); handled {
 		return err
 	}

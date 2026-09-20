@@ -146,6 +146,9 @@ func (c *Client) runOneRequest(
 		*multiErr = multierror.Append(*multiErr, err)
 		return
 	}
+	if restClientReq.SleepDuration > 0 {
+		time.Sleep(restClientReq.SleepDuration)
+	}
 	response, err := c.executeRequestWithVariables(ctx, restClientReq, parsedFile, osEnvGetter, index)
 	response, shouldSkip := c.handleRequestExecutionError(response, err, restClientReq, index, multiErr)
 	if shouldSkip || response == nil {
@@ -324,6 +327,9 @@ func (c *Client) ExecuteRequest(ctx context.Context, parsedFile *ParsedFile, ind
 	}
 	if err := c.resolveRequestRefs(ctx, restClientReq, parsedFile, newRefExecutionState(), osEnvGetter); err != nil {
 		return nil, err
+	}
+	if restClientReq.SleepDuration > 0 {
+		time.Sleep(restClientReq.SleepDuration)
 	}
 	return c.executeAndStoreRequest(ctx, restClientReq, parsedFile, osEnvGetter, index)
 }

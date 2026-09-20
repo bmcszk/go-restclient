@@ -63,6 +63,8 @@ type Request struct {
 	DisabledExpr string
 	// Timeout specifies a custom timeout for this request (from @timeout directive)
 	Timeout time.Duration
+	// SleepDuration pauses execution for the given duration before sending (from @sleep directive)
+	SleepDuration time.Duration
 
 	// External file body configuration
 	// ExternalFilePath stores the path for external file body references (< ./path/to/file or <@ ./path/to/file)
