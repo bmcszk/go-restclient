@@ -1,11 +1,11 @@
 ---
 # go-restclient-atek
 title: 'Directive: @loop for N / for item of collection ($index, name0..nameN)'
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-09-19T14:16:10Z
-updated_at: 2026-09-19T14:16:10Z
+updated_at: 2026-09-20T17:10:24Z
 parent: go-restclient-p988
 ---
 
