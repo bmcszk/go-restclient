@@ -1,0 +1,10 @@
+### a
+# @forceRef login
+GET [[.ServerURL]]/a
+
+### b
+# @forceRef login
+GET [[.ServerURL]]/b
+
+### login
+POST [[.ServerURL]]/login

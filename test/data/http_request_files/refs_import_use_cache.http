@@ -1,0 +1,11 @@
+# @import ./refs_import_def.http
+
+### useTokenA
+# @ref token
+POST [[.ServerURL]]/{{importedBase}}/a
+X-Token: {{token.response.body.token}}
+
+### useTokenB
+# @ref token
+POST [[.ServerURL]]/{{importedBase}}/b
+X-Token: {{token.response.body.token}}

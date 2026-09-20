@@ -1,0 +1,10 @@
+### a
+# @ref login
+GET [[.ServerURL]]/a
+
+### b
+# @ref login
+GET [[.ServerURL]]/b
+
+### login
+POST [[.ServerURL]]/login

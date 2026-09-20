@@ -17,8 +17,6 @@ const (
 	slashCommentPrefix = "//"
 )
 
-
-
 // loadEnvironmentFile attempts to load a specific environment's variables from a JSON file.
 // It returns the variables map or nil if the environment/file is not found or on error.
 func loadEnvironmentFile(filePath string, selectedEnvName string) (map[string]string, error) {
@@ -92,9 +90,9 @@ func parseRequestFile(filePath string, client *Client, importStack []string) (*P
 
 // parsingVariables holds variables needed for parsing
 type parsingVariables struct {
-	dotEnvVars               map[string]string
-	osEnvGetter              func(string) (string, bool)
-	requestScopedSystemVars  map[string]string
+	dotEnvVars              map[string]string
+	osEnvGetter             func(string) (string, bool)
+	requestScopedSystemVars map[string]string
 }
 
 // prepareParsingContext prepares the file path and import stack for parsing
@@ -175,10 +173,10 @@ func loadEnvironmentSpecificVariables(originalFilePath string, client *Client, p
 // loadEnvironmentFiles loads variables from both public and private environment files
 func loadEnvironmentFiles(fileDir, selectedEnvName string) map[string]string {
 	mergedEnvVars := make(map[string]string)
-	
+
 	loadPublicEnvFile(fileDir, selectedEnvName, mergedEnvVars)
 	loadPrivateEnvFile(fileDir, selectedEnvName, mergedEnvVars)
-	
+
 	return mergedEnvVars
 }
 
@@ -217,13 +215,13 @@ func ensureEnvironmentVariablesInitialized(parsedFile *ParsedFile, _, _ string) 
 func parseRequests(reader *bufio.Reader, filePath string, client *Client,
 	requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool),
 	dotEnvVars map[string]string, importStack []string) (*ParsedFile, error) {
-	parserState := initializeParserState(filePath, client, requestScopedSystemVars, 
+	parserState := initializeParserState(filePath, client, requestScopedSystemVars,
 		osEnvGetter, dotEnvVars, importStack)
-	
+
 	if err := processFileLines(reader, parserState); err != nil {
 		return nil, err
 	}
-	
+
 	finalizeParseResults(parserState)
 	return parserState.parsedFile, nil
 }
@@ -239,53 +237,11 @@ func initializeParserState(filePath string, client *Client, requestScopedSystemV
 		dotEnvVars:              dotEnvVars,
 		importStack:             importStack,
 		parsedFile: &ParsedFile{
-			Requests: make([]*Request, 0),
+			Requests:      make([]*Request, 0),
 			FileVariables: make(map[string]string),
-			FilePath: filePath,
+			FilePath:      filePath,
 		},
-		currentFileVariables:    make(map[string]string),
-		lineNumber:              0,
+		currentFileVariables: make(map[string]string),
+		lineNumber:           0,
 	}
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

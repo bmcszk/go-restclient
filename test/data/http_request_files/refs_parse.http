@@ -1,0 +1,6 @@
+### collector
+# @ref login
+# @forceRef refresh
+GET [[.ServerURL]]/protected
+
+###

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -45,6 +46,9 @@ type requestParserState struct {
 	// Multi-line query parameter support
 	queryParams        []string // Accumulated query parameters from multi-line syntax
 	parsingQueryParams bool     // Flag to indicate we're collecting query parameters
+
+	// @import'd ParsedFiles; appended to Requests at finalize (Imported=true).
+	importedParsedFiles []*ParsedFile
 }
 
 // processFileLines reads and processes all lines from the reader
@@ -99,6 +103,14 @@ func finalizeParseResults(parserState *requestParserState) {
 
 	for k, v := range parserState.currentFileVariables {
 		parserState.parsedFile.FileVariables[k] = v
+	}
+
+	// append after locals: stable indices for ExecuteRequest.
+	for _, imported := range parserState.importedParsedFiles {
+		for _, req := range imported.Requests {
+			req.Imported = true
+			parserState.parsedFile.Requests = append(parserState.parsedFile.Requests, req)
+		}
 	}
 }
 
@@ -273,7 +285,10 @@ func (p *requestParserState) processCommentDirectives(commentContent string) err
 	if p.handleTimeoutDirective(commentContent) {
 		return nil
 	}
-	return nil // Other comment content - no special handling needed
+	if handled, err := p.handleImportDirective(commentContent); handled {
+		return err
+	}
+	return p.handleRefDirective(commentContent) // Other comment content - no special handling needed
 }
 
 // handleNameDirective processes @name directives
@@ -310,6 +325,51 @@ func (p *requestParserState) handleTimeoutDirective(commentContent string) bool 
 		return true
 	}
 	return false
+}
+
+// handleRefDirective processes @ref and @forceRef directives.
+func (p *requestParserState) handleRefDirective(commentContent string) error {
+	if strings.HasPrefix(commentContent, "@forceRef ") {
+		return p.appendRef("@forceRef", commentContent[len("@forceRef "):])
+	}
+	if strings.HasPrefix(commentContent, "@ref ") {
+		return p.appendRef("@ref", commentContent[len("@ref "):])
+	}
+	return nil
+}
+
+// handleImportDirective parses `# @import <path>`, merges its vars/requests.
+func (p *requestParserState) handleImportDirective(commentContent string) (bool, error) {
+	const prefix = "@import"
+	if !strings.HasPrefix(commentContent, prefix) {
+		return false, nil
+	}
+	raw := strings.TrimSpace(commentContent[len(prefix):])
+	if raw == "" {
+		return true, errors.New("@import directive requires a path")
+	}
+	importedPath := filepath.Join(filepath.Dir(p.filePath), raw)
+	imported, err := parseRequestFile(importedPath, p.client, p.importStack)
+	if err != nil {
+		return true, fmt.Errorf("@import %s: %w", raw, err)
+	}
+	for k, v := range imported.FileVariables {
+		if _, already := p.currentFileVariables[k]; already {
+			continue
+		}
+		p.currentFileVariables[k] = v
+	}
+	p.importedParsedFiles = append(p.importedParsedFiles, imported)
+	return true, nil
+}
+
+func (p *requestParserState) appendRef(directive, raw string) error {
+	name := strings.TrimSpace(raw)
+	if name == "" {
+		return fmt.Errorf("missing reference name in %s directive", directive)
+	}
+	p.currentRequest.Refs = append(p.currentRequest.Refs, RequestRef{Name: name, Force: directive == "@forceRef"})
+	return nil
 }
 
 // handleEmptyLine processes an empty line, which can be used to separate headers from body

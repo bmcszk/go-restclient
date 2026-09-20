@@ -268,7 +268,7 @@ Define variables at the top of the file:
 
 ### Get users
 GET {{baseUrl}}/{{apiVersion}}/users
-Authorization: Bearer {{token}}
+Authorization: Bearer {{token.response.body.token}}
 ```
 
 ### Environment Variables
@@ -615,6 +615,144 @@ Content-Type: application/json
 
 {{get data.response.body}}
 ```
+
+## Request Referencing
+
+Run a request before the current one and reach its response via the standard
+`{{name.response.*}}` placeholders. Three directives drive this:
+`@ref`, `@forceRef`, and `@import`. Referencing works regardless of the order
+the requests appear in the file — targets are resolved by name.
+
+### Referencing requests with @ref
+
+```http
+### token
+# @name token
+POST https://example.com/api/login
+Content-Type: application/json
+
+{ "user": "admin", "pass": "secret" }
+
+### use token
+# @ref token
+GET https://example.com/api/secure
+Authorization: Bearer {{token.response.body.token}}
+```
+
+- The referenced request runs before the referencing one.
+- Its response is cached for the duration of the run; a second `@ref token`
+  in the same run does **not** re-execute `token`.
+- The cache is per execution call (`ExecuteFile` or `ExecuteRequest`), not
+  per file or global.
+- Response data is reachable through the same placeholders used for chained
+  requests: `{{name.response.body.path}}`, `{{name.response.headers.Header}}`,
+  `{{name.response.status}}`.
+
+### Forcing re-execution with @forceRef
+
+```http
+### create order
+# @name createOrder
+POST https://example.com/api/orders
+Content-Type: application/json
+
+{ "item": "book" }
+
+### retry with same body
+# @forceRef createOrder
+POST https://example.com/api/audit
+Content-Type: application/json
+
+{ "lastOrderId": "{{createOrder.response.body.id}}" }
+```
+
+`@forceRef` always re-runs the target and refreshes the cache. Use it when
+the referenced request has side effects (state mutation, token issuance,
+one-shot endpoints) that must happen on each reference.
+
+### Multiple refs, chains, cycles, and missing names
+
+```http
+### refresh
+# @name refresh
+POST https://example.com/api/refresh
+
+### session
+# @name session
+# @ref refresh
+GET https://example.com/api/session
+
+### profile
+# @name profile
+# @ref session
+# @ref refresh
+GET https://example.com/api/profile
+```
+
+- A request can list multiple `@ref` / `@forceRef` directives; they run in
+  declaration order. Chains compose transitively — in the example above,
+  `refresh` runs before `session`, and both run before `profile`.
+- A cycle (A refs B, B refs A) errors out:
+  `cycle detected in @ref graph involving request "A"`.
+- An unknown reference errors out:
+  `unknown referenced request "A"`.
+- An empty reference name (e.g. `# @ref`) errors out:
+  `missing reference name in @ref directive`.
+
+### Importing requests from another file with @import
+
+`common.http`:
+
+```http
+@host = https://example.com
+
+### login
+# @name login
+POST {{host}}/api/login
+Content-Type: application/json
+
+{ "user": "admin", "pass": "secret" }
+```
+
+`main.http`:
+
+```http
+# @import ./common.http
+
+### use imported login
+# @ref login
+GET {{host}}/api/secure
+Authorization: Bearer {{login.response.body.token}}
+```
+
+- `# @import <relative-path>` is conventionally placed at the top of the
+  file. The path resolves relative to the importing file's directory.
+- Imported named requests become available as `@ref` / `@forceRef` targets.
+- Imported file-global variables (`@name = value`) merge into the importing
+  file's scope; **local definitions win on clash** (the importing file's
+  value is kept).
+- Imported requests do **not** run in the main loop — they execute only
+  when pulled in via `@ref` / `@forceRef` from a local request.
+- A missing file is a parse error:
+  `@import ./missing.http: failed to open request file /abs/path/missing.http: open ...: no such file or directory`.
+- A circular import (`a.http` imports `b.http` which imports `a.http`)
+  errors out:
+  `circular import detected: '<abs-path>' already in import stack [...]`.
+
+### Execution context
+
+Request referencing works in every execution path:
+
+- Whole-file execution via `ExecuteFile` and the CLI `--all` flag.
+- Single-request execution via `client.ExecuteRequest`, the CLI `-n` (name)
+  and `-i` (index) flags. Only the selected request's ref chain runs;
+  siblings are not touched.
+- The CLI `-A` / `--after` (prerequisite) composes naturally: the
+  prerequisite runs first (with its own ref chain), then the target's ref
+  chain, then the target itself.
+
+The ref cache is per execution call, not global. Two separate `ExecuteFile`
+calls on the same file re-execute every `@ref` independently.
 
 ## Response Body Validation Placeholders
 
