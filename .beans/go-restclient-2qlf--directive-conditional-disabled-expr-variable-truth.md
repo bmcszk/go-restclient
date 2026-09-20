@@ -1,11 +1,11 @@
 ---
 # go-restclient-2qlf
 title: 'Directive: conditional @disabled !expr (variable truthiness)'
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-09-19T14:16:10Z
-updated_at: 2026-09-19T14:16:10Z
+updated_at: 2026-09-20T15:46:49Z
 parent: go-restclient-p988
 blocked_by:
     - go-restclient-lyp1
