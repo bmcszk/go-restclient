@@ -132,6 +132,12 @@ func (c *Client) runOneRequest(
 	if refState.alreadyExecuted(restClientReq.Name) {
 		return
 	}
+	if restClientReq.Disabled {
+		skipped := &Response{Request: restClientReq, Skipped: true}
+		*responses = append(*responses, skipped)
+		storeResponse(parsedFile, restClientReq, skipped)
+		return
+	}
 	if err := c.resolveRequestRefs(ctx, restClientReq, parsedFile, refState, osEnvGetter); err != nil {
 		*multiErr = multierror.Append(*multiErr, err)
 		return
@@ -290,6 +296,9 @@ func (c *Client) ExecuteRequest(ctx context.Context, parsedFile *ParsedFile, ind
 
 	osEnvGetter := func(key string) (string, bool) { return os.LookupEnv(key) }
 	restClientReq := parsedFile.Requests[index]
+	if restClientReq.Disabled {
+		return &Response{Request: restClientReq, Skipped: true}, nil
+	}
 	if err := c.resolveRequestRefs(ctx, restClientReq, parsedFile, newRefExecutionState(), osEnvGetter); err != nil {
 		return nil, err
 	}
@@ -989,8 +998,3 @@ func (*Client) setRequestBody(restClientReq *Request, finalSubstitutedBody strin
 		restClientReq.GetBody = nil
 	}
 }
-
-// TODO: Add other public methods as needed, e.g.:
-// - Execute(ctx context.Context, request *Request, options ...RequestOption) (*Response, error)
-// - A method to validate a single response if users construct ExpectedResponse manually.
-//

@@ -1,11 +1,11 @@
 ---
 # go-restclient-lyp1
 title: 'Directive: @disabled static skip with Skipped response state'
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-09-19T14:16:10Z
-updated_at: 2026-09-19T14:16:10Z
+updated_at: 2026-09-20T13:47:24Z
 parent: go-restclient-p988
 ---
 

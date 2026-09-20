@@ -56,6 +56,8 @@ type Request struct {
 	NoRedirect bool
 	// NoCookieJar indicates that this request should not use the cookie jar (from @no-cookie-jar directive)
 	NoCookieJar bool
+	// Disabled indicates that this request should be skipped at execution time (from @disabled directive)
+	Disabled bool
 	// Timeout specifies a custom timeout for this request (from @timeout directive)
 	Timeout time.Duration
 

@@ -1,14 +1,14 @@
 ---
 # go-restclient-p988
 title: 'Epic: execution control directives (@disabled/@loop/@sleep)'
-status: todo
+status: in-progress
 type: feature
 priority: high
 tags:
     - epic
     - httpyac-parity
 created_at: 2026-09-19T14:16:10Z
-updated_at: 2026-09-19T14:16:10Z
+updated_at: 2026-09-20T13:47:24Z
 ---
 
 ## Goal

@@ -282,6 +282,9 @@ func (p *requestParserState) processCommentDirectives(commentContent string) err
 	if p.handleNoCookieJarDirective(commentContent) {
 		return nil
 	}
+	if handled, err := p.handleDisabledDirective(commentContent); handled {
+		return err
+	}
 	if p.handleTimeoutDirective(commentContent) {
 		return nil
 	}
@@ -316,6 +319,21 @@ func (p *requestParserState) handleNoCookieJarDirective(commentContent string) b
 		return true
 	}
 	return false
+}
+
+// handleDisabledDirective parses `@disabled`; any trailing text is a parse error.
+func (p *requestParserState) handleDisabledDirective(commentContent string) (bool, error) {
+	const prefix = "@disabled"
+	if !strings.HasPrefix(commentContent, prefix) {
+		return false, nil
+	}
+	rest := strings.TrimSpace(commentContent[len(prefix):])
+	if rest != "" {
+		return true, fmt.Errorf("@disabled directive takes no arguments (got %q)", rest)
+	}
+	p.currentRequest.Disabled = true
+
+	return true, nil
 }
 
 // handleTimeoutDirective processes @timeout directives

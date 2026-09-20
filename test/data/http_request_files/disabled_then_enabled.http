@@ -1,0 +1,6 @@
+### first
+# @disabled
+GET [[.ServerURL]]/first
+
+###
+GET [[.ServerURL]]/second

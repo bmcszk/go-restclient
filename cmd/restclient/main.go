@@ -179,7 +179,6 @@ func runList(filePath string) int {
 	return 0
 }
 
-
 func executeSingle(
 	client *restclient.Client,
 	parsedFile *restclient.ParsedFile,
@@ -333,6 +332,9 @@ func walkOutputPath(val any, segments []string) any {
 }
 
 func formatResponse(resp *restclient.Response) string {
+	if resp.Skipped {
+		return requestLine(resp) + "\n  SKIP\n"
+	}
 	if resp.Error != nil {
 		return requestLine(resp) + "\n"
 	}

@@ -263,6 +263,14 @@ func (p *parts) parsedRequestRawURLIs(i int, rawURL string) *parts {
 	return p
 }
 
+// parsedRequestDisabled asserts the parsed request at index i has the disabled flag set to want.
+func (p *parts) parsedRequestDisabled(i int, want bool) *parts {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(want, p.parsedFile.Requests[i].Disabled)
+
+	return p
+}
+
 // parsedRequestRefs asserts the parsed request at index i declares a @ref/@forceRef entry.
 func (p *parts) parsedRequestRefs(i int, wantName string, wantForce bool) *parts {
 	p.require.Greater(len(p.parsedFile.Requests), i)
