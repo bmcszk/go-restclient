@@ -331,6 +331,15 @@ You can reference shared variables within environment definitions:
 }
 ```
 
+### OAuth2 Password Grant
+
+`Authorization: oauth2 *** <prefix>` also supports the resource-owner
+password grant. Provide `{{prefix}}_username` and `{{prefix}}_password`
+(the grant is inferred from their presence, or set the grant explicitly).
+By default client credentials travel in the HTTP `Basic` auth header;
+set `{{prefix}}_useAuthorizationHeader=false` to move them into the
+request body instead.
+
 ### .env Files and Named Environments
 
 A `.env` file next to your request file is loaded automatically; its variables
