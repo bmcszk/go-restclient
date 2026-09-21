@@ -331,6 +331,36 @@ You can reference shared variables within environment definitions:
 }
 ```
 
+### OAuth2 Password Grant
+
+`Authorization: oauth2 *** <prefix>` also supports the resource-owner
+password grant. Provide `{{prefix}}_username` and `{{prefix}}_password`
+(the grant is inferred from their presence, or set the grant explicitly).
+By default client credentials travel in the HTTP `Basic` auth header;
+set `{{prefix}}_useAuthorizationHeader=false` to move them into the
+request body instead.
+
+### .env Files and Named Environments
+
+A `.env` file next to your request file is loaded automatically; its variables
+are referenced as `{{name}}` or `{{$dotenv name}}`. Values support placeholders
+(`{{$processEnv VAR}}`, `{{$dotenv VAR}}`, `{{otherVar}}`), expanded after load;
+unresolvable placeholders are kept as-is. Unresolvable `{{$processEnv VAR}}`
+in a dotenv value stays literal.
+
+Pass `--env <name>` (library: `WithEnvName`) to also load `.env.<name>` after
+`.env`; its keys override `.env` values.
+
+```
+.env           CLIENT_ID={{$processEnv STAGING_CLIENT_ID}}
+.env.staging   CLIENT_ID=staging-client
+restclient -f items.http --env staging
+```
+
+OAuth2 note: `@acme_tokenEndpoint = {{host}}/oauth2/token` style values (and
+other `@acme_*` fields) are expanded before the token request, so nested
+variables and `-D` overrides work.
+
 ### Dynamic System Variables
 
 These generate values at runtime using the `{{$variableName}}` syntax:
@@ -939,6 +969,12 @@ The required variables can be defined in `http-client.env.json`:
   }
 }
 ```
+
+### httpyac Script Blocks
+
+httpyac-style inline script blocks (`{{ ... }}` on their own lines, e.g. to run
+JS via `require`) are not supported and are ignored by the parser. Placeholders
+like `{{variable}}` inside requests are unaffected.
 
 ### Cookies Management
 

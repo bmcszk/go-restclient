@@ -78,3 +78,11 @@ func WithEnvironment(name string) ClientOption {
 		return nil
 	}
 }
+
+// WithEnvName sets the name of a .env.<name> file loaded over .env during execution.
+func WithEnvName(name string) ClientOption {
+	return func(c *Client) error {
+		c.envName = name
+		return nil
+	}
+}

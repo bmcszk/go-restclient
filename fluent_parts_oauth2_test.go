@@ -30,6 +30,55 @@ func (p *parts) aClientWithOAuth2Vars() *parts {
 	}))
 }
 
+// aClientWithOAuth2ProgrammaticVars builds a client with the given programmatic vars —
+// for scenarios whose @-vars resolve through the normal lookup chain.
+func (p *parts) aClientWithOAuth2ProgrammaticVars(vars map[string]any) *parts {
+	return p.aClient(rc.WithVars(vars))
+}
+
+// clientWithProgrammaticVars adds programmatic vars to the existing client (SetProgrammaticVars),
+// mirroring the -D/--define CLI path.
+func (p *parts) clientWithProgrammaticVars(vars map[string]any) *parts {
+	p.client.SetProgrammaticVars(vars)
+
+	return p
+}
+
+// aClientWithOAuth2PasswordVars builds a client whose `p`-prefixed OAuth2 password-grant
+// variables point at the token server; useAuthorizationHeader=false keeps client creds in the body.
+func (p *parts) aClientWithOAuth2PasswordVars() *parts {
+	return p.aClient(rc.WithVars(map[string]any{
+		"p_tokenEndpoint":          p.tokenServerURL + "/token",
+		"p_clientId":               "test-client",
+		"p_clientSecret":           "test-secret",
+		"p_username":               "test-user",
+		"p_password":               "test-pass",
+		"p_useAuthorizationHeader": "false",
+	}))
+}
+
+// aClientWithOAuth2PasswordVarsAuthHeaderUnset omits useAuthorizationHeader so the
+// file's @-var (or the true default) decides the Basic-header behavior.
+func (p *parts) aClientWithOAuth2PasswordVarsAuthHeaderUnset() *parts {
+	return p.aClient(rc.WithVars(map[string]any{
+		"p_tokenEndpoint": p.tokenServerURL + "/token",
+		"p_clientId":      "test-client",
+		"p_clientSecret":  "test-secret",
+		"p_username":      "test-user",
+		"p_password":      "test-pass",
+	}))
+}
+
+// aClientWithOAuth2PasswordVarsMissingPassword omits the password to exercise the missing-variable error.
+func (p *parts) aClientWithOAuth2PasswordVarsMissingPassword() *parts {
+	return p.aClient(rc.WithVars(map[string]any{
+		"p_tokenEndpoint": p.tokenServerURL + "/token",
+		"p_clientId":      "test-client",
+		"p_clientSecret":  "test-secret",
+		"p_username":      "test-user",
+	}))
+}
+
 // aClientWithOAuth2VarsMissingSecret omits the client secret to exercise the missing-variable error.
 func (p *parts) aClientWithOAuth2VarsMissingSecret() *parts {
 	return p.aClient(rc.WithVars(map[string]any{

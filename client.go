@@ -17,7 +17,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-multierror"
-	"github.com/joho/godotenv"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/encoding/unicode"
@@ -33,6 +32,7 @@ type Client struct {
 	currentDotEnvVars       map[string]string
 	programmaticVars        map[string]any
 	selectedEnvironmentName string // Added for T4
+	envName                 string
 	oauth2Tokens            map[string]oauth2Token
 	oauth2Mu                sync.Mutex
 }
@@ -822,16 +822,10 @@ func (c *Client) parseAndValidateFile(requestFilePath string) (*ParsedFile, erro
 	return parsedFile, nil
 }
 
-// loadDotEnvVars loads .env variables from the same directory as the request file
+// loadDotEnvVars loads .env and .env.<name> (WithEnvName) from the request
+// file directory into the client's dotenv vars.
 func (c *Client) loadDotEnvVars(requestFilePath string) {
-	c.currentDotEnvVars = make(map[string]string)
-	envFilePath := filepath.Join(filepath.Dir(requestFilePath), ".env")
-	if _, err := os.Stat(envFilePath); err == nil {
-		loadedVars, loadErr := godotenv.Read(envFilePath)
-		if loadErr == nil {
-			c.currentDotEnvVars = loadedVars
-		}
-	}
+	c.currentDotEnvVars = loadDotEnvDir(filepath.Dir(requestFilePath), c.envName)
 }
 
 // executeRequestWithVariables handles variable substitution and execution for a single request

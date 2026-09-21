@@ -1,7 +1,7 @@
 ---
 # go-restclient-gqnq
 title: 'Epic: OAuth2 non-interactive grants (client credentials + password)'
-status: todo
+status: in-progress
 type: feature
 priority: normal
 tags:

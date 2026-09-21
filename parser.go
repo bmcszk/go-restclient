@@ -125,22 +125,66 @@ func checkCircularImports(absFilePath string, importStack []string) error {
 // setupParsingVariables sets up all variables needed for parsing
 func setupParsingVariables(filePath string, client *Client) parsingVariables {
 	return parsingVariables{
-		dotEnvVars:              loadDotEnvForParsing(filePath),
+		dotEnvVars:              loadDotEnvDir(filepath.Dir(filePath), clientEnvName(client)),
 		osEnvGetter:             func(key string) (string, bool) { return os.LookupEnv(key) },
 		requestScopedSystemVars: generateRequestScopedVarsForParsing(client),
 	}
 }
 
-// loadDotEnvForParsing loads .env variables for parsing
-func loadDotEnvForParsing(filePath string) map[string]string {
-	dotEnvVars := make(map[string]string)
-	envFilePath := filepath.Join(filepath.Dir(filePath), ".env")
-	if _, statErr := os.Stat(envFilePath); statErr == nil {
-		if loadedVars, loadErr := godotenv.Read(envFilePath); loadErr == nil {
-			dotEnvVars = loadedVars
+// clientEnvName returns the client's named dotenv file name, if any.
+func clientEnvName(client *Client) string {
+	if client == nil {
+		return ""
+	}
+
+	return client.envName
+}
+
+// loadDotEnvDir loads .env then .env.<name> (when name is non-empty) from dir,
+// later files overriding earlier keys, and expands {{...}} placeholders in the
+// loaded values. Unresolvable placeholders are left as-is.
+func loadDotEnvDir(dir, name string) map[string]string {
+	dotEnvVars := readEnvFileIfExists(filepath.Join(dir, ".env"))
+	if name != "" {
+		mergeEnvFile(dotEnvVars, filepath.Join(dir, ".env."+name))
+	}
+	expandDotEnvValues(dotEnvVars)
+
+	return dotEnvVars
+}
+
+// readEnvFileIfExists loads a dotenv file; missing or unreadable yields an empty map.
+func readEnvFileIfExists(path string) map[string]string {
+	if _, statErr := os.Stat(path); statErr != nil {
+		return make(map[string]string)
+	}
+	loadedVars, loadErr := godotenv.Read(path)
+	if loadErr != nil {
+		return make(map[string]string)
+	}
+
+	return loadedVars
+}
+
+// mergeEnvFile overlays the keys of the dotenv file at path onto vars.
+func mergeEnvFile(vars map[string]string, path string) {
+	for k, v := range readEnvFileIfExists(path) {
+		vars[k] = v
+	}
+}
+
+// expandDotEnvValues resolves {{...}} placeholders (process env, dotenv,
+// variables) inside dotenv values in place.
+func expandDotEnvValues(dotEnvVars map[string]string) {
+	rctx := resolveContext{
+		dotEnvVars:  dotEnvVars,
+		osEnvGetter: os.LookupEnv,
+	}
+	for key, value := range dotEnvVars {
+		if expanded, err := expandPlaceholders(value, rctx); err == nil {
+			dotEnvVars[key] = expanded
 		}
 	}
-	return dotEnvVars
 }
 
 // generateRequestScopedVarsForParsing generates request-scoped system variables

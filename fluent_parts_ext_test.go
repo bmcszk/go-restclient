@@ -87,6 +87,17 @@ func (p *parts) aDotEnvFileRemoved() *parts {
 	return p
 }
 
+// aDotEnvNamedFile writes content to <baseDir>/.env.<name> for --env-style scenarios.
+func (p *parts) aDotEnvNamedFile(name, content string) *parts {
+	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, ".env."+name), []byte(content), 0644))
+	return p
+}
+
+// aClientWithEnvName builds the client with WithEnvName (named dotenv file).
+func (p *parts) aClientWithEnvName(name string) *parts {
+	return p.aClient(rc.WithEnvName(name))
+}
+
 // aFixtureCopy copies a committed fixture into baseDir, applying text replacements.
 func (p *parts) aFixtureCopy(requestPath, destName string, replacements map[string]string) *parts {
 	content, err := os.ReadFile(requestPath)
@@ -242,6 +253,14 @@ func (p *parts) parsedRequestCount(n int) *parts {
 func (p *parts) parsedRequestMethod(i int, method string) *parts {
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(method, p.parsedFile.Requests[i].Method)
+
+	return p
+}
+
+// parsedRequestBodyIs asserts the raw body of the parsed request at index i.
+func (p *parts) parsedRequestBodyIs(i int, want string) *parts {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(want, p.parsedFile.Requests[i].RawBody)
 
 	return p
 }

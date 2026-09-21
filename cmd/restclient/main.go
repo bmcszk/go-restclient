@@ -20,19 +20,22 @@ import (
 	"github.com/bmcszk/go-restclient"
 )
 
+var version = "dev"
+
 type cli struct {
-	File          string   `short:"f" long:"file" required:"true" help:"Request file path" group:"required"`
-	Name          string   `short:"n" long:"name" help:"Run request by name" group:"selection"`
-	Index         *int     `short:"i" long:"index" help:"Run request by index" group:"selection"`
-	All           bool     `long:"all" help:"Run all requests in file" group:"selection"`
-	Expected      string   `short:"e" long:"expected" help:"Expected response file" group:"validation"`
-	ExpectedName  string   `long:"e-name" help:"Expected response name" group:"validation"`
-	ExpectedIndex int      `long:"e-index" help:"Expected response index" default:"-1" group:"validation"`
-	List          bool     `short:"l" long:"list" help:"List requests" group:"output"`
-	FailOnError   bool     `short:"E" long:"fail-on-error" help:"Fail on 4xx/5xx" group:"output"`
-	Output        string   `short:"o" long:"output" help:"Output format: body, jsonpath, env" group:"output"`
-	After         string   `short:"A" long:"after" help:"Prerequisite request" group:"output"`
-	Define        []string `short:"D" long:"define" help:"Define variable key=value" group:"variables"`
+	File          string           `short:"f" long:"file" required:"true" help:"Request file path" group:"required"`
+	Name          string           `short:"n" long:"name" help:"Run request by name" group:"selection"`
+	Index         *int             `short:"i" long:"index" help:"Run request by index" group:"selection"`
+	All           bool             `long:"all" help:"Run all requests in file" group:"selection"`
+	Expected      string           `short:"e" long:"expected" help:"Expected response file" group:"validation"`
+	ExpectedName  string           `long:"e-name" help:"Expected response name" group:"validation"`
+	ExpectedIndex int              `long:"e-index" help:"Expected response index" default:"-1" group:"validation"`
+	List          bool             `short:"l" long:"list" help:"List requests" group:"output"`
+	FailOnError   bool             `short:"E" long:"fail-on-error" help:"Fail on 4xx/5xx" group:"output"`
+	Output        string           `short:"o" long:"output" help:"Output format: body, jsonpath, env" group:"output"`
+	After         string           `short:"A" long:"after" help:"Prerequisite request" group:"output"`
+	Define        []string         `short:"D" long:"define" help:"Define variable key=value" group:"variables"`
+	Version       kong.VersionFlag `short:"V" help:"Show version and exit"`
 }
 
 var c cli
@@ -43,6 +46,7 @@ func main() {
 		kong.Description("Execute HTTP requests defined in a .http / .rest file"),
 		kong.UsageOnError(),
 		kong.ConfigureHelp(kong.HelpOptions{Compact: true, Summary: true}),
+		kong.Vars{"version": version},
 	)
 
 	if c.List {
