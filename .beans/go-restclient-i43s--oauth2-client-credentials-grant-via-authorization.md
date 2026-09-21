@@ -1,11 +1,11 @@
 ---
 # go-restclient-i43s
 title: 'OAuth2 client_credentials grant via Authorization: oauth2 header'
-status: done
+status: completed
 type: task
 priority: normal
 created_at: 2026-09-19T14:16:10Z
-updated_at: 2026-09-19T14:16:10Z
+updated_at: 2026-09-21T20:24:20Z
 parent: go-restclient-gqnq
 ---
 

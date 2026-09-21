@@ -1,11 +1,11 @@
 ---
 # go-restclient-jugo
 title: OAuth2 password grant + useAuthorizationHeader=false
-status: done
+status: completed
 type: task
 priority: normal
 created_at: 2026-09-19T14:16:10Z
-updated_at: 2026-09-19T14:16:10Z
+updated_at: 2026-09-21T20:24:20Z
 parent: go-restclient-gqnq
 blocked_by:
     - go-restclient-i43s

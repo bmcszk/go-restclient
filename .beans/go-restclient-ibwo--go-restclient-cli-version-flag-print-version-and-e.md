@@ -1,11 +1,11 @@
 ---
 # go-restclient-ibwo
 title: 'go-restclient CLI --version flag: print version and exit'
-status: done
+status: completed
 type: task
 priority: normal
 created_at: 2026-09-21T19:22:09Z
-updated_at: 2026-09-21T19:22:09Z
+updated_at: 2026-09-21T20:24:10Z
 ---
 
 ## Requirement
