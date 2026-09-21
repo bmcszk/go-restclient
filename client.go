@@ -856,6 +856,15 @@ func (c *Client) executeRequestWithVariables(
 			restClientReq.Name, index, err)
 	}
 
+	// Substituted request headers carry the oauth2 directive; it is replaced
+	// here before the request is sent, leaving the resolved Bearer token as
+	// the actual Authorization header.
+	if err := c.applyOAuth2(restClientReq); err != nil {
+		return &Response{Request: restClientReq, Error: err}, fmt.Errorf(
+			"oauth2 token fetch failed for request %s (index %d): %w",
+			restClientReq.Name, index, err)
+	}
+
 	// Execute the HTTP request
 	resp, execErr := c.doHTTPRequest(ctx, restClientReq)
 	if execErr != nil {
