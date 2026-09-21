@@ -56,7 +56,7 @@ func processFileLines(reader *bufio.Reader, parserState *requestParserState) err
 			return readErr
 		}
 
-		if processErr := processLineIfNeeded(line, parserState); processErr != nil {
+		if processErr := processRawFileLine(line, reader, parserState); processErr != nil {
 			return processErr
 		}
 
@@ -65,6 +65,41 @@ func processFileLines(reader *bufio.Reader, parserState *requestParserState) err
 		}
 	}
 	return nil
+}
+
+// processRawFileLine handles one raw line: script-block skipping or normal
+// parsing. Returns any processing error.
+func processRawFileLine(line string, reader *bufio.Reader, parserState *requestParserState) error {
+	if processScriptBlockStart(line, reader) {
+		return nil
+	}
+	return processLineIfNeeded(line, parserState)
+}
+
+// processScriptBlockStart checks whether the line opens an httpyac inline
+// script block (a bare "{{"); if so it consumes the block and reports true.
+func processScriptBlockStart(line string, reader *bufio.Reader) bool {
+	if strings.TrimSpace(line) != "{{" {
+		return false
+	}
+	return skipScriptBlock(reader) == nil
+}
+
+// skipScriptBlock consumes lines up to and including the closing "}}" of an
+// httpyac inline script block (issue #46: blocks are ignored, not parsed).
+func skipScriptBlock(reader *bufio.Reader) error {
+	for {
+		line, err := reader.ReadString('\n')
+		if strings.TrimSpace(line) == "}}" {
+			return nil
+		}
+		if readErr := handleReadError(err); readErr != nil {
+			return readErr
+		}
+		if err == io.EOF {
+			return nil
+		}
+	}
 }
 
 // processLineIfNeeded processes a line if it should be processed
