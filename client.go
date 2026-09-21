@@ -35,6 +35,7 @@ type Client struct {
 	selectedEnvironmentName string // Added for T4
 	oauth2Tokens            map[string]oauth2Token
 	oauth2Mu                sync.Mutex
+	dotEnvName              string
 }
 
 // NewClient creates a new instance of the REST client.

@@ -87,6 +87,21 @@ func (p *parts) aDotEnvFileRemoved() *parts {
 	return p
 }
 
+// aDotEnvNamedFile writes content to <baseDir>/.env.<name> for --env-style scenarios.
+func (p *parts) aDotEnvNamedFile(name, content string) *parts {
+	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, ".env."+name), []byte(content), 0644))
+	return p
+}
+
+// aClientWithDotEnvName builds the client with WithDotEnvName (named dotenv file).
+func (p *parts) aClientWithDotEnvName(name string) *parts {
+	client, err := rc.NewClient(rc.WithDotEnvName(name))
+	p.require.NoError(err)
+	p.client = client
+
+	return p
+}
+
 // aFixtureCopy copies a committed fixture into baseDir, applying text replacements.
 func (p *parts) aFixtureCopy(requestPath, destName string, replacements map[string]string) *parts {
 	content, err := os.ReadFile(requestPath)

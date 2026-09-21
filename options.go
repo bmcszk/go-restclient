@@ -78,3 +78,11 @@ func WithEnvironment(name string) ClientOption {
 		return nil
 	}
 }
+
+// WithDotEnvName loads .env.<name> from the request file directory after .env.
+func WithDotEnvName(name string) ClientOption {
+	return func(c *Client) error {
+		c.dotEnvName = name
+		return nil
+	}
+}
