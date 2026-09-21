@@ -93,13 +93,9 @@ func (p *parts) aDotEnvNamedFile(name, content string) *parts {
 	return p
 }
 
-// aClientWithDotEnvName builds the client with WithDotEnvName (named dotenv file).
-func (p *parts) aClientWithDotEnvName(name string) *parts {
-	client, err := rc.NewClient(rc.WithDotEnvName(name))
-	p.require.NoError(err)
-	p.client = client
-
-	return p
+// aClientWithEnvName builds the client with WithEnvName (named dotenv file).
+func (p *parts) aClientWithEnvName(name string) *parts {
+	return p.aClient(rc.WithEnvName(name))
 }
 
 // aFixtureCopy copies a committed fixture into baseDir, applying text replacements.
