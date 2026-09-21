@@ -44,6 +44,29 @@ func (p *parts) clientWithProgrammaticVars(vars map[string]any) *parts {
 	return p
 }
 
+// aClientWithOAuth2PasswordVars builds a client whose `p`-prefixed OAuth2 password-grant
+// variables point at the token server; useAuthorizationHeader=false keeps client creds in the body.
+func (p *parts) aClientWithOAuth2PasswordVars() *parts {
+	return p.aClient(rc.WithVars(map[string]any{
+		"p_tokenEndpoint":          p.tokenServerURL + "/token",
+		"p_clientId":               "test-client",
+		"p_clientSecret":           "test-secret",
+		"p_username":               "test-user",
+		"p_password":               "test-pass",
+		"p_useAuthorizationHeader": "false",
+	}))
+}
+
+// aClientWithOAuth2PasswordVarsMissingPassword omits the password to exercise the missing-variable error.
+func (p *parts) aClientWithOAuth2PasswordVarsMissingPassword() *parts {
+	return p.aClient(rc.WithVars(map[string]any{
+		"p_tokenEndpoint": p.tokenServerURL + "/token",
+		"p_clientId":      "test-client",
+		"p_clientSecret":  "test-secret",
+		"p_username":      "test-user",
+	}))
+}
+
 // aClientWithOAuth2VarsMissingSecret omits the client secret to exercise the missing-variable error.
 func (p *parts) aClientWithOAuth2VarsMissingSecret() *parts {
 	return p.aClient(rc.WithVars(map[string]any{

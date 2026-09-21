@@ -1,6 +1,7 @@
 package restclient_test
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"testing"
@@ -170,6 +171,102 @@ Authorization: oauth2 p`).and().
 
 	then.
 		errorContains("oauth2", "p", "500")
+}
+
+func TestExecuteFile_OAuth2PasswordGrantPostsUserCredentials(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anOAuth2TokenServerWithStatus(http.StatusOK).and().
+		anEchoServer().and().
+		aHttpFile(`### oauth2 api
+GET {{server}}/api
+Authorization: oauth2 password p`).and().
+		aClientWithOAuth2PasswordVars()
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		serverReceivedMethodAndPath(0, http.MethodPost, "/token").and().
+		serverReceivedHeaderValue(0, "Content-Type", "application/x-www-form-urlencoded").and().
+		serverReceivedHeaderValue(0, "Authorization", "").and().
+		serverReceivedBodyIs(0, "client_id=test-client&client_secret=test-secret&grant_type=password"+
+			"&password=test-pass&username=test-user").and().
+		serverReceivedMethodAndPath(1, http.MethodGet, "/api").and().
+		serverReceivedHeaderValue(1, "Authorization", "Bearer test-access-token")
+}
+
+func TestExecuteFile_OAuth2UseAuthorizationHeaderFalseSendsCredsInBody(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anOAuth2TokenServerWithStatus(http.StatusOK).and().
+		anEchoServer().and().
+		aHttpFile(`@p_useAuthorizationHeader = false
+
+### oauth2 api
+GET {{server}}/api
+Authorization: oauth2 password p`).and().
+		aClientWithOAuth2PasswordVars()
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		serverReceivedMethodAndPath(0, http.MethodPost, "/token").and().
+		serverReceivedHeaderValue(0, "Authorization", "").and().
+		serverReceivedBodyIs(0, "client_id=test-client&client_secret=test-secret&grant_type=password"+
+			"&password=test-pass&username=test-user").and().
+		serverReceivedMethodAndPath(1, http.MethodGet, "/api").and().
+		serverReceivedHeaderValue(1, "Authorization", "Bearer test-access-token")
+}
+
+func TestExecuteFile_OAuth2UseAuthorizationHeaderTrueSendsBasicHeader(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anOAuth2TokenServerWithStatus(http.StatusOK).and().
+		anEchoServer().and().
+		aHttpFile(`@p_useAuthorizationHeader = true
+
+### oauth2 api
+GET {{server}}/api
+Authorization: oauth2 password p`).and().
+		aClientWithOAuth2PasswordVars()
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		serverReceivedMethodAndPath(0, http.MethodPost, "/token").and().
+		serverReceivedHeaderValue(0, "Authorization",
+			"Basic "+base64.StdEncoding.EncodeToString([]byte("test-client:test-secret"))).and().
+		serverReceivedBodyIs(0, "grant_type=password&password=test-pass&username=test-user").and().
+		serverReceivedMethodAndPath(1, http.MethodGet, "/api").and().
+		serverReceivedHeaderValue(1, "Authorization", "Bearer test-access-token")
+}
+
+func TestExecuteFile_OAuth2PasswordGrantMissingPasswordFails(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anOAuth2TokenServerWithStatus(http.StatusOK).and().
+		anEchoServer().and().
+		aHttpFile(`### oauth2 api
+GET {{server}}/api
+Authorization: oauth2 password p`).and().
+		aClientWithOAuth2PasswordVarsMissingPassword()
+
+	when.
+		executeFile()
+
+	then.
+		errorContains("oauth2", "p_password").and().
+		capturedRequestCount(0)
 }
 
 func TestExecuteFile_OAuth2UnsupportedGrantFailsWithClearError(t *testing.T) {
