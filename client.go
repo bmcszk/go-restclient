@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,6 +33,8 @@ type Client struct {
 	currentDotEnvVars       map[string]string
 	programmaticVars        map[string]any
 	selectedEnvironmentName string // Added for T4
+	oauth2Tokens            map[string]oauth2Token
+	oauth2Mu                sync.Mutex
 }
 
 // NewClient creates a new instance of the REST client.
@@ -40,6 +43,7 @@ func NewClient(options ...ClientOption) (*Client, error) {
 	c := &Client{
 		httpClient:     &http.Client{},
 		DefaultHeaders: make(http.Header),
+		oauth2Tokens:   make(map[string]oauth2Token),
 	}
 
 	for _, option := range options {
@@ -859,7 +863,7 @@ func (c *Client) executeRequestWithVariables(
 	// Substituted request headers carry the oauth2 directive; it is replaced
 	// here before the request is sent, leaving the resolved Bearer token as
 	// the actual Authorization header.
-	if err := c.applyOAuth2(restClientReq); err != nil {
+	if err := c.applyOAuth2(restClientReq, parsedFile, osEnvGetter); err != nil {
 		return &Response{Request: restClientReq, Error: err}, fmt.Errorf(
 			"oauth2 token fetch failed for request %s (index %d): %w",
 			restClientReq.Name, index, err)
