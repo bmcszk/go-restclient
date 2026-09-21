@@ -8,10 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"path/filepath"
-	"strconv"
 	"strings"
-	"time"
 )
 
 // RequestLineResult represents the result of parsing a request line
@@ -271,107 +268,6 @@ func (*requestParserState) isCommentedSeparator(commentContent string) bool {
 	return strings.HasPrefix(commentContent, requestSeparator)
 }
 
-// processCommentDirectives processes various comment directives
-func (p *requestParserState) processCommentDirectives(commentContent string) error {
-	if p.handleNameDirective(commentContent) {
-		return nil
-	}
-	if p.handleNoRedirectDirective(commentContent) {
-		return nil
-	}
-	if p.handleNoCookieJarDirective(commentContent) {
-		return nil
-	}
-	if p.handleTimeoutDirective(commentContent) {
-		return nil
-	}
-	if handled, err := p.handleImportDirective(commentContent); handled {
-		return err
-	}
-	return p.handleRefDirective(commentContent) // Other comment content - no special handling needed
-}
-
-// handleNameDirective processes @name directives
-func (p *requestParserState) handleNameDirective(commentContent string) bool {
-	parsedName, isNameDirective := parseNameFromAtNameDirective(commentContent)
-	if isNameDirective && parsedName != "" {
-		p.currentRequest.Name = parsedName
-	}
-	return isNameDirective
-}
-
-// handleNoRedirectDirective processes @no-redirect directives
-func (p *requestParserState) handleNoRedirectDirective(commentContent string) bool {
-	if strings.HasPrefix(commentContent, "@no-redirect") {
-		p.currentRequest.NoRedirect = true
-		return true
-	}
-	return false
-}
-
-// handleNoCookieJarDirective processes @no-cookie-jar directives
-func (p *requestParserState) handleNoCookieJarDirective(commentContent string) bool {
-	if strings.HasPrefix(commentContent, "@no-cookie-jar") {
-		p.currentRequest.NoCookieJar = true
-		return true
-	}
-	return false
-}
-
-// handleTimeoutDirective processes @timeout directives
-func (p *requestParserState) handleTimeoutDirective(commentContent string) bool {
-	if strings.HasPrefix(commentContent, "@timeout ") {
-		p.processTimeoutDirective(commentContent)
-		return true
-	}
-	return false
-}
-
-// handleRefDirective processes @ref and @forceRef directives.
-func (p *requestParserState) handleRefDirective(commentContent string) error {
-	if strings.HasPrefix(commentContent, "@forceRef ") {
-		return p.appendRef("@forceRef", commentContent[len("@forceRef "):])
-	}
-	if strings.HasPrefix(commentContent, "@ref ") {
-		return p.appendRef("@ref", commentContent[len("@ref "):])
-	}
-	return nil
-}
-
-// handleImportDirective parses `# @import <path>`, merges its vars/requests.
-func (p *requestParserState) handleImportDirective(commentContent string) (bool, error) {
-	const prefix = "@import"
-	if !strings.HasPrefix(commentContent, prefix) {
-		return false, nil
-	}
-	raw := strings.TrimSpace(commentContent[len(prefix):])
-	if raw == "" {
-		return true, errors.New("@import directive requires a path")
-	}
-	importedPath := filepath.Join(filepath.Dir(p.filePath), raw)
-	imported, err := parseRequestFile(importedPath, p.client, p.importStack)
-	if err != nil {
-		return true, fmt.Errorf("@import %s: %w", raw, err)
-	}
-	for k, v := range imported.FileVariables {
-		if _, already := p.currentFileVariables[k]; already {
-			continue
-		}
-		p.currentFileVariables[k] = v
-	}
-	p.importedParsedFiles = append(p.importedParsedFiles, imported)
-	return true, nil
-}
-
-func (p *requestParserState) appendRef(directive, raw string) error {
-	name := strings.TrimSpace(raw)
-	if name == "" {
-		return fmt.Errorf("missing reference name in %s directive", directive)
-	}
-	p.currentRequest.Refs = append(p.currentRequest.Refs, RequestRef{Name: name, Force: directive == "@forceRef"})
-	return nil
-}
-
 // handleEmptyLine processes an empty line, which can be used to separate headers from body
 func (p *requestParserState) handleEmptyLine() error {
 	// If a method has been defined (i.e., we are past the request line),
@@ -578,6 +474,8 @@ func (p *requestParserState) finalizeCurrentRequest() {
 			rawBody := strings.Join(p.bodyLines, "\n") // Use \n as per HTTP spec for line endings in body
 			p.currentRequest.RawBody = rawBody
 		}
+		// Snapshot pre-substitution state so loop iterations can be re-substituted from originals.
+		p.snapshotLoopState(p.currentRequest)
 		// Note: p.currentRequest.Body (io.Reader) will be set by the consumer (e.g., Send) after variable substitution
 
 		// Populate ActiveVariables for this request from currentFileVariables
@@ -601,26 +499,6 @@ func (p *requestParserState) finalizeCurrentRequest() {
 	p.justSawEmptyLineSeparator = false // Reset separator state
 	p.parsingQueryParams = false        // Reset query parameter state
 	p.queryParams = []string{}
-}
-
-// processTimeoutDirective handles the @timeout directive with milliseconds value
-func (p *requestParserState) processTimeoutDirective(commentContent string) {
-	p.ensureCurrentRequest()
-	timeoutStr := strings.TrimSpace(commentContent[len("@timeout "):])
-	if timeoutStr == "" {
-		return
-	}
-
-	timeoutMs, err := strconv.Atoi(timeoutStr)
-	if err != nil || timeoutMs <= 0 {
-		slog.Warn("Invalid timeout value in @timeout directive",
-			"value", timeoutStr,
-			"lineNumber", p.lineNumber,
-			"filePath", p.filePath)
-		return
-	}
-
-	p.currentRequest.Timeout = time.Duration(timeoutMs) * time.Millisecond
 }
 
 // _setRawURLFromLine sets the RawURLString and attempts to parse it into the URL field of the current request.

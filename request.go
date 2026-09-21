@@ -56,8 +56,33 @@ type Request struct {
 	NoRedirect bool
 	// NoCookieJar indicates that this request should not use the cookie jar (from @no-cookie-jar directive)
 	NoCookieJar bool
+	// Disabled indicates that this request should be skipped at execution time (from @disabled directive)
+	Disabled bool
+	// DisabledExpr stores a conditional @disabled !<expr> argument; evaluated at execution time to skip.
+	DisabledExpr string
 	// Timeout specifies a custom timeout for this request (from @timeout directive)
 	Timeout time.Duration
+	// SleepDuration pauses execution for the given duration before sending (from @sleep directive)
+	SleepDuration time.Duration
+	// LoopFor is a literal iteration count from `# @loop for N` (N >= 0; 0/negative = no-op at execute time)
+	LoopFor int
+	// LoopDeclared is true when any @loop directive was parsed on this request.
+	LoopDeclared bool
+	// LoopExpr is the raw `{{var}}` expression from `# @loop for {{var}}`; resolved at execute time
+	LoopExpr string
+	// LoopCollection names the collection variable from `# @loop for item of <coll>`; resolved at execute time
+	LoopCollection string
+	// LoopItemName is the per-iteration item alias from `# @loop for <itemName> of <coll>`.
+	LoopItemName string
+
+	// loopIterationIndex is the 0-based iteration counter set transiently by the executor; exposed via {{$index}}.
+	loopIterationIndex int
+	// loopIterationValue is the current iteration value set transiently by the executor; nil for `for N` loops.
+	loopIterationValue any
+	// loopOriginalRawBody is a snapshot of the parse-time RawBody for loop re-substitution.
+	loopOriginalRawBody string
+	// loopOriginalHeaders is a snapshot of the parse-time Headers for loop re-substitution.
+	loopOriginalHeaders http.Header
 
 	// External file body configuration
 	// ExternalFilePath stores the path for external file body references (< ./path/to/file or <@ ./path/to/file)

@@ -43,6 +43,8 @@ type parts struct {
 	// share the name requestCount in Go.
 	requestHits      atomic.Int64
 	capturedRequests []*http.Request
+	// capturedRequestTimes records time.Now() when the test server received each request.
+	capturedRequestTimes []time.Time
 	// intercepted holds the outgoing request captured by aMockTransportClient.
 	intercepted *http.Request
 	// cookieCheck records whether the cookie test server received its cookie back.
@@ -109,6 +111,7 @@ func (p *parts) aHttpServer(h http.HandlerFunc) *parts {
 		r.Body = io.NopCloser(strings.NewReader(string(body)))
 		p.capturedRequests = append(p.capturedRequests, r)
 		p.capturedBodies = append(p.capturedBodies, string(body))
+		p.capturedRequestTimes = append(p.capturedRequestTimes, time.Now())
 		p.requestHits.Add(1)
 		h(w, r)
 	}))

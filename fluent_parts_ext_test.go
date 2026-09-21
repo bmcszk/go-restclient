@@ -263,6 +263,54 @@ func (p *parts) parsedRequestRawURLIs(i int, rawURL string) *parts {
 	return p
 }
 
+// parsedRequestDisabled asserts the parsed request at index i has the disabled flag set to want.
+func (p *parts) parsedRequestDisabled(i int, want bool) *parts {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(want, p.parsedFile.Requests[i].Disabled)
+
+	return p
+}
+
+// parsedRequestSleep asserts the parsed request at index i has SleepDuration set to want.
+func (p *parts) parsedRequestSleep(i int, want time.Duration) *parts {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(want, p.parsedFile.Requests[i].SleepDuration)
+
+	return p
+}
+
+// parsedRequestDisabledExpr asserts the conditional @disabled expression (after `!`) at index i equals want.
+func (p *parts) parsedRequestDisabledExpr(i int, want string) *parts {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(want, p.parsedFile.Requests[i].DisabledExpr)
+
+	return p
+}
+
+// parsedRequestLoopCount asserts the literal `@loop for N` count on the parsed request at index i.
+func (p *parts) parsedRequestLoopCount(i int, want int) *parts {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(want, p.parsedFile.Requests[i].LoopFor)
+
+	return p
+}
+
+// parsedRequestLoopExpr asserts the raw expression on `@loop for {{expr}}` of the parsed request at index i.
+func (p *parts) parsedRequestLoopExpr(i int, want string) *parts {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(want, p.parsedFile.Requests[i].LoopExpr)
+
+	return p
+}
+
+// parsedRequestLoopCollection asserts the collection name on `@loop for item of collection` at index i.
+func (p *parts) parsedRequestLoopCollection(i int, want string) *parts {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(want, p.parsedFile.Requests[i].LoopCollection)
+
+	return p
+}
+
 // parsedRequestRefs asserts the parsed request at index i declares a @ref/@forceRef entry.
 func (p *parts) parsedRequestRefs(i int, wantName string, wantForce bool) *parts {
 	p.require.Greater(len(p.parsedFile.Requests), i)
@@ -397,9 +445,8 @@ func (p *parts) aHttpFile(content string) *parts {
 
 // aHttpFileFromTemplate renders a committed request fixture template with the test server
 // URL ([[.ServerURL]] delimiters) and stores the processed file path for execution.
+// serverURL may be empty for parse-only fixtures; the template still renders (URL stays relative).
 func (p *parts) aHttpFileFromTemplate(templateName string) *parts {
-	p.require.NotEmpty(p.serverURL)
-
 	return p.aHttpFileFromTemplateWithData(templateName, struct{ ServerURL string }{ServerURL: p.serverURL})
 }
 
@@ -623,6 +670,22 @@ func (p *parts) requestRawURLContains(fragments ...string) *parts {
 // capturedRequestCount asserts how many requests the test server received.
 func (p *parts) capturedRequestCount(n int) *parts {
 	p.require.Equal(n, len(p.capturedRequests))
+
+	return p
+}
+
+// requestSkipped asserts the response at index i is marked as skipped.
+func (p *parts) requestSkipped(i int) *parts {
+	p.require.Greater(len(p.responses), i)
+	p.assert.True(p.responses[i].Skipped)
+
+	return p
+}
+
+// requestExecuted asserts the response at index i is not marked as skipped.
+func (p *parts) requestExecuted(i int) *parts {
+	p.require.Greater(len(p.responses), i)
+	p.assert.False(p.responses[i].Skipped)
 
 	return p
 }

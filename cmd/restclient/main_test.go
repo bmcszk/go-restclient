@@ -431,3 +431,24 @@ func TestCLI_DefineFlagInvalid(t *testing.T) {
 	_, code := runBinary(t, binary, "-f", filePath, "--all", "-D", "invalid")
 	assert.Equal(t, 1, code)
 }
+
+func TestCLI_DisabledPrintsSkipLine(t *testing.T) {
+	var paths []string
+	server := startMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, "ok")
+	})
+	defer server.Close()
+
+	binary := buildBinary(t)
+	dir := t.TempDir()
+	filePath := writeTestFile(t, dir, "test.http",
+		fmt.Sprintf("### disabled\n# @disabled\nGET %s/skipped\n###\nGET %s/ran\n",
+			server.URL, server.URL))
+
+	out, code := runBinary(t, binary, "-f", filePath, "--all")
+	assert.Equal(t, 0, code, "stdout=%s", out)
+	assert.Contains(t, out, "SKIP")
+	assert.Equal(t, []string{"/ran"}, paths, "disabled request must not hit the server")
+}

@@ -1,0 +1,3 @@
+### conditional
+# @disabled !{{flag}}
+GET [[.ServerURL]]/conditional

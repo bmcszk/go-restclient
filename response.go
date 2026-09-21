@@ -20,6 +20,7 @@ type Response struct {
 	TLSVersion     string        // e.g., "TLS 1.3" (if IsTLS is true)
 	TLSCipherSuite string        // e.g., "TLS_AES_128_GCM_SHA256" (if IsTLS is true)
 	Error          error         // Error encountered during request execution or response processing
+	Skipped        bool          // True when the request was skipped (e.g., @disabled directive)
 }
 
 // ExpectedResponse defines what an actual response should be compared against.

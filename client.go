@@ -8,7 +8,6 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -112,13 +111,15 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 		if restClientReq.Imported {
 			continue
 		}
-		c.runOneRequest(ctx, restClientReq, i, parsedFile, refState, osEnvGetter, &responses, &multiErr)
+		reqResponses, err := c.runOneRequest(ctx, restClientReq, i, parsedFile, refState, osEnvGetter)
+		responses = append(responses, reqResponses...)
+		multiErr = multierror.Append(multiErr, err)
 	}
 
 	return responses, multiErr.ErrorOrNil()
 }
 
-// runOneRequest executes one request plus its @ref/@forceRef deps.
+// runOneRequest executes one request plus its @ref/@forceRef deps; returns appended responses and errors.
 func (c *Client) runOneRequest(
 	ctx context.Context,
 	restClientReq *Request,
@@ -126,24 +127,61 @@ func (c *Client) runOneRequest(
 	parsedFile *ParsedFile,
 	refState *refExecutionState,
 	osEnvGetter func(string) (string, bool),
-	responses *[]*Response,
-	multiErr **multierror.Error,
-) {
+) ([]*Response, *multierror.Error) {
+	var respOut []*Response
+	var multiErr *multierror.Error
 	if refState.alreadyExecuted(restClientReq.Name) {
-		return
+		return respOut, multiErr
 	}
-	if err := c.resolveRequestRefs(ctx, restClientReq, parsedFile, refState, osEnvGetter); err != nil {
-		*multiErr = multierror.Append(*multiErr, err)
-		return
+	skip, err := c.skipRequest(restClientReq, parsedFile, osEnvGetter)
+	if err != nil {
+		return respOut, multierror.Append(multiErr, fmt.Errorf("evaluating @disabled: %w", err))
+	}
+	if skip {
+		skipped := &Response{Request: restClientReq, Skipped: true}
+		respOut = append(respOut, skipped)
+		storeResponse(parsedFile, restClientReq, skipped)
+		return respOut, multiErr
+	}
+	if handled, loopResponses, loopErr := c.runRequestWithLoops(
+		ctx, restClientReq, index, parsedFile, refState, osEnvGetter,
+	); handled {
+		respOut = append(respOut, loopResponses...)
+		return respOut, multierror.Append(multiErr, loopErr)
+	}
+	if restClientReq.SleepDuration > 0 {
+		time.Sleep(restClientReq.SleepDuration)
 	}
 	response, err := c.executeRequestWithVariables(ctx, restClientReq, parsedFile, osEnvGetter, index)
-	response, shouldSkip := c.handleRequestExecutionError(response, err, restClientReq, index, multiErr)
+	response, shouldSkip, combinedErr := c.handleRequestExecutionError(response, err, restClientReq, index)
+	multiErr = multierror.Append(multiErr, combinedErr)
 	if shouldSkip || response == nil {
-		return
+		return respOut, multiErr
 	}
-	*responses = append(*responses, response)
+	respOut = append(respOut, response)
 	storeResponse(parsedFile, restClientReq, response)
 	refState.recordExecuted(restClientReq.Name, response)
+	return respOut, multiErr
+}
+
+// isLoopedRequest returns true when the request declares any @loop directive.
+func (*Client) isLoopedRequest(req *Request) bool {
+	return req.LoopDeclared
+}
+
+// skipRequest decides @disabled / @disabled !<expr> skipping; returns (skip, err).
+func (c *Client) skipRequest(
+	restClientReq *Request,
+	parsedFile *ParsedFile,
+	osEnvGetter func(string) (string, bool),
+) (bool, error) {
+	if restClientReq.Disabled {
+		return true, nil
+	}
+	if restClientReq.DisabledExpr == "" {
+		return false, nil
+	}
+	return c.evaluateDisabledExpr(restClientReq.DisabledExpr, parsedFile, restClientReq, osEnvGetter)
 }
 
 // refExecutionState tracks per-ExecuteFile execution of @ref/@forceRef dependencies.
@@ -290,8 +328,32 @@ func (c *Client) ExecuteRequest(ctx context.Context, parsedFile *ParsedFile, ind
 
 	osEnvGetter := func(key string) (string, bool) { return os.LookupEnv(key) }
 	restClientReq := parsedFile.Requests[index]
+	skip, err := c.skipRequest(restClientReq, parsedFile, osEnvGetter)
+	if err != nil {
+		return nil, fmt.Errorf("evaluating @disabled: %w", err)
+	}
+	if skip {
+		return &Response{Request: restClientReq, Skipped: true}, nil
+	}
 	if err := c.resolveRequestRefs(ctx, restClientReq, parsedFile, newRefExecutionState(), osEnvGetter); err != nil {
 		return nil, err
+	}
+	if restClientReq.SleepDuration > 0 {
+		time.Sleep(restClientReq.SleepDuration)
+	}
+	return c.executeAndStoreRequest(ctx, restClientReq, parsedFile, osEnvGetter, index)
+}
+
+// executeAndStoreRequest executes the request and stores the response in the file's response map.
+func (c *Client) executeAndStoreRequest(
+	ctx context.Context,
+	restClientReq *Request,
+	parsedFile *ParsedFile,
+	osEnvGetter func(string) (string, bool),
+	index int,
+) (*Response, error) {
+	if c.isLoopedRequest(restClientReq) {
+		return c.executeLoopAndStore(ctx, restClientReq, parsedFile, osEnvGetter, index)
 	}
 	response, err := c.executeRequestWithVariables(ctx, restClientReq, parsedFile, osEnvGetter, index)
 	if err != nil {
@@ -304,25 +366,22 @@ func (c *Client) ExecuteRequest(ctx context.Context, parsedFile *ParsedFile, ind
 	return response, nil
 }
 
-// handleRequestExecutionError processes errors from request execution and manages error wrapping
-// Returns the processed response and a boolean indicating if the request should be skipped
+// handleRequestExecutionError processes errors from request execution; returns (response, shouldSkip, combined error).
 func (c *Client) handleRequestExecutionError(
 	response *Response,
 	err error,
 	restClientReq *Request,
 	index int,
-	multiErr **multierror.Error,
-) (*Response, bool) {
+) (*Response, bool, error) {
 	if err != nil {
-		*multiErr = multierror.Append(*multiErr, err)
 		if shouldSkipRequest(response, err) {
-			return nil, true
+			return nil, true, err
 		}
 		response = ensureResponseExists(response, restClientReq)
 	}
 
-	c.wrapResponseError(response, restClientReq, index, multiErr)
-	return response, false
+	wrappedErr := c.wrapResponseError(response, restClientReq, index)
+	return response, false, multierror.Append(err, wrappedErr).ErrorOrNil()
 }
 
 // shouldSkipRequest determines if a request should be skipped based on error type
@@ -340,23 +399,22 @@ func ensureResponseExists(response *Response, restClientReq *Request) *Response 
 	return response
 }
 
-// wrapResponseError wraps response errors for logging
+// wrapResponseError returns a wrapped error describing the request's failed processing, or nil when nothing to wrap.
 func (*Client) wrapResponseError(
 	response *Response,
 	restClientReq *Request,
 	index int,
-	multiErr **multierror.Error,
-) {
-	if response != nil && response.Error != nil {
-		urlForError := restClientReq.RawURLString
-		if restClientReq.URL != nil {
-			urlForError = restClientReq.URL.String()
-		}
-		wrappedErr := fmt.Errorf(
-			"request %d (%s %s) processing resulted in error: %w",
-			index+1, restClientReq.Method, urlForError, response.Error)
-		*multiErr = multierror.Append(*multiErr, wrappedErr)
+) error {
+	if response == nil || response.Error == nil {
+		return nil
 	}
+	urlForError := restClientReq.RawURLString
+	if restClientReq.URL != nil {
+		urlForError = restClientReq.URL.String()
+	}
+	return fmt.Errorf(
+		"request %d (%s %s) processing resulted in error: %w",
+		index+1, restClientReq.Method, urlForError, response.Error)
 }
 
 // End of function resolveVariablesInText
@@ -465,101 +523,6 @@ func resolveSystemVariablePlaceholder(
 	return substituteDynamicSystemVariables(placeholder, dotEnvVars, programmaticVars)
 }
 
-// _resolveRequestURL resolves the final request URL based on the client's BaseURL and the request's URL.
-// It returns the resolved URL or an error if the BaseURL is invalid or requestURL is nil.
-// _resolveRequestURL resolves the final request URL based on the client's BaseURL,
-// the request's initial URL (if parsed),
-// and the request's RawURLString (if initial URL parsing was deferred).
-// It returns the resolved URL or an error.
-func (*Client) _resolveRequestURL(
-	baseURLStr string,
-	initialRequestURL *url.URL,
-	rawRequestURLStr string,
-) (*url.URL, error) {
-	currentRequestURL, err := determineCurrentRequestURL(initialRequestURL, rawRequestURLStr)
-	if err != nil {
-		return nil, err
-	}
-
-	freshRequestURL, err := sanitizeRequestURL(currentRequestURL)
-	if err != nil {
-		return nil, err
-	}
-
-	return resolveWithBaseURL(freshRequestURL, baseURLStr)
-}
-
-// determineCurrentRequestURL determines which URL to use for processing
-func determineCurrentRequestURL(initialRequestURL *url.URL, rawRequestURLStr string) (*url.URL, error) {
-	if initialRequestURL != nil {
-		return initialRequestURL, nil
-	}
-	if rawRequestURLStr != "" {
-		parsedRawURL, err := url.Parse(rawRequestURLStr)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"failed to parse rawRequestURLString '%s' after variable expansion: %w",
-				rawRequestURLStr, err)
-		}
-		return parsedRawURL, nil
-	}
-	return nil, errors.New("request URL is unexpectedly nil and rawRequestURLString is empty")
-}
-
-// sanitizeRequestURL re-parses a URL to ensure it's valid
-func sanitizeRequestURL(currentRequestURL *url.URL) (*url.URL, error) {
-	currentRequestURLStr := currentRequestURL.String()
-	freshRequestURL, err := url.Parse(currentRequestURLStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to re-parse current requestURL string '%s': %w", currentRequestURLStr, err)
-	}
-	return freshRequestURL, nil
-}
-
-// resolveWithBaseURL resolves a request URL against a base URL
-func resolveWithBaseURL(freshRequestURL *url.URL, baseURLStr string) (*url.URL, error) {
-	if freshRequestURL.IsAbs() {
-		return freshRequestURL, nil
-	}
-	if baseURLStr == "" {
-		return freshRequestURL, nil
-	}
-
-	freshBase, err := parseAndSanitizeBaseURL(baseURLStr)
-	if err != nil {
-		return nil, err
-	}
-
-	return handleSpecialPathJoining(freshRequestURL, freshBase)
-}
-
-// parseAndSanitizeBaseURL parses and sanitizes a base URL
-func parseAndSanitizeBaseURL(baseURLStr string) (*url.URL, error) {
-	base, err := url.Parse(baseURLStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid BaseURL %s: %w", baseURLStr, err)
-	}
-
-	baseStr := base.String()
-	freshBase, err := url.Parse(baseStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to re-parse base URL string '%s': %w", baseStr, err)
-	}
-	return freshBase, nil
-}
-
-// handleSpecialPathJoining handles special cases for URL path joining
-func handleSpecialPathJoining(freshRequestURL, freshBase *url.URL) (*url.URL, error) {
-	if strings.HasPrefix(freshRequestURL.Path, "/") && freshBase.Path != "" && freshBase.Path != "/" {
-		finalResolvedURL := joinURLPaths(freshBase, freshRequestURL)
-		if finalResolvedURL == nil {
-			return nil, fmt.Errorf("failed to join URL paths: %s and %s", freshBase.Path, freshRequestURL.Path)
-		}
-		return finalResolvedURL, nil
-	}
-	return freshBase.ResolveReference(freshRequestURL), nil
-}
-
 // executeRequest sends a given Request and returns the Response.
 // Errors during execution (e.g. network, body read) are captured in Response.Error.
 // A non-nil error is returned by this function only for critical pre-execution
@@ -614,7 +577,7 @@ func (c *Client) prepareRequestURL(rcRequest *Request) error {
 	}
 
 	var err error
-	rcRequest.URL, err = c._resolveRequestURL(c.BaseURL, rcRequest.URL, rcRequest.RawURLString)
+	rcRequest.URL, err = c.resolveRequestURL(c.BaseURL, rcRequest.URL, rcRequest.RawURLString)
 	return err
 }
 
@@ -780,11 +743,13 @@ func (c *Client) processExternalFile(
 
 	// Apply variable substitution if requested
 	if restClientReq.ExternalFileWithVariables {
+		loopAliases, loopIndex := currentLoopBindings(restClientReq)
 		resolvedContent := resolveVariablesInText(content, resolveContext{
 			programmaticVars: c.programmaticVars, fileScopedVars: restClientReq.ActiveVariables,
 			environmentVars: parsedFile.EnvironmentVariables, globalVars: parsedFile.GlobalVariables,
 			systemVars: requestScopedSystemVars, osEnvGetter: osEnvGetter,
 			dotEnvVars: c.currentDotEnvVars, responseMap: parsedFile.ResponseMap,
+			loopItemAliases: loopAliases, loopIndex: loopIndex,
 		})
 		content = substituteDynamicSystemVariables(
 			resolvedContent,
@@ -967,11 +932,13 @@ func (c *Client) processRegularBody(
 	requestScopedSystemVars map[string]string,
 	osEnvGetter func(string) (string, bool),
 ) string {
+	loopAliases, loopIndex := currentLoopBindings(restClientReq)
 	resolvedBody := resolveVariablesInText(restClientReq.RawBody, resolveContext{
 		programmaticVars: c.programmaticVars, fileScopedVars: restClientReq.ActiveVariables,
 		environmentVars: parsedFile.EnvironmentVariables, globalVars: parsedFile.GlobalVariables,
 		systemVars: requestScopedSystemVars, osEnvGetter: osEnvGetter,
 		dotEnvVars: c.currentDotEnvVars, responseMap: parsedFile.ResponseMap,
+		loopItemAliases: loopAliases, loopIndex: loopIndex,
 	})
 	return substituteDynamicSystemVariables(resolvedBody, c.currentDotEnvVars, c.programmaticVars)
 }
@@ -989,8 +956,3 @@ func (*Client) setRequestBody(restClientReq *Request, finalSubstitutedBody strin
 		restClientReq.GetBody = nil
 	}
 }
-
-// TODO: Add other public methods as needed, e.g.:
-// - Execute(ctx context.Context, request *Request, options ...RequestOption) (*Response, error)
-// - A method to validate a single response if users construct ExpectedResponse manually.
-//

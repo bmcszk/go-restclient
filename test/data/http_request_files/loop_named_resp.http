@@ -1,0 +1,12 @@
+### loopreq
+# @name loopreq
+# @loop for 2
+POST [[.ServerURL]]/loop
+Content-Type: application/json
+
+{"i": "{{$index}}"}
+
+### use
+GET [[.ServerURL]]/use
+X-Loop0: {{loopreq0.response.body.i}}
+X-Loop1: {{loopreq1.response.body.i}}
