@@ -919,6 +919,27 @@ Content-Type: application/json
 }
 ```
 
+### OAuth2 Token Acquisition (client credentials)
+
+`Authorization: oauth2 [client_credentials] <prefix>` on a request makes the client fetch a token first and send `Authorization: Bearer <token>` instead. The token is fetched once per prefix and cached for the client's lifetime. The grant word is optional — a bare `oauth2 <prefix>` means `client_credentials`; other grants (e.g. password) are not supported yet.
+
+```
+POST https://api.example.com/secure
+Authorization: oauth2 myapi
+```
+
+The required variables can be defined in `http-client.env.json`:
+
+```json
+{
+  "$shared": {
+    "myapi_tokenEndpoint": "https://auth.example.com/oauth/token",
+    "myapi_clientId": "web-app",
+    "myapi_clientSecret": "secret"
+  }
+}
+```
+
 ### Cookies Management
 
 Both clients automatically manage cookies between requests in the same file.
@@ -993,3 +1014,5 @@ grant_type=client_credentials&client_id={{clientId}}&client_secret={{clientSecre
 GET https://api.example.com/secure
 Authorization: Bearer {{getToken.response.body.access_token}}
 ```
+
+Or use the built-in OAuth2 support: `Authorization: oauth2 myapi` (see OAuth2 Token Acquisition above).
