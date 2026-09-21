@@ -257,6 +257,14 @@ func (p *parts) parsedRequestMethod(i int, method string) *parts {
 	return p
 }
 
+// parsedRequestBodyIs asserts the raw body of the parsed request at index i.
+func (p *parts) parsedRequestBodyIs(i int, want string) *parts {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(want, p.parsedFile.Requests[i].RawBody)
+
+	return p
+}
+
 // parsedRequestName asserts the name of the parsed request at index i.
 func (p *parts) parsedRequestName(i int, name string) *parts {
 	p.require.Greater(len(p.parsedFile.Requests), i)
