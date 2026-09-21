@@ -16,7 +16,7 @@ type loopIteration struct {
 	item  any // current iteration value (nil for `for N` loops)
 }
 
-// runRequestWithLoops handles the loop expansion of a single request during ExecuteFile; returns (handled, err).
+// runRequestWithLoops runs the request as a @loop when declared; returns handled, appended responses, and the error.
 func (c *Client) runRequestWithLoops(
 	ctx context.Context,
 	restClientReq *Request,
@@ -24,33 +24,31 @@ func (c *Client) runRequestWithLoops(
 	parsedFile *ParsedFile,
 	refState *refExecutionState,
 	osEnvGetter func(string) (string, bool),
-	responses *[]*Response,
-) (handled bool, err error) {
+) (handled bool, responses []*Response, err error) {
 	iterations, iterErr := c.resolveLoopIterations(restClientReq, parsedFile, osEnvGetter)
 	if iterErr != nil {
-		return true, iterErr
+		return true, nil, iterErr
 	}
 	isLooped := c.isLoopedRequest(restClientReq)
 	if isLooped && len(iterations) == 0 {
 		// No-op loop (N<=0 / empty collection): no refs, no response entries, no error.
-		return true, nil
+		return true, nil, nil
 	}
 	if refErr := c.resolveRequestRefs(ctx, restClientReq, parsedFile, refState, osEnvGetter); refErr != nil {
-		return true, refErr
+		return true, nil, refErr
 	}
 	if !isLooped {
-		return false, nil
+		return false, nil, nil
 	}
 	iterResponses, loopErr := c.runLoopIterations(ctx, restClientReq, iterations, parsedFile, osEnvGetter, index)
 	if loopErr != nil {
-		return true, loopErr
+		return true, nil, loopErr
 	}
-	*responses = append(*responses, iterResponses...)
 	// Plain name addressing resolves to the first iteration's response (zero-based name0).
 	if resp := parsedFile.ResponseMap[loopResponseName(restClientReq.Name, 0)]; resp != nil {
 		refState.recordExecuted(restClientReq.Name, resp)
 	}
-	return true, nil
+	return true, iterResponses, nil
 }
 
 // executeLoopAndStore handles the loop expansion of a single request during ExecuteRequest.

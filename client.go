@@ -111,13 +111,15 @@ func (c *Client) ExecuteFile(ctx context.Context, requestFilePath string) ([]*Re
 		if restClientReq.Imported {
 			continue
 		}
-		multiErr = c.runOneRequest(ctx, restClientReq, i, parsedFile, refState, osEnvGetter, &responses, multiErr)
+		reqResponses, err := c.runOneRequest(ctx, restClientReq, i, parsedFile, refState, osEnvGetter)
+		responses = append(responses, reqResponses...)
+		multiErr = multierror.Append(multiErr, err)
 	}
 
 	return responses, multiErr.ErrorOrNil()
 }
 
-// runOneRequest executes one request plus its @ref/@forceRef deps and returns the appended multiErr.
+// runOneRequest executes one request plus its @ref/@forceRef deps; returns appended responses and errors.
 func (c *Client) runOneRequest(
 	ctx context.Context,
 	restClientReq *Request,
@@ -125,26 +127,27 @@ func (c *Client) runOneRequest(
 	parsedFile *ParsedFile,
 	refState *refExecutionState,
 	osEnvGetter func(string) (string, bool),
-	responses *[]*Response,
-	multiErr *multierror.Error,
-) *multierror.Error {
+) ([]*Response, *multierror.Error) {
+	var respOut []*Response
+	var multiErr *multierror.Error
 	if refState.alreadyExecuted(restClientReq.Name) {
-		return multiErr
+		return respOut, multiErr
 	}
 	skip, err := c.skipRequest(restClientReq, parsedFile, osEnvGetter)
 	if err != nil {
-		return multierror.Append(multiErr, fmt.Errorf("evaluating @disabled: %w", err))
+		return respOut, multierror.Append(multiErr, fmt.Errorf("evaluating @disabled: %w", err))
 	}
 	if skip {
 		skipped := &Response{Request: restClientReq, Skipped: true}
-		*responses = append(*responses, skipped)
+		respOut = append(respOut, skipped)
 		storeResponse(parsedFile, restClientReq, skipped)
-		return multiErr
+		return respOut, multiErr
 	}
-	if handled, loopErr := c.runRequestWithLoops(
-		ctx, restClientReq, index, parsedFile, refState, osEnvGetter, responses,
+	if handled, loopResponses, loopErr := c.runRequestWithLoops(
+		ctx, restClientReq, index, parsedFile, refState, osEnvGetter,
 	); handled {
-		return multierror.Append(multiErr, loopErr)
+		respOut = append(respOut, loopResponses...)
+		return respOut, multierror.Append(multiErr, loopErr)
 	}
 	if restClientReq.SleepDuration > 0 {
 		time.Sleep(restClientReq.SleepDuration)
@@ -153,12 +156,12 @@ func (c *Client) runOneRequest(
 	response, shouldSkip, combinedErr := c.handleRequestExecutionError(response, err, restClientReq, index)
 	multiErr = multierror.Append(multiErr, combinedErr)
 	if shouldSkip || response == nil {
-		return multiErr
+		return respOut, multiErr
 	}
-	*responses = append(*responses, response)
+	respOut = append(respOut, response)
 	storeResponse(parsedFile, restClientReq, response)
 	refState.recordExecuted(restClientReq.Name, response)
-	return multiErr
+	return respOut, multiErr
 }
 
 // isLoopedRequest returns true when the request declares any @loop directive.
