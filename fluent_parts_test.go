@@ -67,7 +67,8 @@ type parts struct {
 	// trackedValues holds consistency-tracking buckets keyed by tracking name.
 	trackedValues map[string][]string
 	// activeTrack names the bucket captured* methods append into.
-	activeTrack string
+	activeTrack    string
+	tokenServerURL string
 	// baseDir is the single per-test directory every given* file-writing method uses.
 	// (testing.T.TempDir creates a fresh subdirectory on every call, so external
 	// files and the .http file would otherwise land in different directories.)
