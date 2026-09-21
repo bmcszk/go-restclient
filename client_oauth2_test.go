@@ -1,6 +1,7 @@
 package restclient_test
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 )
@@ -62,12 +63,8 @@ func TestExecuteFile_OAuth2TokenEndpointNestedVarExpands(t *testing.T) {
 	given.
 		anOAuth2TokenServerWithStatus(http.StatusOK).and().
 		anEchoServer().and().
-		aHttpFile(`@host = {{server}}
-@acme_tokenEndpoint = {{host}}/oauth2/token
-
-### oauth2 api
-GET {{server}}/api
-Authorization: oauth2 acme`).and().
+		aHttpFile(fmt.Sprintf("@host = %[1]s\n@acme_tokenEndpoint = {{host}}/oauth2/token\n\n"+
+			"### oauth2 api\nGET {{server}}/api\nAuthorization: oauth2 acme", given.tokenServerURL)).and().
 		aClientWithOAuth2ProgrammaticVars(map[string]any{
 			"acme_clientId":     "nested-client",
 			"acme_clientSecret": "nested-secret",

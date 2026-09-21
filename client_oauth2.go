@@ -2,10 +2,12 @@ package restclient
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 )
 
@@ -149,7 +151,8 @@ func oauth2Form(grant, clientID, clientSecret string) string {
 	}.Encode()
 }
 
-// oauth2Var resolves `<prefix>_<suffix>` via the standard variable lookup chain.
+// oauth2Var resolves `<prefix>_<suffix>` via the standard variable lookup chain,
+// then expands any nested `{{...}}` placeholders inside the value.
 func (c *Client) oauth2Var(
 	prefix string,
 	suffix string,
@@ -168,7 +171,90 @@ func (c *Client) oauth2Var(
 		return "", fmt.Errorf("oauth2 %s: variable %s is not a non-empty string", prefix, name)
 	}
 
-	return s, nil
+	expanded, err := expandPlaceholders(s, rctx)
+	if err != nil {
+		return "", fmt.Errorf("oauth2 %s: variable %s: %w", prefix, name, err)
+	}
+
+	return expanded, nil
+}
+
+// oauth2PlaceholderRe matches a single `{{...}}` placeholder token,
+// using the same brace style as the variable substitution in variables.go.
+var oauth2PlaceholderRe = regexp.MustCompile(`{{\s*(.*?)\s*}}`)
+
+// oauth2MaxExpansionDepth bounds recursive placeholder expansion hops.
+const oauth2MaxExpansionDepth = 5
+
+// expandPlaceholders expands `{{...}}` placeholders in value using the variable
+// lookup chain. Unresolvable placeholders are left as-is.
+func expandPlaceholders(value string, rctx resolveContext) (string, error) {
+	pieces := make([]string, 0, 4)
+	last := 0
+	for _, loc := range oauth2PlaceholderRe.FindAllStringIndex(value, -1) {
+		pieces = append(pieces, value[last:loc[0]])
+		expanded, err := expandPlaceholderToken(value[loc[0]+2:loc[1]-2], rctx, 0)
+		if err != nil {
+			return "", err
+		}
+		pieces = append(pieces, expanded)
+		last = loc[1]
+	}
+	pieces = append(pieces, value[last:])
+
+	return strings.Join(pieces, ""), nil
+}
+
+// expandPlaceholderToken resolves one `{{...}}` token body, recursing when the
+// resolved variable value itself contains placeholders (depth-bounded).
+func expandPlaceholderToken(directive string, rctx resolveContext, depth int) (string, error) {
+	directive = strings.TrimSpace(directive)
+	if depth >= oauth2MaxExpansionDepth {
+		return "", errors.New("oauth2: placeholder expansion too deep")
+	}
+	if v, ok := expandNamedSource(directive, rctx); ok {
+		return v, nil
+	}
+	return expandVarToken(directive, rctx)
+}
+
+// expandNamedSource resolves `$processEnv X` / `$dotenv X` tokens; ok=false when
+// the token is not a named-source directive.
+func expandNamedSource(directive string, rctx resolveContext) (string, bool) {
+	if name, ok := strings.CutPrefix(directive, "$processEnv "); ok {
+		if v, ok := rctx.osEnvGetter(strings.TrimSpace(name)); ok {
+			return v, true
+		}
+
+		return "{{" + directive + "}}", true
+	}
+	if name, ok := strings.CutPrefix(directive, "$dotenv "); ok {
+		if v, ok := rctx.dotEnvVars[strings.TrimSpace(name)]; ok {
+			return v, true
+		}
+
+		return "{{" + directive + "}}", true
+	}
+
+	return "", false
+}
+
+// expandVarToken resolves a plain variable token via the lookup chain.
+func expandVarToken(directive string, rctx resolveContext) (string, error) {
+	resolved, ok := lookupVar(directive, rctx)
+	if !ok {
+		return "{{" + directive + "}}", nil
+	}
+	s, ok := resolved.(string)
+	if !ok {
+		s = fmt.Sprintf("%v", resolved)
+	}
+	out, err := expandPlaceholders(s, rctx)
+	if err != nil {
+		return "", err
+	}
+
+	return out, nil
 }
 
 // oauth2Token is a cached OAuth2 access token, keyed by directive prefix.
