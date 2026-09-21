@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -430,6 +431,23 @@ func TestCLI_DefineFlagInvalid(t *testing.T) {
 
 	_, code := runBinary(t, binary, "-f", filePath, "--all", "-D", "invalid")
 	assert.Equal(t, 1, code)
+}
+
+func TestCLI_VersionFlag(t *testing.T) {
+	binary := buildBinary(t)
+	out, code := runBinary(t, binary, "--version")
+	assert.Equal(t, 0, code)
+	assert.NotEmpty(t, strings.TrimSpace(out), "--version must print a non-empty version")
+	assert.Contains(t, out, "dev")
+	assert.NotContains(t, out, "missing flags", "--version must bypass required-flag validation")
+}
+
+func TestCLI_VersionShortFlag(t *testing.T) {
+	binary := buildBinary(t)
+	out, code := runBinary(t, binary, "-V")
+	assert.Equal(t, 0, code)
+	assert.Contains(t, out, "dev")
+	assert.NotContains(t, out, "missing flags")
 }
 
 func TestCLI_DisabledPrintsSkipLine(t *testing.T) {

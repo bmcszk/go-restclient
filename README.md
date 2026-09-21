@@ -191,7 +191,11 @@ go install github.com/bmcszk/go-restclient/cmd/restclient@latest
 restclient -f requests.http --all
 restclient -f requests.http -n "get user"
 restclient -f requests.http -i 0
+restclient --version
 ```
+
+`--version` (or `-V`) prints the build version and exits; release builds
+stamp it via `-ldflags "-X main.version=<ver>"`.
 
 **Note:** Without `-n`, `-i`, or `--all`, the CLI exits with an error.
 
