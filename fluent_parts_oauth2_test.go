@@ -30,6 +30,20 @@ func (p *parts) aClientWithOAuth2Vars() *parts {
 	}))
 }
 
+// aClientWithOAuth2ProgrammaticVars builds a client with the given programmatic vars —
+// for scenarios whose @-vars resolve through the normal lookup chain.
+func (p *parts) aClientWithOAuth2ProgrammaticVars(vars map[string]any) *parts {
+	return p.aClient(rc.WithVars(vars))
+}
+
+// clientWithProgrammaticVars adds programmatic vars to the existing client (SetProgrammaticVars),
+// mirroring the -D/--define CLI path.
+func (p *parts) clientWithProgrammaticVars(vars map[string]any) *parts {
+	p.client.SetProgrammaticVars(vars)
+
+	return p
+}
+
 // aClientWithOAuth2VarsMissingSecret omits the client secret to exercise the missing-variable error.
 func (p *parts) aClientWithOAuth2VarsMissingSecret() *parts {
 	return p.aClient(rc.WithVars(map[string]any{
