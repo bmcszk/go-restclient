@@ -235,7 +235,7 @@ func TestExecuteFile_OAuth2UseAuthorizationHeaderTrueSendsBasicHeader(t *testing
 ### oauth2 api
 GET {{server}}/api
 Authorization: oauth2 password p`).and().
-		aClientWithOAuth2PasswordVars()
+		aClientWithOAuth2PasswordVarsAuthHeaderUnset()
 
 	when.
 		executeFile()

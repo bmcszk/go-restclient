@@ -57,6 +57,18 @@ func (p *parts) aClientWithOAuth2PasswordVars() *parts {
 	}))
 }
 
+// aClientWithOAuth2PasswordVarsAuthHeaderUnset omits useAuthorizationHeader so the
+// file's @-var (or the true default) decides the Basic-header behavior.
+func (p *parts) aClientWithOAuth2PasswordVarsAuthHeaderUnset() *parts {
+	return p.aClient(rc.WithVars(map[string]any{
+		"p_tokenEndpoint": p.tokenServerURL + "/token",
+		"p_clientId":      "test-client",
+		"p_clientSecret":  "test-secret",
+		"p_username":      "test-user",
+		"p_password":      "test-pass",
+	}))
+}
+
 // aClientWithOAuth2PasswordVarsMissingPassword omits the password to exercise the missing-variable error.
 func (p *parts) aClientWithOAuth2PasswordVarsMissingPassword() *parts {
 	return p.aClient(rc.WithVars(map[string]any{
