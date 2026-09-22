@@ -47,7 +47,7 @@ func main() {
 		kong.Description("Execute HTTP requests defined in a .http / .rest file"),
 		kong.UsageOnError(),
 		kong.ConfigureHelp(kong.HelpOptions{Compact: true, Summary: true}),
-		kong.Vars{"version": version},
+		kong.Vars{"version": resolveVersion()},
 	)
 
 	if c.List {
