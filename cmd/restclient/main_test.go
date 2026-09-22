@@ -381,6 +381,50 @@ func TestCLI_DefineFlagMultiple(t *testing.T) {
 	assert.Equal(t, 0, code)
 }
 
+func TestCLI_EnvFlagRunsNamedDotenv(t *testing.T) {
+	var gotKey string
+	server := startMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		gotKey = r.Header.Get("X-Key")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, gotKey)
+	})
+	defer server.Close()
+
+	binary := buildBinary(t)
+	dir := t.TempDir()
+	writeTestFile(t, dir, ".env", "KEY=default\n")
+	writeTestFile(t, dir, ".env.staging", "KEY=staging\n")
+	filePath := writeTestFile(t, dir, "test.http",
+		fmt.Sprintf("GET %s/echo\nX-Key: {{$dotenv KEY}}\n", server.URL))
+
+	out, code := runBinary(t, binary, "-f", filePath, "--all", "--env", "staging")
+	assert.Equal(t, 0, code, "stdout=%s", out)
+	assert.Equal(t, "staging", gotKey, ".env.staging must override .env")
+	assert.Contains(t, out, "staging")
+}
+
+func TestCLI_EnvFlagAbsentKeepsDefaultDotenv(t *testing.T) {
+	var gotKey string
+	server := startMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+		gotKey = r.Header.Get("X-Key")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprint(w, gotKey)
+	})
+	defer server.Close()
+
+	binary := buildBinary(t)
+	dir := t.TempDir()
+	writeTestFile(t, dir, ".env", "KEY=default\n")
+	writeTestFile(t, dir, ".env.staging", "KEY=staging\n")
+	filePath := writeTestFile(t, dir, "test.http",
+		fmt.Sprintf("GET %s/echo\nX-Key: {{$dotenv KEY}}\n", server.URL))
+
+	out, code := runBinary(t, binary, "-f", filePath, "--all")
+	assert.Equal(t, 0, code, "stdout=%s", out)
+	assert.Equal(t, "default", gotKey, "without --env, .env value must win")
+	assert.Contains(t, out, "default")
+}
+
 func TestCLI_NameSelectRunsRefChain(t *testing.T) {
 	var paths []string
 	server := startMockServer(t, func(w http.ResponseWriter, r *http.Request) {

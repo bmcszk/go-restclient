@@ -272,6 +272,7 @@ restclient -f requests.http -o env "token"
 | `-o` | `--output` | Output format |
 | `-A` | `--after` | Prerequisite request |
 | `-D` | `--define` | Define variable (repeatable) |
+| | `--env` | Named dotenv `.env.<name>` loaded over `.env` |
 
 ## Response Validation
 
