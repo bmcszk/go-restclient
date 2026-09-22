@@ -66,6 +66,9 @@ var (
 	reRandomMacAddressDot = regexp.MustCompile(`{{\s*\$random\.macAddress\s*}}`)
 )
 
+// placeholderRe matches a single `{{...}}` placeholder for the substitution engine.
+var placeholderRe = regexp.MustCompile(`{{\s*(.*?)\s*}}`)
+
 const (
 	defaultRandomLength          = 16
 	defaultRandomHexLength       = 16
@@ -110,56 +113,30 @@ func resolveVariablesInText(text string, rctx resolveContext) string {
 
 	for i := 0; i < maxIterations; i++ {
 		previousText := currentText
-		re := regexp.MustCompile(`{{\s*(.*?)\s*}}`)
 
-		currentText = re.ReplaceAllStringFunc(previousText, func(match string) string {
-			return resolveVariablePlaceholder(match, variableResolverContext{
-				clientProgrammaticVars:  rctx.programmaticVars,
-				fileScopedVars:          rctx.fileScopedVars,
-				environmentVars:         rctx.environmentVars,
-				globalVars:              rctx.globalVars,
-				requestScopedSystemVars: rctx.systemVars,
-				osEnvGetter:             rctx.osEnvGetter,
-				dotEnvVars:              rctx.dotEnvVars,
-				responseMap:             rctx.responseMap,
-				loopItemAliases:         rctx.loopItemAliases,
-				loopIndex:               rctx.loopIndex,
-			})
-		}) // End of ReplaceAllStringFunc
+		currentText = placeholderRe.ReplaceAllStringFunc(previousText, func(match string) string {
+			return resolveVariablePlaceholder(match, rctx)
+		})
 
 		if currentText == previousText {
 			break // No more substitutions made in this pass
 		}
 		// If we are on the last iteration and still making changes, it might be a circular dependency.
 		// The currentText will be returned as is, potentially with unresolved variables.
-	} // End of for loop
+	}
 
 	warnUnresolvedPlaceholders(currentText)
 	return currentText
 }
 
-// variableResolverContext holds all the variable sources for resolution.
-type variableResolverContext struct {
-	clientProgrammaticVars  map[string]any
-	fileScopedVars          map[string]string
-	environmentVars         map[string]string
-	globalVars              map[string]string
-	requestScopedSystemVars map[string]string
-	osEnvGetter             func(string) (string, bool)
-	dotEnvVars              map[string]string
-	responseMap             map[string]*Response
-	loopItemAliases         map[string]any
-	loopIndex               int
-}
-
 // resolveSpecialPlaceholder handles $-system vars, response refs, and loop-item refs.
-func resolveSpecialPlaceholder(varName, match string, ctx variableResolverContext) (string, bool) {
+func resolveSpecialPlaceholder(varName, match string, ctx resolveContext) (string, bool) {
 	if strings.HasPrefix(varName, "$") {
 		// $index inside a loop iteration resolves to the 0-based iteration index.
 		if varName == "$index" && ctx.loopIndex >= 0 {
 			return strconv.Itoa(ctx.loopIndex), true
 		}
-		return resolveSystemVariable(varName, match, ctx.requestScopedSystemVars), true
+		return resolveSystemVariable(varName, match, ctx.systemVars), true
 	}
 	if resolved := resolveResponseReference(varName, ctx.responseMap); resolved != "" {
 		return resolved, true
@@ -171,7 +148,7 @@ func resolveSpecialPlaceholder(varName, match string, ctx variableResolverContex
 }
 
 // resolveVariablePlaceholder resolves a single variable placeholder.
-func resolveVariablePlaceholder(match string, ctx variableResolverContext) string {
+func resolveVariablePlaceholder(match string, ctx resolveContext) string {
 	directive := strings.TrimSpace(match[2 : len(match)-2])
 	varName, fallbackValue, hasFallback := parseVariableDirective(directive)
 
@@ -214,7 +191,7 @@ func resolveSystemVariable(varName, match string, requestScopedSystemVars map[st
 }
 
 // resolveRegularVariable resolves regular variables using the precedence order.
-func resolveRegularVariable(varName string, ctx variableResolverContext) string {
+func resolveRegularVariable(varName string, ctx resolveContext) string {
 	// Try high-priority sources first
 	if resolved := resolveHighPriorityVariables(varName, ctx); resolved != "" {
 		return resolved
@@ -225,9 +202,9 @@ func resolveRegularVariable(varName string, ctx variableResolverContext) string 
 }
 
 // resolveHighPriorityVariables resolves from programmatic and file-scoped variables.
-func resolveHighPriorityVariables(varName string, ctx variableResolverContext) string {
+func resolveHighPriorityVariables(varName string, ctx resolveContext) string {
 	// 1. Client programmatic variables
-	if resolved := resolveProgrammaticVariable(varName, ctx.clientProgrammaticVars); resolved != "" {
+	if resolved := resolveProgrammaticVariable(varName, ctx.programmaticVars); resolved != "" {
 		return resolved
 	}
 
@@ -240,7 +217,7 @@ func resolveHighPriorityVariables(varName string, ctx variableResolverContext) s
 }
 
 // resolveLowPriorityVariables resolves from environment and system variables.
-func resolveLowPriorityVariables(varName string, ctx variableResolverContext) string {
+func resolveLowPriorityVariables(varName string, ctx resolveContext) string {
 	// 3. Environment-specific variables
 	if resolved := resolveFromMap(varName, ctx.environmentVars); resolved != "" {
 		return resolved
@@ -275,7 +252,7 @@ func resolveProgrammaticVariable(varName string, clientProgrammaticVars map[stri
 }
 
 // resolveFileScopedVariable resolves from file-scoped variables with dynamic evaluation.
-func resolveFileScopedVariable(varName string, ctx variableResolverContext) string {
+func resolveFileScopedVariable(varName string, ctx resolveContext) string {
 	fileScopedVarNameToTry := "@" + varName
 	val, ok := ctx.fileScopedVars[fileScopedVarNameToTry]
 	if !ok {
@@ -289,10 +266,10 @@ func resolveFileScopedVariable(varName string, ctx variableResolverContext) stri
 	// Found in file-scoped variables
 
 	// Check if the resolved file-scoped variable's value is itself a dynamic system variable placeholder
-	if isDynamicSystemVariablePlaceholder(val, ctx.requestScopedSystemVars) {
+	if isDynamicSystemVariablePlaceholder(val, ctx.systemVars) {
 		// File-scoped variable is dynamic, evaluating
-		// Pass clientProgrammaticVars and dotEnvVars to substituteDynamicSystemVariables
-		evaluatedVal := substituteDynamicSystemVariables(val, ctx.dotEnvVars, ctx.clientProgrammaticVars)
+		// Pass programmaticVars and dotEnvVars to substituteDynamicSystemVariables
+		evaluatedVal := substituteDynamicSystemVariables(val, ctx.dotEnvVars, ctx.programmaticVars)
 		ctx.fileScopedVars[fileScopedVarNameToTry] = evaluatedVal // Cache the evaluated value
 		return evaluatedVal
 	}
@@ -333,7 +310,7 @@ func applyBaseURLIfNeeded(rawURL string, clientBaseURL string) string {
 	// If clientBaseURL couldn't be parsed properly or is not a full URL,
 	// return the original rawURL (which is an absolute path).
 	return rawURL
-} // End of function resolveVariablesInText
+}
 
 // isDynamicSystemVariablePlaceholder checks if a value is a dynamic system variable placeholder.
 func isDynamicSystemVariablePlaceholder(value string, requestScopedSystemVars map[string]string) bool {
@@ -448,11 +425,8 @@ type variableMaps struct {
 func substituteRequestVariables(
 	rcRequest *Request,
 	parsedFile *ParsedFile,
-	requestScopedSystemVars map[string]string,
-	osEnvGetter func(string) (string, bool),
-	programmaticVars map[string]any,
-	currentDotEnvVars map[string]string,
 	clientBaseURL string,
+	rctx resolveContext,
 ) (*url.URL, error) {
 	fileScopedVars, envVarsFromFile, globalVarsFromFile := initializeVariableMaps(parsedFile)
 	mergeRequestActiveVariables(rcRequest, fileScopedVars)
@@ -465,14 +439,12 @@ func substituteRequestVariables(
 
 	respMap := parsedFile.ResponseMap
 
-	finalParsedURL, err := processURLSubstitution(rcRequest, varMaps,
-		requestScopedSystemVars, osEnvGetter, programmaticVars, currentDotEnvVars, clientBaseURL, respMap)
+	finalParsedURL, err := processURLSubstitution(rcRequest, varMaps, clientBaseURL, rctx, respMap)
 	if err != nil {
 		return nil, err
 	}
 
-	processHeaderSubstitution(rcRequest, varMaps,
-		requestScopedSystemVars, osEnvGetter, programmaticVars, currentDotEnvVars, respMap)
+	processHeaderSubstitution(rcRequest, varMaps, rctx, respMap)
 
 	return finalParsedURL, nil
 }
@@ -507,18 +479,18 @@ func mergeRequestActiveVariables(rcRequest *Request, fileScopedVars map[string]s
 
 // processURLSubstitution handles URL variable substitution and parsing
 func processURLSubstitution(rcRequest *Request, varMaps variableMaps,
-	requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool),
-	programmaticVars map[string]any, currentDotEnvVars map[string]string, clientBaseURL string,
+	clientBaseURL string, rctx resolveContext,
 	responseMap map[string]*Response) (*url.URL, error) {
 	loopAliases, loopIndex := currentLoopBindings(rcRequest)
-	substitutedRawURL := resolveVariablesInText(rcRequest.RawURLString, resolveContext{
-		programmaticVars: programmaticVars, fileScopedVars: varMaps.fileScopedVars,
-		environmentVars: varMaps.envVarsFromFile, globalVars: varMaps.globalVarsFromFile,
-		systemVars: requestScopedSystemVars, osEnvGetter: osEnvGetter,
-		dotEnvVars: currentDotEnvVars, responseMap: responseMap,
-		loopItemAliases: loopAliases, loopIndex: loopIndex,
-	})
-	substitutedRawURL = substituteDynamicSystemVariables(substitutedRawURL, currentDotEnvVars, programmaticVars)
+	rctx.fileScopedVars = varMaps.fileScopedVars
+	rctx.environmentVars = varMaps.envVarsFromFile
+	rctx.globalVars = varMaps.globalVarsFromFile
+	rctx.responseMap = responseMap
+	rctx.loopItemAliases = loopAliases
+	rctx.loopIndex = loopIndex
+	substitutedRawURL := resolveVariablesInText(rcRequest.RawURLString, rctx)
+	substitutedRawURL = substituteDynamicSystemVariables(
+		substitutedRawURL, rctx.dotEnvVars, rctx.programmaticVars)
 
 	if strings.TrimSpace(substitutedRawURL) == "" {
 		return nil, fmt.Errorf("URL is empty after variable substitution (original: %s)", rcRequest.RawURLString)
@@ -538,25 +510,23 @@ func processURLSubstitution(rcRequest *Request, varMaps variableMaps,
 
 // processHeaderSubstitution handles header variable substitution
 func processHeaderSubstitution(rcRequest *Request, varMaps variableMaps,
-	requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool),
-	programmaticVars map[string]any, currentDotEnvVars map[string]string,
-	responseMap map[string]*Response) {
+	rctx resolveContext, responseMap map[string]*Response) {
 	if rcRequest.Headers == nil {
 		return
 	}
 
 	loopAliases, loopIndex := currentLoopBindings(rcRequest)
+	rctx.fileScopedVars = varMaps.fileScopedVars
+	rctx.environmentVars = varMaps.envVarsFromFile
+	rctx.globalVars = varMaps.globalVarsFromFile
+	rctx.responseMap = responseMap
+	rctx.loopItemAliases = loopAliases
+	rctx.loopIndex = loopIndex
 	for key, values := range rcRequest.Headers {
 		newValues := make([]string, len(values))
 		for j, val := range values {
-			resolvedVal := resolveVariablesInText(val, resolveContext{
-				programmaticVars: programmaticVars, fileScopedVars: varMaps.fileScopedVars,
-				environmentVars: varMaps.envVarsFromFile, globalVars: varMaps.globalVarsFromFile,
-				systemVars: requestScopedSystemVars, osEnvGetter: osEnvGetter,
-				dotEnvVars: currentDotEnvVars, responseMap: responseMap,
-				loopItemAliases: loopAliases, loopIndex: loopIndex,
-			})
-			newValues[j] = substituteDynamicSystemVariables(resolvedVal, currentDotEnvVars, programmaticVars)
+			resolvedVal := resolveVariablesInText(val, rctx)
+			newValues[j] = substituteDynamicSystemVariables(resolvedVal, rctx.dotEnvVars, rctx.programmaticVars)
 		}
 		rcRequest.Headers[key] = newValues
 	}
@@ -690,15 +660,16 @@ func generateRandomHexString(length int, fallbackMatch string) string {
 	return hexStr[:length]
 }
 
+// reDateTimeRelated matches $datetime/$localDatetime placeholders with optional args.
+var reDateTimeRelated = regexp.MustCompile(`{{\$(datetime|localDatetime)((?:\s*(?:\"[^\"]*\"|[^\"\s}]+))*)\s*}}`)
+
 // substituteDateTimeVariables handles the substitution of $datetime and $localDatetime variables.
 func substituteDateTimeVariables(text string) string {
-	reDateTimeRelated := regexp.MustCompile(`{{\$(datetime|localDatetime)((?:\s*(?:\"[^\"]*\"|[^\"\s}]+))*)\s*}}`)
 	return reDateTimeRelated.ReplaceAllStringFunc(text, processDateTimeMatch)
 }
 
 // processDateTimeMatch processes a single datetime variable match
 func processDateTimeMatch(match string) string {
-	reDateTimeRelated := regexp.MustCompile(`{{\$(datetime|localDatetime)((?:\s*(?:\"[^\"]*\"|[^\"\s}]+))*)\s*}}`)
 	captures := reDateTimeRelated.FindStringSubmatch(match)
 	if len(captures) < 3 {
 		slog.Warn("Could not parse datetime/localDatetime variable, captures unexpected",
@@ -714,10 +685,12 @@ func processDateTimeMatch(match string) string {
 	return formatTimeString(now, formatStr, match)
 }
 
+// reDateTimeArgParts extracts quoted or bare arguments from a datetime argument list.
+var reDateTimeArgParts = regexp.MustCompile(`(?:\"([^\"]*)\"|([^\"\s}]+))`)
+
 // extractFormatString extracts the format string from datetime arguments
 func extractFormatString(argsStr string) string {
-	argPartsRegex := regexp.MustCompile(`(?:\"([^\"]*)\"|([^\"\s}]+))`)
-	parsedArgsMatches := argPartsRegex.FindAllStringSubmatch(argsStr, -1)
+	parsedArgsMatches := reDateTimeArgParts.FindAllStringSubmatch(argsStr, -1)
 
 	for _, m := range parsedArgsMatches {
 		if m[1] != "" {
@@ -770,9 +743,11 @@ func substituteDynamicSystemVariables(
 	return text
 }
 
+// reSystemEnvVar matches {{$env.VAR_NAME}} placeholders.
+var reSystemEnvVar = regexp.MustCompile(`{{\$env\.([A-Za-z_][A-Za-z0-9_]*?)}}`)
+
 // substituteSystemEnvVariables handles {{$env.VAR_NAME}} placeholders
 func substituteSystemEnvVariables(text string) string {
-	reSystemEnvVar := regexp.MustCompile(`{{\$env\.([A-Za-z_][A-Za-z0-9_]*?)}}`)
 	return reSystemEnvVar.ReplaceAllStringFunc(text, func(match string) string {
 		parts := reSystemEnvVar.FindStringSubmatch(match)
 		if len(parts) == 2 {
@@ -810,9 +785,11 @@ func dotEnvReplacer(activeDotEnvVars map[string]string) func(string) string {
 	}
 }
 
+// reDotEnvEncoded matches URL-encoded {{$dotenv VAR}} placeholders.
+var reDotEnvEncoded = regexp.MustCompile(`%7B%7B\$dotenv\s+([a-zA-Z_][a-zA-Z0-9_]*)%7D%7D`)
+
 // substituteDotEnvEncoded handles URL-encoded dotenv variables
 func substituteDotEnvEncoded(text string, activeDotEnvVars map[string]string) string {
-	reDotEnvEncoded := regexp.MustCompile(`%7B%7B\$dotenv\s+([a-zA-Z_][a-zA-Z0-9_]*)%7D%7D`)
 	return reDotEnvEncoded.ReplaceAllStringFunc(text, func(match string) string {
 		parts := reDotEnvEncoded.FindStringSubmatch(match)
 		if len(parts) == 2 {
@@ -898,9 +875,11 @@ func processEnvReplacer() func(string) string {
 	}
 }
 
+// reProcessEnvEncoded matches URL-encoded {{$processEnv VAR}} placeholders.
+var reProcessEnvEncoded = regexp.MustCompile(`%7B%7B\$processEnv\s+([A-Za-z_][A-Za-z0-9_]*)%7D%7D`)
+
 // substituteProcessEnvEncoded handles URL-encoded process env variables
 func substituteProcessEnvEncoded(text string) string {
-	reProcessEnvEncoded := regexp.MustCompile(`%7B%7B\$processEnv\s+([A-Za-z_][A-Za-z0-9_]*)%7D%7D`)
 	return reProcessEnvEncoded.ReplaceAllStringFunc(text, func(match string) string {
 		parts := reProcessEnvEncoded.FindStringSubmatch(match)
 		if len(parts) == 2 {

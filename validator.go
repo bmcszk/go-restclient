@@ -52,7 +52,7 @@ const anyRegexPattern = `(?s).*?`       // Matches any char (incl newline), non-
 // As a method on the `Client`, it uses `c.programmaticVars` for programmatic variables and the client instance `c`
 // itself for resolving system variables (e.g., {{$uuid}}) within the .hresp content.
 // Variables can also be defined in the .hresp file using `@name = value` syntax.
-// The precedence for variable resolution is detailed in `hresp_vars.go:resolveAndSubstitute`.
+// The precedence for variable resolution is detailed in `variables.go:resolveVariablesInText`.
 //
 // It returns a consolidated error (multierror) if any discrepancies are found (e.g., status mismatch,
 // header mismatch, body mismatch, or count mismatch between actual and expected responses), or nil
@@ -174,7 +174,16 @@ func (c *Client) loadAndParseExpectedResponses(
 		return nil, nil, fmt.Errorf("failed to extract @defines from %s: %w", responseFilePath, err)
 	}
 
-	substitutedContent := resolveAndSubstitute(contentWithoutDefines, fileVars, c)
+	// Plain @define keys are prefixed so fileScopedVars match the main engine's "@name" lookup.
+	atFileVars := make(map[string]string, len(fileVars))
+	for name, value := range fileVars {
+		atFileVars["@"+name] = value
+	}
+	rctx := c.directiveResolveContext(nil, &Request{ActiveVariables: atFileVars}, os.LookupEnv,
+		c.generateRequestScopedSystemVariables(), nil, -1)
+	substitutedContent := resolveVariablesInText(contentWithoutDefines, rctx)
+	substitutedContent = substituteDynamicSystemVariables(
+		substitutedContent, c.currentDotEnvVars, c.programmaticVars)
 
 	expectedResponses, parseErr := parseExpectedResponses(strings.NewReader(substitutedContent), responseFilePath)
 	if parseErr != nil {

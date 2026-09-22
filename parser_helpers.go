@@ -183,7 +183,7 @@ func processExpectedStatusOrHeaderLine(line string, lineNumber int, resp *Expect
 
 // parseExpectedResponses parses expected HTTP response definitions from an io.Reader.
 // It expects the content provided by the reader to be the raw .hresp format, typically after
-// any variable substitutions have already been performed (e.g., by `resolveAndSubstitute`).
+// any variable substitutions have already been performed (e.g., by `resolveVariablesInText`).
 //
 // The `filePath` argument is used for context in error messages only and does not imply that this
 // function reads from the file system directly. It processes content line by line, interpreting
