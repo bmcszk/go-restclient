@@ -3,514 +3,497 @@ package main_test
 import (
 	"fmt"
 	"net/http"
-	"net/http/httptest"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-// buildBinary compiles the restclient binary and returns its path.
-func buildBinary(t *testing.T) string {
-	t.Helper()
-	binary := filepath.Join(t.TempDir(), "restclient")
-	cmd := exec.Command("go", "build", "-o", binary, ".")
-	cmd.Dir = filepath.Join(findModuleRoot(t), "cmd", "restclient")
-	out, err := cmd.CombinedOutput()
-	require.NoError(t, err, "build failed: %s", string(out))
-	return binary
-}
-
-func findModuleRoot(t *testing.T) string {
-	t.Helper()
-	dir, err := os.Getwd()
-	require.NoError(t, err)
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatal("could not find module root")
-		}
-		dir = parent
-	}
-}
-
-// writeTestFile writes content to a temp .http file.
-func writeTestFile(t *testing.T, dir, name, content string) string {
-	t.Helper()
-	path := filepath.Join(dir, name)
-	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
-	return path
-}
-
-// startMockServer starts a test HTTP server.
-func startMockServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
-	t.Helper()
-	return httptest.NewServer(handler)
-}
-
-func runBinary(t *testing.T, binary string, args ...string) (string, int) {
-	t.Helper()
-	cmd := exec.Command(binary, args...)
-	out, err := cmd.CombinedOutput()
-	exitCode := 0
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			exitCode = exitErr.ExitCode()
-		} else {
-			t.Fatalf("failed to run binary: %v", err)
-		}
-	}
-	return string(out), exitCode
-}
-
 func TestCLI_NoArgs(t *testing.T) {
-	binary := buildBinary(t)
-	out, code := runBinary(t, binary)
-	assert.Equal(t, 80, code) // Kong exit code for missing required flag
-	assert.Contains(t, out, "missing flags: --file=STRING")
+	given, when, then := newParts(t)
+
+	given.
+		givenABuiltBinary()
+
+	when.
+		whenRunningNoArgs()
+
+	then.
+		thenExitCodeIs(80).and().
+		thenOutputContains("missing flags: --file=STRING")
 }
 
 func TestCLI_MissingFile(t *testing.T) {
-	binary := buildBinary(t)
-	out, code := runBinary(t, binary, "-f", "/nonexistent/file.http")
-	assert.Equal(t, 1, code)
-	assert.Contains(t, out, "error")
+	given, when, then := newParts(t)
+
+	given.
+		givenABuiltBinary()
+
+	when.
+		whenRunningWithArgs("-f", "/nonexistent/file.http")
+
+	then.
+		thenExitCodeIs(1).and().
+		thenOutputContains("error")
 }
 
 func TestCLI_SingleRequest(t *testing.T) {
-	server := startMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "hello")
-	})
-	defer server.Close()
+	given, when, then := newParts(t)
 
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "test.http",
-		fmt.Sprintf("GET %s/health\n", server.URL))
+	given.
+		givenAMockServer(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "hello")
+		}).and().
+		givenAnHttpFile(fmt.Sprintf("GET %s/health\n", given.serverURL)).and().
+		givenABuiltBinary()
 
-	out, code := runBinary(t, binary, "-f", filePath, "--all")
-	assert.Equal(t, 0, code)
-	assert.Contains(t, out, "200 OK")
-	assert.Contains(t, out, "hello")
+	when.
+		whenRunningAll()
+
+	then.
+		thenExitCodeIs(0).and().
+		thenOutputContains("200 OK").and().
+		thenOutputContains("hello")
 }
 
 func TestCLI_SelectByName(t *testing.T) {
-	var paths []string
-	server := startMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		paths = append(paths, r.URL.Path)
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "ok")
-	})
-	defer server.Close()
+	given, when, then := newParts(t)
 
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "test.http",
-		fmt.Sprintf("### get user\nGET %s/a\n###\n### get order\nGET %s/b\n",
-			server.URL, server.URL))
+	given.
+		givenAMockServer(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "ok")
+		}).and().
+		givenAnHttpFile(fmt.Sprintf("### get user\nGET %s/a\n###\n### get order\nGET %s/b\n",
+			given.serverURL, given.serverURL)).and().
+		givenABuiltBinary()
 
-	out, code := runBinary(t, binary, "-f", filePath, "-n", "get order")
-	assert.Equal(t, 0, code)
-	assert.Contains(t, out, "200 OK")
-	assert.Equal(t, []string{"/b"}, paths, "only the named request should execute")
+	when.
+		whenRunningNamed("get order")
+
+	then.
+		thenExitCodeIs(0).and().
+		thenOutputContains("200 OK").and().
+		thenServerGotPaths("/b")
 }
 
 func TestCLI_SelectByIndex(t *testing.T) {
-	var paths []string
-	server := startMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		paths = append(paths, r.URL.Path)
-		w.WriteHeader(http.StatusOK)
-	})
-	defer server.Close()
+	given, when, then := newParts(t)
 
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "test.http",
-		fmt.Sprintf("GET %s/first\n###\nGET %s/second\n###\nGET %s/third\n",
-			server.URL, server.URL, server.URL))
+	given.
+		givenAMockServer(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}).and().
+		givenAnHttpFile(fmt.Sprintf("GET %s/first\n###\nGET %s/second\n###\nGET %s/third\n",
+			given.serverURL, given.serverURL, given.serverURL)).and().
+		givenABuiltBinary()
 
-	out, code := runBinary(t, binary, "-f", filePath, "-i", "1")
-	assert.Equal(t, 0, code)
-	assert.Contains(t, out, "200 OK")
-	assert.Equal(t, []string{"/second"}, paths)
+	when.
+		whenRunningByIndex("1")
+
+	then.
+		thenExitCodeIs(0).and().
+		thenOutputContains("200 OK").and().
+		thenServerGotPaths("/second")
 }
 
 func TestCLI_NameNotFound(t *testing.T) {
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "test.http",
-		"GET http://example.com/a\n")
+	given, when, then := newParts(t)
 
-	out, code := runBinary(t, binary, "-f", filePath, "-n", "nonexistent")
-	assert.Equal(t, 1, code)
-	assert.Contains(t, out, "not found")
+	given.
+		givenAnHttpFile("GET http://example.com/a\n").and().
+		givenABuiltBinary()
+
+	when.
+		whenRunningNamed("nonexistent")
+
+	then.
+		thenExitCodeIs(1).and().
+		thenOutputContains("not found")
 }
 
 func TestCLI_IndexOutOfRange(t *testing.T) {
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "test.http",
-		"GET http://example.com/a\n")
+	given, when, then := newParts(t)
 
-	out, code := runBinary(t, binary, "-f", filePath, "-i", "5")
-	assert.Equal(t, 1, code)
-	assert.Contains(t, out, "out of range")
+	given.
+		givenAnHttpFile("GET http://example.com/a\n").and().
+		givenABuiltBinary()
+
+	when.
+		whenRunningByIndex("5")
+
+	then.
+		thenExitCodeIs(1).and().
+		thenOutputContains("out of range")
 }
 
 func TestCLI_NameAndIndexMutuallyExclusive(t *testing.T) {
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "test.http",
-		"GET http://example.com/a\n")
+	given, when, then := newParts(t)
 
-	out, code := runBinary(t, binary, "-f", filePath, "-n", "foo", "-i", "0")
-	assert.Equal(t, 1, code) // Kong returns 1 for validation errors
-	assert.Contains(t, out, "mutually exclusive")
+	given.
+		givenAnHttpFile("GET http://example.com/a\n").and().
+		givenABuiltBinary()
+
+	when.
+		whenRunningWithArgs("-f", given.httpFile, "-n", "foo", "-i", "0")
+
+	then.
+		thenExitCodeIs(1).and().
+		thenOutputContains("mutually exclusive")
 }
 
 func TestCLI_ExpectedPass(t *testing.T) {
-	server := startMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("X-Custom", "yes")
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "body-ok")
-	})
-	defer server.Close()
+	given, when, then := newParts(t)
 
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "test.http",
-		fmt.Sprintf("GET %s/check\n", server.URL))
+	given.
+		givenAMockServer(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("X-Custom", "yes")
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "body-ok")
+		}).and().
+		givenAnHttpFile(fmt.Sprintf("GET %s/check\n", given.serverURL)).and().
+		givenAnExpectedFile("HTTP/1.1 200 OK\nX-Custom: yes\n\nbody-ok\n").and().
+		givenABuiltBinary()
 
-	expectedPath := writeTestFile(t, dir, "expected.hresp",
-		"HTTP/1.1 200 OK\nX-Custom: yes\n\nbody-ok\n")
+	when.
+		whenRunningAllWithExpected()
 
-	out, code := runBinary(t, binary, "-f", filePath, "--all", "-e", expectedPath)
-	assert.Equal(t, 0, code)
-	assert.Contains(t, out, "200 OK")
+	then.
+		thenExitCodeIs(0).and().
+		thenOutputContains("200 OK")
 }
 
 func TestCLI_ExpectedFail(t *testing.T) {
-	server := startMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "actual-body")
-	})
-	defer server.Close()
+	given, when, then := newParts(t)
 
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "test.http",
-		fmt.Sprintf("GET %s/check\n", server.URL))
+	given.
+		givenAMockServer(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "actual-body")
+		}).and().
+		givenAnHttpFile(fmt.Sprintf("GET %s/check\n", given.serverURL)).and().
+		givenAnExpectedFile("HTTP/1.1 200 OK\n\nexpected-body\n").and().
+		givenABuiltBinary()
 
-	expectedPath := writeTestFile(t, dir, "expected.hresp",
-		"HTTP/1.1 200 OK\n\nexpected-body\n")
+	when.
+		whenRunningAllWithExpected()
 
-	out, code := runBinary(t, binary, "-f", filePath, "--all", "-e", expectedPath)
-	assert.Equal(t, 1, code)
-	assert.Contains(t, out, "error")
+	then.
+		thenExitCodeIs(1).and().
+		thenOutputContains("error")
 }
 
 func TestCLI_SelectByNameWithExpected(t *testing.T) {
-	server := startMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusCreated)
-		_, _ = fmt.Fprint(w, "created")
-	})
-	defer server.Close()
+	given, when, then := newParts(t)
 
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "test.http",
-		fmt.Sprintf("### skip this\nGET %s/other\n###\n### create item\nPOST %s/item\n",
-			server.URL, server.URL))
+	given.
+		givenAMockServer(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusCreated)
+			_, _ = fmt.Fprint(w, "created")
+		}).and().
+		givenAnHttpFile(fmt.Sprintf("### skip this\nGET %s/other\n###\n### create item\nPOST %s/item\n",
+			given.serverURL, given.serverURL)).and().
+		givenAnExpectedFile("HTTP/1.1 201 Created\n\ncreated\n").and().
+		givenABuiltBinary()
 
-	expectedPath := writeTestFile(t, dir, "expected.hresp",
-		"HTTP/1.1 201 Created\n\ncreated\n")
+	when.
+		whenRunningNamedWithExpected("create item")
 
-	out, code := runBinary(t, binary, "-f", filePath, "-n", "create item", "-e", expectedPath)
-	assert.Equal(t, 0, code)
-	assert.Contains(t, out, "201 Created")
+	then.
+		thenExitCodeIs(0).and().
+		thenOutputContains("201 Created")
 }
 
 func TestCLI_NegativeIndex(t *testing.T) {
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "test.http",
-		"GET http://example.com/a\n")
+	given, when, then := newParts(t)
 
-	out, code := runBinary(t, binary, "-f", filePath, "--index=-1")
-	assert.Equal(t, 1, code)
-	assert.Contains(t, out, "out of range")
+	given.
+		givenAnHttpFile("GET http://example.com/a\n").and().
+		givenABuiltBinary()
+
+	when.
+		whenRunningByIndexLong("-1")
+
+	then.
+		thenExitCodeIs(1).and().
+		thenOutputContains("out of range")
 }
 
 func TestCLI_List(t *testing.T) {
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "test.http",
-		"### login\nGET http://example.com/login\n###\n### logout\nGET http://example.com/logout\n")
+	given, when, then := newParts(t)
 
-	out, code := runBinary(t, binary, "-f", filePath, "--list")
-	assert.Equal(t, 0, code)
-	assert.Contains(t, out, "0  login")
-	assert.Contains(t, out, "1  logout")
+	given.
+		givenAnHttpFile("### login\nGET http://example.com/login\n###" +
+			"\n### logout\nGET http://example.com/logout\n").and().
+		givenABuiltBinary()
+
+	when.
+		whenRunningList()
+
+	then.
+		thenExitCodeIs(0).and().
+		thenOutputContains("0  login").and().
+		thenOutputContains("1  logout")
 }
 
 func TestCLI_ListUnnamed(t *testing.T) {
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "test.http",
-		"GET http://example.com/a\n###\nGET http://example.com/b\n")
+	given, when, then := newParts(t)
 
-	out, code := runBinary(t, binary, "-f", filePath, "--list")
-	assert.Equal(t, 0, code)
-	assert.Contains(t, out, "0  (unnamed)")
-	assert.Contains(t, out, "1  (unnamed)")
+	given.
+		givenAnHttpFile("GET http://example.com/a\n###\nGET http://example.com/b\n").and().
+		givenABuiltBinary()
+
+	when.
+		whenRunningList()
+
+	then.
+		thenExitCodeIs(0).and().
+		thenOutputContains("0  (unnamed)").and().
+		thenOutputContains("1  (unnamed)")
 }
 
 func TestCLI_ListMissingFile(t *testing.T) {
-	binary := buildBinary(t)
-	out, code := runBinary(t, binary, "--list")
-	assert.Equal(t, 80, code) // Kong exit code for missing required flag
-	assert.Contains(t, out, "missing flags: --file=STRING")
+	given, when, then := newParts(t)
+
+	given.
+		givenABuiltBinary()
+
+	when.
+		whenRunningListWithoutFile()
+
+	then.
+		thenExitCodeIs(80).and().
+		thenOutputContains("missing flags: --file=STRING")
 }
 
 func TestCLI_FailOnError_4xx(t *testing.T) {
-	server := startMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = fmt.Fprint(w, "not found")
-	})
-	defer server.Close()
+	given, when, then := newParts(t)
 
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "test.http",
-		fmt.Sprintf("GET %s/missing\n", server.URL))
+	given.
+		givenAMockServer(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = fmt.Fprint(w, "not found")
+		}).and().
+		givenAnHttpFile(fmt.Sprintf("GET %s/missing\n", given.serverURL)).and().
+		givenABuiltBinary()
 
-	// Without --fail-on-error: exits 0
-	_, code := runBinary(t, binary, "-f", filePath, "--all")
-	assert.Equal(t, 0, code)
+	when.
+		whenRunningAll()
 
-	// With --fail-on-error: exits 1
-	_, code = runBinary(t, binary, "-f", filePath, "--all", "--fail-on-error")
-	assert.Equal(t, 1, code)
+	then.
+		thenExitCodeIs(0)
+
+	when.
+		whenRunningAllWithFailOnError()
+
+	then.
+		thenExitCodeIs(1)
 }
 
 func TestCLI_FailOnError_Success(t *testing.T) {
-	server := startMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "ok")
-	})
-	defer server.Close()
+	given, when, then := newParts(t)
 
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "test.http",
-		fmt.Sprintf("GET %s/ok\n", server.URL))
+	given.
+		givenAMockServer(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "ok")
+		}).and().
+		givenAnHttpFile(fmt.Sprintf("GET %s/ok\n", given.serverURL)).and().
+		givenABuiltBinary()
 
-	// With --fail-on-error but 200 response: exits 0
-	_, code := runBinary(t, binary, "-f", filePath, "--all", "--fail-on-error")
-	assert.Equal(t, 0, code)
+	when.
+		whenRunningAllWithFailOnError()
+
+	then.
+		thenExitCodeIs(0)
 }
 
 func TestCLI_DefineFlag(t *testing.T) {
-	server := startMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if auth := r.Header.Get("Authorization"); auth != "Bearer test-token" {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "ok")
-	})
-	defer server.Close()
+	given, when, then := newParts(t)
 
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "test.http",
-		fmt.Sprintf("GET %s/protected\nAuthorization: Bearer {{token}}\n", server.URL))
+	given.
+		givenAMockServer(bearerChecker("test-token")).and().
+		givenAnHttpFile(fmt.Sprintf("GET %s/protected\nAuthorization: Bearer {{token}}\n", given.serverURL)).and().
+		givenABuiltBinary()
 
-	// With -D token=test-token
-	_, code := runBinary(t, binary, "-f", filePath, "--all", "-D", "token=test-token")
-	assert.Equal(t, 0, code)
+	when.
+		whenRunningAllWithDefine("token=test-token")
+
+	then.
+		thenExitCodeIs(0)
 }
 
 func TestCLI_DefineFlagLong(t *testing.T) {
-	server := startMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if auth := r.Header.Get("Authorization"); auth != "Bearer another" {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "ok")
-	})
-	defer server.Close()
+	given, when, then := newParts(t)
 
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "test.http",
-		fmt.Sprintf("GET %s/protected\nAuthorization: Bearer {{token}}\n", server.URL))
+	given.
+		givenAMockServer(bearerChecker("another")).and().
+		givenAnHttpFile(fmt.Sprintf("GET %s/protected\nAuthorization: Bearer {{token}}\n", given.serverURL)).and().
+		givenABuiltBinary()
 
-	// With --define token=another
-	_, code := runBinary(t, binary, "-f", filePath, "--all", "--define", "token=another")
-	assert.Equal(t, 0, code)
+	when.
+		whenRunningWithArgs("-f", given.httpFile, "--all", "--define", "token=another")
+
+	then.
+		thenExitCodeIs(0)
 }
 
 func TestCLI_DefineFlagMultiple(t *testing.T) {
-	server := startMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-API-Key") != "key123" || r.Header.Get("X-Env") != "staging" {
-			http.Error(w, "bad headers", http.StatusBadRequest)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "ok")
-	})
-	defer server.Close()
+	given, when, then := newParts(t)
 
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "test.http",
-		fmt.Sprintf("GET %s/protected\nX-API-Key: {{api_key}}\nX-Env: {{env}}\n", server.URL))
+	given.
+		givenAMockServer(apiKeyEnvChecker()).and().
+		givenAnHttpFile(fmt.Sprintf("GET %s/protected\nX-API-Key: {{api_key}}\nX-Env: {{env}}\n",
+			given.serverURL)).and().
+		givenABuiltBinary()
 
-	// Multiple -D flags
-	_, code := runBinary(t, binary, "-f", filePath, "--all", "-D", "api_key=key123", "-D", "env=staging")
-	assert.Equal(t, 0, code)
+	when.
+		whenRunningAllWithDefine("api_key=key123", "env=staging")
+
+	then.
+		thenExitCodeIs(0)
 }
 
 func TestCLI_EnvFlagRunsNamedDotenv(t *testing.T) {
-	var gotKey string
-	server := startMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		gotKey = r.Header.Get("X-Key")
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, gotKey)
-	})
-	defer server.Close()
+	given, when, then := newParts(t)
 
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	writeTestFile(t, dir, ".env", "KEY=default\n")
-	writeTestFile(t, dir, ".env.staging", "KEY=staging\n")
-	filePath := writeTestFile(t, dir, "test.http",
-		fmt.Sprintf("GET %s/echo\nX-Key: {{$dotenv KEY}}\n", server.URL))
+	given.
+		givenAMockServer(keyEchoHandler).and().
+		givenADotenvFile(".env", "KEY=default\n").and().
+		givenADotenvFile(".env.staging", "KEY=staging\n").and().
+		givenAnHttpFile(fmt.Sprintf("GET %s/echo\nX-Key: {{$dotenv KEY}}\n", given.serverURL)).and().
+		givenABuiltBinary()
 
-	out, code := runBinary(t, binary, "-f", filePath, "--all", "--env", "staging")
-	assert.Equal(t, 0, code, "stdout=%s", out)
-	assert.Equal(t, "staging", gotKey, ".env.staging must override .env")
-	assert.Contains(t, out, "staging")
+	when.
+		whenRunningAllWithEnv("staging")
+
+	then.
+		thenExitCodeIs(0).and().
+		thenServerGotHeaderOnPath("/echo", "X-Key", "staging").and().
+		thenOutputContains("staging")
 }
 
 func TestCLI_EnvFlagAbsentKeepsDefaultDotenv(t *testing.T) {
-	var gotKey string
-	server := startMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		gotKey = r.Header.Get("X-Key")
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, gotKey)
-	})
-	defer server.Close()
+	given, when, then := newParts(t)
 
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	writeTestFile(t, dir, ".env", "KEY=default\n")
-	writeTestFile(t, dir, ".env.staging", "KEY=staging\n")
-	filePath := writeTestFile(t, dir, "test.http",
-		fmt.Sprintf("GET %s/echo\nX-Key: {{$dotenv KEY}}\n", server.URL))
+	given.
+		givenAMockServer(keyEchoHandler).and().
+		givenADotenvFile(".env", "KEY=default\n").and().
+		givenADotenvFile(".env.staging", "KEY=staging\n").and().
+		givenAnHttpFile(fmt.Sprintf("GET %s/echo\nX-Key: {{$dotenv KEY}}\n", given.serverURL)).and().
+		givenABuiltBinary()
 
-	out, code := runBinary(t, binary, "-f", filePath, "--all")
-	assert.Equal(t, 0, code, "stdout=%s", out)
-	assert.Equal(t, "default", gotKey, "without --env, .env value must win")
-	assert.Contains(t, out, "default")
+	when.
+		whenRunningAll()
+
+	then.
+		thenExitCodeIs(0).and().
+		thenServerGotHeaderOnPath("/echo", "X-Key", "default").and().
+		thenOutputContains("default")
 }
 
 func TestCLI_NameSelectRunsRefChain(t *testing.T) {
-	var paths []string
-	server := startMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		paths = append(paths, r.URL.Path)
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "ok")
-	})
-	defer server.Close()
+	given, when, then := newParts(t)
 
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "test.http",
-		fmt.Sprintf("### get protected\n# @ref login\nGET %s/protected\n###\n### login\nPOST %s/login\n",
-			server.URL, server.URL))
+	given.
+		givenAMockServer(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "ok")
+		}).and().
+		givenAnHttpFile(fmt.Sprintf("### get protected\n# @ref login\nGET %s/protected\n###"+
+			"\n### login\nPOST %s/login\n",
+			given.serverURL, given.serverURL)).and().
+		givenABuiltBinary()
 
-	out, code := runBinary(t, binary, "-f", filePath, "-n", "get protected")
-	assert.Equal(t, 0, code, "stdout=%s", out)
-	assert.Equal(t, []string{"/login", "/protected"}, paths,
-		"@ref login must run before target even though login is declared later")
+	when.
+		whenRunningNamed("get protected")
+
+	then.
+		thenExitCodeIs(0).and().
+		thenServerGotPaths("/login", "/protected")
 }
 
 func TestCLI_AfterComposableWithRefChain(t *testing.T) {
-	var paths []string
-	server := startMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		paths = append(paths, r.URL.Path)
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "ok")
-	})
-	defer server.Close()
+	given, when, then := newParts(t)
 
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "test.http",
-		fmt.Sprintf("### get protected\n# @ref login\nGET %s/protected\n"+
+	given.
+		givenAMockServer(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "ok")
+		}).and().
+		givenAnHttpFile(fmt.Sprintf("### get protected\n# @ref login\nGET %s/protected\n"+
 			"###\n### login\nPOST %s/login\n###\n### health\nGET %s/health\n",
-			server.URL, server.URL, server.URL))
+			given.serverURL, given.serverURL, given.serverURL)).and().
+		givenABuiltBinary()
 
-	out, code := runBinary(t, binary, "-f", filePath, "-n", "get protected", "-A", "health")
-	assert.Equal(t, 0, code, "stdout=%s", out)
-	assert.Equal(t, []string{"/health", "/login", "/protected"}, paths,
-		"-A health runs first, then ref chain, then target")
+	when.
+		whenRunningNamedWithAfter("get protected", "health")
+
+	then.
+		thenExitCodeIs(0).and().
+		thenServerGotPaths("/health", "/login", "/protected")
 }
 
 func TestCLI_DefineFlagInvalid(t *testing.T) {
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "test.http", "GET http://example.com\n")
+	given, when, then := newParts(t)
 
-	_, code := runBinary(t, binary, "-f", filePath, "--all", "-D", "invalid")
-	assert.Equal(t, 1, code)
+	given.
+		givenAnHttpFile("GET http://example.com\n").and().
+		givenABuiltBinary()
+
+	when.
+		whenRunningAllWithDefine("invalid")
+
+	then.
+		thenExitCodeIs(1)
 }
 
 func TestCLI_VersionFlag(t *testing.T) {
-	binary := buildBinary(t)
-	out, code := runBinary(t, binary, "--version")
-	assert.Equal(t, 0, code)
-	assert.NotEmpty(t, strings.TrimSpace(out), "--version must print a non-empty version")
-	assert.Contains(t, out, "dev")
-	assert.NotContains(t, out, "missing flags", "--version must bypass required-flag validation")
+	given, when, then := newParts(t)
+
+	given.
+		givenABuiltBinary()
+
+	when.
+		whenRunningVersionFlag("--version")
+
+	then.
+		thenExitCodeIs(0).and().
+		thenOutputTrimmedIsNotEmpty().and().
+		thenOutputContains("dev").and().
+		thenOutputNotContains("missing flags")
 }
 
 func TestCLI_VersionShortFlag(t *testing.T) {
-	binary := buildBinary(t)
-	out, code := runBinary(t, binary, "-V")
-	assert.Equal(t, 0, code)
-	assert.Contains(t, out, "dev")
-	assert.NotContains(t, out, "missing flags")
+	given, when, then := newParts(t)
+
+	given.
+		givenABuiltBinary()
+
+	when.
+		whenRunningVersionFlag("-V")
+
+	then.
+		thenExitCodeIs(0).and().
+		thenOutputContains("dev").and().
+		thenOutputNotContains("missing flags")
 }
 
 func TestCLI_DisabledPrintsSkipLine(t *testing.T) {
-	var paths []string
-	server := startMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		paths = append(paths, r.URL.Path)
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "ok")
-	})
-	defer server.Close()
+	given, when, then := newParts(t)
 
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "test.http",
-		fmt.Sprintf("### disabled\n# @disabled\nGET %s/skipped\n###\nGET %s/ran\n",
-			server.URL, server.URL))
+	given.
+		givenAMockServer(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "ok")
+		}).and().
+		givenAnHttpFile(fmt.Sprintf("### disabled\n# @disabled\nGET %s/skipped\n###\nGET %s/ran\n",
+			given.serverURL, given.serverURL)).and().
+		givenABuiltBinary()
 
-	out, code := runBinary(t, binary, "-f", filePath, "--all")
-	assert.Equal(t, 0, code, "stdout=%s", out)
-	assert.Contains(t, out, "SKIP")
-	assert.Equal(t, []string{"/ran"}, paths, "disabled request must not hit the server")
+	when.
+		whenRunningAll()
+
+	then.
+		thenExitCodeIs(0).and().
+		thenOutputContains("SKIP").and().
+		thenServerGotPaths("/ran")
 }
