@@ -26,7 +26,7 @@ func buildVersion() string {
 
 // vcsInfo returns the embedded vcs revision and dirty flag, if any.
 func vcsInfo(info *debug.BuildInfo) (rev, dirty string) {
-	rev, dirty := "", ""
+	rev, dirty = "", ""
 	for _, s := range info.Settings {
 		switch s.Key {
 		case "vcs.revision":
