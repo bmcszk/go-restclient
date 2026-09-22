@@ -87,11 +87,11 @@ func (p *requestParserState) setLoopCount(arg string) (bool, error) {
 // snapshotLoopState snapshots pre-substitution body/headers so loop iterations can be re-substituted from originals.
 func (*requestParserState) snapshotLoopState(req *Request) {
 	if req.LoopDeclared {
-		req.loopOriginalRawBody = req.RawBody
+		req.runtime.originalRawBody = req.RawBody
 		snapshot := make(http.Header, len(req.Headers))
 		for k, vs := range req.Headers {
 			snapshot[k] = append([]string(nil), vs...)
 		}
-		req.loopOriginalHeaders = snapshot
+		req.runtime.originalHeaders = snapshot
 	}
 }

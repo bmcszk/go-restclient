@@ -69,8 +69,8 @@ func (c *Client) executeLoopAndStore(
 		return nil, nil
 	}
 	iterResponses, runErr := c.runLoopIterations(ctx, restClientReq, iterations, parsedFile, osEnvGetter, index)
-	restClientReq.loopIterationIndex = 0
-	restClientReq.loopIterationValue = nil
+	restClientReq.runtime.iterationIndex = 0
+	restClientReq.runtime.iterationValue = nil
 	if runErr != nil {
 		return &Response{Request: restClientReq, Error: runErr}, runErr
 	}
@@ -288,8 +288,8 @@ func (c *Client) runLoopIteration(
 	i int,
 	iter loopIteration,
 ) (*Response, error) {
-	req.loopIterationIndex = iter.index
-	req.loopIterationValue = iter.item
+	req.runtime.iterationIndex = iter.index
+	req.runtime.iterationValue = iter.item
 	resetLoopIterationState(req)
 	if i == 0 && req.SleepDuration > 0 {
 		time.Sleep(req.SleepDuration)
@@ -310,12 +310,12 @@ func (c *Client) runLoopIteration(
 
 // resetLoopIterationState restores RawBody / Headers to the parse-time snapshot for re-substitution.
 func resetLoopIterationState(req *Request) {
-	if req.loopOriginalRawBody != "" || req.ExternalFilePath == "" {
-		req.RawBody = req.loopOriginalRawBody
+	if req.runtime.originalRawBody != "" || req.ExternalFilePath == "" {
+		req.RawBody = req.runtime.originalRawBody
 	}
-	if req.loopOriginalHeaders != nil {
-		restored := make(http.Header, len(req.loopOriginalHeaders))
-		for k, vs := range req.loopOriginalHeaders {
+	if req.runtime.originalHeaders != nil {
+		restored := make(http.Header, len(req.runtime.originalHeaders))
+		for k, vs := range req.runtime.originalHeaders {
 			restored[k] = append([]string(nil), vs...)
 		}
 		req.Headers = restored

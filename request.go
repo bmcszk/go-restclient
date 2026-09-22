@@ -75,14 +75,8 @@ type Request struct {
 	// LoopItemName is the per-iteration item alias from `# @loop for <itemName> of <coll>`.
 	LoopItemName string
 
-	// loopIterationIndex is the 0-based iteration counter set transiently by the executor; exposed via {{$index}}.
-	loopIterationIndex int
-	// loopIterationValue is the current iteration value set transiently by the executor; nil for `for N` loops.
-	loopIterationValue any
-	// loopOriginalRawBody is a snapshot of the parse-time RawBody for loop re-substitution.
-	loopOriginalRawBody string
-	// loopOriginalHeaders is a snapshot of the parse-time Headers for loop re-substitution.
-	loopOriginalHeaders http.Header
+	// runtime holds per-execution transient loop state; never parsed from the file.
+	runtime requestRuntime
 
 	// External file body configuration
 	// ExternalFilePath stores the path for external file body references (< ./path/to/file or <@ ./path/to/file)
@@ -97,6 +91,14 @@ type Request struct {
 
 	// Imported: set on requests from @import files; executor skips them (ref-only).
 	Imported bool
+}
+
+// requestRuntime holds per-execution transient loop state; never parsed from the file.
+type requestRuntime struct {
+	iterationIndex  int         // 0-based counter set by the executor; exposed via {{$index}}
+	iterationValue  any         // current iteration value; nil for `for N` loops
+	originalRawBody string      // parse-time RawBody snapshot for loop re-substitution
+	originalHeaders http.Header // parse-time Headers snapshot for loop re-substitution
 }
 
 // ParsedFile represents all content parsed from a single .rest or .http file.

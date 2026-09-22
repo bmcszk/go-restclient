@@ -528,11 +528,11 @@ func currentLoopBindings(rcRequest *Request) (map[string]any, int) {
 	}
 	if rcRequest.LoopItemName != "" {
 		return map[string]any{
-			"item":                 rcRequest.loopIterationValue,
-			rcRequest.LoopItemName: rcRequest.loopIterationValue,
-		}, rcRequest.loopIterationIndex
+			"item":                 rcRequest.runtime.iterationValue,
+			rcRequest.LoopItemName: rcRequest.runtime.iterationValue,
+		}, rcRequest.runtime.iterationIndex
 	}
-	return map[string]any{"item": rcRequest.loopIterationValue}, rcRequest.loopIterationIndex
+	return map[string]any{"item": rcRequest.runtime.iterationValue}, rcRequest.runtime.iterationIndex
 }
 
 // parseLength extracts an optional length argument from a regex match.
