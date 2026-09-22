@@ -197,9 +197,7 @@ restclient --version
 `--version` (or `-V`) prints the build version and exits; release builds
 stamp it via `-ldflags "-X main.version=<ver>"`.
 
-**Note (safer default):** When `-f` is given without `-n`, `-i`, or `--all`, the CLI
-prints a hint to stderr and exits with code 2 instead of executing the whole file. Pass
-`--all` explicitly to run every request in file order.
+**Note:** Without `-n`, `-i`, or `--all`, the CLI exits with an error.
 
 ### List requests
 

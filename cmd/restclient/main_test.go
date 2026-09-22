@@ -79,7 +79,7 @@ func TestCLI_NoArgs(t *testing.T) {
 
 func TestCLI_MissingFile(t *testing.T) {
 	binary := buildBinary(t)
-	out, code := runBinary(t, binary, "-f", "/nonexistent/file.http", "--all")
+	out, code := runBinary(t, binary, "-f", "/nonexistent/file.http")
 	assert.Equal(t, 1, code)
 	assert.Contains(t, out, "error")
 }
@@ -513,65 +513,4 @@ func TestCLI_DisabledPrintsSkipLine(t *testing.T) {
 	assert.Equal(t, 0, code, "stdout=%s", out)
 	assert.Contains(t, out, "SKIP")
 	assert.Equal(t, []string{"/ran"}, paths, "disabled request must not hit the server")
-}
-
-func TestExecuteFile_RequiresAllOrSelector(t *testing.T) {
-	server := startMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	defer server.Close()
-
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "multi.http",
-		fmt.Sprintf("GET %s/a\n###\nGET %s/b\n", server.URL, server.URL))
-
-	out, code := runBinary(t, binary, "-f", filePath)
-	assert.Equal(t, 2, code, "missing selector with -f must exit 2; stdout=%s", out)
-	assert.Contains(t, out, "hint:")
-	assert.Contains(t, out, "--all")
-	assert.Contains(t, out, "-n NAME")
-	assert.Contains(t, out, "-i IDX")
-	assert.Contains(t, out, "-l (list)")
-	assert.Contains(t, out, "Refusing to execute the whole file by default")
-}
-
-func TestExecuteFile_AllFlagRunsAllRequests(t *testing.T) {
-	var paths []string
-	server := startMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		paths = append(paths, r.URL.Path)
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, "ok")
-	})
-	defer server.Close()
-
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "multi.http",
-		fmt.Sprintf("GET %s/first\n###\nGET %s/second\n###\nGET %s/third\n",
-			server.URL, server.URL, server.URL))
-
-	out, code := runBinary(t, binary, "-f", filePath, "--all")
-	assert.Equal(t, 0, code, "stdout=%s", out)
-	assert.Equal(t, []string{"/first", "/second", "/third"}, paths,
-		"--all must execute every request in file order")
-}
-
-func TestExecuteFile_NameSelectorUnchanged(t *testing.T) {
-	var paths []string
-	server := startMockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		paths = append(paths, r.URL.Path)
-		w.WriteHeader(http.StatusOK)
-	})
-	defer server.Close()
-
-	binary := buildBinary(t)
-	dir := t.TempDir()
-	filePath := writeTestFile(t, dir, "multi.http",
-		fmt.Sprintf("### first\nGET %s/one\n###\n### second\nGET %s/two\n",
-			server.URL, server.URL))
-
-	out, code := runBinary(t, binary, "-f", filePath, "-n", "second")
-	assert.Equal(t, 0, code, "stdout=%s", out)
-	assert.Equal(t, []string{"/two"}, paths, "-n must still run only the named request")
 }
