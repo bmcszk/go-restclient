@@ -49,6 +49,13 @@ func main() {
 		kong.Vars{"version": version},
 	)
 
+	if c.File != "" && !c.All && c.Name == "" && c.Index == nil && !c.List {
+		_, _ = fmt.Fprintln(os.Stderr,
+			"hint: -f requires --all (run all), -n NAME, -i IDX, or -l (list). "+
+				"Refusing to execute the whole file by default.")
+		os.Exit(2)
+	}
+
 	if c.List {
 		os.Exit(runList(c.File))
 	}
@@ -91,14 +98,11 @@ func dispatchExecution(
 	if c.All {
 		return client.ExecuteFile(context.Background(), c.File)
 	}
-	if c.Name != "" || c.Index != nil {
-		idx := math.MinInt
-		if c.Index != nil {
-			idx = *c.Index
-		}
-		return executeSingle(client, parsedFile, c.Name, idx)
+	idx := math.MinInt
+	if c.Index != nil {
+		idx = *c.Index
 	}
-	return nil, errors.New("specify -n NAME, -i INDEX, or --all to run requests")
+	return executeSingle(client, parsedFile, c.Name, idx)
 }
 
 func setupClient(c cli) (*restclient.Client, *restclient.ParsedFile, error) {
