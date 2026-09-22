@@ -1,11 +1,11 @@
 ---
 # go-restclient-uldf
 title: 'go-restclient CLI: require --all when -f given without -n/-i/-l (#33 Option A)'
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-09-22T09:51:10Z
-updated_at: 2026-09-22T09:51:10Z
+updated_at: 2026-09-22T10:01:51Z
 ---
 
 ## Goal
@@ -109,4 +109,3 @@ ok      github.com/bmcszk/go-restclient/cmd/restclient    10.090s
 - Working tree UNCOMMITTED (per orchestrator contract).
 - Base: `27b0def26ea96c2afb86c31fa097b40b7fa3b40b` (master HEAD).
 - Branch+commit to be created by orchestrator: `feature/issue-33-require-all-without-selector`.
-
