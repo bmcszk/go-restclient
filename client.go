@@ -23,8 +23,8 @@ type Client struct {
 	DefaultHeaders          http.Header
 	currentDotEnvVars       map[string]string
 	programmaticVars        map[string]any
-	selectedEnvironmentName string // Added for T4
-	envName                 string
+	selectedEnvironmentName string // environment name for http-client.env.json (WithEnvironment)
+	envName                 string // .env.<name> overlay file selector (WithEnvName / --env flag)
 	oauth2Tokens            map[string]oauth2Token
 	oauth2Mu                sync.Mutex
 }
