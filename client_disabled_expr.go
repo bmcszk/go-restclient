@@ -14,7 +14,7 @@ func (c *Client) evaluateDisabledExpr(
 	restClientReq *Request,
 	osEnvGetter func(string) (string, bool),
 ) (bool, error) {
-	rctx := c.directiveResolveContext(parsedFile, restClientReq, osEnvGetter)
+	rctx := c.directiveResolveContext(parsedFile, restClientReq, osEnvGetter, nil, nil, -1)
 
 	if missing := findFirstUndefinedDisabledExprVar(expr, rctx); missing != "" {
 		return false, fmt.Errorf("undefined variable %q in @disabled expr", missing)

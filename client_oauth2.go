@@ -80,7 +80,7 @@ func (c *Client) oauth2DetectGrant(
 	restClientReq *Request,
 	osEnvGetter func(string) (string, bool),
 ) string {
-	rctx := c.directiveResolveContext(parsedFile, restClientReq, osEnvGetter)
+	rctx := c.directiveResolveContext(parsedFile, restClientReq, osEnvGetter, nil, nil, -1)
 	if _, ok := lookupVar(prefix+"_username", rctx); ok {
 		return oauth2GrantPassword
 	}
@@ -179,7 +179,7 @@ func (c *Client) oauth2UseAuthorizationHeader(
 	restClientReq *Request,
 	osEnvGetter func(string) (string, bool),
 ) (bool, error) {
-	rctx := c.directiveResolveContext(parsedFile, restClientReq, osEnvGetter)
+	rctx := c.directiveResolveContext(parsedFile, restClientReq, osEnvGetter, nil, nil, -1)
 	val, ok := lookupVar(prefix+"_useAuthorizationHeader", rctx)
 	if !ok {
 		return true, nil
@@ -281,7 +281,7 @@ func (c *Client) oauth2Var(
 	restClientReq *Request,
 	osEnvGetter func(string) (string, bool),
 ) (string, error) {
-	rctx := c.directiveResolveContext(parsedFile, restClientReq, osEnvGetter)
+	rctx := c.directiveResolveContext(parsedFile, restClientReq, osEnvGetter, nil, nil, -1)
 	name := prefix + "_" + suffix
 	val, ok := lookupVar(name, rctx)
 	if !ok {
@@ -340,7 +340,9 @@ func expandPlaceholderToken(directive string, rctx resolveContext, depth int) (s
 }
 
 // expandNamedSource resolves `$processEnv X` / `$dotenv X` tokens; ok=false when
-// the token is not a named-source directive.
+// the token is not a named-source directive. It reads the shared resolveContext
+// sources (no private precedence list) but keeps oauth2's verbatim-preservation
+// semantics, which differ from the main engine's dynamic-pass behavior.
 func expandNamedSource(directive string, rctx resolveContext) (string, bool) {
 	if name, ok := strings.CutPrefix(directive, "$processEnv "); ok {
 		if v, ok := rctx.osEnvGetter(strings.TrimSpace(name)); ok {

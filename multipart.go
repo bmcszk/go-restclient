@@ -13,7 +13,6 @@ import (
 	"strings"
 )
 
-
 // multipartPart represents a parsed multipart form part
 type multipartPart struct {
 	Name            string
@@ -29,7 +28,7 @@ func (*Client) isMultipartFormWithFileReferences(restClientReq *Request) bool {
 	if !strings.Contains(strings.ToLower(contentType), "multipart/form-data") {
 		return false
 	}
-	
+
 	// Check if the body contains file reference syntax (< filename)
 	return strings.Contains(restClientReq.RawBody, "< ")
 }
@@ -43,20 +42,16 @@ func (c *Client) processMultipartFormWithFiles(
 ) (string, error) {
 	// First apply variable substitution to the raw body
 	loopAliases, loopIndex := currentLoopBindings(restClientReq)
-	resolvedBody := resolveVariablesInText(restClientReq.RawBody, resolveContext{
-		programmaticVars: c.programmaticVars, fileScopedVars: restClientReq.ActiveVariables,
-		environmentVars: parsedFile.EnvironmentVariables, globalVars: parsedFile.GlobalVariables,
-		systemVars: requestScopedSystemVars, osEnvGetter: osEnvGetter,
-		dotEnvVars: c.currentDotEnvVars, responseMap: parsedFile.ResponseMap,
-		loopItemAliases: loopAliases, loopIndex: loopIndex,
-	})
-	
+	rctx := c.directiveResolveContext(parsedFile, restClientReq, osEnvGetter,
+		requestScopedSystemVars, loopAliases, loopIndex)
+	resolvedBody := resolveVariablesInText(restClientReq.RawBody, rctx)
+
 	processedBody := substituteDynamicSystemVariables(
 		resolvedBody,
 		c.currentDotEnvVars,
 		c.programmaticVars,
 	)
-	
+
 	// Parse and reconstruct the multipart form with file substitution
 	result, err := c.reconstructMultipartFormWithFiles(processedBody, restClientReq)
 	if err != nil {
@@ -71,7 +66,7 @@ func (c *Client) reconstructMultipartFormWithFiles(body string, restClientReq *R
 	if err != nil {
 		return "", err
 	}
-	
+
 	return c.buildMultipartForm(boundary, formParts, restClientReq.FilePath)
 }
 
@@ -82,12 +77,12 @@ func (c *Client) parseMultipartFormData(body string, restClientReq *Request) (st
 	if boundary == "" {
 		return "", nil, fmt.Errorf("no boundary found in Content-Type header: %s", contentType)
 	}
-	
+
 	formParts, err := c.parseMultipartBody(body, boundary)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to parse multipart body: %w", err)
 	}
-	
+
 	return boundary, formParts, nil
 }
 
@@ -95,21 +90,21 @@ func (c *Client) parseMultipartFormData(body string, restClientReq *Request) (st
 func (c *Client) buildMultipartForm(boundary string, formParts []multipartPart, filePath string) (string, error) {
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
-	
+
 	if err := writer.SetBoundary(boundary); err != nil {
 		return "", fmt.Errorf("failed to set multipart boundary: %w", err)
 	}
-	
+
 	for _, part := range formParts {
 		if err := c.writePartToMultipart(writer, part, filePath); err != nil {
 			return "", err
 		}
 	}
-	
+
 	if err := writer.Close(); err != nil {
 		return "", fmt.Errorf("failed to close multipart writer: %w", err)
 	}
-	
+
 	return buf.String(), nil
 }
 
@@ -141,43 +136,43 @@ func (*Client) extractBoundaryFromContentType(contentType string) string {
 // parseMultipartBody parses a multipart body into individual parts
 func (c *Client) parseMultipartBody(body, boundary string) ([]multipartPart, error) {
 	var parts []multipartPart
-	
+
 	// Split by boundary
 	boundaryDelimiter := "--" + boundary
 	sections := strings.Split(body, boundaryDelimiter)
-	
+
 	for _, section := range sections {
 		section = strings.TrimSpace(section)
 		if section == "" || section == "--" {
 			continue
 		}
-		
+
 		part, err := c.parseMultipartSection(section)
 		if err != nil {
 			continue // Skip malformed sections
 		}
-		
+
 		parts = append(parts, part)
 	}
-	
+
 	if len(parts) == 0 {
 		return nil, errors.New("no valid multipart sections found in body")
 	}
-	
+
 	return parts, nil
 }
 
 // parseMultipartSection parses a single multipart section
 func (c *Client) parseMultipartSection(section string) (multipartPart, error) {
 	var part multipartPart
-	
+
 	// Trim the section to remove leading/trailing whitespace
 	section = strings.TrimSpace(section)
-	
+
 	headerLines, contentLines := c.splitSectionIntoHeadersAndContent(section)
 	c.parseMultipartHeaders(&part, headerLines)
 	c.parseMultipartContent(&part, contentLines)
-	
+
 	if part.Name == "" {
 		return part, errors.New("no name found in multipart section")
 	}
@@ -187,7 +182,7 @@ func (c *Client) parseMultipartSection(section string) (multipartPart, error) {
 // splitSectionIntoHeadersAndContent splits a multipart section into headers and content
 func (c *Client) splitSectionIntoHeadersAndContent(section string) (headerLines []string, contentLines []string) {
 	lines := strings.Split(section, "\n")
-	
+
 	contentStartIndex := c.findContentStartIndex(lines)
 	return c.splitLinesAtIndex(lines, contentStartIndex)
 }
@@ -198,7 +193,7 @@ func (*Client) findContentStartIndex(lines []string) int {
 	if emptyLineIndex := findEmptyLineIndex(lines); emptyLineIndex != -1 {
 		return emptyLineIndex + 1
 	}
-	
+
 	// Use heuristic to separate headers from content
 	return findContentStartByHeuristic(lines)
 }
@@ -208,7 +203,7 @@ func (*Client) splitLinesAtIndex(lines []string, contentStartIndex int) (headerL
 	if contentStartIndex == -1 {
 		return lines, nil // All lines are headers
 	}
-	
+
 	headerLines = lines[:contentStartIndex]
 	if contentStartIndex < len(lines) {
 		contentLines = lines[contentStartIndex:]
@@ -241,7 +236,7 @@ func isMultipartHeaderLine(line string) bool {
 	if !strings.Contains(line, ":") {
 		return false
 	}
-	
+
 	trimmedLine := strings.TrimSpace(line)
 	return strings.HasPrefix(trimmedLine, "Content-Disposition:") ||
 		strings.HasPrefix(trimmedLine, "Content-Type:") ||
@@ -265,7 +260,7 @@ func (c *Client) parseMultipartHeaders(part *multipartPart, headerLines []string
 func (*Client) parseMultipartContent(part *multipartPart, contentLines []string) {
 	content := strings.Join(contentLines, "\n")
 	content = strings.TrimSpace(content)
-	
+
 	if strings.HasPrefix(content, "< ") {
 		part.IsFileReference = true
 		part.Content = strings.TrimSpace(content[2:]) // Remove "< "
@@ -307,21 +302,21 @@ func (*Client) extractContentType(header string) string {
 // writeFilePartToMultipart writes a file part to the multipart writer
 func (c *Client) writeFilePartToMultipart(writer *multipart.Writer, part multipartPart, requestFilePath string) error {
 	filePath := c.resolveFilePath(part.Content, requestFilePath)
-	
+
 	fileContent, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to read file %s: %w", filePath, err)
 	}
-	
+
 	formWriter, err := c.createMultipartFormWriter(writer, part)
 	if err != nil {
 		return fmt.Errorf("failed to create form field: %w", err)
 	}
-	
+
 	if _, err = formWriter.Write(fileContent); err != nil {
 		return fmt.Errorf("failed to write file content: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -330,16 +325,16 @@ func (*Client) resolveFilePath(contentPath, requestFilePath string) string {
 	if filepath.IsAbs(contentPath) {
 		return contentPath
 	}
-	
+
 	requestDir := filepath.Dir(requestFilePath)
-	
+
 	// If the request file is in a temporary directory, try resolving relative to cwd first
 	if strings.Contains(requestDir, os.TempDir()) {
 		if resolvedPath := tryResolveFromCwd(contentPath); resolvedPath != "" {
 			return resolvedPath
 		}
 	}
-	
+
 	// Fallback to request directory
 	return filepath.Join(requestDir, contentPath)
 }
@@ -350,12 +345,12 @@ func tryResolveFromCwd(contentPath string) string {
 	if err != nil {
 		return ""
 	}
-	
+
 	cwdPath := filepath.Join(cwd, contentPath)
 	if _, err := os.Stat(cwdPath); err == nil {
 		return cwdPath
 	}
-	
+
 	return ""
 }
 
@@ -364,11 +359,11 @@ func (*Client) createMultipartFormWriter(writer *multipart.Writer, part multipar
 	if part.Filename != "" {
 		return createFilePartWithFilename(writer, part)
 	}
-	
+
 	if part.ContentType != "" {
 		return createFilePartWithoutFilename(writer, part)
 	}
-	
+
 	return writer.CreateFormField(part.Name)
 }
 
@@ -397,11 +392,11 @@ func (*Client) writeFieldPartToMultipart(writer *multipart.Writer, part multipar
 	if err != nil {
 		return fmt.Errorf("failed to create form field: %w", err)
 	}
-	
+
 	_, err = formWriter.Write([]byte(part.Content))
 	if err != nil {
 		return fmt.Errorf("failed to write field content: %w", err)
 	}
-	
+
 	return nil
 }

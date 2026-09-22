@@ -87,7 +87,6 @@ var userAgents = []string{
 		"(KHTML, like Gecko) Version/14.1.1 Safari/605.1.15",
 }
 
-
 // substituteFakerVariables handles the substitution of faker/person data variables
 func substituteFakerVariables(text string) string {
 	text = substituteVSCodeStyleFakers(text)
@@ -102,7 +101,7 @@ func substituteVSCodeStyleFakers(text string) string {
 	text = reRandomLastName.ReplaceAllStringFunc(text, getRandomLastName)
 	text = reRandomFullName.ReplaceAllStringFunc(text, getRandomFullName)
 	text = reRandomJobTitle.ReplaceAllStringFunc(text, getRandomJobTitle)
-	
+
 	// Contact data
 	text = reRandomPhoneNumber.ReplaceAllStringFunc(text, getRandomPhoneNumber)
 	text = reRandomStreetAddress.ReplaceAllStringFunc(text, getRandomStreetAddress)
@@ -110,13 +109,13 @@ func substituteVSCodeStyleFakers(text string) string {
 	text = reRandomState.ReplaceAllStringFunc(text, getRandomState)
 	text = reRandomZipCode.ReplaceAllStringFunc(text, getRandomZipCode)
 	text = reRandomCountry.ReplaceAllStringFunc(text, getRandomCountry)
-	
+
 	// Internet data
 	text = reRandomUrl.ReplaceAllStringFunc(text, getRandomUrl)
 	text = reRandomDomainName.ReplaceAllStringFunc(text, getRandomDomainName)
 	text = reRandomUserAgent.ReplaceAllStringFunc(text, getRandomUserAgent)
 	text = reRandomMacAddress.ReplaceAllStringFunc(text, getRandomMacAddress)
-	
+
 	return text
 }
 
@@ -127,7 +126,7 @@ func substituteJetBrainsStyleFakers(text string) string {
 	text = reRandomLastNameDot.ReplaceAllStringFunc(text, getRandomLastName)
 	text = reRandomFullNameDot.ReplaceAllStringFunc(text, getRandomFullName)
 	text = reRandomJobTitleDot.ReplaceAllStringFunc(text, getRandomJobTitle)
-	
+
 	// Contact data - JetBrains style
 	text = reRandomPhoneNumberDot.ReplaceAllStringFunc(text, getRandomPhoneNumber)
 	text = reRandomStreetAddressDot.ReplaceAllStringFunc(text, getRandomStreetAddress)
@@ -135,13 +134,13 @@ func substituteJetBrainsStyleFakers(text string) string {
 	text = reRandomStateDot.ReplaceAllStringFunc(text, getRandomState)
 	text = reRandomZipCodeDot.ReplaceAllStringFunc(text, getRandomZipCode)
 	text = reRandomCountryDot.ReplaceAllStringFunc(text, getRandomCountry)
-	
+
 	// Internet data - JetBrains style
 	text = reRandomUrlDot.ReplaceAllStringFunc(text, getRandomUrl)
 	text = reRandomDomainNameDot.ReplaceAllStringFunc(text, getRandomDomainName)
 	text = reRandomUserAgentDot.ReplaceAllStringFunc(text, getRandomUserAgent)
 	text = reRandomMacAddressDot.ReplaceAllStringFunc(text, getRandomMacAddress)
-	
+
 	return text
 }
 
@@ -186,9 +185,9 @@ func getRandomJobTitle(_ string) string {
 
 // getRandomPhoneNumber returns a random phone number
 func getRandomPhoneNumber(_ string) string {
-	areaCode := rand.Intn(900) + 100   // 100-999
-	exchange := rand.Intn(900) + 100   // 100-999
-	number := rand.Intn(10000)         // 0000-9999
+	areaCode := rand.Intn(900) + 100 // 100-999
+	exchange := rand.Intn(900) + 100 // 100-999
+	number := rand.Intn(10000)       // 0000-9999
 	return fmt.Sprintf("(%03d) %03d-%04d", areaCode, exchange, number)
 }
 

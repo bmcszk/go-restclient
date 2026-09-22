@@ -421,8 +421,6 @@ func (*Client) wrapResponseError(
 		index+1, restClientReq.Method, urlForError, response.Error)
 }
 
-// End of function resolveVariablesInText
-
 // substituteDynamicSystemVariables handles system variables that require argument
 // parsing or dynamic evaluation at substitution time.
 
@@ -557,7 +555,7 @@ func (c *Client) doHTTPRequest(ctx context.Context, rcRequest *Request) (*Respon
 
 	defer func() { _ = httpResp.Body.Close() }()
 	bodyBytes, readErr := io.ReadAll(httpResp.Body)
-	c._populateResponseDetails(clientResponse, httpResp, bodyBytes, readErr)
+	c.populateResponseDetails(clientResponse, httpResp, bodyBytes, readErr)
 
 	return clientResponse, nil
 }
@@ -565,14 +563,14 @@ func (c *Client) doHTTPRequest(ctx context.Context, rcRequest *Request) (*Respon
 // prepareRequestURL handles URL preparation and variable substitution
 func (c *Client) prepareRequestURL(rcRequest *Request) error {
 	if rcRequest.URL == nil && rcRequest.RawURLString != "" {
+		rctx := c.directiveResolveContext(nil, rcRequest, os.LookupEnv,
+			c.generateRequestScopedSystemVariables(), nil, -1)
+		rctx.dotEnvVars = nil // no .env context for direct single-request execution
 		substitutedAndParsedURL, subsErr := substituteRequestVariables(
 			rcRequest,
 			nil, // parsedFile - no file context for direct executeRequest
-			c.generateRequestScopedSystemVariables(),
-			os.LookupEnv,
-			c.programmaticVars,
-			nil,       // currentDotEnvVars - no specific .env file for direct call
-			c.BaseURL, // Pass client's BaseURL for consistency
+			c.BaseURL,
+			rctx,
 		)
 		if subsErr != nil {
 			return fmt.Errorf("variable substitution failed for request '%s': %w", rcRequest.Name, subsErr)
@@ -657,7 +655,7 @@ func (c *Client) handleHTTPError(
 	clientResponse.Error = fmt.Errorf("failed to execute HTTP request: %w", doErr)
 	if httpResp != nil {
 		var bodyBytes []byte
-		c._populateResponseDetails(clientResponse, httpResp, bodyBytes, doErr)
+		c.populateResponseDetails(clientResponse, httpResp, bodyBytes, doErr)
 		if httpResp.Body != nil {
 			_ = httpResp.Body.Close()
 		}
@@ -666,8 +664,8 @@ func (c *Client) handleHTTPError(
 	return clientResponse
 }
 
-// _populateResponseDetails copies relevant information from an *http.Response and body to our *Response.
-func (*Client) _populateResponseDetails(resp *Response, httpResp *http.Response, bodyBytes []byte, bodyReadErr error) {
+// populateResponseDetails copies relevant information from an *http.Response and body to our *Response.
+func (*Client) populateResponseDetails(resp *Response, httpResp *http.Response, bodyBytes []byte, bodyReadErr error) {
 	if httpResp == nil {
 		return
 	}
@@ -748,13 +746,9 @@ func (c *Client) processExternalFile(
 	// Apply variable substitution if requested
 	if restClientReq.ExternalFileWithVariables {
 		loopAliases, loopIndex := currentLoopBindings(restClientReq)
-		resolvedContent := resolveVariablesInText(content, resolveContext{
-			programmaticVars: c.programmaticVars, fileScopedVars: restClientReq.ActiveVariables,
-			environmentVars: parsedFile.EnvironmentVariables, globalVars: parsedFile.GlobalVariables,
-			systemVars: requestScopedSystemVars, osEnvGetter: osEnvGetter,
-			dotEnvVars: c.currentDotEnvVars, responseMap: parsedFile.ResponseMap,
-			loopItemAliases: loopAliases, loopIndex: loopIndex,
-		})
+		rctx := c.directiveResolveContext(parsedFile, restClientReq, osEnvGetter,
+			requestScopedSystemVars, loopAliases, loopIndex)
+		resolvedContent := resolveVariablesInText(content, rctx)
 		content = substituteDynamicSystemVariables(
 			resolvedContent,
 			c.currentDotEnvVars,
@@ -881,11 +875,8 @@ func (c *Client) substituteRequestURLAndHeaders(
 	finalParsedURL, subsErr := substituteRequestVariables(
 		restClientReq,
 		parsedFile,
-		requestScopedSystemVars,
-		osEnvGetter,
-		c.programmaticVars,
-		c.currentDotEnvVars,
 		c.BaseURL,
+		c.directiveResolveContext(parsedFile, restClientReq, osEnvGetter, requestScopedSystemVars, nil, -1),
 	)
 	if subsErr != nil {
 		return subsErr
@@ -940,13 +931,9 @@ func (c *Client) processRegularBody(
 	osEnvGetter func(string) (string, bool),
 ) string {
 	loopAliases, loopIndex := currentLoopBindings(restClientReq)
-	resolvedBody := resolveVariablesInText(restClientReq.RawBody, resolveContext{
-		programmaticVars: c.programmaticVars, fileScopedVars: restClientReq.ActiveVariables,
-		environmentVars: parsedFile.EnvironmentVariables, globalVars: parsedFile.GlobalVariables,
-		systemVars: requestScopedSystemVars, osEnvGetter: osEnvGetter,
-		dotEnvVars: c.currentDotEnvVars, responseMap: parsedFile.ResponseMap,
-		loopItemAliases: loopAliases, loopIndex: loopIndex,
-	})
+	rctx := c.directiveResolveContext(parsedFile, restClientReq, osEnvGetter,
+		requestScopedSystemVars, loopAliases, loopIndex)
+	resolvedBody := resolveVariablesInText(restClientReq.RawBody, rctx)
 	return substituteDynamicSystemVariables(resolvedBody, c.currentDotEnvVars, c.programmaticVars)
 }
 

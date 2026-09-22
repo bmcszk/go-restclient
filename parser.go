@@ -79,7 +79,7 @@ func parseRequestFile(filePath string, client *Client, importStack []string) (*P
 	reader := bufio.NewReader(file)
 	parsedFile, err := parseRequests(
 		reader, absFilePath, client, parsingVars.requestScopedSystemVars,
-		parsingVars.osEnvGetter, parsingVars.dotEnvVars, newImportStack)
+		parsingVars.osEnvGetter, newImportStack)
 	if err != nil {
 		return nil, err
 	}
@@ -176,10 +176,7 @@ func mergeEnvFile(vars map[string]string, path string) {
 // expandDotEnvValues resolves {{...}} placeholders (process env, dotenv,
 // variables) inside dotenv values in place.
 func expandDotEnvValues(dotEnvVars map[string]string) {
-	rctx := resolveContext{
-		dotEnvVars:  dotEnvVars,
-		osEnvGetter: os.LookupEnv,
-	}
+	rctx := newDotEnvResolveContext(dotEnvVars)
 	for key, value := range dotEnvVars {
 		if expanded, err := expandPlaceholders(value, rctx); err == nil {
 			dotEnvVars[key] = expanded
@@ -258,9 +255,9 @@ func ensureEnvironmentVariablesInitialized(parsedFile *ParsedFile, _, _ string) 
 // It's used by parseRequestFile to process individual HTTP request files.
 func parseRequests(reader *bufio.Reader, filePath string, client *Client,
 	requestScopedSystemVars map[string]string, osEnvGetter func(string) (string, bool),
-	dotEnvVars map[string]string, importStack []string) (*ParsedFile, error) {
+	importStack []string) (*ParsedFile, error) {
 	parserState := initializeParserState(filePath, client, requestScopedSystemVars,
-		osEnvGetter, dotEnvVars, importStack)
+		osEnvGetter, importStack)
 
 	if err := processFileLines(reader, parserState); err != nil {
 		return nil, err
@@ -272,13 +269,12 @@ func parseRequests(reader *bufio.Reader, filePath string, client *Client,
 
 // initializeParserState creates and initializes the parser state
 func initializeParserState(filePath string, client *Client, requestScopedSystemVars map[string]string,
-	osEnvGetter func(string) (string, bool), dotEnvVars map[string]string, importStack []string) *requestParserState {
+	osEnvGetter func(string) (string, bool), importStack []string) *requestParserState {
 	return &requestParserState{
 		filePath:                filePath,
 		client:                  client,
 		requestScopedSystemVars: requestScopedSystemVars,
 		osEnvGetter:             osEnvGetter,
-		dotEnvVars:              dotEnvVars,
 		importStack:             importStack,
 		parsedFile: &ParsedFile{
 			Requests:      make([]*Request, 0),

@@ -29,7 +29,6 @@ type requestParserState struct {
 	client                  *Client
 	requestScopedSystemVars map[string]string
 	osEnvGetter             func(string) (string, bool)
-	dotEnvVars              map[string]string
 	importStack             []string
 
 	parsedFile                *ParsedFile

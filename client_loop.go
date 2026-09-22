@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -147,7 +148,7 @@ func (c *Client) resolveLoopExprCount(
 	restClientReq *Request,
 	osEnvGetter func(string) (string, bool),
 ) (int, error) {
-	rctx := c.directiveResolveContext(parsedFile, restClientReq, osEnvGetter)
+	rctx := c.directiveResolveContext(parsedFile, restClientReq, osEnvGetter, nil, nil, -1)
 	if missing := findFirstUndefinedDisabledExprVar(expr, rctx); missing != "" {
 		return 0, fmt.Errorf("undefined variable %q in @loop expression", missing)
 	}
@@ -171,7 +172,7 @@ func (c *Client) resolveLoopCollection(
 	restClientReq *Request,
 	osEnvGetter func(string) (string, bool),
 ) ([]any, error) {
-	rctx := c.directiveResolveContext(parsedFile, restClientReq, osEnvGetter)
+	rctx := c.directiveResolveContext(parsedFile, restClientReq, osEnvGetter, nil, nil, -1)
 	val, ok := lookupVar(collName, rctx)
 	if !ok {
 		return nil, fmt.Errorf("undefined variable %q in @loop collection", collName)
@@ -179,25 +180,45 @@ func (c *Client) resolveLoopCollection(
 	return decodeCollectionValue(val, collName)
 }
 
-// directiveResolveContext builds the resolveContext used for directive variable lookups (@disabled, @loop).
+// directiveResolveContext builds the client-scoped resolveContext used by all
+// variable substitution sites; loopItemAliases/loopIndex are nil/-1 outside loop iterations.
 func (c *Client) directiveResolveContext(
 	parsedFile *ParsedFile,
 	restClientReq *Request,
 	osEnvGetter func(string) (string, bool),
+	systemVars map[string]string,
+	loopItemAliases map[string]any,
+	loopIndex int,
 ) resolveContext {
+	var environmentVars, globalVars map[string]string
+	var responseMap map[string]*Response
+	if parsedFile != nil {
+		environmentVars = parsedFile.EnvironmentVariables
+		globalVars = parsedFile.GlobalVariables
+		responseMap = parsedFile.ResponseMap
+	}
 	return resolveContext{
 		programmaticVars: c.programmaticVars,
 		fileScopedVars:   restClientReq.ActiveVariables,
-		environmentVars:  parsedFile.EnvironmentVariables,
-		globalVars:       parsedFile.GlobalVariables,
-		systemVars:       c.generateRequestScopedSystemVariables(),
+		environmentVars:  environmentVars,
+		globalVars:       globalVars,
+		systemVars:       systemVars,
 		osEnvGetter:      osEnvGetter,
 		dotEnvVars:       c.currentDotEnvVars,
-		responseMap:      parsedFile.ResponseMap,
+		responseMap:      responseMap,
+		loopItemAliases:  loopItemAliases,
+		loopIndex:        loopIndex,
 	}
 }
 
-// decodeCollectionValue decodes a resolved collection variable into []any; supports []any, []string, JSON strings.
+// newDotEnvResolveContext builds the minimal dotenv-scoped resolveContext for
+// expanding placeholders inside .env values (OS env + dotenv lookups only).
+func newDotEnvResolveContext(dotEnvVars map[string]string) resolveContext {
+	return resolveContext{
+		osEnvGetter: os.LookupEnv,
+		dotEnvVars:  dotEnvVars,
+	}
+}
 func decodeCollectionValue(val any, collName string) ([]any, error) {
 	switch x := val.(type) {
 	case []any:
