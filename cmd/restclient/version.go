@@ -8,40 +8,35 @@ import (
 // trustedSemver matches an exact tagged version, e.g. v1.2.3 (never pseudoVersions).
 var trustedSemver = regexp.MustCompile(`^v?\d+\.\d+\.\d+$`)
 
-// resolveVersion returns the effective CLI version: ldflags-injected value wins,
-// then a tagged go-install module version, then vcs revision, then "dev".
-func resolveVersion() string {
-	if version != "dev" {
-		return version
-	}
+// buildVersion reports the CLI version from embedded build info: tagged module
+// version for go-install builds, vcs revision for tree builds, "dev" otherwise.
+func buildVersion() string {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
-		return version
+		return "dev"
 	}
 	if v := info.Main.Version; trustedSemver.MatchString(v) {
 		return v
 	}
-	vcs := vcsInfo(info)
-	if vcs.revision != "" {
-		return "devel-" + vcs.revision[:min(7, len(vcs.revision))] + vcs.dirty
+	if rev, dirty := vcsInfo(info); rev != "" {
+		return "devel-" + rev[:min(7, len(rev))] + dirty
 	}
-	return version
+	return "dev"
 }
 
-// vcsInfo extracts revision and dirty flag from build settings.
-func vcsInfo(info *debug.BuildInfo) (vcs struct {
-	revision, dirty string
-}) {
+// vcsInfo returns the embedded vcs revision and dirty flag, if any.
+func vcsInfo(info *debug.BuildInfo) (string, string) {
+	rev, dirty := "", ""
 	for _, s := range info.Settings {
 		switch s.Key {
 		case "vcs.revision":
-			vcs.revision = s.Value
+			rev = s.Value
 		case "vcs.modified":
 			if s.Value == "true" {
-				vcs.dirty = "-dirty"
+				dirty = "-dirty"
 			}
 		default:
 		}
 	}
-	return vcs
+	return rev, dirty
 }
