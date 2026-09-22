@@ -399,20 +399,6 @@ func matchesDynamicPattern(value string) bool {
 	return false
 }
 
-// randomStringFromCharset generates a random string of a given length using characters from the provided charset.
-func randomStringFromCharset(length int, charset string) string {
-	if length <= 0 || len(charset) == 0 { // Added len(charset) == 0 check
-		return ""
-	}
-	source := rand.NewSource(time.Now().UnixNano())
-	rng := rand.New(source)
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[rng.Intn(len(charset))]
-	}
-	return string(b)
-}
-
 // substituteRequestVariables handles the substitution of variables in the request's URL and headers.
 // variableMaps holds the different types of variable maps
 type variableMaps struct {
