@@ -35,6 +35,7 @@ type cli struct {
 	Output        string           `short:"o" long:"output" help:"Output format: body, jsonpath, env" group:"output"`
 	After         string           `short:"A" long:"after" help:"Prerequisite request" group:"output"`
 	Define        []string         `short:"D" long:"define" help:"Define variable key=value" group:"variables"`
+	EnvName       string           `name:"env" help:"Named dotenv (.env.<name>) over .env" group:"variables"`
 	Version       kong.VersionFlag `short:"V" help:"Show version and exit"`
 }
 
@@ -109,7 +110,11 @@ func setupClient(c cli) (*restclient.Client, *restclient.ParsedFile, error) {
 	if err := validateConfig(c); err != nil {
 		return nil, nil, err
 	}
-	client, err := newClient()
+	var opts []restclient.ClientOption
+	if c.EnvName != "" {
+		opts = append(opts, restclient.WithEnvName(c.EnvName))
+	}
+	client, err := restclient.NewClient(opts...)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -128,10 +133,6 @@ func validateConfig(c cli) error {
 		return errors.New("-n and -i are mutually exclusive")
 	}
 	return nil
-}
-
-func newClient() (*restclient.Client, error) {
-	return restclient.NewClient()
 }
 
 func applyDefines(client *restclient.Client, defines []string) error {
