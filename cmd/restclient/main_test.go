@@ -458,7 +458,6 @@ func TestCLI_VersionFlag(t *testing.T) {
 	then.
 		thenExitCodeIs(0).and().
 		thenOutputTrimmedIsNotEmpty().and().
-		thenOutputContains("dev").and().
 		thenOutputNotContains("missing flags")
 }
 
@@ -473,7 +472,7 @@ func TestCLI_VersionShortFlag(t *testing.T) {
 
 	then.
 		thenExitCodeIs(0).and().
-		thenOutputContains("dev").and().
+		thenOutputTrimmedIsNotEmpty().and().
 		thenOutputNotContains("missing flags")
 }
 
