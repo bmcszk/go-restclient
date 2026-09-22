@@ -1,11 +1,11 @@
 ---
 # go-restclient-ak18
 title: 'go-restclient CLI --env flag: named dotenv via WithEnvName (#52)'
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-09-22T10:04:26Z
-updated_at: 2026-09-22T10:04:26Z
+updated_at: 2026-09-22T10:12:00Z
 ---
 
 
