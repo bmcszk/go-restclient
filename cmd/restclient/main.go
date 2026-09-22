@@ -20,8 +20,6 @@ import (
 	"github.com/bmcszk/go-restclient"
 )
 
-var version = "dev"
-
 type cli struct {
 	File          string           `short:"f" long:"file" required:"true" help:"Request file path" group:"required"`
 	Name          string           `short:"n" long:"name" help:"Run request by name" group:"selection"`
@@ -47,7 +45,7 @@ func main() {
 		kong.Description("Execute HTTP requests defined in a .http / .rest file"),
 		kong.UsageOnError(),
 		kong.ConfigureHelp(kong.HelpOptions{Compact: true, Summary: true}),
-		kong.Vars{"version": version},
+		kong.Vars{"version": buildVersion()},
 	)
 
 	if c.List {
