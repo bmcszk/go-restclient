@@ -1,8 +1,16 @@
 package restclient
 
+// Random-value substitution: faker variables, $random.* variables, and charset-based generators.
+
 import (
 	"fmt"
 	"math/rand"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 // Name lists for person data generation
@@ -87,60 +95,55 @@ var userAgents = []string{
 		"(KHTML, like Gecko) Version/14.1.1 Safari/605.1.15",
 }
 
-// substituteFakerVariables handles the substitution of faker/person data variables
-func substituteFakerVariables(text string) string {
-	text = substituteVSCodeStyleFakers(text)
-	text = substituteJetBrainsStyleFakers(text)
-	return text
+// fakerReplacement pairs one faker variable regex with its value generator.
+type fakerReplacement struct {
+	re *regexp.Regexp
+	fn func(string) string
 }
 
-// substituteVSCodeStyleFakers handles VS Code style faker variables
-func substituteVSCodeStyleFakers(text string) string {
-	// Person data
-	text = reRandomFirstName.ReplaceAllStringFunc(text, getRandomFirstName)
-	text = reRandomLastName.ReplaceAllStringFunc(text, getRandomLastName)
-	text = reRandomFullName.ReplaceAllStringFunc(text, getRandomFullName)
-	text = reRandomJobTitle.ReplaceAllStringFunc(text, getRandomJobTitle)
-
-	// Contact data
-	text = reRandomPhoneNumber.ReplaceAllStringFunc(text, getRandomPhoneNumber)
-	text = reRandomStreetAddress.ReplaceAllStringFunc(text, getRandomStreetAddress)
-	text = reRandomCity.ReplaceAllStringFunc(text, getRandomCity)
-	text = reRandomState.ReplaceAllStringFunc(text, getRandomState)
-	text = reRandomZipCode.ReplaceAllStringFunc(text, getRandomZipCode)
-	text = reRandomCountry.ReplaceAllStringFunc(text, getRandomCountry)
-
-	// Internet data
-	text = reRandomUrl.ReplaceAllStringFunc(text, getRandomUrl)
-	text = reRandomDomainName.ReplaceAllStringFunc(text, getRandomDomainName)
-	text = reRandomUserAgent.ReplaceAllStringFunc(text, getRandomUserAgent)
-	text = reRandomMacAddress.ReplaceAllStringFunc(text, getRandomMacAddress)
-
-	return text
-}
-
-// substituteJetBrainsStyleFakers handles JetBrains style faker variables
-func substituteJetBrainsStyleFakers(text string) string {
-	// Person data
-	text = reRandomFirstNameDot.ReplaceAllStringFunc(text, getRandomFirstName)
-	text = reRandomLastNameDot.ReplaceAllStringFunc(text, getRandomLastName)
-	text = reRandomFullNameDot.ReplaceAllStringFunc(text, getRandomFullName)
-	text = reRandomJobTitleDot.ReplaceAllStringFunc(text, getRandomJobTitle)
-
+// fakerReplacements lists all faker tokens in substitution order: VS Code style first, then JetBrains style.
+var fakerReplacements = []fakerReplacement{
+	// Person data - VS Code style
+	{reRandomFirstName, getRandomFirstName},
+	{reRandomLastName, getRandomLastName},
+	{reRandomFullName, getRandomFullName},
+	{reRandomJobTitle, getRandomJobTitle},
+	// Contact data - VS Code style
+	{reRandomPhoneNumber, getRandomPhoneNumber},
+	{reRandomStreetAddress, getRandomStreetAddress},
+	{reRandomCity, getRandomCity},
+	{reRandomState, getRandomState},
+	{reRandomZipCode, getRandomZipCode},
+	{reRandomCountry, getRandomCountry},
+	// Internet data - VS Code style
+	{reRandomUrl, getRandomUrl},
+	{reRandomDomainName, getRandomDomainName},
+	{reRandomUserAgent, getRandomUserAgent},
+	{reRandomMacAddress, getRandomMacAddress},
+	// Person data - JetBrains style
+	{reRandomFirstNameDot, getRandomFirstName},
+	{reRandomLastNameDot, getRandomLastName},
+	{reRandomFullNameDot, getRandomFullName},
+	{reRandomJobTitleDot, getRandomJobTitle},
 	// Contact data - JetBrains style
-	text = reRandomPhoneNumberDot.ReplaceAllStringFunc(text, getRandomPhoneNumber)
-	text = reRandomStreetAddressDot.ReplaceAllStringFunc(text, getRandomStreetAddress)
-	text = reRandomCityDot.ReplaceAllStringFunc(text, getRandomCity)
-	text = reRandomStateDot.ReplaceAllStringFunc(text, getRandomState)
-	text = reRandomZipCodeDot.ReplaceAllStringFunc(text, getRandomZipCode)
-	text = reRandomCountryDot.ReplaceAllStringFunc(text, getRandomCountry)
-
+	{reRandomPhoneNumberDot, getRandomPhoneNumber},
+	{reRandomStreetAddressDot, getRandomStreetAddress},
+	{reRandomCityDot, getRandomCity},
+	{reRandomStateDot, getRandomState},
+	{reRandomZipCodeDot, getRandomZipCode},
+	{reRandomCountryDot, getRandomCountry},
 	// Internet data - JetBrains style
-	text = reRandomUrlDot.ReplaceAllStringFunc(text, getRandomUrl)
-	text = reRandomDomainNameDot.ReplaceAllStringFunc(text, getRandomDomainName)
-	text = reRandomUserAgentDot.ReplaceAllStringFunc(text, getRandomUserAgent)
-	text = reRandomMacAddressDot.ReplaceAllStringFunc(text, getRandomMacAddress)
+	{reRandomUrlDot, getRandomUrl},
+	{reRandomDomainNameDot, getRandomDomainName},
+	{reRandomUserAgentDot, getRandomUserAgent},
+	{reRandomMacAddressDot, getRandomMacAddress},
+}
 
+// substituteFakerVariables handles the substitution of faker/person data variables.
+func substituteFakerVariables(text string) string {
+	for _, r := range fakerReplacements {
+		text = r.re.ReplaceAllStringFunc(text, r.fn)
+	}
 	return text
 }
 
@@ -266,4 +269,141 @@ func getRandomMacAddress(_ string) string {
 	return fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x",
 		rand.Intn(256), rand.Intn(256), rand.Intn(256),
 		rand.Intn(256), rand.Intn(256), rand.Intn(256))
+}
+
+// randomStringFromCharset generates a random string of a given length using characters from the provided charset.
+func randomStringFromCharset(length int, charset string) string {
+	if length <= 0 || len(charset) == 0 { // Added len(charset) == 0 check
+		return ""
+	}
+	source := rand.NewSource(time.Now().UnixNano())
+	rng := rand.New(source)
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[rng.Intn(len(charset))]
+	}
+	return string(b)
+}
+
+// substituteRandomVariables handles the substitution of $random.* variables.
+func substituteRandomVariables(text string, programmaticVars map[string]any) string {
+	// Integer types
+	text = reRandomInt.ReplaceAllStringFunc(text,
+		substituteRandomIntFunc(reRandomInt, defaultRandomMinInt, defaultRandomMaxInt))
+	text = reRandomDotInteger.ReplaceAllStringFunc(text,
+		substituteRandomIntFunc(reRandomDotInteger, defaultRandomMinInt, defaultRandomMaxInt))
+
+	// Float types
+	text = reRandomFloat.ReplaceAllStringFunc(text,
+		substituteRandomFloatFunc(reRandomFloat, defaultRandomMinFloat, defaultRandomMaxFloat))
+	text = reRandomDotFloat.ReplaceAllStringFunc(text,
+		substituteRandomFloatFunc(reRandomDotFloat, defaultRandomMinFloat, defaultRandomMaxFloat))
+
+	// Boolean
+	text = strings.ReplaceAll(text, "{{$randomBoolean}}", strconv.FormatBool(rand.Intn(2) == 0))
+
+	// Hexadecimal
+	text = reRandomHex.ReplaceAllStringFunc(text, substituteRandomHexHelper(reRandomHex, defaultRandomHexLength))
+	text = reRandomDotHexadecimal.ReplaceAllStringFunc(text,
+		substituteRandomHexHelper(reRandomDotHexadecimal, defaultRandomHexLength))
+
+	// Alphabetic / Alphanumeric
+	text = reRandomDotAlphabetic.ReplaceAllStringFunc(text,
+		substituteRandomLengthCharsetFunc(reRandomDotAlphabetic, charsetAlphabetic))
+	// Uses underscore
+	text = reRandomAlphaNumeric.ReplaceAllStringFunc(text,
+		substituteRandomLengthCharsetFunc(reRandomAlphaNumeric, charsetAlphaNumericWithExtra))
+	// No underscore
+	text = reRandomDotAlphanumeric.ReplaceAllStringFunc(text,
+		substituteRandomLengthCharsetFunc(reRandomDotAlphanumeric, charsetAlphaNumeric))
+
+	// General Random String
+	text = reRandomString.ReplaceAllStringFunc(text, substituteRandomLengthCharsetFunc(reRandomString, charsetFull))
+
+	// Email
+	emailGenerator := func() string {
+		return fmt.Sprintf("%s@%s.com",
+			randomStringFromCharset(10, charsetAlphaNumeric),
+			randomStringFromCharset(7, charsetAlphabetic))
+	}
+	text = strings.ReplaceAll(text, "{{$randomEmail}}", emailGenerator())
+	text = strings.ReplaceAll(text, "{{$random.email}}", emailGenerator())
+
+	// Domain
+	text = strings.ReplaceAll(text, "{{$randomDomain}}",
+		fmt.Sprintf("%s.com", randomStringFromCharset(10, charsetAlphabetic)))
+
+	// IP Addresses
+	text = strings.ReplaceAll(text, "{{$randomIPv4}}",
+		fmt.Sprintf("%d.%d.%d.%d", rand.Intn(256), rand.Intn(256), rand.Intn(256), rand.Intn(256)))
+
+	text = strings.ReplaceAll(text, "{{$randomIPv6}}", func() string {
+		segments := make([]string, 8)
+		for i := 0; i < 8; i++ {
+			segments[i] = fmt.Sprintf("%x", rand.Intn(0x10000))
+		}
+		return strings.Join(segments, ":")
+	}())
+
+	// UUID
+	text = strings.ReplaceAll(text, "{{$randomUUID}}", uuid.New().String())
+
+	// Password (uses programmaticVars, so it calls the existing substituteRandomPasswordFunc with modification)
+	text = reRandomPassword.ReplaceAllStringFunc(text, func(match string) string {
+		return substituteRandomPasswordFunc(match, programmaticVars)
+	})
+
+	// Color
+	text = strings.ReplaceAll(text, "{{$randomColor}}",
+		fmt.Sprintf("#%02x%02x%02x", rand.Intn(256), rand.Intn(256), rand.Intn(256)))
+
+	// Word
+	if len(randomWords) > 0 { // Prevent panic on empty slice
+		text = strings.ReplaceAll(text, "{{$randomWord}}", randomWords[rand.Intn(len(randomWords))])
+	}
+
+	// Person/Identity data (faker variables)
+	text = substituteFakerVariables(text)
+
+	return text
+}
+
+// substituteRandomPasswordFunc handles $randomPassword.* substitution; programmaticVars enables charset overrides.
+func substituteRandomPasswordFunc(match string, programmaticVars map[string]any) string {
+	length := parsePasswordLength(match)
+	if length < 0 {
+		return match // Malformed length
+	}
+	if length == 0 {
+		return ""
+	}
+
+	charset := getPasswordCharset(programmaticVars)
+	return randomStringFromCharset(length, charset)
+}
+
+// parsePasswordLength extracts and validates the length parameter from a password match
+func parsePasswordLength(match string) int {
+	parts := reRandomPassword.FindStringSubmatch(match)
+	length := defaultRandomPasswordLength
+	if len(parts) >= 2 && parts[1] != "" {
+		parsedLen, err := strconv.Atoi(parts[1])
+		if err != nil || parsedLen < 0 {
+			return -1 // Invalid length
+		}
+		length = parsedLen
+	}
+	return length
+}
+
+// getPasswordCharset determines the charset to use for password generation
+func getPasswordCharset(programmaticVars map[string]any) string {
+	if psVars, ok := programmaticVars["password"]; ok {
+		if psMap, ok := psVars.(map[string]string); ok {
+			if charset, ok := psMap["charset"]; ok && charset != "" {
+				return charset
+			}
+		}
+	}
+	return charsetFull
 }
