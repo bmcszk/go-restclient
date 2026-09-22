@@ -15,7 +15,7 @@ import (
 
 // ExpectedResponse is defined in response.go
 
-var ( //nolint:gochecknoglobals
+var (
 	regexpPlaceholderFinder       = regexp.MustCompile(`\{\{\$regexp\s+((?s).*?)\}\}`)
 	anyGuidPlaceholderFinder      = regexp.MustCompile(`\{\{\$anyGuid\}\}`)
 	anyTimestampPlaceholderFinder = regexp.MustCompile(`\{\{\$anyTimestamp\}\}`)
