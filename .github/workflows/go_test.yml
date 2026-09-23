@@ -8,6 +8,8 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # push coverage badge JSON to gh-pages
     strategy:
       matrix:
         go-version: [ '1.21', '1.22', '1.23', '1.24' ]
@@ -28,8 +30,25 @@ jobs:
         make install-gotestsum
         gotestsum --junitfile unit-tests.xml -- -covermode=atomic -coverprofile=coverage.out ./...
 
-    - name: Upload coverage
-      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
-      with:
-        files: coverage.out
-        token: ${{ secrets.CODECOV_TOKEN }} # optional for public repos
+    - name: Publish coverage badge (Go 1.24 + master only)
+      if: matrix.go-version == '1.24' && github.ref == 'refs/heads/master'
+      run: |
+        PCT=$(go tool cover -func=coverage.out | awk '/total/ {gsub("%",""); print $3}')
+        COLOR=brightgreen; awk -v p="$PCT" 'BEGIN{exit !(p<80)}' && COLOR=green
+        awk -v p="$PCT" 'BEGIN{exit !(p<60)}' && COLOR=yellow
+        mkdir -p /tmp/badges
+        printf '{"schemaVersion":1,"label":"coverage","message":"%s%%","color":"%s"}' "$PCT" "$COLOR" > /tmp/badges/coverage.json
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git fetch origin gh-pages --depth=1 2>/dev/null || true
+        if git rev-parse --verify origin/gh-pages >/dev/null 2>&1; then
+          git checkout -B gh-pages origin/gh-pages
+        else
+          git checkout --orphan gh-pages
+          git rm -rf . >/dev/null 2>&1 || true
+        fi
+        mkdir -p badges
+        cp /tmp/badges/coverage.json badges/coverage.json
+        git add badges/coverage.json
+        git commit -m "chore(badges): coverage $PCT%" --allow-empty
+        git push origin gh-pages

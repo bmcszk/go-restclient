@@ -2,11 +2,13 @@ package restclient_test
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -165,6 +167,31 @@ func serveCannedRoute(w http.ResponseWriter, r *http.Request, route cannedRoute)
 }
 
 // aCannedServer serves a fixed routing table of canned responses: exact path lookup,
+
+// aTLSServer hosts an echo handler over httptest TLS (self-signed cert).
+func (p *parts) aTLSServer() *parts {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		r.Body = io.NopCloser(strings.NewReader(string(body)))
+		p.capturedRequests = append(p.capturedRequests, r)
+		p.capturedBodies = append(p.capturedBodies, string(body))
+		p.capturedRequestTimes = append(p.capturedRequestTimes, time.Now())
+		p.requestHits.Add(1)
+	}))
+	p.servers = append(p.servers, srv)
+	p.serverURL = srv.URL
+	p.Cleanup(srv.Close)
+
+	return p
+}
+
+// aTLSInsecureClient builds a restclient trusting the httptest self-signed cert.
+func (p *parts) aTLSInsecureClient() *parts {
+	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
+
+	return p.aClient(rc.WithHTTPClient(httpClient))
+}
+
 // 405 on method mismatch, 404 for unknown paths. Replaces multi-path handler vars.
 func (p *parts) aCannedServer(routes map[string]cannedRoute) *parts {
 	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {

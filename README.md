@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/bmcszk/go-restclient/actions/workflows/go_test.yml/badge.svg?branch=master)](https://github.com/bmcszk/go-restclient/actions/workflows/go_test.yml)
 [![Security](https://github.com/bmcszk/go-restclient/actions/workflows/security.yml/badge.svg?branch=master)](https://github.com/bmcszk/go-restclient/actions/workflows/security.yml)
-[![codecov](https://codecov.io/gh/bmcszk/go-restclient/graph/badge.svg)](https://app.codecov.io/gh/bmcszk/go-restclient)
+[![coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/bmcszk/go-restclient/gh-pages/badges/coverage.json&cacheSeconds=3600)](https://github.com/bmcszk/go-restclient/blob/master/.github/workflows/go_test.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/bmcszk/go-restclient/badge)](https://scorecard.dev/viewer/?uri=github.com/bmcszk/go-restclient)
 [![Go Reference](https://pkg.go.dev/badge/github.com/bmcszk/go-restclient.svg)](https://pkg.go.dev/github.com/bmcszk/go-restclient)
 [![License](https://img.shields.io/github/license/bmcszk/go-restclient)](./LICENSE)
