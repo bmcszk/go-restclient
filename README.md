@@ -1,5 +1,12 @@
 # Go REST Client Library
 
+[![Tests](https://github.com/bmcszk/go-restclient/actions/workflows/go_test.yml/badge.svg?branch=master)](https://github.com/bmcszk/go-restclient/actions/workflows/go_test.yml)
+[![Security](https://github.com/bmcszk/go-restclient/actions/workflows/security.yml/badge.svg?branch=master)](https://github.com/bmcszk/go-restclient/actions/workflows/security.yml)
+[![codecov](https://codecov.io/gh/bmcszk/go-restclient/graph/badge.svg)](https://app.codecov.io/gh/bmcszk/go-restclient)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/bmcszk/go-restclient/badge)](https://scorecard.dev/viewer/?uri=github.com/bmcszk/go-restclient)
+[![Go Reference](https://pkg.go.dev/badge/github.com/bmcszk/go-restclient.svg)](https://pkg.go.dev/github.com/bmcszk/go-restclient)
+[![License](https://img.shields.io/github/license/bmcszk/go-restclient)](./LICENSE)
+
 A Go library for executing HTTP requests from `.http` files and validating responses. Write once, use everywhere - for both manual testing and automated E2E tests.
 
 ## Why This Library?

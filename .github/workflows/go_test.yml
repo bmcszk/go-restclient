@@ -26,4 +26,10 @@ jobs:
     - name: Run tests
       run: |
         make install-gotestsum
-        make test
+        gotestsum --junitfile unit-tests.xml -- -covermode=atomic -coverprofile=coverage.out ./...
+
+    - name: Upload coverage
+      uses: codecov/codecov-action@5975040f7f7d40edaff8d784b576fd65ae95c073 # v5.5.5
+      with:
+        files: coverage.out
+        token: ${{ secrets.CODECOV_TOKEN }} # optional for public repos

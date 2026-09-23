@@ -63,3 +63,31 @@ jobs:
         uses: github/codeql-action/autobuild@717e230604b28efc38d8b4d3737d0611b16bc19a # v3.30.0
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@717e230604b28efc38d8b4d3737d0611b16bc19a # v3.30.0
+
+  scorecard:
+    name: OpenSSF Scorecard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write # OIDC for publishing results
+    steps:
+      - name: Check out code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - name: Run analysis
+        uses: ossf/scorecard-action@99c09fe975337306107572b4fdf4db224cf8e2f2 # v2.4.3
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true # makes the public badge work
+      - name: Upload artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scorecard-sarif
+          path: results.sarif
+      - name: Upload to code-scanning
+        uses: github/codeql-action/upload-sarif@717e230604b28efc38d8b4d3737d0611b16bc19a # v3.30.0
+        with:
+          sarif_file: results.sarif
