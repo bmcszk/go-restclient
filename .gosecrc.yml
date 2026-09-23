@@ -1,0 +1,7 @@
+# gosec configuration — go-restclient
+# G404 (math/rand): all uses generate faker/test DATA ($randomWord, $randomInt, MAC/color generators),
+# not security material (tokens/keys use crypto paths). Weak RNG is correct here.
+# G304 (variable file path): the tool's core function is reading .http/.env/fixture files from
+# user-supplied CLI paths. A local CLI reading files the user names is intended behavior, not path traversal.
+G404: false
+G304: false

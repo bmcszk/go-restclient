@@ -44,7 +44,7 @@ jobs:
       - name: Run gosec
         uses: securego/gosec@b72378a2da300339c40788e1eddf1ddea6498558 # v2.22.11
         with:
-          args: ./...
+          args: -exclude-generated -config .gosecrc.yml ./...
 
   codeql:
     name: CodeQL analyze
