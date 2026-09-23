@@ -2,6 +2,7 @@ package restclient_test
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -182,6 +183,13 @@ func (p *parts) aTLSServer() *parts {
 	p.Cleanup(srv.Close)
 
 	return p
+}
+
+// aTLSInsecureClient builds a restclient trusting the httptest self-signed cert.
+func (p *parts) aTLSInsecureClient() *parts {
+	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
+
+	return p.aClient(rc.WithHTTPClient(httpClient))
 }
 
 // 405 on method mismatch, 404 for unknown paths. Replaces multi-path handler vars.

@@ -1,23 +1,18 @@
 package restclient_test
 
 import (
-	"crypto/tls"
-	"net/http"
 	"testing"
-
-	rc "github.com/bmcszk/go-restclient"
 )
 
 // An HTTPS response records IsTLS, TLSVersion and cipher suite.
 func TestExecuteFile_HTTPSResponseCapturesTLSData(t *testing.T) {
 	given, when, then := newParts(t)
 
-	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
 	given.
 		aTLSServer().and().
 		aHttpFile(`### tls
 GET {{server}}/secure`).and().
-		aClient(rc.WithHTTPClient(httpClient))
+		aTLSInsecureClient()
 
 	when.
 		executeFile()
