@@ -62,7 +62,7 @@ jobs:
       - name: Autobuild
         uses: github/codeql-action/autobuild@717e230604b28efc38d8b4d3737d0611b16bc19a # v3.30.0
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@717e230604b28efc38d8b4d3737d0611b16bc19a # v3.30.0
+        uses: github/codeql-action/analyze@2d92b76c45b91eb80fc44c74ce3fce0ee94e8f9d # v3.30.0
 
   scorecard:
     name: OpenSSF Scorecard
