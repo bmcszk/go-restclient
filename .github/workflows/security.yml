@@ -1,0 +1,93 @@
+name: Security
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    name: govulncheck (known vulns, call-graph)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: "1.24"
+      - name: Run govulncheck
+        uses: golang/govulncheck-action@b625fbe08f3bccbe446d94fbf87fcc875a4f50ee # v1.0.4
+        with:
+          go-version-input: "stable"
+          go-package: ./...
+
+  gosec:
+    name: gosec (SAST)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # SARIF upload; harmless without GHAS
+    steps:
+      - name: Check out code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: "1.24"
+      - name: Run gosec
+        uses: securego/gosec@b72378a2da300339c40788e1eddf1ddea6498558 # v2.22.11
+        with:
+          args: "-exclude=Generated,G404,G304 ./..."
+
+  codeql:
+    name: CodeQL analyze
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Check out code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@717e230604b28efc38d8b4d3737d0611b16bc19a # v3.30.0
+        with:
+          languages: go
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@717e230604b28efc38d8b4d3737d0611b16bc19a # v3.30.0
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@717e230604b28efc38d8b4d3737d0611b16bc19a # v3.30.0
+
+  scorecard:
+    name: OpenSSF Scorecard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write # OIDC for publishing results
+    steps:
+      - name: Check out code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - name: Run analysis
+        uses: ossf/scorecard-action@99c09fe975337306107572b4fdf4db224cf8e2f2 # v2.4.3
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true # makes the public badge work
+      - name: Upload artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scorecard-sarif
+          path: results.sarif
+      - name: Upload to code-scanning
+        uses: github/codeql-action/upload-sarif@717e230604b28efc38d8b4d3737d0611b16bc19a # v3.30.0
+        with:
+          sarif_file: results.sarif
