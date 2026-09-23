@@ -44,7 +44,7 @@ jobs:
       - name: Run gosec
         uses: securego/gosec@b72378a2da300339c40788e1eddf1ddea6498558 # v2.22.11
         with:
-          args: "-exclude=Generated -exclude=G404 -exclude=G304 ./..."
+          args: "-exclude=Generated,G404,G304 ./..."
 
   codeql:
     name: CodeQL analyze
