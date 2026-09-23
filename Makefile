@@ -41,7 +41,7 @@ install-lint: ## Install golangci-lint
 
 install-gotestsum: ## Install gotestsum
 	@echo "Installing gotestsum..."
-	@go install gotest.tools/gotestsum@latest
+	@go install gotest.tools/gotestsum@v1.12.0
 
 # Clean
 clean: ## Clean build artifacts
