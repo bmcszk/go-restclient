@@ -111,28 +111,3 @@ GET /relative`).and().
 	then.
 		errorContains("invalid BaseURL")
 }
-
-func (p *parts) serverReceivedBodyLengthIs(index int, want int) *parts {
-	p.require.Greater(len(p.capturedRequests), index)
-	p.require.Equal(want, len(p.capturedBodies[index]))
-
-	return p
-}
-
-// serverReceivedBodyMatches asserts the captured request body against a regexp.
-func (p *parts) serverReceivedBodyMatches(index int, pattern string) *parts {
-	p.require.Greater(len(p.capturedRequests), index)
-	p.assert.Regexp(pattern, p.capturedBodies[index])
-
-	return p
-}
-
-// trackedValueIs asserts the most recent tracked value equals want.
-func (p *parts) trackedValueIs(want string) *parts {
-	values, ok := p.trackedValues[p.activeTrack]
-	p.require.True(ok, "no tracking bucket %q active", p.activeTrack)
-	p.require.NotEmpty(values)
-	p.assert.Equal(want, values[len(values)-1])
-
-	return p
-}

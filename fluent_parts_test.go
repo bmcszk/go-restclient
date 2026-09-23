@@ -255,3 +255,17 @@ func (p *parts) requestCount(n int64) *parts {
 
 	return p
 }
+
+// responseIsTLS asserts the current response used TLS.
+func (p *parts) responseIsTLS() *parts {
+	p.require.True(p.current().IsTLS, "expected TLS response, got plain")
+
+	return p
+}
+
+// responseTLSVersionMatches asserts the current response TLS version against a regexp.
+func (p *parts) responseTLSVersionMatches(pattern string) *parts {
+	p.assert.Regexp(pattern, p.current().TLSVersion)
+
+	return p
+}
