@@ -234,3 +234,163 @@ GET {{server}}/items`).and().
 	then.
 		errorContains("undefined variable", "missing")
 }
+
+// `# @loop for item of items` with a []string programmatic variable loops per element (liftStrings).
+func TestExecuteFile_LoopOfStringsCollectionRunsPerElement(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aHttpFile(`### loop
+# @loop for item of items
+GET {{server}}/{{item}}`).and().
+		aClient(rc.WithVars(map[string]any{"items": []string{"alpha", "beta"}}))
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		capturedRequestCount(2).and().
+		tracking("segment").and().
+		capturedURLSegment(0).and().
+		trackedValueIs("alpha").and().
+		capturedURLSegment(1).and().
+		trackedValueIs("beta")
+}
+
+// A JSON-encoded string collection variable decodes into elements (decodeStringCollection).
+func TestExecuteFile_LoopOfJsonEncodedCollectionRunsPerElement(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aHttpFile(`### loop
+# @loop for item of items
+GET {{server}}/{{item}}`).and().
+		aClient(rc.WithVars(map[string]any{"items": `["one","two","three"]`}))
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		capturedRequestCount(3).and().
+		tracking("segment").and().
+		capturedURLSegment(2).and().
+		trackedValueIs("three")
+}
+
+// An empty JSON-encoded string collection produces zero requests.
+func TestExecuteFile_LoopOfJsonEncodedEmptyCollectionIsNoop(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aHttpFile(`### loop
+# @loop for item of items
+GET {{server}}/{{item}}`).and().
+		aClient(rc.WithVars(map[string]any{"items": "   "}))
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		capturedRequestCount(0)
+}
+
+// A non-JSON string collection errors with the collection name.
+func TestExecuteFile_LoopOfJsonEncodedMalformedCollectionErrors(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aHttpFile(`### loop
+# @loop for item of items
+GET {{server}}/{{item}}`).and().
+		aClient(rc.WithVars(map[string]any{"items": "{not-json"}))
+
+	when.
+		executeFile()
+
+	then.
+		errorContains("is not an array")
+}
+
+// A collection of JSON numbers loop-substitutes as bare JSON numbers.
+func TestExecuteFile_LoopOfNumericCollectionSubstitutesNumbers(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aHttpFile(`### loop
+# @loop for item of items
+GET {{server}}/id/{{item}}`).and().
+		aClient(rc.WithVars(map[string]any{"items": []any{float64(7), float64(42)}}))
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		capturedRequestCount(2).and().
+		tracking("segment").and().
+		capturedURLSegmentAt(0, 2).and().
+		trackedValueIs("7").and().
+		capturedURLSegmentAt(1, 2).and().
+		trackedValueIs("42")
+}
+
+// A collection of objects loop-substitutes as compact JSON per element.
+func TestExecuteFile_LoopOfObjectCollectionSubstitutesJSON(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aHttpFile(`### loop
+# @loop for item of users
+GET {{server}}/u/{{item}}`).and().
+		aClient(rc.WithVars(map[string]any{"users": []any{
+			map[string]any{"name": "ann"},
+			map[string]any{"name": "joe"},
+		}}))
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		capturedRequestCount(2).and().
+		tracking("segment").and().
+		capturedURLSegmentAt(0, 2).and().
+		trackedValueIs(`{"name":"ann"}`).and().
+		capturedURLSegmentAt(1, 2).and().
+		trackedValueIs(`{"name":"joe"}`)
+}
+
+// A nil collection element substitutes as an empty string.
+func TestExecuteFile_LoopOfCollectionWithNilElementSubstitutesEmpty(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aHttpFile(`### loop
+# @loop for item of items
+GET {{server}}/x/{{item}}`).and().
+		aClient(rc.WithVars(map[string]any{"items": []any{"a", nil, "c"}}))
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		capturedRequestCount(3).and().
+		tracking("segment").and().
+		capturedURLSegmentAt(0, 2).and().
+		trackedValueIs("a").and().
+		capturedURLSegmentAt(1, 2).and().
+		trackedValueIs("").and().
+		capturedURLSegmentAt(2, 2).and().
+		trackedValueIs("c")
+}
