@@ -1,0 +1,138 @@
+# Release automation: tag + GitHub release from master, gated on green CI.
+#
+# Trigger: manual dispatch with a version. Guards (enforced, fail-closed):
+#   1. run must target master
+#   2. latest "Go Unit Tests" run on master must be completed/success
+#   3. HEAD sha of master must match the sha that run built
+#   4. version matches semver and is newer than the latest existing tag
+# Artifacts: linux/darwin/windows amd64 binaries, sha256sums, cosign keyless
+# signatures + bundles (scorecard Signed-Releases).
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release tag (semver, e.g. v0.3.0)'
+        required: true
+        type: string
+
+permissions: {}
+
+env:
+  GO_VERSION: '1.24'
+
+jobs:
+  guard:
+    name: Verify master is green
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      sha: ${{ steps.head.outputs.sha }}
+    steps:
+      - name: Enforce master context
+        if: github.ref_name != 'master'
+        run: |
+          echo "Releases can only be cut from master (got: ${{ github.ref_name }})" >&2
+          exit 1
+
+      - name: Resolve master HEAD
+        id: head
+        run: |
+          sha=$(git ls-remote origin refs/heads/master | cut -f1)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Enforce green master CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha='${{ steps.head.outputs.sha }}'
+          run=$(gh api "repos/${{ github.repository }}/actions/runs?branch=master&workflow=Go+Unit+Tests&head_sha=$sha&status=success&per_page=1" --jq '.workflow_runs[0].id')
+          if [ -z "$run" ]; then
+            echo "No green 'Go Unit Tests' run on master HEAD ($sha) — refusing to release" >&2
+            exit 1
+          fi
+          echo "master HEAD $sha has green CI (run $run)"
+
+      - name: Enforce semver + newer than latest tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ver='${{ inputs.version }}'
+          echo "$ver" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' || { echo "not semver: $ver" >&2; exit 1; }
+          latest=$(gh api "repos/${{ github.repository }}/tags?per_page=1" --jq '.[0].name' || true)
+          if [ -n "$latest" ]; then
+            sort_ver() { echo "${1#v}" | awk -F. '{printf "%06d%06d%06d\n", $1, $2, $3}'; }
+            if [ "$(sort_ver "$ver")" -le "$(sort_ver "$latest")" ]; then
+              echo "$ver is not newer than latest tag $latest" >&2
+              exit 1
+            fi
+          fi
+
+  release:
+    name: Build, sign, publish
+    needs: guard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: master
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build binaries
+        run: |
+          version='${{ inputs.version }}'
+          mkdir -p dist
+          for os in linux darwin windows; do
+            ext=''
+            [ "$os" = 'windows' ] && ext='.exe'
+            target="dist/restclient_${os}_amd64${ext}"
+            CGO_ENABLED=0 GOOS="$os" GOARCH=amd64 go build -trimpath \
+              -ldflags "-s -w" -o "$target" ./cmd/restclient
+          done
+          cd dist
+          sha256sum restclient_* > checksums.txt
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Sign artifacts (keyless)
+        run: |
+          cd dist
+          for f in restclient_*; do
+            cosign sign-blob --yes \
+              --output-signature "$f.sig" \
+              --bundle "$f.bundle" \
+              "$f"
+          done
+
+      - name: Create tag and GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          SHA: ${{ needs.guard.outputs.sha }}
+        run: |
+          git tag "$VERSION" "$SHA"
+          git push origin "refs/tags/$VERSION"
+          notes="Features-only summary is generated from commits since the previous tag; see checksums.txt and .sig/.bundle files for verification (cosign verify-blob --bundle <file>.bundle --certificate-identity-regexp \"^https://github.com/${{ github.repository }}/\" --certificate-oidc-issuer https://token.actions.githubusercontent.com <file>)."
+          gh release create "$VERSION" dist/* \
+            --target "$SHA" \
+            --title "$VERSION" \
+            --notes "Built from master@$SHA (green CI). $notes"
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist
+          path: dist/
