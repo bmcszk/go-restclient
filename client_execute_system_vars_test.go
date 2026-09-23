@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	rc "github.com/bmcszk/go-restclient"
 )
 
 // TestExecuteFile_WithGuidSystemVariable: System Variables {{$guid}} and {{$uuid}}.
@@ -376,4 +378,67 @@ func TestExecuteFile_WithContactAndInternetFakerData(t *testing.T) {
 		capturedJSONFieldNotContains(1, "{{", "contact", "address", "street").and().
 		capturedJSONFieldNotContains(1, "{{", "technical", "website").and().
 		capturedJSONFieldMatchesRegexp(1, `^https?://`, "technical", "website")
+}
+
+// {{$randomPassword N}} substitutes an N-char password from the default charset.
+func TestExecuteFile_WithRandomPasswordSystemVariable_ValidLength(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aHttpFile(`### pw
+POST {{server}}/pw
+
+{{$randomPassword 8}}`).and().
+		aClient()
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		capturedRequestCount(1).and().
+		serverReceivedBodyLengthIs(0, 8)
+}
+
+// programmatic "password.charset" overrides the random-password charset.
+func TestExecuteFile_WithRandomPasswordSystemVariable_CharsetOverride(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aHttpFile(`### pw
+POST {{server}}/pw
+
+{{$randomPassword 6}}`).and().
+		aClient(rc.WithVars(map[string]any{
+			"password": map[string]string{"charset": "xyz"},
+		}))
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		capturedRequestCount(1).and().
+		serverReceivedBodyMatches(0, `^[xyz]{6}$`)
+}
+
+// A malformed random-password length leaves the placeholder unresolved.
+func TestParseFile_WithRandomPasswordSystemVariable_MalformedLength(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		aHttpFile(`### pw
+POST https://example.com/pw
+
+{{$randomPassword -3}}`).and().
+		aClient()
+
+	when.
+		parsingFile()
+
+	then.
+		parseSucceeded().and().
+		parsedRequestBodyIs(0, "{{$randomPassword -3}}")
 }

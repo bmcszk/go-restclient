@@ -234,3 +234,86 @@ GET {{server}}/items`).and().
 	then.
 		errorContains("undefined variable", "missing")
 }
+
+// `# @loop for item of items` with a []string programmatic variable loops per element (liftStrings).
+func TestExecuteFile_LoopOfStringsCollectionRunsPerElement(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aHttpFile(`### loop
+# @loop for item of items
+GET {{server}}/{{item}}`).and().
+		aClient(rc.WithVars(map[string]any{"items": []string{"alpha", "beta"}}))
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		capturedRequestCount(2).and().
+		tracking("segment").and().
+		capturedURLSegment(0).and().
+		trackedValueIs("alpha").and().
+		capturedURLSegment(1).and().
+		trackedValueIs("beta")
+}
+
+// A JSON-encoded string collection variable decodes into elements (decodeStringCollection).
+func TestExecuteFile_LoopOfJsonEncodedCollectionRunsPerElement(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aHttpFile(`### loop
+# @loop for item of items
+GET {{server}}/{{item}}`).and().
+		aClient(rc.WithVars(map[string]any{"items": `["one","two","three"]`}))
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		capturedRequestCount(3).and().
+		tracking("segment").and().
+		capturedURLSegment(2).and().
+		trackedValueIs("three")
+}
+
+// An empty JSON-encoded string collection produces zero requests.
+func TestExecuteFile_LoopOfJsonEncodedEmptyCollectionIsNoop(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aHttpFile(`### loop
+# @loop for item of items
+GET {{server}}/{{item}}`).and().
+		aClient(rc.WithVars(map[string]any{"items": "   "}))
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		capturedRequestCount(0)
+}
+
+// A non-JSON string collection errors with the collection name.
+func TestExecuteFile_LoopOfJsonEncodedMalformedCollectionErrors(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aHttpFile(`### loop
+# @loop for item of items
+GET {{server}}/{{item}}`).and().
+		aClient(rc.WithVars(map[string]any{"items": "{not-json"}))
+
+	when.
+		executeFile()
+
+	then.
+		errorContains("is not an array")
+}
