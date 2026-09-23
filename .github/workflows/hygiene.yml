@@ -1,0 +1,23 @@
+name: Reuse / hygiene
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  branch-protection-audit:
+    name: Report missing protections (advisory)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notes for maintainer
+        run: |
+          echo "This workflow is a reminder that the following must be enabled in repo Settings:"
+          echo "- Branch protection on master: require PR + green checks (test matrix, lint, security)"
+          echo "- Secret scanning + push protection (Settings > Code security)"
+          echo "- Dependabot alerts (Settings > Code security)"
+          echo "These are repository settings and cannot be enforced from workflow files."
