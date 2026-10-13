@@ -27,7 +27,6 @@ func extractHrespDefines(hrespContent string) (map[string]string, string, error)
 			continue
 		}
 
-		// Process @define line
 		processDefineLineToMaps(trimmedLine, defines)
 	}
 
@@ -40,11 +39,9 @@ func extractHrespDefines(hrespContent string) (map[string]string, string, error)
 
 // processDefineLineToMaps processes a @define line and adds it to the defines map
 func processDefineLineToMaps(trimmedLine string, defines map[string]string) {
-	// Line starts with "@", try to parse as a define
 	parts := strings.SplitN(trimmedLine[1:], "=", 2)
 	if len(parts) != 2 {
-		// Malformed define (e.g., "@foo" without "="), or just an "@" symbol.
-		// Current logic implies @-prefixed lines that are not valid defines are simply dropped.
+		// @-prefixed lines that are not valid defines are dropped.
 		return
 	}
 
@@ -52,7 +49,6 @@ func processDefineLineToMaps(trimmedLine string, defines map[string]string) {
 	varValue := strings.TrimSpace(parts[1])
 
 	if varName == "" {
-		// Variable name cannot be empty.
 		return
 	}
 

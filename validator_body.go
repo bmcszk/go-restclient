@@ -198,13 +198,6 @@ func processDatetimePlaceholder(formatArg string) string {
 // It attempts to parse the string as JSON and returns true if successful.
 // This handles all JSON types: objects, arrays, strings, numbers, booleans, and null.
 func isJSONContent(body string) bool {
-	// Attempt to parse as JSON - this handles all valid JSON types including:
-	// - Objects: {"key": "value"}
-	// - Arrays: [1, 2, 3]
-	// - Strings: "hello"
-	// - Numbers: 42, 3.14
-	// - Booleans: true, false
-	// - Null: null
 	var jsonData any
 	err := json.Unmarshal([]byte(body), &jsonData)
 	return err == nil
@@ -214,12 +207,10 @@ func isJSONContent(body string) bool {
 // even when it contains placeholders like {{$anyTimestamp}}. It uses the same placeholder
 // replacement logic as the JSON comparison to ensure consistency.
 func isJSONContentWithPlaceholders(body string) bool {
-	// First, try normal JSON parsing
 	if isJSONContent(body) {
 		return true
 	}
 
-	// If that fails, check if it contains placeholders and try with placeholder substitution
 	if strings.Contains(body, "{{$") {
 		// Use the same placeholder replacement logic as JSON comparison
 		testBody, _ := replacePlaceholdersWithTempValues(body)
@@ -271,7 +262,6 @@ func replacePatternPlaceholders(jsonStr string, regex *regexp.Regexp, placeholde
 	matches := regex.FindAllString(result, -1)
 
 	for _, match := range matches {
-		// Generate unique random number key
 		tempKey := generateUniqueRandomKey(placeholderMap)
 		result = strings.ReplaceAll(result, match, fmt.Sprintf("%d", tempKey))
 		placeholderMap[tempKey] = match
@@ -352,18 +342,29 @@ func compareJSONWithPlaceholders(responseFilePath string, responseIndex int, exp
 	return compareBodiesOriginal(responseFilePath, responseIndex, expectedBody, actualBody)
 }
 
+// bodyDiffError builds a validation error carrying a unified diff of expected vs actual.
+func bodyDiffError(responseFilePath string, responseIndex int, msg, expected, actual, fromFile, toFile string) error {
+	diff := difflib.UnifiedDiff{
+		A:        difflib.SplitLines(expected),
+		B:        difflib.SplitLines(actual),
+		FromFile: fromFile,
+		ToFile:   toFile,
+		Context:  3,
+	}
+	diffText, _ := difflib.GetUnifiedDiffString(diff)
+	return fmt.Errorf("validation for response #%d ('%s'): %s:\\n%s",
+		responseIndex, responseFilePath, msg, diffText)
+}
+
 // compareJSONBodies compares two JSON bodies with whitespace-agnostic comparison.
 // It processes placeholders in the expected body, then normalizes both JSON strings and compares them.
 func compareJSONBodies(responseFilePath string, responseIndex int, expectedBody, actualBody string) error {
-	// First, check if the expected body contains placeholders
 	normalizedExpectedBody := strings.TrimSpace(strings.ReplaceAll(expectedBody, "\\r\\n", "\\n"))
 
 	if strings.Contains(normalizedExpectedBody, "{{$") {
-		// Use placeholder-based comparison for JSON with placeholders
 		return compareJSONWithPlaceholders(responseFilePath, responseIndex, expectedBody, actualBody)
 	}
 
-	// No placeholders, use direct JSON normalization and comparison
 	normalizedExpected, err := normalizeJSON(expectedBody)
 	if err != nil {
 		return fmt.Errorf("validation for response #%d ('%s'): failed to normalize expected JSON: %w",
@@ -378,16 +379,8 @@ func compareJSONBodies(responseFilePath string, responseIndex int, expectedBody,
 
 	// Compare the normalized JSON strings
 	if normalizedActual != normalizedExpected {
-		diff := difflib.UnifiedDiff{
-			A:        difflib.SplitLines(normalizedExpected),
-			B:        difflib.SplitLines(normalizedActual),
-			FromFile: "Expected JSON (normalized)",
-			ToFile:   "Actual JSON (normalized)",
-			Context:  3,
-		}
-		diffText, _ := difflib.GetUnifiedDiffString(diff)
-		return fmt.Errorf("validation for response #%d ('%s'): JSON content mismatch:\\n%s",
-			responseIndex, responseFilePath, diffText)
+		return bodyDiffError(responseFilePath, responseIndex, "JSON content mismatch",
+			normalizedExpected, normalizedActual, "Expected JSON (normalized)", "Actual JSON (normalized)")
 	}
 
 	return nil
@@ -404,16 +397,8 @@ func compareBodiesOriginal(responseFilePath string, responseIndex int, expectedB
 	// The robust placeholder handling is done by buildRegexFromExpectedBody.
 	if !strings.Contains(normalizedExpectedBody, "{{$") {
 		if normalizedActualBody != normalizedExpectedBody {
-			diff := difflib.UnifiedDiff{
-				A:        difflib.SplitLines(normalizedExpectedBody),
-				B:        difflib.SplitLines(normalizedActualBody),
-				FromFile: "Expected Body",
-				ToFile:   "Actual Body",
-				Context:  3,
-			}
-			diffText, _ := difflib.GetUnifiedDiffString(diff)
-			return fmt.Errorf("validation for response #%d ('%s'): body mismatch:\\n%s",
-				responseIndex, responseFilePath, diffText)
+			return bodyDiffError(responseFilePath, responseIndex, "body mismatch",
+				normalizedExpectedBody, normalizedActualBody, "Expected Body", "Actual Body")
 		}
 		return nil
 	}
@@ -429,18 +414,10 @@ func compareBodiesOriginal(responseFilePath string, responseIndex int, expectedB
 	}
 
 	if !compiledRegex.MatchString(normalizedActualBody) {
-		diff := difflib.UnifiedDiff{
-			A:        difflib.SplitLines(normalizedExpectedBody), // Show original expected for diff
-			B:        difflib.SplitLines(normalizedActualBody),
-			FromFile: "Expected Body (with placeholders)",
-			ToFile:   "Actual Body",
-			Context:  3,
-		}
-		diffText, _ := difflib.GetUnifiedDiffString(diff)
-		return fmt.Errorf(
-			"validation for response #%d ('%s'): body mismatch "+
-				"(regexp/placeholder evaluation failed):\\n%s\\nCompiled Regex: %s",
-			responseIndex, responseFilePath, diffText, regexPatternString)
+		err := bodyDiffError(responseFilePath, responseIndex,
+			"body mismatch (regexp/placeholder evaluation failed)",
+			normalizedExpectedBody, normalizedActualBody, "Expected Body (with placeholders)", "Actual Body")
+		return fmt.Errorf("%w\\nCompiled Regex: %s", err, regexPatternString)
 	}
 
 	return nil
@@ -450,8 +427,6 @@ func compareBodiesOriginal(responseFilePath string, responseIndex int, expectedB
 // supporting placeholders like {{$regexp pattern}}, {{$anyGuid}}, {{$anyTimestamp}}, and {{$anyDatetime format}}.
 // For JSON content, it performs whitespace-agnostic comparison by normalizing JSON formatting.
 func compareBodies(responseFilePath string, responseIndex int, expectedBody, actualBody string) error {
-	// Check if both bodies are JSON content - if so, use JSON-specific comparison
-	// For expected body, use placeholder-aware JSON detection
 	expectedIsJSON := isJSONContentWithPlaceholders(expectedBody)
 	actualIsJSON := isJSONContent(actualBody)
 
@@ -459,6 +434,5 @@ func compareBodies(responseFilePath string, responseIndex int, expectedBody, act
 		return compareJSONBodies(responseFilePath, responseIndex, expectedBody, actualBody)
 	}
 
-	// For non-JSON content, use the original placeholder logic
 	return compareBodiesOriginal(responseFilePath, responseIndex, expectedBody, actualBody)
 }

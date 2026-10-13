@@ -27,7 +27,6 @@ func (c *Client) processExternalFile(
 		fullPath = filepath.Join(requestDir, restClientReq.ExternalFilePath)
 	}
 
-	// Read the file with appropriate encoding
 	content, err := c.readFileWithEncoding(fullPath, restClientReq.ExternalFileEncoding)
 	if err != nil {
 		return "", fmt.Errorf("failed to read external file %s: %w", restClientReq.ExternalFilePath, err)
@@ -51,24 +50,20 @@ func (c *Client) processExternalFile(
 
 // readFileWithEncoding reads a file with the specified encoding, defaulting to UTF-8
 func (c *Client) readFileWithEncoding(filePath, encodingName string) (string, error) {
-	// Read the file as bytes
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return "", err
 	}
 
-	// If no encoding specified or UTF-8, return as-is
 	if encodingName == "" || strings.ToLower(encodingName) == "utf-8" || strings.ToLower(encodingName) == "utf8" {
 		return string(data), nil
 	}
 
-	// Get the decoder for the specified encoding
 	decoder, err := c.getEncodingDecoder(encodingName)
 	if err != nil {
 		return "", fmt.Errorf("unsupported encoding %s: %w", encodingName, err)
 	}
 
-	// Decode the content
 	decodedContent, err := decoder.Bytes(data)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode content with encoding %s: %w", encodingName, err)
