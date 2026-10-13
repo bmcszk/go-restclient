@@ -463,10 +463,9 @@ func mergeRequestActiveVariables(rcRequest *Request, fileScopedVars map[string]s
 	}
 }
 
-// processURLSubstitution handles URL variable substitution and parsing
-func processURLSubstitution(rcRequest *Request, varMaps variableMaps,
-	clientBaseURL string, rctx resolveContext,
-	responseMap map[string]*Response) (*url.URL, error) {
+// withVarMaps returns a copy of rctx with the request's variable maps, response map, and loop bindings applied.
+func withVarMaps(rctx resolveContext, rcRequest *Request, varMaps variableMaps,
+	responseMap map[string]*Response) resolveContext {
 	loopAliases, loopIndex := currentLoopBindings(rcRequest)
 	rctx.fileScopedVars = varMaps.fileScopedVars
 	rctx.environmentVars = varMaps.envVarsFromFile
@@ -474,6 +473,14 @@ func processURLSubstitution(rcRequest *Request, varMaps variableMaps,
 	rctx.responseMap = responseMap
 	rctx.loopItemAliases = loopAliases
 	rctx.loopIndex = loopIndex
+	return rctx
+}
+
+// processURLSubstitution handles URL variable substitution and parsing
+func processURLSubstitution(rcRequest *Request, varMaps variableMaps,
+	clientBaseURL string, rctx resolveContext,
+	responseMap map[string]*Response) (*url.URL, error) {
+	rctx = withVarMaps(rctx, rcRequest, varMaps, responseMap)
 	substitutedRawURL := resolveVariablesInText(rcRequest.RawURLString, rctx)
 	substitutedRawURL = substituteDynamicSystemVariables(
 		substitutedRawURL, rctx.dotEnvVars, rctx.programmaticVars)
@@ -501,13 +508,7 @@ func processHeaderSubstitution(rcRequest *Request, varMaps variableMaps,
 		return
 	}
 
-	loopAliases, loopIndex := currentLoopBindings(rcRequest)
-	rctx.fileScopedVars = varMaps.fileScopedVars
-	rctx.environmentVars = varMaps.envVarsFromFile
-	rctx.globalVars = varMaps.globalVarsFromFile
-	rctx.responseMap = responseMap
-	rctx.loopItemAliases = loopAliases
-	rctx.loopIndex = loopIndex
+	rctx = withVarMaps(rctx, rcRequest, varMaps, responseMap)
 	for key, values := range rcRequest.Headers {
 		newValues := make([]string, len(values))
 		for j, val := range values {
