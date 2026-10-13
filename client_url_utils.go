@@ -7,42 +7,27 @@ import (
 	"strings"
 )
 
-// joinURLPaths joins base and request paths, handling query strings and fragments
-// using the standard library's url.JoinPath for proper path joining
+// joinURLPaths joins base and request paths, preserving query string and fragment.
 func joinURLPaths(base *url.URL, requestURL *url.URL) *url.URL {
-	// Join the paths using the standard url.JoinPath
 	targetPath, err := url.JoinPath(base.Path, requestURL.Path)
 	if err != nil {
-		// Path join failed, return nil
 		return nil
 	}
-
-	targetQuery := requestURL.RawQuery
-	targetFragment := requestURL.Fragment
-
-	// Create a URL struct from base parts and new path/query/fragment
-	tempURL := url.URL{
+	joined := url.URL{
 		Scheme:   base.Scheme,
 		Opaque:   base.Opaque,
 		User:     base.User,
 		Host:     base.Host,
 		Path:     targetPath,
-		RawQuery: targetQuery,
-		Fragment: targetFragment,
+		RawQuery: requestURL.RawQuery,
+		Fragment: requestURL.Fragment,
 	}
-
-	// Get the string representation of this assembled URL
-	finalURLStr := tempURL.String()
-	// URL constructed successfully
-
-	// Parse this string to get a fully validated *url.URL object
-	finalResolvedURL, err := url.Parse(finalURLStr)
+	// Round-trip through String() so the result is a fully validated *url.URL.
+	final, err := url.Parse(joined.String())
 	if err != nil {
-		// Failed to parse constructed URL
 		return nil
 	}
-
-	return finalResolvedURL
+	return final
 }
 
 // resolveRequestURL returns the request URL resolved against BaseURL, or an error.
