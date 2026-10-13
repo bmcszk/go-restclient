@@ -23,16 +23,9 @@ import (
 // if all validations pass. Errors during file reading, @define extraction, variable substitution, or
 // .hresp parsing are also returned.
 func (c *Client) ValidateResponses(responseFilePath string, actualResponses ...*Response) error {
-	expectedResponses, errs, parseErr := c.loadAndParseExpectedResponses(responseFilePath)
-
-	// If there was a critical error (file not found, etc.), return immediately
-	if parseErr != nil && errs == nil {
-		return parseErr
-	}
-
-	// Continue with validation even if parsing failed, but use empty expected responses
+	expectedResponses, errs, parseErr := c.loadExpectedResponsesOrEmpty(responseFilePath)
 	if parseErr != nil {
-		expectedResponses = nil
+		return parseErr
 	}
 
 	errs = c.validateResponseCounts(responseFilePath, actualResponses, expectedResponses, errs)
@@ -52,32 +45,35 @@ func (c *Client) ValidateResponsesWithOptions(
 	opts ValidateOptions,
 	actualResponses ...*Response,
 ) error {
-	expectedResponses, errs, parseErr := c.loadAndParseExpectedResponses(responseFilePath)
-
-	// If there was a critical error (file not found, etc.), return immediately
-	if parseErr != nil && errs == nil {
+	expectedResponses, errs, parseErr := c.loadExpectedResponsesOrEmpty(responseFilePath)
+	if parseErr != nil {
 		return parseErr
 	}
 
-	// Continue with validation even if parsing failed, but use empty expected responses
-	if parseErr != nil {
-		expectedResponses = nil
-	}
-
-	// If selecting a specific expected response by name or index, filter
 	if opts.ExpectedName != "" || opts.ExpectedIndex >= 0 {
 		expectedResponses, selectErr := selectExpectedResponse(expectedResponses, opts.ExpectedName, opts.ExpectedIndex)
 		if selectErr != nil {
 			return selectErr
 		}
-		// When selecting specific response, only validate that one
-		errs = c.validateSingleResponsePair(responseFilePath, actualResponses, expectedResponses, errs)
-		return errs.ErrorOrNil()
+		return c.validateSingleResponsePair(responseFilePath, actualResponses, expectedResponses, errs).ErrorOrNil()
 	}
 
 	errs = c.validateResponseCounts(responseFilePath, actualResponses, expectedResponses, errs)
 	errs = c.validateResponsePairs(responseFilePath, actualResponses, expectedResponses, errs)
 	return errs.ErrorOrNil()
+}
+
+// loadExpectedResponsesOrEmpty loads and parses the .hresp file; on a non-critical
+// parse failure it returns empty expected responses so validation can still run.
+func (c *Client) loadExpectedResponsesOrEmpty(responseFilePath string) ([]*ExpectedResponse, *multierror.Error, error) {
+	expectedResponses, errs, parseErr := c.loadAndParseExpectedResponses(responseFilePath)
+	if parseErr == nil {
+		return expectedResponses, errs, nil
+	}
+	if errs == nil {
+		return nil, errs, parseErr
+	}
+	return nil, errs, nil
 }
 
 // selectExpectedResponse filters expected responses by name or index.

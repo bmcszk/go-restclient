@@ -139,9 +139,10 @@ func (c *Client) runOneRequest(
 		storeResponse(parsedFile, restClientReq, skipped)
 		return respOut, multiErr
 	}
-	if handled, loopResponses, loopErr := c.runRequestWithLoops(
+	loopHandled, loopResponses, loopErr := c.runRequestWithLoops(
 		ctx, restClientReq, index, parsedFile, refState, osEnvGetter,
-	); handled {
+	)
+	if loopHandled {
 		respOut = append(respOut, loopResponses...)
 		return respOut, multierror.Append(multiErr, loopErr)
 	}
