@@ -9,8 +9,6 @@ import (
 	"unicode"
 )
 
-// Helper functions extracted from parser.go to reduce file size
-
 // isPotentialRequestLine checks if a line could be a request line
 func isPotentialRequestLine(line string) bool {
 	parts := strings.Fields(line)
@@ -31,45 +29,30 @@ func isPotentialRequestLine(line string) bool {
 // if the commentContent was indeed a recognized @name directive pattern.
 func parseNameFromAtNameDirective(commentContent string) (nameValue string, isAtNamePattern bool) {
 	if !strings.HasPrefix(commentContent, "@name") {
-		return "", false // Not an @name pattern at all
-	}
-
-	// It starts with "@name". Now check if it's a valid form.
-	// Valid forms: "@name" (no value), or "@name<whitespace>value"
-
-	// Case 1: Exactly "@name"
-	if len(commentContent) == len("@name") {
-		return "", true // It's the @name pattern, value is empty.
-	}
-
-	// Case 2: Must be "@name" followed by whitespace to be our pattern.
-	if !unicode.IsSpace(rune(commentContent[len("@name")])) {
-		// e.g., "@nametag". This is not the "@name <value>" pattern.
 		return "", false
 	}
 
-	// It's "@name" followed by whitespace. This is a recognized @name pattern.
-	// Extract the potential value.
-	// commentContent[len("@name"):] will get the part after "@name", including leading spaces.
+	if len(commentContent) == len("@name") {
+		return "", true
+	}
+
+	if !unicode.IsSpace(rune(commentContent[len("@name")])) {
+		return "", false
+	}
+
 	valuePart := commentContent[len("@name"):]
-	// First, trim leading/trailing whitespace from the raw value part.
 	trimmedValue := strings.TrimSpace(valuePart)
-	// Then, normalize internal whitespace sequences (tabs, multiple spaces) to single spaces.
-	// strings.Fields splits by any whitespace and removes empty strings resulting from multiple spaces.
-	// strings.Join then puts them back with single spaces.
 	normalizedName := strings.Join(strings.Fields(trimmedValue), " ")
 	return normalizedName, true
 }
 
-// parseInt is a helper function to convert string to int.
+// parseInt converts a string to int.
 func parseInt(s string) (int, error) {
 	var n int
 	_, err := fmt.Sscan(s, &n)
 	return n, err
 }
 
-// extractURLAndVersion splits a URL string that may contain HTTP version.
-// Returns the URL and HTTP version (if present).
 // extractURLAndVersion splits a URL string that may contain HTTP version.
 // Returns the URL and HTTP version (if present).
 func (*requestParserState) extractURLAndVersion(urlAndVersion string) (urlStr, httpVersion string) {
@@ -130,8 +113,6 @@ func isSpecialHTTPTokenChar(r rune) bool {
 	}
 }
 
-// Expected response parsing functions moved from parser.go
-
 // parseExpectedStatusLine parses a line as an HTTP status line (HTTP_VERSION STATUS_CODE [STATUS_TEXT]).
 // It updates the provided ExpectedResponse with the parsed status code and status string.
 func parseExpectedStatusLine(line string, lineNumber int, resp *ExpectedResponse) error {
@@ -174,26 +155,12 @@ func parseExpectedHeaderLine(line string, lineNumber int, resp *ExpectedResponse
 // processExpectedStatusOrHeaderLine determines if a line is an expected status or header and parses it accordingly.
 func processExpectedStatusOrHeaderLine(line string, lineNumber int, resp *ExpectedResponse) error {
 	if (resp.Status == nil || *resp.Status == "") && resp.StatusCode == nil {
-		// Expecting a status line
 		return parseExpectedStatusLine(line, lineNumber, resp)
 	}
-	// Expecting a header line
 	return parseExpectedHeaderLine(line, lineNumber, resp)
 }
 
 // parseExpectedResponses parses expected HTTP response definitions from an io.Reader.
-// It expects the content provided by the reader to be the raw .hresp format, typically after
-// any variable substitutions have already been performed (e.g., by `resolveVariablesInText`).
-//
-// The `filePath` argument is used for context in error messages only and does not imply that this
-// function reads from the file system directly. It processes content line by line, interpreting
-// status lines, headers, and body sections, separated by "###". Comments (#) and lines starting
-// with "@" (which should have been processed prior to calling this function if they were variable
-// definitions) are ignored.
-//
-// Returns a slice of `ExpectedResponse` structs or an error if parsing fails (e.g., due to
-// malformed status lines or headers).
-// responseParserState holds the state for parsing expected responses
 type responseParserState struct {
 	expectedResponses       []*ExpectedResponse
 	currentExpectedResponse *ExpectedResponse

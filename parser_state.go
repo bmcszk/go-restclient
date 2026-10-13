@@ -147,14 +147,11 @@ func finalizeParseResults(parserState *requestParserState) {
 
 // processFileLine handles the processing of a single line from the request file
 func processFileLine(parserState *requestParserState, line string) error {
-	// Remove trailing newline and carriage return if present
 	line = strings.TrimRight(line, "\r\n")
 	trimmedLine := strings.TrimSpace(line)
-	// Process the line based on content
 	if trimmedLine == "" {
 		return parserState.handleEmptyLine()
 	}
-	// Process non-empty line
 	lineType := determineLineType(trimmedLine)
 	return parserState.processLine(lineType, trimmedLine, line)
 }
@@ -190,8 +187,7 @@ func (p *requestParserState) isRequestLine(trimmedLine string) bool {
 func (p *requestParserState) processLine(lineType lineType, trimmedLine, originalLine string) error {
 	switch lineType {
 	case lineTypeSeparator:
-		// Handle request separator (### or ---)
-		return p.handleRequestLine(trimmedLine) // Use handleRequestLine for requestSeparator
+		return p.handleRequestLine(trimmedLine)
 	case lineTypeVariableDefinition:
 		return p.handleVariableDefinition(trimmedLine)
 	case lineTypeComment:
@@ -221,7 +217,6 @@ func (p *requestParserState) handleContent(trimmedLine, originalLine string) err
 	if p.isRequestLine(trimmedLine) {
 		return p.handleRequestLine(trimmedLine)
 	}
-
 	// Handle header-like lines
 	if strings.Contains(trimmedLine, ":") {
 		return p.handlePotentialHeaderLine(trimmedLine)
@@ -254,7 +249,6 @@ func (p *requestParserState) handleOrphanedContent(originalLine string) error {
 		return nil
 	}
 
-	// If there is a request context, treat as body content
 	// Finalize any accumulated query parameters before starting body parsing
 	p.finalizeQueryParameters()
 	p.parsingBody = true
@@ -388,7 +382,6 @@ func (p *requestParserState) handleHeader(trimmedLine string) error {
 	headerName := strings.TrimSpace(parts[0])
 	headerValue := strings.TrimSpace(parts[1])
 
-	// Add or append the header
 	p.currentRequest.Headers.Add(headerName, headerValue)
 	return nil
 }
@@ -432,19 +425,17 @@ func (p *requestParserState) handleBodyContent(line string) {
 func (p *requestParserState) handleExternalFileReference(line string) {
 	p.ensureCurrentRequest()
 
-	// Remove leading whitespace and '<' character
-	content := strings.TrimSpace(line[1:]) // Remove the '<'
+	content := strings.TrimSpace(line[1:])
 
-	// Check for variable substitution syntax (<@)
+	// "<@" requests variable substitution inside the referenced file; "<" does not.
 	if strings.HasPrefix(content, "@") {
-		p.parseExternalFileWithVariables(content[1:]) // Remove the '@'
+		p.parseExternalFileWithVariables(content[1:])
 	} else {
-		// Static file reference (< ./path/to/file)
 		p.currentRequest.ExternalFilePath = strings.TrimSpace(content)
 		p.currentRequest.ExternalFileWithVariables = false
 	}
 
-	// Set RawBody to indicate external file usage (for backward compatibility)
+	// RawBody keeps the raw reference for backward compatibility.
 	p.currentRequest.RawBody = line
 }
 
@@ -465,8 +456,6 @@ func (p *requestParserState) handleVariableDefinition(trimmedLine string) error 
 	parts := strings.SplitN(trimmedLine, "=", 2)
 
 	if len(parts) != 2 { // Case: "@name_only_var" or just "@"
-		// If trimmedLine is just "@", it's missing name and equals.
-		// If trimmedLine is "@foo", it's missing equals.
 		return fmt.Errorf("malformed in-place variable definition, missing '=' or name part invalid: %s", trimmedLine)
 	}
 
@@ -479,7 +468,6 @@ func (p *requestParserState) handleVariableDefinition(trimmedLine string) error 
 		return fmt.Errorf("malformed variable definition, must start with '@': %s", trimmedLine)
 	}
 
-	// Check if the name part after "@" is empty or just whitespace
 	actualVarName := strings.TrimSpace(varNameWithAt[1:])
 	if actualVarName == "" { // Case: "@ = value" or "@   = value"
 		return fmt.Errorf("malformed in-place variable definition, variable name cannot be empty: %s", trimmedLine)
@@ -503,35 +491,27 @@ func (p *requestParserState) finalizeCurrentRequest() {
 	// A request is only considered valid and added if it has both a method and a URL.
 	// Body, headers, etc., are optional.
 	if p.currentRequest.Method != "" && p.currentRequest.RawURLString != "" {
-		// Set the request body from collected lines (only if external file is not used)
 		if p.currentRequest.ExternalFilePath == "" {
-			rawBody := strings.Join(p.bodyLines, "\n") // Use \n as per HTTP spec for line endings in body
-			p.currentRequest.RawBody = rawBody
+			p.currentRequest.RawBody = strings.Join(p.bodyLines, "\n")
 		}
 		// Snapshot pre-substitution state so loop iterations can be re-substituted from originals.
 		p.snapshotLoopState(p.currentRequest)
-		// Note: p.currentRequest.Body (io.Reader) will be set by the consumer (e.g., Send) after variable substitution
 
-		// Populate ActiveVariables for this request from currentFileVariables
-		// This ensures the request captures variables defined before it in the file.
+		// Capture variables defined before this request in the file.
 		p.currentRequest.ActiveVariables = make(map[string]string)
 		for k, v := range p.currentFileVariables {
 			p.currentRequest.ActiveVariables[k] = v
 		}
-		// Also include any variables defined within the request block itself (e.g. via @variable in comments)
-		// This part might need refinement if @variable directives inside a request block are meant to be request-scoped
-		// For now, assuming currentFileVariables is the primary source at finalization.
 
 		p.parsedFile.Requests = append(p.parsedFile.Requests, p.currentRequest)
 	}
 
-	// Reset parser state for a new potential request, but don't create the new p.currentRequest here.
-	// ensureCurrentRequest will handle creation when the next relevant line is processed.
-	p.currentRequest = nil // Mark current request as finalized and processed.
+	// Reset parser state for a new potential request; ensureCurrentRequest recreates it on demand.
+	p.currentRequest = nil
 	p.bodyLines = []string{}
 	p.parsingBody = false
-	p.justSawEmptyLineSeparator = false // Reset separator state
-	p.parsingQueryParams = false        // Reset query parameter state
+	p.justSawEmptyLineSeparator = false
+	p.parsingQueryParams = false
 	p.queryParams = []string{}
 }
 
@@ -741,12 +721,10 @@ func (p *requestParserState) parseAndSetURL(rawURL string) {
 // isQueryParameterLine checks if a line is a multi-line query parameter
 // VS Code REST Client syntax: lines starting with ? or & (after whitespace)
 func (p *requestParserState) isQueryParameterLine(trimmedLine string) bool {
-	// Must have a current request to append query parameters to
 	if p.currentRequest == nil || p.currentRequest.Method == "" {
 		return false
 	}
 
-	// Check for ? (first query param) or & (continuation query param)
 	return strings.HasPrefix(trimmedLine, "?") || strings.HasPrefix(trimmedLine, "&")
 }
 
@@ -756,13 +734,12 @@ func (p *requestParserState) handleQueryParameterLine(trimmedLine string) error 
 		return errors.New("query parameter line without active request context")
 	}
 
-	// Start collecting query parameters if this is the first one
+	// Start collecting query parameters
 	if !p.parsingQueryParams {
 		p.parsingQueryParams = true
 		p.queryParams = []string{}
 	}
 
-	// Remove the ? or & prefix and trim whitespace
 	paramLine := strings.TrimSpace(trimmedLine[1:])
 	if paramLine != "" {
 		p.queryParams = append(p.queryParams, paramLine)
@@ -777,13 +754,9 @@ func (p *requestParserState) finalizeQueryParameters() {
 		return
 	}
 
-	// Join all query parameters with &
-	queryString := strings.Join(p.queryParams, "&")
+	queryParameters := strings.Join(p.queryParams, "&")
+	p.appendQueryStringToURL(queryParameters)
 
-	// Append to the URL
-	p.appendQueryStringToURL(queryString)
-
-	// Reset query parameter state
 	p.parsingQueryParams = false
 	p.queryParams = []string{}
 }
@@ -800,7 +773,6 @@ func (p *requestParserState) appendQueryStringToURL(queryString string) {
 	}
 	p.currentRequest.RawURLString += separator + queryString
 
-	// Re-parse the URL if it doesn't contain variables
 	p.reparseURLIfNoVariables()
 }
 
@@ -841,18 +813,14 @@ func (p *requestParserState) handleFormDataLine(line string) {
 	trimmedLine := strings.TrimSpace(line)
 
 	if strings.HasPrefix(trimmedLine, "&") {
-		// Remove the & and add to existing form data
 		formParam := strings.TrimSpace(trimmedLine[1:])
 		if len(p.bodyLines) > 0 {
-			// Append to the last line with & separator
 			lastIndex := len(p.bodyLines) - 1
 			p.bodyLines[lastIndex] = strings.TrimSpace(p.bodyLines[lastIndex]) + "&" + formParam
 		} else {
-			// First line starts with &, treat as form parameter
 			p.bodyLines = append(p.bodyLines, formParam)
 		}
 	} else {
-		// Regular form data line - trim newlines but preserve the content
 		p.bodyLines = append(p.bodyLines, strings.TrimSpace(line))
 	}
 }
