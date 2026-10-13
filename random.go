@@ -286,8 +286,8 @@ func substituteRandomVariables(text string, programmaticVars map[string]any) str
 	})
 	text = strings.ReplaceAll(text, "{{$randomColor}}",
 		fmt.Sprintf("#%02x%02x%02x", rand.Intn(256), rand.Intn(256), rand.Intn(256)))
-	if randomWord := randomChoice(randomWords, ""); randomWord != "" {
-		text = strings.ReplaceAll(text, "{{$randomWord}}", randomWord)
+	if len(randomWords) > 0 {
+		text = strings.ReplaceAll(text, "{{$randomWord}}", randomWords[rand.Intn(len(randomWords))])
 	}
 	return substituteFakerVariables(text)
 }

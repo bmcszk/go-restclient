@@ -21,13 +21,12 @@ const (
 // It returns the variables map or nil if the environment/file is not found or on error.
 func loadEnvironmentFile(filePath string, selectedEnvName string) (map[string]string, error) {
 	if selectedEnvName == "" {
-		return nil, nil // No environment selected, nothing to load
+		return nil, nil
 	}
 
 	if _, statErr := os.Stat(filePath); statErr != nil {
 		if os.IsNotExist(statErr) {
-			// Environment file not found
-			return nil, nil // File not found is not an error, just means no vars from this file
+			return nil, nil
 		}
 		// Another error occurred trying to stat the file (e.g., permissions)
 		slog.Warn("Error checking environment file", "error", statErr, "file", filePath)
@@ -50,8 +49,7 @@ func loadEnvironmentFile(filePath string, selectedEnvName string) (map[string]st
 		return selectedEnvVars, nil
 	}
 
-	// Selected environment not found
-	return nil, nil // Environment not found in this file
+	return nil, nil
 }
 
 // ParseRequestFile reads a .rest or .http file and parses it into a ParsedFile struct
@@ -228,7 +226,6 @@ func loadPublicEnvFile(fileDir, selectedEnvName string, mergedEnvVars map[string
 		for k, v := range publicVars {
 			mergedEnvVars[k] = v
 		}
-		// Environment variables loaded from public file
 	}
 }
 
@@ -239,7 +236,6 @@ func loadPrivateEnvFile(fileDir, selectedEnvName string, mergedEnvVars map[strin
 		for k, v := range privateVars {
 			mergedEnvVars[k] = v
 		}
-		// Environment variables loaded from private file
 	}
 }
 
@@ -248,7 +244,6 @@ func ensureEnvironmentVariablesInitialized(parsedFile *ParsedFile, _, _ string) 
 	if parsedFile.EnvironmentVariables == nil {
 		parsedFile.EnvironmentVariables = make(map[string]string)
 	}
-	// No environment-specific variables found
 }
 
 // parseRequests reads HTTP requests from a reader and parses them into a ParsedFile struct.

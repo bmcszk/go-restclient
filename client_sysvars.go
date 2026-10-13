@@ -22,7 +22,6 @@ func (*Client) generateRequestScopedSystemVariables() map[string]string {
 	vars["$timestamp"] = strconv.FormatInt(time.Now().UTC().Unix(), 10)
 	vars["$isoTimestamp"] = time.Now().UTC().Format(time.RFC3339) // Add $isoTimestamp
 	vars["$randomInt"] = strconv.Itoa(rand.Intn(1001))            // 0-1000 inclusive as per PRD
-	// Add other simple, no-argument system variables here if any
 
 	return vars
 }
@@ -45,7 +44,7 @@ func (c *Client) resolveFileScopedSystemVariables(parsedFile *ParsedFile) {
 	c.updateRequestActiveVariables(parsedFile.Requests, resolvedVariables)
 }
 
-// resolveFileVariables processes each file-scoped variable that contains system variable placeholders
+// resolveFileVariables resolves each file-scoped variable containing system variable placeholders.
 func (c *Client) resolveFileVariables(
 	parsedFile *ParsedFile,
 	fileScopedSystemVars map[string]string,
@@ -103,7 +102,7 @@ func resolveSystemVariablePlaceholder(
 ) string {
 	innerDirective := strings.TrimSpace(placeholder[2 : len(placeholder)-2])
 
-	// Check if it's a simple system variable that we have pre-generated
+	// Match only against pre-generated (request-scoped) system variables
 	if val, ok := systemVars[innerDirective]; ok {
 		return val
 	}

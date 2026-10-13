@@ -52,7 +52,6 @@ func (c *Client) processMultipartFormWithFiles(
 		c.programmaticVars,
 	)
 
-	// Parse and reconstruct the multipart form with file substitution
 	return c.reconstructMultipartFormWithFiles(processedBody, restClientReq)
 }
 
@@ -133,9 +132,7 @@ func (*Client) extractBoundaryFromContentType(contentType string) string {
 func (c *Client) parseMultipartBody(body, boundary string) ([]multipartPart, error) {
 	var parts []multipartPart
 
-	// Split by boundary
-	boundaryDelimiter := "--" + boundary
-	sections := strings.Split(body, boundaryDelimiter)
+	sections := strings.Split(body, "--"+boundary)
 
 	for _, section := range sections {
 		section = strings.TrimSpace(section)
