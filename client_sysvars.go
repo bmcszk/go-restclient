@@ -11,9 +11,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// substituteDynamicSystemVariables handles system variables that require argument
-// parsing or dynamic evaluation at substitution time.
-
 // generateRequestScopedSystemVariables creates a map of system variables that are generated once per request.
 // This ensures that if, for example, {{$uuid}} is used multiple times within the same request
 // (e.g., in the URL and a header), it resolves to the same value for that specific request.
