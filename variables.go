@@ -183,11 +183,10 @@ func parseVariableDirective(directive string) (varName, fallbackValue string, ha
 // resolveSystemVariable handles system variables that start with $.
 func resolveSystemVariable(varName, match string, requestScopedSystemVars map[string]string) string {
 	if val, ok := requestScopedSystemVars[varName]; ok {
-		// Found system variable in request scope
 		return val
 	}
-	// System variable not in scope, preserve for dynamic processing
-	return match // Preserve for substituteDynamicSystemVariables
+	// Not in scope: preserve for substituteDynamicSystemVariables.
+	return match
 }
 
 // resolveRegularVariable resolves regular variables using the precedence order.
@@ -242,9 +241,7 @@ func resolveLowPriorityVariables(varName string, ctx resolveContext) string {
 // resolveProgrammaticVariable resolves from client programmatic variables.
 func resolveProgrammaticVariable(varName string, clientProgrammaticVars map[string]any) string {
 	if clientProgrammaticVars != nil {
-		// Checking client programmatic variables
 		if val, ok := clientProgrammaticVars[varName]; ok {
-			// Found in programmatic variables
 			return fmt.Sprintf("%v", val)
 		}
 	}
@@ -263,17 +260,13 @@ func resolveFileScopedVariable(varName string, ctx resolveContext) string {
 		return ""
 	}
 
-	// Found in file-scoped variables
-
 	// Check if the resolved file-scoped variable's value is itself a dynamic system variable placeholder
 	if isDynamicSystemVariablePlaceholder(val, ctx.systemVars) {
-		// File-scoped variable is dynamic, evaluating
-		// Pass programmaticVars and dotEnvVars to substituteDynamicSystemVariables
 		evaluatedVal := substituteDynamicSystemVariables(val, ctx.dotEnvVars, ctx.programmaticVars)
-		ctx.fileScopedVars[fileScopedVarNameToTry] = evaluatedVal // Cache the evaluated value
+		ctx.fileScopedVars[fileScopedVarNameToTry] = evaluatedVal
 		return evaluatedVal
 	}
-	return val // Return the original value if not a dynamic placeholder needing evaluation
+	return val
 }
 
 // resolveFromMap resolves a variable from a simple string map.
@@ -290,25 +283,19 @@ func resolveFromMap(varName string, varMap map[string]string) string {
 // if the raw URL doesn't have a scheme and a non-empty clientBaseURL is provided.
 func applyBaseURLIfNeeded(rawURL string, clientBaseURL string) string {
 	if strings.Contains(rawURL, "://") || clientBaseURL == "" {
-		return rawURL // No need to apply base URL
+		return rawURL
 	}
 
-	// At this point, rawURL has no scheme, and clientBaseURL is not empty.
-
 	if !strings.HasPrefix(rawURL, "/") {
-		// It's a relative path, simply prepend base URL + "/"
 		return strings.TrimRight(clientBaseURL, "/") + "/" + rawURL
 	}
 
-	// It's an absolute path (starts with "/").
-	// We need to take scheme and host from clientBaseURL.
+	// Absolute path: take scheme and host from clientBaseURL.
 	baseURLParsed, err := url.Parse(clientBaseURL)
 	if err == nil && baseURLParsed.Scheme != "" && baseURLParsed.Host != "" {
 		return baseURLParsed.Scheme + "://" + baseURLParsed.Host + rawURL
 	}
 
-	// If clientBaseURL couldn't be parsed properly or is not a full URL,
-	// return the original rawURL (which is an absolute path).
 	return rawURL
 }
 
@@ -400,13 +387,13 @@ func matchesDynamicPattern(value string) bool {
 }
 
 // substituteRequestVariables handles the substitution of variables in the request's URL and headers.
-// variableMaps holds the different types of variable maps
 type variableMaps struct {
 	fileScopedVars     map[string]string
 	envVarsFromFile    map[string]string
 	globalVarsFromFile map[string]string
 }
 
+// substituteRequestVariables substitutes variables in the request's URL and headers.
 // It returns the final parsed URL or an error if substitution/parsing fails.
 func substituteRequestVariables(
 	rcRequest *Request,
@@ -463,10 +450,9 @@ func mergeRequestActiveVariables(rcRequest *Request, fileScopedVars map[string]s
 	}
 }
 
-// processURLSubstitution handles URL variable substitution and parsing
-func processURLSubstitution(rcRequest *Request, varMaps variableMaps,
-	clientBaseURL string, rctx resolveContext,
-	responseMap map[string]*Response) (*url.URL, error) {
+// withVarMaps returns a copy of rctx with the request's variable maps, response map, and loop bindings applied.
+func withVarMaps(rctx resolveContext, rcRequest *Request, varMaps variableMaps,
+	responseMap map[string]*Response) resolveContext {
 	loopAliases, loopIndex := currentLoopBindings(rcRequest)
 	rctx.fileScopedVars = varMaps.fileScopedVars
 	rctx.environmentVars = varMaps.envVarsFromFile
@@ -474,6 +460,14 @@ func processURLSubstitution(rcRequest *Request, varMaps variableMaps,
 	rctx.responseMap = responseMap
 	rctx.loopItemAliases = loopAliases
 	rctx.loopIndex = loopIndex
+	return rctx
+}
+
+// processURLSubstitution handles URL variable substitution and parsing
+func processURLSubstitution(rcRequest *Request, varMaps variableMaps,
+	clientBaseURL string, rctx resolveContext,
+	responseMap map[string]*Response) (*url.URL, error) {
+	rctx = withVarMaps(rctx, rcRequest, varMaps, responseMap)
 	substitutedRawURL := resolveVariablesInText(rcRequest.RawURLString, rctx)
 	substitutedRawURL = substituteDynamicSystemVariables(
 		substitutedRawURL, rctx.dotEnvVars, rctx.programmaticVars)
@@ -501,13 +495,7 @@ func processHeaderSubstitution(rcRequest *Request, varMaps variableMaps,
 		return
 	}
 
-	loopAliases, loopIndex := currentLoopBindings(rcRequest)
-	rctx.fileScopedVars = varMaps.fileScopedVars
-	rctx.environmentVars = varMaps.envVarsFromFile
-	rctx.globalVars = varMaps.globalVarsFromFile
-	rctx.responseMap = responseMap
-	rctx.loopItemAliases = loopAliases
-	rctx.loopIndex = loopIndex
+	rctx = withVarMaps(rctx, rcRequest, varMaps, responseMap)
 	for key, values := range rcRequest.Headers {
 		newValues := make([]string, len(values))
 		for j, val := range values {
