@@ -32,10 +32,11 @@ func (c *Client) applyOAuth2(
 	if restClientReq == nil || restClientReq.Headers == nil {
 		return nil
 	}
-	if !oauth2HeaderMatches(restClientReq.Headers.Get("Authorization")) {
+	authHeader := restClientReq.Headers.Get("Authorization")
+	if !oauth2HeaderMatches(authHeader) {
 		return nil
 	}
-	directive, err := parseOAuth2Header(restClientReq.Headers.Get("Authorization"))
+	directive, err := parseOAuth2Header(authHeader)
 	if err != nil {
 		return err
 	}
