@@ -147,91 +147,64 @@ func substituteFakerVariables(text string) string {
 	return text
 }
 
+// randomChoice returns a random element of the list, or fallback when empty.
+func randomChoice(list []string, fallback string) string {
+	if len(list) == 0 {
+		return fallback
+	}
+	return list[rand.Intn(len(list))]
+}
+
 // getRandomFirstName returns a random first name
 func getRandomFirstName(_ string) string {
-	if len(firstNames) > 0 {
-		return firstNames[rand.Intn(len(firstNames))]
-	}
-	return "John"
+	return randomChoice(firstNames, "John")
 }
 
 // getRandomLastName returns a random last name
 func getRandomLastName(_ string) string {
-	if len(lastNames) > 0 {
-		return lastNames[rand.Intn(len(lastNames))]
-	}
-	return "Doe"
+	return randomChoice(lastNames, "Doe")
 }
 
 // getRandomFullName returns a random full name
 func getRandomFullName(_ string) string {
-	firstName := "John"
-	lastName := "Doe"
-	if len(firstNames) > 0 {
-		firstName = firstNames[rand.Intn(len(firstNames))]
-	}
-	if len(lastNames) > 0 {
-		lastName = lastNames[rand.Intn(len(lastNames))]
-	}
-	return firstName + " " + lastName
+	return randomChoice(firstNames, "John") + " " + randomChoice(lastNames, "Doe")
 }
 
 // getRandomJobTitle returns a random job title
 func getRandomJobTitle(_ string) string {
-	if len(jobTitles) > 0 {
-		return jobTitles[rand.Intn(len(jobTitles))]
-	}
-	return "Software Engineer"
+	return randomChoice(jobTitles, "Software Engineer")
 }
 
 // Contact data generators
 
 // getRandomPhoneNumber returns a random phone number
 func getRandomPhoneNumber(_ string) string {
-	areaCode := rand.Intn(900) + 100 // 100-999
-	exchange := rand.Intn(900) + 100 // 100-999
-	number := rand.Intn(10000)       // 0000-9999
-	return fmt.Sprintf("(%03d) %03d-%04d", areaCode, exchange, number)
+	return fmt.Sprintf("(%03d) %03d-%04d", rand.Intn(900)+100, rand.Intn(900)+100, rand.Intn(10000))
 }
 
 // getRandomStreetAddress returns a random street address
 func getRandomStreetAddress(_ string) string {
-	if len(streetNames) == 0 {
-		return "123 Main St"
-	}
-	streetNumber := rand.Intn(9999) + 1 // 1-9999
-	streetName := streetNames[rand.Intn(len(streetNames))]
-	return fmt.Sprintf("%d %s", streetNumber, streetName)
+	return fmt.Sprintf("%d %s", rand.Intn(9999)+1, randomChoice(streetNames, "Main St"))
 }
 
 // getRandomCity returns a random city
 func getRandomCity(_ string) string {
-	if len(cities) > 0 {
-		return cities[rand.Intn(len(cities))]
-	}
-	return "New York"
+	return randomChoice(cities, "New York")
 }
 
 // getRandomState returns a random state
 func getRandomState(_ string) string {
-	if len(states) > 0 {
-		return states[rand.Intn(len(states))]
-	}
-	return "California"
+	return randomChoice(states, "California")
 }
 
 // getRandomZipCode returns a random ZIP code
 func getRandomZipCode(_ string) string {
-	zipCode := rand.Intn(100000) // 00000-99999
-	return fmt.Sprintf("%05d", zipCode)
+	return fmt.Sprintf("%05d", rand.Intn(100000))
 }
 
 // getRandomCountry returns a random country
 func getRandomCountry(_ string) string {
-	if len(countries) > 0 {
-		return countries[rand.Intn(len(countries))]
-	}
-	return "United States"
+	return randomChoice(countries, "United States")
 }
 
 // Internet data generators
@@ -241,27 +214,19 @@ func getRandomUrl(_ string) string {
 	if len(protocols) == 0 || len(domains) == 0 || len(paths) == 0 {
 		return "https://example.com/api"
 	}
-	protocol := protocols[rand.Intn(len(protocols))]
-	domain := domains[rand.Intn(len(domains))]
-	path := paths[rand.Intn(len(paths))]
-	return fmt.Sprintf("%s://%s%s", protocol, domain, path)
+	return fmt.Sprintf("%s://%s%s",
+		randomChoice(protocols, "https"), randomChoice(domains, "example.com"), randomChoice(paths, "/api"))
 }
 
 // getRandomDomainName returns a random domain name
 func getRandomDomainName(_ string) string {
-	if len(domains) > 0 {
-		return domains[rand.Intn(len(domains))]
-	}
-	return "example.com"
+	return randomChoice(domains, "example.com")
 }
 
 // getRandomUserAgent returns a random user agent string
 func getRandomUserAgent(_ string) string {
-	if len(userAgents) > 0 {
-		return userAgents[rand.Intn(len(userAgents))]
-	}
-	return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-		"(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+	return randomChoice(userAgents, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "+
+		"(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
 }
 
 // getRandomMacAddress returns a random MAC address
@@ -285,87 +250,80 @@ func randomStringFromCharset(length int, charset string) string {
 	return string(b)
 }
 
+// randomEmail returns a random email address.
+func randomEmail() string {
+	return fmt.Sprintf("%s@%s.com",
+		randomStringFromCharset(10, charsetAlphaNumeric),
+		randomStringFromCharset(7, charsetAlphabetic))
+}
+
+// randomIPv6 returns a random IPv6 address.
+func randomIPv6() string {
+	segments := make([]string, 8)
+	for i := range segments {
+		segments[i] = fmt.Sprintf("%x", rand.Intn(0x10000))
+	}
+	return strings.Join(segments, ":")
+}
+
 // substituteRandomVariables handles the substitution of $random.* variables.
 func substituteRandomVariables(text string, programmaticVars map[string]any) string {
-	// Integer types
-	text = reRandomInt.ReplaceAllStringFunc(text,
-		substituteRandomIntFunc(reRandomInt, defaultRandomMinInt, defaultRandomMaxInt))
-	text = reRandomDotInteger.ReplaceAllStringFunc(text,
-		substituteRandomIntFunc(reRandomDotInteger, defaultRandomMinInt, defaultRandomMaxInt))
-
-	// Float types
-	text = reRandomFloat.ReplaceAllStringFunc(text,
-		substituteRandomFloatFunc(reRandomFloat, defaultRandomMinFloat, defaultRandomMaxFloat))
-	text = reRandomDotFloat.ReplaceAllStringFunc(text,
-		substituteRandomFloatFunc(reRandomDotFloat, defaultRandomMinFloat, defaultRandomMaxFloat))
-
-	// Boolean
+	text = substituteRandomInts(text)
+	text = substituteRandomFloats(text)
 	text = strings.ReplaceAll(text, "{{$randomBoolean}}", strconv.FormatBool(rand.Intn(2) == 0))
-
-	// Hexadecimal
-	text = reRandomHex.ReplaceAllStringFunc(text, substituteRandomHexHelper(reRandomHex, defaultRandomHexLength))
-	text = reRandomDotHexadecimal.ReplaceAllStringFunc(text,
-		substituteRandomHexHelper(reRandomDotHexadecimal, defaultRandomHexLength))
-
-	// Alphabetic / Alphanumeric
-	text = reRandomDotAlphabetic.ReplaceAllStringFunc(text,
-		substituteRandomLengthCharsetFunc(reRandomDotAlphabetic, charsetAlphabetic))
-	// Uses underscore
-	text = reRandomAlphaNumeric.ReplaceAllStringFunc(text,
-		substituteRandomLengthCharsetFunc(reRandomAlphaNumeric, charsetAlphaNumericWithExtra))
-	// No underscore
-	text = reRandomDotAlphanumeric.ReplaceAllStringFunc(text,
-		substituteRandomLengthCharsetFunc(reRandomDotAlphanumeric, charsetAlphaNumeric))
-
-	// General Random String
-	text = reRandomString.ReplaceAllStringFunc(text, substituteRandomLengthCharsetFunc(reRandomString, charsetFull))
-
-	// Email
-	emailGenerator := func() string {
-		return fmt.Sprintf("%s@%s.com",
-			randomStringFromCharset(10, charsetAlphaNumeric),
-			randomStringFromCharset(7, charsetAlphabetic))
-	}
-	text = strings.ReplaceAll(text, "{{$randomEmail}}", emailGenerator())
-	text = strings.ReplaceAll(text, "{{$random.email}}", emailGenerator())
-
-	// Domain
+	text = substituteRandomHex(text)
+	text = substituteRandomStrings(text)
+	text = strings.ReplaceAll(text, "{{$randomEmail}}", randomEmail())
+	text = strings.ReplaceAll(text, "{{$random.email}}", randomEmail())
 	text = strings.ReplaceAll(text, "{{$randomDomain}}",
 		fmt.Sprintf("%s.com", randomStringFromCharset(10, charsetAlphabetic)))
-
-	// IP Addresses
 	text = strings.ReplaceAll(text, "{{$randomIPv4}}",
 		fmt.Sprintf("%d.%d.%d.%d", rand.Intn(256), rand.Intn(256), rand.Intn(256), rand.Intn(256)))
-
-	text = strings.ReplaceAll(text, "{{$randomIPv6}}", func() string {
-		segments := make([]string, 8)
-		for i := 0; i < 8; i++ {
-			segments[i] = fmt.Sprintf("%x", rand.Intn(0x10000))
-		}
-		return strings.Join(segments, ":")
-	}())
-
-	// UUID
+	text = strings.ReplaceAll(text, "{{$randomIPv6}}", randomIPv6())
 	text = strings.ReplaceAll(text, "{{$randomUUID}}", uuid.New().String())
-
-	// Password (uses programmaticVars, so it calls the existing substituteRandomPasswordFunc with modification)
 	text = reRandomPassword.ReplaceAllStringFunc(text, func(match string) string {
 		return substituteRandomPasswordFunc(match, programmaticVars)
 	})
-
-	// Color
 	text = strings.ReplaceAll(text, "{{$randomColor}}",
 		fmt.Sprintf("#%02x%02x%02x", rand.Intn(256), rand.Intn(256), rand.Intn(256)))
-
-	// Word
-	if len(randomWords) > 0 { // Prevent panic on empty slice
-		text = strings.ReplaceAll(text, "{{$randomWord}}", randomWords[rand.Intn(len(randomWords))])
+	if randomWord := randomChoice(randomWords, ""); randomWord != "" {
+		text = strings.ReplaceAll(text, "{{$randomWord}}", randomWord)
 	}
+	return substituteFakerVariables(text)
+}
 
-	// Person/Identity data (faker variables)
-	text = substituteFakerVariables(text)
+// substituteRandomInts handles $randomInt and $random.integer.
+func substituteRandomInts(text string) string {
+	text = reRandomInt.ReplaceAllStringFunc(text,
+		substituteRandomIntFunc(reRandomInt, defaultRandomMinInt, defaultRandomMaxInt))
+	return reRandomDotInteger.ReplaceAllStringFunc(text,
+		substituteRandomIntFunc(reRandomDotInteger, defaultRandomMinInt, defaultRandomMaxInt))
+}
 
-	return text
+// substituteRandomFloats handles $randomFloat and $random.float.
+func substituteRandomFloats(text string) string {
+	text = reRandomFloat.ReplaceAllStringFunc(text,
+		substituteRandomFloatFunc(reRandomFloat, defaultRandomMinFloat, defaultRandomMaxFloat))
+	return reRandomDotFloat.ReplaceAllStringFunc(text,
+		substituteRandomFloatFunc(reRandomDotFloat, defaultRandomMinFloat, defaultRandomMaxFloat))
+}
+
+// substituteRandomHex handles $randomHex and $random.hexadecimal.
+func substituteRandomHex(text string) string {
+	text = reRandomHex.ReplaceAllStringFunc(text, substituteRandomHexHelper(reRandomHex, defaultRandomHexLength))
+	return reRandomDotHexadecimal.ReplaceAllStringFunc(text,
+		substituteRandomHexHelper(reRandomDotHexadecimal, defaultRandomHexLength))
+}
+
+// substituteRandomStrings handles the length/charset-based random string variables.
+func substituteRandomStrings(text string) string {
+	text = reRandomDotAlphabetic.ReplaceAllStringFunc(text,
+		substituteRandomLengthCharsetFunc(reRandomDotAlphabetic, charsetAlphabetic))
+	text = reRandomAlphaNumeric.ReplaceAllStringFunc(text,
+		substituteRandomLengthCharsetFunc(reRandomAlphaNumeric, charsetAlphaNumericWithExtra))
+	text = reRandomDotAlphanumeric.ReplaceAllStringFunc(text,
+		substituteRandomLengthCharsetFunc(reRandomDotAlphanumeric, charsetAlphaNumeric))
+	return reRandomString.ReplaceAllStringFunc(text, substituteRandomLengthCharsetFunc(reRandomString, charsetFull))
 }
 
 // substituteRandomPasswordFunc handles $randomPassword.* substitution; programmaticVars enables charset overrides.
