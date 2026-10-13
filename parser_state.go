@@ -535,9 +535,9 @@ func (p *requestParserState) finalizeCurrentRequest() {
 	p.queryParams = []string{}
 }
 
-// _setRawURLFromLine sets the RawURLString and attempts to parse it into the URL field of the current request.
+// setRawURLFromLine sets the RawURLString and attempts to parse it into the URL field of the current request.
 // It logs the outcome with the provided context hint.
-func (p *requestParserState) _setRawURLFromLine(requestLine, contextHint string) {
+func (p *requestParserState) setRawURLFromLine(requestLine, contextHint string) {
 	trimmedURL := strings.TrimSpace(requestLine)
 	p.currentRequest.RawURLString = trimmedURL
 	parsedURL, err := url.Parse(trimmedURL)
@@ -565,7 +565,7 @@ func (p *requestParserState) handleNonMethodRequestLine(requestLine string, firs
 				"urlToken", firstToken, "line", p.lineNumber, "requestPtr", fmt.Sprintf("%p", p.currentRequest))
 			p.currentRequest.Method = "GET"
 			p.currentRequest.HTTPVersion = "HTTP/1.1" // Default for short-form
-			p._setRawURLFromLine(firstToken, "short-form GET URL")
+			p.setRawURLFromLine(firstToken, "short-form GET URL")
 		} else {
 			// First token is not a method, and not a URL. It's an orphaned line or unexpected content.
 			slog.Warn("First token not a method or URL, and no method on currentRequest. Treating as orphaned line.",
@@ -585,7 +585,7 @@ func (p *requestParserState) handleNonMethodRequestLine(requestLine string, firs
 			"token", firstToken, "requestLine", requestLine,
 			"currentMethod", p.currentRequest.Method, "line", p.lineNumber,
 			"requestPtr", fmt.Sprintf("%p", p.currentRequest))
-		p._setRawURLFromLine(requestLine, "URL part, method previously set")
+		p.setRawURLFromLine(requestLine, "URL part, method previously set")
 		return
 	}
 
@@ -646,36 +646,37 @@ func (p *requestParserState) parseRequestLineDetails(originalRequestLine string)
 	return p.handleValidMethodLine(parts, methodCandidate, result)
 }
 
+// finalizeForSeparator closes the current request when a same-line separator
+// finalized the line, and reports the line result.
+func (p *requestParserState) finalizeForSeparator(result RequestLineResult) RequestLineResult {
+	if result != RequestLineFinalizedBySeparator {
+		return RequestLineContinues
+	}
+	if p.currentRequest != nil && (p.currentRequest.Method != "" || p.currentRequest.RawURLString != "") {
+		p.finalizeCurrentRequest()
+	}
+	p.ensureCurrentRequest()
+	return RequestLineFinalizedBySeparator
+}
+
 // handleEmptyRequestLine handles empty request lines
 func (p *requestParserState) handleEmptyRequestLine(
 	result RequestLineResult, originalRequestLine string) RequestLineResult {
-	if result == RequestLineFinalizedBySeparator {
-		if p.currentRequest != nil && (p.currentRequest.Method != "" || p.currentRequest.RawURLString != "") {
-			p.finalizeCurrentRequest()
-		}
-		p.ensureCurrentRequest()
-		return RequestLineFinalizedBySeparator
+	if result != RequestLineFinalizedBySeparator {
+		slog.Warn(
+			"parseRequestLineDetails: Empty request line after processing potential separator",
+			"originalRequestLine", originalRequestLine, "line", p.lineNumber,
+			"requestPtr", fmt.Sprintf("%p", p.currentRequest))
+		return RequestLineContinues
 	}
-	slog.Warn(
-		"parseRequestLineDetails: Empty request line after processing potential separator",
-		"originalRequestLine", originalRequestLine, "line", p.lineNumber,
-		"requestPtr", fmt.Sprintf("%p", p.currentRequest))
-	return RequestLineContinues
+	return p.finalizeForSeparator(result)
 }
 
 // handleNonMethodLine handles lines that don't start with a valid HTTP method
 func (p *requestParserState) handleNonMethodLine(
 	requestLine, methodCandidate string, result RequestLineResult) RequestLineResult {
 	p.handleNonMethodRequestLine(requestLine, methodCandidate)
-
-	if result == RequestLineFinalizedBySeparator {
-		if p.currentRequest != nil && (p.currentRequest.Method != "" || p.currentRequest.RawURLString != "") {
-			p.finalizeCurrentRequest()
-		}
-		p.ensureCurrentRequest()
-		return RequestLineFinalizedBySeparator
-	}
-	return RequestLineContinues
+	return p.finalizeForSeparator(result)
 }
 
 // handleValidMethodLine handles lines that start with a valid HTTP method
@@ -684,33 +685,20 @@ func (p *requestParserState) handleValidMethodLine(parts []string, methodCandida
 	p.currentRequest.Method = methodCandidate
 
 	if len(parts) < 2 {
-		return p.handleIncompleteMethodLine(methodCandidate, result)
+		return p.finalizeForSeparator(p.handleIncompleteMethodLine(methodCandidate, result))
 	}
 
 	p.parseURLAndVersion(parts)
-
-	if result == RequestLineFinalizedBySeparator {
-		p.finalizeCurrentRequest()
-		p.ensureCurrentRequest()
-		return RequestLineFinalizedBySeparator
-	}
-
-	return RequestLineContinues
+	return p.finalizeForSeparator(result)
 }
 
 // handleIncompleteMethodLine handles method lines without URL parts
 func (p *requestParserState) handleIncompleteMethodLine(
-	methodCandidate string, result RequestLineResult) RequestLineResult {
+	methodCandidate string, _ RequestLineResult) RequestLineResult {
 	slog.Warn(
 		"parseRequestLineDetails: Method found, but no URL part.",
 		"method", methodCandidate, "line", p.lineNumber,
 		"requestPtr", fmt.Sprintf("%p", p.currentRequest))
-
-	if result == RequestLineFinalizedBySeparator {
-		p.finalizeCurrentRequest()
-		p.ensureCurrentRequest()
-		return RequestLineFinalizedBySeparator
-	}
 	return RequestLineContinues
 }
 
@@ -727,18 +715,27 @@ func (p *requestParserState) parseURLAndVersion(parts []string) {
 
 // parseURLIfNoVariables parses URL immediately if it contains no variables
 func (p *requestParserState) parseURLIfNoVariables(urlStr string) {
-	containsVariables := strings.Contains(urlStr, "{{") || strings.Contains(urlStr, "}}")
-
-	if !containsVariables {
-		if parsedURL, err := url.Parse(urlStr); err != nil {
-			slog.Warn(
-				"parseRequestLineDetails: Failed to parse RawURLString (no variables)",
-				"rawURL", urlStr, "error", err, "line", p.lineNumber,
-				"requestPtr", fmt.Sprintf("%p", p.currentRequest))
-		} else {
-			p.currentRequest.URL = parsedURL
-		}
+	if !containsTemplateVariables(urlStr) {
+		p.parseAndSetURL(urlStr)
 	}
+}
+
+// containsTemplateVariables reports whether the URL contains {{ }} placeholders.
+func containsTemplateVariables(rawURL string) bool {
+	return strings.Contains(rawURL, "{{") || strings.Contains(rawURL, "}}")
+}
+
+// parseAndSetURL parses the URL and stores it on the current request when valid.
+func (p *requestParserState) parseAndSetURL(rawURL string) {
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		slog.Warn(
+			"parseRequestLineDetails: Failed to parse RawURLString (no variables)",
+			"rawURL", rawURL, "error", err, "line", p.lineNumber,
+			"requestPtr", fmt.Sprintf("%p", p.currentRequest))
+		return
+	}
+	p.currentRequest.URL = parsedURL
 }
 
 // isQueryParameterLine checks if a line is a multi-line query parameter
@@ -809,12 +806,8 @@ func (p *requestParserState) appendQueryStringToURL(queryString string) {
 
 // reparseURLIfNoVariables re-parses the URL if it doesn't contain template variables
 func (p *requestParserState) reparseURLIfNoVariables() {
-	rawURL := p.currentRequest.RawURLString
-	containsVariables := strings.Contains(rawURL, "{{") || strings.Contains(rawURL, "}}")
-	if !containsVariables {
-		if parsedURL, err := url.Parse(p.currentRequest.RawURLString); err == nil {
-			p.currentRequest.URL = parsedURL
-		}
+	if !containsTemplateVariables(p.currentRequest.RawURLString) {
+		p.parseAndSetURL(p.currentRequest.RawURLString)
 	}
 }
 

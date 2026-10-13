@@ -53,11 +53,7 @@ func (c *Client) processMultipartFormWithFiles(
 	)
 
 	// Parse and reconstruct the multipart form with file substitution
-	result, err := c.reconstructMultipartFormWithFiles(processedBody, restClientReq)
-	if err != nil {
-		return "", err
-	}
-	return result, nil
+	return c.reconstructMultipartFormWithFiles(processedBody, restClientReq)
 }
 
 // reconstructMultipartFormWithFiles parses multipart form data and reconstructs it with file content substitution
