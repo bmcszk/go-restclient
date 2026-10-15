@@ -1,13 +1,7 @@
 package restclient_test
 
 import (
-	"crypto/tls"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -20,83 +14,6 @@ import (
 
 // introduced by the batch-2b test migration. Same conventions: state lives in parts,
 // assertions come from parts.require / parts.assert, .and() stays at end of line.
-
-// cannedRoute is one aCannedServer route; validJSON also requires a json.Valid body.
-type cannedRoute struct {
-	method    string
-	code      int
-	body      string
-	validJSON bool
-}
-
-// serveCannedRoute writes the cannedRoute response for r: 405 on method mismatch,
-// 400 on validJSON with an unparseable body. The caller handled unknown paths.
-func serveCannedRoute(w http.ResponseWriter, r *http.Request, route cannedRoute) {
-	if r.Method != route.method {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-
-		return
-	}
-	if route.validJSON {
-		body, _ := io.ReadAll(r.Body)
-		if !json.Valid(body) {
-			w.WriteHeader(http.StatusBadRequest)
-
-			return
-		}
-	}
-	w.WriteHeader(route.code)
-	_, _ = fmt.Fprint(w, route.body)
-}
-
-// aCannedServer serves a fixed routing table of canned responses: exact path lookup,
-
-// aTLSServer hosts an echo handler over httptest TLS (self-signed cert).
-func (p *parts) aTLSServer() *parts {
-	srv := httptest.NewTLSServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		r.Body = io.NopCloser(strings.NewReader(string(body)))
-		p.capturedRequests = append(p.capturedRequests, r)
-		p.capturedBodies = append(p.capturedBodies, string(body))
-		p.capturedRequestTimes = append(p.capturedRequestTimes, time.Now())
-		p.requestHits.Add(1)
-	}))
-	p.servers = append(p.servers, srv)
-	p.serverURL = srv.URL
-	p.Cleanup(srv.Close)
-
-	return p
-}
-
-// aTLSInsecureClient builds a restclient trusting the httptest self-signed cert.
-func (p *parts) aTLSInsecureClient() *parts {
-	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
-
-	return p.aClient(rc.WithHTTPClient(httpClient))
-}
-
-// 405 on method mismatch, 404 for unknown paths. Replaces multi-path handler vars.
-func (p *parts) aCannedServer(routes map[string]cannedRoute) *parts {
-	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
-		route, ok := routes[r.URL.Path]
-		if !ok {
-			w.WriteHeader(http.StatusNotFound)
-
-			return
-		}
-		serveCannedRoute(w, r, route)
-	})
-}
-
-// anEchoServer echoes the request body back verbatim with 200 OK — for tests that only
-// need a round-tripped body (e.g. external-file encoding round trips).
-func (p *parts) anEchoServer() *parts {
-	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(body)
-	})
-}
 
 // urlHost returns the host portion of the given URL string. Used to compute the
 // httptest server's host for assertions in http-client.env.json subtests.
@@ -140,21 +57,6 @@ func (p *parts) serverReceivedFakerHeaders(reqIndex int, rules []fakerHeaderRule
 	return p
 }
 
-// aHttpFile writes the given .http content, replacing {{server}} with the test server URL.
-// withServerAddressVars stores scheme/host/port vars and rebuilds the client with them.
-func (p *parts) withServerAddressVars() *parts {
-	parsed, err := url.Parse(p.serverURL)
-	p.require.NoError(err)
-
-	p.activeServerVars = map[string]any{
-		"scheme": parsed.Scheme,
-		"host":   parsed.Hostname(),
-		"port":   parsed.Port(),
-	}
-
-	return p.aClient(rc.WithVars(p.activeServerVars))
-}
-
 // aClientWithDefaults builds a client from fixed defaults recorded in parts.clientConfig.
 func (p *parts) aClientWithDefaults() *parts {
 	p.clientConfig = clientConfigSnapshot{
@@ -169,24 +71,6 @@ func (p *parts) aClientWithDefaults() *parts {
 		rc.WithBaseURL(p.clientConfig.baseURL),
 		rc.WithDefaultHeader(p.clientConfig.headerKey, p.clientConfig.headerValue),
 	)
-}
-
-// aMockTransportClient builds the client under test with a mock round tripper that
-// records the outgoing request into parts.intercepted and answers 200 with a fixed body.
-func (p *parts) aMockTransportClient() *parts {
-	transport := &mockRoundTripper{
-		RoundTripFunc: func(req *http.Request) (*http.Response, error) {
-			p.intercepted = req.Clone(req.Context())
-
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader("mocked response")),
-				Header:     make(http.Header),
-			}, nil
-		},
-	}
-
-	return p.aClient(rc.WithHTTPClient(&http.Client{Transport: transport}))
 }
 
 // aCookieRedirectFixture renders a committed cookie/redirect template into baseDir.
@@ -244,18 +128,4 @@ func (p *parts) clientDefaultHeadersEmpty() *parts {
 	p.assert.Empty(p.client.DefaultHeaders)
 
 	return p
-}
-
-// mockRoundTripper adapts a function into an http.RoundTripper for the DSL.
-type mockRoundTripper struct {
-	RoundTripFunc func(req *http.Request) (*http.Response, error)
-}
-
-// RoundTrip delegates to the configured function.
-func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	if m.RoundTripFunc != nil {
-		return m.RoundTripFunc(req)
-	}
-
-	return nil, errors.New("RoundTripFunc not set")
 }

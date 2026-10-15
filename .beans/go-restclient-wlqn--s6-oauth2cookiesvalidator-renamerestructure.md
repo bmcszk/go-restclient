@@ -5,25 +5,21 @@ status: todo
 type: task
 priority: normal
 created_at: 2026-10-15T11:20:03Z
-updated_at: 2026-10-15T11:20:42Z
+updated_at: 2026-10-15T12:35:22Z
 parent: go-restclient-495b
 blocked_by:
     - go-restclient-1sgh
 ---
 
-## Scope
-Rename+restructure: fluent_parts_oauth2_test.go→oauth2_parts_test.go (+oauth2State incl tokenServerURL), fluent_parts_cookies_redirects_test.go→cookies_parts_test.go (+cookiesState incl cookieCheck + aCookieRedirectFixture from ext), fluent_parts_validator_test.go→validator_parts_test.go (+validatorState). GREP expectedFilePath writers first: core-written stays base.
+## Triage (brainer endgame re-plan 2026-10-15, disk-verified)
+3 leaves: (a) fold fluent_parts_oauth2_test.go(88) into client_oauth2_test.go → 376ln/12 tests; (b) fold fluent_parts_cookies_redirects_test.go(107) into client_cookies_redirects_test.go → 186ln/4 tests; (c) rename fluent_parts_validator_test.go → validator_parts_test.go + validatorState restructure (cross-cutting builders used by 4-6 files).
 ## Acceptance criteria
-- [ ] three domain files per suffix convention with domainState structs
+- [ ] oauth2 file folded, cookies file folded; fluent_parts_oauth2/cookies_redirects GONE
+- [ ] validator_parts_test.go + validatorState; chains byte-identical
 - [ ] gates green, 270 tests, zero scenario diffs
-
-## Triage (brainer completion plan 2026-10-15)
-Part of single-PR delivery (#84 → master, absorbs #83). Waves strictly serial: every wave edits fluent_parts_test.go (struct embed + root wiring); zero-scenario-diff gate needs stable base. Pattern to replicate = capture pilot: anonymous embed, root *parts back-pointer, builders return p.root, var _ = []any{domainState{}} guard.
-## Gates (per wave)
-gofmt empty; build/vet 0; golangci-lint '0 issues.'; go test -count=1 green; Test inventory 270 no dupes; zero scenario-file diffs; CI watched to terminal.
+## Gates
+gofmt/build/vet 0; lint `0 issues.`; go test -count=1; inventory 270; moves-only; CI terminal on #84.
 ## Skills for coder
-- ~/.agents/skills/go-dev
-- go-restclient-fluent-dsl skill (Hermes) — DSL layout table + hard rules
-- docs/fluent-testing-guideline.md §6-12 (in-repo)
+- ~/.agents/skills/go-dev, ~/.agents/skills/coding-rules
 ## Delegation
-pi contract (pi-delegation skill): GIT JAIL + -t +codemode + scout recon; orchestrator re-gates + commits 'Refs: <bean-id>' + pushes to reorg/parts-dsl-split.
+pi contract per pi-delegation skill.

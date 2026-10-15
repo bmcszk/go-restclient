@@ -2,11 +2,6 @@ package restclient_test
 
 import (
 	"context"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -33,13 +28,9 @@ type clientConfigSnapshot struct {
 // parts is the shared state for the fluent Given/When/Then test DSL.
 type parts struct {
 	*testing.T
-	require   *require.Assertions
-	assert    *assert.Assertions
-	client    *rc.Client
-	servers   []*httptest.Server
-	serverURL string
-	// share the name requestCount in Go.
-	requestHits atomic.Int64
+	require *require.Assertions
+	assert  *assert.Assertions
+	client  *rc.Client
 	// capture holds the capture/tracking domain state (recorded requests, bodies and
 	// consistency-tracking buckets); capture_parts_test.go builds on it.
 	captureState
@@ -52,10 +43,11 @@ type parts struct {
 	// env holds the env domain state (dotenv files, environment-backed client
 	// builds); env_parts_test.go builds on it.
 	envState
-	cookieCheck  bool
-	clientConfig clientConfigSnapshot
-	// activeServerVars holds the scheme/host/port variables of the running test server.
-	activeServerVars map[string]any
+	// server holds the server domain state (the httptest servers and their
+	// address variables); server_parts_test.go builds on it.
+	serverState
+	cookieCheck      bool
+	clientConfig     clientConfigSnapshot
 	expectedFilePath string
 	responses        []*rc.Response
 	execErr          error
@@ -82,6 +74,7 @@ func newParts(t *testing.T) (given, when, then *parts) {
 	p.parseState.root = p
 	p.fileState.root = p
 	p.envState.root = p
+	p.serverState.root = p
 	p.trackedValues = make(map[string][]string)
 
 	return p, p, p
@@ -100,24 +93,6 @@ func multierrorCount(err error) int {
 	}
 
 	return 1
-}
-
-// aHttpServer counts requests; bodies are read eagerly because net/http closes them on return.
-func (p *parts) aHttpServer(h http.HandlerFunc) *parts {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		r.Body = io.NopCloser(strings.NewReader(string(body)))
-		p.capturedRequests = append(p.capturedRequests, r)
-		p.capturedBodies = append(p.capturedBodies, string(body))
-		p.capturedRequestTimes = append(p.capturedRequestTimes, time.Now())
-		p.requestHits.Add(1)
-		h(w, r)
-	}))
-	p.servers = append(p.servers, srv)
-	p.serverURL = srv.URL
-	p.Cleanup(srv.Close)
-
-	return p
 }
 
 // aClient builds the restclient under test with the given options.
