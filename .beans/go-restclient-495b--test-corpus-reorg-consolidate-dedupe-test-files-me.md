@@ -5,7 +5,7 @@ status: in-progress
 type: epic
 priority: normal
 created_at: 2026-10-15T10:18:58Z
-updated_at: 2026-10-15T15:30:31Z
+updated_at: 2026-10-15T16:40:54Z
 ---
 
 # TEST-CORPUS-REORG: consolidate + dedupe test files, meaningful parts DSL split
@@ -54,3 +54,9 @@ User-directed test reorg (2026-10-15): fewer files, all < 1000 lines, no duplica
 - brainer re-plan v2 (fresh census) → 6 wave beans V2W1–V2W6, all completed with PoW
 - separation audit (script): 0 Test in parts files; 0 receiver methods in plain test files; ≤1000 ln; parity 270+2Fuzz / 0 lost / 0 added
 - 22 test files = 9 parts-only + 13 tests-only
+
+
+## V3 paired-layout round PoW (2026-10-15)
+- brainer v3 re-plan → 5 wave beans V3W1–V3W5, all completed with PoW
+- 10 named pairs + base; rule-3 audit clean; anonymous *parts embedding (0 root refs); ≤1000 ln; 270+2 parity
+- Final: 24 test files; epic DONE criteria met — closes on merge of PR #84
