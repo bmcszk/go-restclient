@@ -1,11 +1,11 @@
 ---
 # go-restclient-skqg
 title: 'S3: file/fixture domain → file_parts_test.go (~20 builders)'
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-10-15T11:20:03Z
-updated_at: 2026-10-15T11:20:42Z
+updated_at: 2026-10-15T11:42:57Z
 parent: go-restclient-495b
 blocked_by:
     - go-restclient-s5a2

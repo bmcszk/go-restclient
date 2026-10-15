@@ -45,6 +45,9 @@ type parts struct {
 	// capture holds the capture/tracking domain state (recorded requests, bodies and
 	// consistency-tracking buckets); capture_parts_test.go builds on it.
 	captureState
+	// parse holds the parse-domain state (the parsed .http file and its error);
+	// parse_parts_test.go builds on it.
+	parseState
 	cookieCheck  bool
 	clientConfig clientConfigSnapshot
 	// activeServerVars holds the scheme/host/port variables of the running test server.
@@ -55,11 +58,7 @@ type parts struct {
 	execErr          error
 	validationErr    error
 	cursor           int
-	// parsedFile holds the result of parsingFile for parsed-file assertions.
-	parsedFile *rc.ParsedFile
-	// parseErr holds the error returned by parsingFile.
-	parseErr       error
-	tokenServerURL string
+	tokenServerURL   string
 	// baseDir is the single per-test directory every given* file-writing method uses.
 	// (testing.T.TempDir creates a fresh subdirectory on every call, so external
 	// files and the .http file would otherwise land in different directories.)
@@ -76,7 +75,8 @@ func newParts(t *testing.T) (given, when, then *parts) {
 		assert:  assert.New(t),
 		baseDir: t.TempDir(),
 	}
-	p.root = p
+	p.captureState.root = p
+	p.parseState.root = p
 	p.trackedValues = make(map[string][]string)
 
 	return p, p, p
