@@ -3,12 +3,24 @@ package restclient_test
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"testing"
 
 	rc "github.com/bmcszk/go-restclient"
 )
 
 // TestExecuteFile_WithCustomVariables: Custom Variables: Basic Definition and Substitution.
+
+// urlHost returns the host portion of the given URL string. Used to compute the
+// httptest server's host for assertions in http-client.env.json subtests.
+func urlHost(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+
+	return parsed.Host
+}
 
 func TestExecuteFile_WithCustomVariables(t *testing.T) {
 	given, when, then := newParts(t)

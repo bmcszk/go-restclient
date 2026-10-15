@@ -14,6 +14,14 @@ import (
 	rc "github.com/bmcszk/go-restclient"
 )
 
+// fakerHeaderRule is one faker-header rule; containsCheck wins over pattern+fieldCount.
+type fakerHeaderRule struct {
+	key           string
+	pattern       string
+	fieldCount    int
+	containsCheck string
+}
+
 // TestExecuteFile_WithGuidSystemVariable: System Variables {{$guid}} and {{$uuid}}.
 
 func TestExecuteFile_WithGuidSystemVariable(t *testing.T) {
@@ -283,6 +291,29 @@ func TestExecuteFile_WithRandomIntSystemVariable_MalformedArgs(t *testing.T) {
 		capturedJSONStringMapIs(0, map[string]string{
 			"value": "{{$randomInt foo bar}}",
 		})
+}
+
+// serverReceivedFakerHeaders applies the standard set of faker-header assertions to the
+// captured request at reqIndex, for every rule in rules.
+func (p *parts) serverReceivedFakerHeaders(reqIndex int, rules []fakerHeaderRule) *parts {
+	p.require.Greater(len(p.capturedRequests), reqIndex)
+
+	for _, rule := range rules {
+		got := p.capturedRequests[reqIndex].Header.Get(rule.key)
+		if rule.containsCheck != "" {
+			p.assert.Contains(got, rule.containsCheck)
+			p.assert.NotContains(got, "{{")
+			continue
+		}
+
+		p.assert.Regexp(rule.pattern, got)
+		p.assert.NotContains(got, "{{")
+		if rule.fieldCount > 0 {
+			p.assert.Len(strings.Fields(got), rule.fieldCount)
+		}
+	}
+
+	return p
 }
 
 // TestExecuteFile_WithFakerPersonData: Faker Library Support - Person/Identity Data.
