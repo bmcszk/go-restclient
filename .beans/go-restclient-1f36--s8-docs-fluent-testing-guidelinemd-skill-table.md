@@ -1,11 +1,11 @@
 ---
 # go-restclient-1f36
 title: 'S8: docs — fluent-testing-guideline.md + skill table'
-status: todo
+status: completed
 type: task
 priority: normal
 created_at: 2026-10-15T11:20:04Z
-updated_at: 2026-10-15T12:35:22Z
+updated_at: 2026-10-15T14:29:50Z
 parent: go-restclient-495b
 blocked_by:
     - go-restclient-euu1
@@ -30,3 +30,10 @@ gofmt/build/vet 0; lint `0 issues.`; go test -count=1; inventory 270; moves-only
 ## Delegation
 pi contract per pi-delegation skill.
 Blocked-by: S6, S7, C1-C7
+
+## Proof of Work (orchestrator-verified)
+- docs/fluent-testing-guideline.md: DSL layout section rewritten (base parts + <domain>_parts_test.go domainState + root back-pointer), stale file refs fixed (e2e_parts/fluent_parts/*-merged files), final 21-file layout tree added
+- AGENTS.md fluent-DSL line updated to new layout (sweep hit)
+- orchestrator verified: every concrete .go filename in doc exists (3 apparent misses = glob shorthand/compound refs, verified in context); README untouched (no test-file refs)
+- gates: gofmt empty, tests both pkgs ok, 270 inventory, docs-only diff (AGENTS.md + guideline)
+- Residual: none.

@@ -472,8 +472,8 @@ when.
 
 **Step 1: Identify Migration Candidates**
 ```bash
-# Find integration tests that cover user workflows
-find test/integration -name "*integration_test.go" | \
+# Find tests that cover user workflows
+find . -name "*_test.go" | \
     xargs grep -l "workflow\|journey\|end-to-end"
 ```
 
@@ -1009,47 +1009,35 @@ func (p *parts) cleanupSQSQueue() {
 ```
 
 ### Test Asset Management
-**Organize test files and assets cleanly:**
+**Organize test files and assets cleanly.** This repo keeps everything in the root package: `parts_test.go` holds the DSL base (`parts` struct, `newParts`, `and`, lifecycle and response builders) and one `<domain>_parts_test.go` file per domain (`capture`, `parse`, `file`, `env`, `server`, `validator`) embeds a `domainState` into `parts` with a `root *parts` back-pointer, so every builder returns `*parts`. Scenario files are grouped per domain (`client_execute_control/core/graphql/refs/system_vars/vars_test.go`, `client_cookies_redirects/oauth2/parsefile/script_test.go`, `validator_test.go`, `validator_placeholders_test.go`) alongside `export_test.go` and `fuzz_url_utils_test.go`.
 
 ```
-test/
-├── e2e/
-│   ├── assets/           # Test data files (videos, images, etc.)
-│   │   └── test-video.mp4
-│   ├── templates/        # Template files for test data generation
-│   │   ├── asset_event.json
-│   │   └── encode_task_event.json
-│   ├── .env.test        # Test environment configuration
-│   ├── docker-compose.test.yml
-│   ├── e2e_test.go      # Main test scenarios
-│   ├── e2e_parts_test.go # Test helpers and fluent interface
-│   └── e2e_checks_test.go # Asynchronous check implementation
-└── integration/
-    └── ...
+<repo root>            # root package: all tests live here
+├── test/data/           # Committed fixtures (external files, http req/resp, graphql, ...)
+├── parts_test.go         # DSL base: parts struct, newParts, lifecycle/response builders
+├── capture_parts_test.go # Capture/tracking domain state + builders (returns *parts)
+├── parse_parts_test.go   # Parse-domain state + builders (returns *parts)
+├── file_parts_test.go    # File/fixture domain state + builders (returns *parts)
+├── env_parts_test.go     # Env domain state + builders (returns *parts)
+├── server_parts_test.go  # Server domain state + builders (returns *parts)
+└── validator_parts_test.go # Validator builders extending *parts directly
 ```
 
 ### Configuration Management
 **Clean separation of test configurations:**
 
 ```go
-// .env.test
-TEST_DB_URL=postgres://test:test@localhost:5433/testdb
-TEST_SQS_QUEUE_URL=http://localhost:4566/000000000000/test-queue
-TEST_SERVICE_ADDRESS=http://localhost:18082
-
-// Test setup with environment loading
+// Test setup loads dotenv files via the parser (godotenv), then builds clients
+// with env-backed options through DSL given-builders such as aDotEnvFile and
+// aClientWithEnvironment (env_parts_test.go).
 func newParts(t *testing.T) (*parts, *parts, *parts) {
     t.Helper()
-    var envs config.Environment
 
-    // Load test-specific environment
-    err := godotenv.Load(".env.test")
-    assert.NoError(t, err, "load test config")
+    p := &parts{T: t, baseDir: t.TempDir()}
+    // Wire domain states (capture/parse/file/env/server/...) to the root parts
+    // and continue with test setup...
 
-    err = env.Parse(&envs)
-    assert.NoError(t, err, "parse test config")
-
-    // Continue with test setup...
+    return p, p, p  // given, when, then
 }
 ```
 
@@ -1264,35 +1252,23 @@ func (p *parts) videoHasAssets(expectedCount int) *parts {
 **Structure tests for maximum maintainability:**
 
 ```
-test/
-└── e2e/
-    ├── .env.test              # Test environment configuration
-    ├── docker-compose.test.yml
-    ├── e2e_test.go            # Main test scenarios (readable workflows)
-    ├── e2e_parts_test.go      # Test helpers and fluent interface
-    └── e2e_checks_test.go     # Asynchronous check implementation
+<repo root>            # root package: all tests live here
+├── parts_test.go             # DSL base (parts struct, newParts, lifecycle builders)
+├── capture_parts_test.go     # Capture domain state + builders (returns *parts)
+├── parse_parts_test.go       # Parse domain state + builders (returns *parts)
+├── file_parts_test.go        # File domain state + builders (returns *parts)
+├── env_parts_test.go         # Env domain state + builders (returns *parts)
+├── server_parts_test.go      # Server domain state + builders (returns *parts)
+└── validator_parts_test.go   # Validator builders extending *parts directly
 ```
 
 #### 8. Environment Configuration Management
 **Separate test configurations cleanly:**
 
 ```go
-// Separate test configs with environment-specific behavior
-func setupTestEnvironment(t *testing.T) *TestEnvironment {
-    t.Helper()
-
-    // Load test-specific config
-    err := godotenv.Load(".env.test")
-    require.NoError(t, err, "load test environment")
-
-    env := &TestEnvironment{
-        DBURL:     os.Getenv("TEST_DB_URL"),
-        SQSQueue:  os.Getenv("TEST_SQS_QUEUE_URL"),
-        ServiceAddr: os.Getenv("TEST_SERVICE_ADDRESS"),
-    }
-
-    return env
-}
+// Env-backed client builds go through the env DSL builders (env_parts_test.go):
+// they write dotenv files under the per-test temp dir and build the client
+// from them, so each test is hermetic — no host environment variables.
 ```
 
 ## Test Anti-Patterns to Avoid
@@ -1342,30 +1318,15 @@ func (p *parts) setupVideoProcessingEnvironment() *parts {
 
 ## Testing Commands Reference
 
-### E2E Test Execution Commands
+### Test Execution Commands
 ```bash
-# E2E tests (HTTP-based) with docker-compose.test.yml
-just test-e2e-up      # Start docker-compose.test.yml services
-just test-e2e-run     # Run `go test ./test/e2e/...` against running services
-just test-e2e-down    # Stop docker-compose.test.yml services
-just test-e2e         # Complete workflow (up → run → down)
+make test            # Run all tests (unit; covers root package + CLI)
+make test-unit       # Run unit tests (gotestsum, coverage + verbose)
+make check           # Pre-commit check (lint + unit tests - fast)
 
-# All tests (unit + integration + e2e + browser)
-just test-all
-
-# Pre-commit check (unit tests + lint only - fast)
-just check
-
-# IMPORTANT: Browser tests are MANDATORY for frontend features
-# HTTP-based E2E tests DO NOT validate frontend functionality
+# All tests in one pass (root package tests + cmd/restclient)
+go test ./... -count=1
 ```
-
-### Test Environment Variables
-- `TEST_DB_URL` - Database connection string for tests
-- `TEST_SQS_QUEUE_URL` - SQS queue URL for async tests
-- `TEST_SERVICE_ADDRESS` - Service base URL for HTTP tests
-- `CI` - Automatically set in CI environments
-- `GITHUB_ACTIONS` - Automatically set in GitHub Actions
 
 ### 11. Minimal Comments Rule
 **Test source carries near-zero comments. The fluent chain IS the documentation.** Delete: `// PRD-COMMENT:` / requirement-tracker blocks (that context belongs in the PR description), `// Given / // When / // Then` section headers (the chain shows it), `// X was captured before...` / `// suppress unused-var` meta-comments, and anything that paraphrases the next line. Keep only: TODO/FIXME with an issue reference, one-line godoc on exported symbols, `// nolint:` directives. If a test needs a paragraph to be understandable, the fix is better names or a DSL method — not a comment.
@@ -1405,7 +1366,7 @@ func TestExecuteFile_SingleRequest(t *testing.T) {
 
 **Never appease the `unused` linter with reference lists (PR#35 round 3).** `var _ = []any{ (*parts).foo, ... }` blocks in DSL files keep dead methods lint-clean forever — 5 dead DSL methods survived 3 review rounds behind them. Delete the blocks and let `unused` name the dead methods, then delete them. Same for `var _ = time.Time{}`-style "silence unused import" lines: fix the import, not the symptom.
 
-**DSL domain split when one file bloats (PR#35 round 3).** fluent_parts_test.go core (parts/newParts/and/lifecycle/base assertions); ext (fixtures/templates/external files/env/servers); capture (tracking/captured*); validator; graphql; per-feature files as needed. File moves only — no renames, no behavior changes; one package so all files share `parts`. Reviewer-triggered splits are exactly this shape.
+**DSL domain split when one file bloats (PR#35 round 3).** The split shape: a base `parts_test.go` (the `parts` struct, `newParts`, `and`, lifecycle and response builders) plus one `<domain>_parts_test.go` per domain. Each domain file embeds a `domainState` struct into `parts` (via a field in the base struct) with a `root *parts` back-pointer, and its builders return `*parts` so the fluent chain stays unbroken across files; one package, so all files share `parts`. Current layout: `parts_test.go` (base) + `capture/parse/file/env/server/validator_parts_test.go` (domainState builders; validator extends `*parts` directly) + per-domain scenario files (`client_execute_*`, `client_*`, `validator_*`, `export_test.go`, `fuzz_url_utils_test.go`). Reviewer-triggered splits are exactly this shape.
 
 **Migration-history godoc is deleted, not shrunk (PR#35 rounds 2-3).** "The legacy tests never exercised this path... gate-mandated count..." belongs in the PR description / bean PoW, never in code. This includes 1-line shrunk survivors and mid-sentence `//` fragments above Test funcs. Delegate contracts for review rounds must state: comments max 1 line across the ENTIRE diff (DSL files included — workers otherwise read "minimal comments" as scoping only Test funcs), only non-obvious WHY, no `// --- moved from X ---` banners. Census: `awk '/^\/\//{c++;next} {if(c>2) print FILENAME": "c" before "NR; c=0}' *_test.go`.
 
