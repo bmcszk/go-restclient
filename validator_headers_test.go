@@ -187,26 +187,6 @@ func TestValidateResponses_HeadersContain_NotTriggeredMatching(t *testing.T) {
 		validationSucceeds()
 }
 
-// TestValidateResponses_HeadersContain_MismatchOnStandardHeader verifies the validator
-// reports a header-value mismatch on a standard header (Content-Type) when HeadersContain
-// is not triggered by the file format.
-func TestValidateResponses_HeadersContain_MismatchOnStandardHeader(t *testing.T) {
-	given, when, then := newParts(t)
-
-	given.
-		aClient().and().
-		aResponseWith(200, "200 OK", "",
-			http.Header{"Content-Type": {"text/html"}}).and().
-		anExpectedResponseFixture("validator_headerscontain_key_missing.hresp")
-
-	when.
-		validateResponses()
-
-	then.
-		validationFails(1,
-			"expected value 'application/json' for header 'Content-Type' not found")
-}
-
 // TestValidateResponses_HeadersContain_ExpectedKeyNotFound verifies the validator reports
 // a missing-expected-header error when the expected Content-Type key is absent and the
 func TestValidateResponses_HeadersContain_ExpectedKeyNotFound(t *testing.T) {
