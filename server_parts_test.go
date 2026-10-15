@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -132,21 +131,6 @@ func (s *serverState) anEchoServer() *parts {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(body)
 	})
-}
-
-// withServerAddressVars stores scheme/host/port vars and rebuilds the client with them.
-func (s *serverState) withServerAddressVars() *parts {
-	p := s.parts
-	parsed, err := url.Parse(p.serverURL)
-	p.require.NoError(err)
-
-	p.activeServerVars = map[string]any{
-		"scheme": parsed.Scheme,
-		"host":   parsed.Hostname(),
-		"port":   parsed.Port(),
-	}
-
-	return p.aClient(rc.WithVars(p.activeServerVars))
 }
 
 // aMockTransportClient builds the client under test with a mock round tripper that
