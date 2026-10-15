@@ -5,7 +5,7 @@ status: todo
 type: task
 priority: normal
 created_at: 2026-10-15T11:20:03Z
-updated_at: 2026-10-15T12:35:22Z
+updated_at: 2026-10-15T13:17:29Z
 parent: go-restclient-495b
 blocked_by:
     - go-restclient-1sgh
@@ -23,3 +23,8 @@ gofmt/build/vet 0; lint `0 issues.`; go test -count=1; inventory 270; moves-only
 - ~/.agents/skills/go-dev, ~/.agents/skills/coding-rules
 ## Delegation
 pi contract per pi-delegation skill.
+
+## Proof of Work (orchestrator-verified)
+- oauth2State (tokenServerURL) embedded; 8 oauth2 builders folded into client_oauth2_test.go; fluent_parts_oauth2_test.go DELETED (wave 1 of split S6)
+- gates re-run by orchestrator: gofmt empty, build/vet 0, lint `0 issues.`, tests both pkgs ok, 270 inventory
+- Residual: S6b (cookies fold + validator rename) next.

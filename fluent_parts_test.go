@@ -46,6 +46,9 @@ type parts struct {
 	// server holds the server domain state (the httptest servers and their
 	// address variables); server_parts_test.go builds on it.
 	serverState
+	// oauth2 holds the oauth2 domain state (the OAuth2 token server address);
+	// client_oauth2_test.go builds on it.
+	oauth2State
 	cookieCheck      bool
 	clientConfig     clientConfigSnapshot
 	expectedFilePath string
@@ -53,7 +56,6 @@ type parts struct {
 	execErr          error
 	validationErr    error
 	cursor           int
-	tokenServerURL   string
 	// baseDir is the single per-test directory every given* file-writing method uses.
 	// (testing.T.TempDir creates a fresh subdirectory on every call, so external
 	// files and the .http file would otherwise land in different directories.)
@@ -75,6 +77,7 @@ func newParts(t *testing.T) (given, when, then *parts) {
 	p.fileState.root = p
 	p.envState.root = p
 	p.serverState.root = p
+	p.oauth2State.root = p
 	p.trackedValues = make(map[string][]string)
 
 	return p, p, p
