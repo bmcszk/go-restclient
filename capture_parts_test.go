@@ -3,6 +3,7 @@ package restclient_test
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -569,6 +570,98 @@ func (c *captureState) trackedValueIs(want string) *parts {
 	p.require.True(ok, "no tracking bucket %q active", p.activeTrack)
 	p.require.NotEmpty(values)
 	p.assert.Equal(want, values[len(values)-1])
+
+	return p
+}
+
+// clientRequestInterceptorCaptures asserts the request captured by aMockTransportClient
+// has the given method and full URL.
+func (c *captureState) clientRequestInterceptorCaptures(method, wantURL string) *parts {
+	p := c.root
+	p.require.NotNil(p.intercepted)
+	p.assert.Equal(method, p.intercepted.Method)
+	p.assert.Equal(wantURL, p.intercepted.URL.String())
+
+	return p
+}
+
+// clientSentNoHeaders asserts the request captured by aMockTransportClient sent no headers.
+func (c *captureState) clientSentNoHeaders() *parts {
+	p := c.root
+	p.require.NotNil(p.intercepted)
+	p.assert.Empty(p.intercepted.Header)
+
+	return p
+}
+
+// serverReceivedMethodAndPath asserts the request at the given server-hit index used the
+// expected HTTP method and path.
+func (c *captureState) serverReceivedMethodAndPath(index int, method, path string) *parts {
+	p := c.root
+	p.require.Greater(len(p.capturedRequests), index)
+	p.assert.Equal(method, p.capturedRequests[index].Method)
+	p.assert.Equal(path, p.capturedRequests[index].URL.Path)
+
+	return p
+}
+
+// serverReceivedJSONBody asserts the request body at the given server-hit index equals the
+// expected JSON regardless of key order or whitespace.
+func (c *captureState) serverReceivedJSONBody(index int, expectedJSON string) *parts {
+	p := c.root
+	p.require.Greater(len(p.capturedRequests), index)
+
+	body, err := io.ReadAll(p.capturedRequests[index].Body)
+	p.require.NoError(err)
+	p.assert.JSONEq(expectedJSON, string(body))
+
+	return p
+}
+
+// serverReceivedHeaderValue asserts a request header value at the given server-hit index.
+func (c *captureState) serverReceivedHeaderValue(index int, key, value string) *parts {
+	p := c.root
+	p.require.Greater(len(p.capturedRequests), index)
+	p.assert.Equal(value, p.capturedRequests[index].Header.Get(key))
+
+	return p
+}
+
+// requestRawURLContains asserts the current request's RawURLString contains every fragment.
+func (c *captureState) requestRawURLContains(fragments ...string) *parts {
+	p := c.root
+	current := p.current()
+	p.require.NotNil(current.Request)
+
+	for _, fragment := range fragments {
+		p.assert.Contains(current.Request.RawURLString, fragment)
+	}
+
+	return p
+}
+
+// capturedRequestCount asserts how many requests the test server received.
+func (c *captureState) capturedRequestCount(n int) *parts {
+	p := c.root
+	p.require.Equal(n, len(p.capturedRequests))
+
+	return p
+}
+
+// requestSkipped asserts the response at index i is marked as skipped.
+func (c *captureState) requestSkipped(i int) *parts {
+	p := c.root
+	p.require.Greater(len(p.responses), i)
+	p.assert.True(p.responses[i].Skipped)
+
+	return p
+}
+
+// requestExecuted asserts the response at index i is not marked as skipped.
+func (c *captureState) requestExecuted(i int) *parts {
+	p := c.root
+	p.require.Greater(len(p.responses), i)
+	p.assert.False(p.responses[i].Skipped)
 
 	return p
 }
