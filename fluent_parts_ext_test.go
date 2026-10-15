@@ -15,64 +15,11 @@ import (
 	"text/template"
 	"time"
 
-	"golang.org/x/text/transform"
-
 	rc "github.com/bmcszk/go-restclient"
 )
 
 // introduced by the batch-2b test migration. Same conventions: state lives in parts,
 // assertions come from parts.require / parts.assert, .and() stays at end of line.
-
-// anExternalFile writes the request file under test verbatim to <baseDir>/name.
-func (p *parts) anExternalFile(name, content string) *parts {
-	p.writeTempFile(name, content)
-	p.httpFilePath = filepath.Join(p.baseDir, name)
-
-	return p
-}
-
-// aFormattedRequestFixture renders a committed %s-placeholder fixture with fmt.Sprintf.
-func (p *parts) aFormattedRequestFixture(name string, substitutions ...string) *parts {
-	baseContent, err := os.ReadFile(filepath.Join(requestFilesDir, name))
-	if err != nil {
-		baseContent, err = os.ReadFile(filepath.Join("test", "data", "execute_file_ignore_empty_blocks", name))
-		p.require.NoError(err)
-	}
-
-	args := make([]any, len(substitutions))
-	for i, s := range substitutions {
-		args[i] = s
-	}
-
-	return p.aHttpFile(fmt.Sprintf(string(baseContent), args...))
-}
-
-// aTemplateFixture renders a committed test/data/<dir> template with [[ ]] delimiters.
-func (p *parts) aTemplateFixture(dir, name string, data any) *parts {
-	tmplContent, err := os.ReadFile(filepath.Join("test", "data", dir, name))
-	p.require.NoError(err)
-
-	tmpl, err := template.New(name).Delims("[[", "]]").Parse(string(tmplContent))
-	p.require.NoError(err)
-
-	path := filepath.Join(p.baseDir, name)
-
-	file, err := os.Create(path)
-	p.require.NoError(err)
-	p.require.NoError(tmpl.Execute(file, data))
-	p.require.NoError(file.Close())
-
-	p.httpFilePath = path
-
-	return p
-}
-
-// aMissingFile points httpFilePath at a path that does not exist, for file-not-found tests.
-func (p *parts) aMissingFile(path string) *parts {
-	p.httpFilePath = path
-
-	return p
-}
 
 // aDotEnvFile writes content to <baseDir>/.env. The parser resolves .env relative to the
 // so this works for aTempDir-based .http files. No-op safety: writing empty content is allowed.
@@ -97,20 +44,6 @@ func (p *parts) aDotEnvNamedFile(name, content string) *parts {
 // aClientWithEnvName builds the client with WithEnvName (named dotenv file).
 func (p *parts) aClientWithEnvName(name string) *parts {
 	return p.aClient(rc.WithEnvName(name))
-}
-
-// aFixtureCopy copies a committed fixture into baseDir, applying text replacements.
-func (p *parts) aFixtureCopy(requestPath, destName string, replacements map[string]string) *parts {
-	content, err := os.ReadFile(requestPath)
-	p.require.NoError(err)
-	result := string(content)
-	for old, newVal := range replacements {
-		result = strings.ReplaceAll(result, old, newVal)
-	}
-	path := filepath.Join(p.baseDir, destName)
-	p.require.NoError(os.WriteFile(path, []byte(result), 0644))
-	p.httpFilePath = path
-	return p
 }
 
 // anEnvJsonFile writes a committed env-json template with {{SERVER_URL}} resolved.
@@ -214,18 +147,6 @@ func (p *parts) anEchoServer() *parts {
 	})
 }
 
-// aRequestFixtureAbs points the DSL at a repo-root-relative request fixture path.
-func (p *parts) aRequestFixtureAbs(name string) *parts {
-	p.httpFilePath = name
-
-	return p
-}
-
-// writeTempFile writes content to a file named name inside the shared per-test base dir.
-func (p *parts) writeTempFile(name, content string) {
-	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, name), []byte(content), 0644))
-}
-
 // urlHost returns the host portion of the given URL string. Used to compute the
 // httptest server's host for assertions in http-client.env.json subtests.
 func urlHost(rawURL string) string {
@@ -235,65 +156,6 @@ func urlHost(rawURL string) string {
 	}
 
 	return parsed.Host
-}
-
-// aHttpFileWithExternalFileEncoding writes the external file in the given encoding and a <@ request for it.
-func (p *parts) aHttpFileWithExternalFileEncoding(
-	encodingName, externalFileName string, rawUTF8Content []byte, encoder transform.Transformer,
-) *parts {
-	var encoded []byte
-	if encoder != nil {
-		var err error
-		encoded, _, err = transform.Bytes(encoder, rawUTF8Content)
-		p.require.NoError(err)
-	} else {
-		encoded = rawUTF8Content
-	}
-
-	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, externalFileName), encoded, 0644))
-
-	return p.aHttpFileFromTemplateWithData("external_file_encoding.http",
-		struct {
-			ServerURL    string
-			EncodingName string
-			ExternalName string
-		}{p.serverURL, encodingName, externalFileName})
-}
-
-// aHttpFileWithExternalFile writes a short request body that points at the named external
-// file via <@, and stores the given JSON content in the external file.
-func (p *parts) aHttpFileWithExternalFile(externalFileName, externalFileContent string) *parts {
-	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, externalFileName), []byte(externalFileContent), 0644))
-
-	return p.aHttpFileFromTemplate("external_file_with_vars.http")
-}
-
-// aHttpFileWithExternalFileStatic writes a short request body that points at the named
-// external file via < (no @: NO variable substitution).
-func (p *parts) aHttpFileWithExternalFileStatic(externalFileName, externalFileContent string) *parts {
-	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, externalFileName), []byte(externalFileContent), 0644))
-
-	return p.aHttpFileFromTemplate("external_file_static.http")
-}
-
-const externalFilesFixtureDir = "test/data/external_files"
-
-// aHttpFileWithExternalFileFixture loads the committed external-file fixture via <@.
-func (p *parts) aHttpFileWithExternalFileFixture(externalFileName string) *parts {
-	src := filepath.Join(externalFilesFixtureDir, externalFileName)
-	content, err := os.ReadFile(src)
-	p.require.NoError(err)
-
-	return p.aHttpFileWithExternalFile(externalFileName, string(content))
-}
-
-// aHttpFileWithExternalFileStaticFixture is the no-substitution < counterpart.
-func (p *parts) aHttpFileWithExternalFileStaticFixture(externalFileName string) *parts {
-	src := filepath.Join(externalFilesFixtureDir, externalFileName)
-	content, err := os.ReadFile(src)
-	p.require.NoError(err)
-
-	return p.aHttpFileWithExternalFileStatic(externalFileName, string(content))
 }
 
 // fakerHeaderRule is one faker-header rule; containsCheck wins over pattern+fieldCount.
@@ -328,50 +190,6 @@ func (p *parts) serverReceivedFakerHeaders(reqIndex int, rules []fakerHeaderRule
 }
 
 // aHttpFile writes the given .http content, replacing {{server}} with the test server URL.
-func (p *parts) aHttpFile(content string) *parts {
-	resolved := strings.ReplaceAll(content, "{{server}}", p.serverURL)
-	path := filepath.Join(p.baseDir, "requests.http")
-	p.require.NoError(os.WriteFile(path, []byte(resolved), 0644))
-	p.httpFilePath = path
-
-	return p
-}
-
-// aHttpFileFromTemplate renders a committed request fixture template with the test server
-// URL ([[.ServerURL]] delimiters) and stores the processed file path for execution.
-// serverURL may be empty for parse-only fixtures; the template still renders (URL stays relative).
-func (p *parts) aHttpFileFromTemplate(templateName string) *parts {
-	return p.aHttpFileFromTemplateWithData(templateName, struct{ ServerURL string }{ServerURL: p.serverURL})
-}
-
-// aHttpFileFromTemplateWithData renders a committed request fixture template with the given
-// template data ([[ ]] delimiters) and stores the processed file path for execution.
-func (p *parts) aHttpFileFromTemplateWithData(templateName string, data any) *parts {
-	tmplContent, err := os.ReadFile(filepath.Join(requestFilesDir, templateName))
-	p.require.NoError(err)
-
-	tmpl, err := template.New(templateName).Delims("[[", "]]").Parse(string(tmplContent))
-	p.require.NoError(err)
-
-	path := filepath.Join(p.baseDir, templateName)
-
-	file, err := os.Create(path)
-	p.require.NoError(err)
-	p.require.NoError(tmpl.Execute(file, data))
-	p.require.NoError(file.Close())
-
-	p.httpFilePath = path
-
-	return p
-}
-
-// aRequestFixture points the DSL at a committed request fixture file without templating.
-func (p *parts) aRequestFixture(name string) *parts {
-	p.httpFilePath = filepath.Join(requestFilesDir, name)
-
-	return p
-}
-
 // withServerAddressVars stores scheme/host/port vars and rebuilds the client with them.
 func (p *parts) withServerAddressVars() *parts {
 	parsed, err := url.Parse(p.serverURL)
@@ -442,23 +260,6 @@ func (p *parts) aCookieRedirectFixture(name string) *parts {
 	p.require.NoError(tmpl.Execute(file, nil))
 	p.require.NoError(file.Close())
 
-	p.httpFilePath = path
-
-	return p
-}
-
-// anUploadsFixtureCopy copies the multipart fixture with server URL and < paths resolved.
-func (p *parts) anUploadsFixtureCopy() *parts {
-	p.require.NotEmpty(p.serverURL)
-
-	content, err := os.ReadFile(filepath.Join("test", "data", "http_request_files", "multipart_file_uploads.http"))
-	p.require.NoError(err)
-
-	resolved := strings.ReplaceAll(string(content), "< ./test/data/request_body/", "< test/data/request_body/")
-	resolved = strings.ReplaceAll(resolved, "[[.ServerURL]]", p.serverURL)
-	path := filepath.Join(p.baseDir, "multipart_file_uploads.http")
-
-	p.require.NoError(os.WriteFile(path, []byte(resolved), 0644))
 	p.httpFilePath = path
 
 	return p

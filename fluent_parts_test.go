@@ -18,8 +18,6 @@ import (
 )
 
 const (
-	requestFilesDir = "test/data/http_request_files"
-
 	responseFilesDir = "test/data/http_response_files"
 )
 
@@ -48,11 +46,13 @@ type parts struct {
 	// parse holds the parse-domain state (the parsed .http file and its error);
 	// parse_parts_test.go builds on it.
 	parseState
+	// file holds the file/fixture domain state (the .http file path the file
+	// builders write and executeFile / parse read); file_parts_test.go builds on it.
+	fileState
 	cookieCheck  bool
 	clientConfig clientConfigSnapshot
 	// activeServerVars holds the scheme/host/port variables of the running test server.
 	activeServerVars map[string]any
-	httpFilePath     string
 	expectedFilePath string
 	responses        []*rc.Response
 	execErr          error
@@ -77,6 +77,7 @@ func newParts(t *testing.T) (given, when, then *parts) {
 	}
 	p.captureState.root = p
 	p.parseState.root = p
+	p.fileState.root = p
 	p.trackedValues = make(map[string][]string)
 
 	return p, p, p

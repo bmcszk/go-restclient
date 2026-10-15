@@ -1,11 +1,11 @@
 ---
 # go-restclient-skqg
 title: 'S3: file/fixture domain → file_parts_test.go (~20 builders)'
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-10-15T11:20:03Z
-updated_at: 2026-10-15T11:42:57Z
+updated_at: 2026-10-15T12:04:51Z
 parent: go-restclient-495b
 blocked_by:
     - go-restclient-s5a2
@@ -27,3 +27,9 @@ gofmt empty; build/vet 0; golangci-lint '0 issues.'; go test -count=1 green; Tes
 - docs/fluent-testing-guideline.md §6-12 (in-repo)
 ## Delegation
 pi contract (pi-delegation skill): GIT JAIL + -t +codemode + scout recon; orchestrator re-gates + commits 'Refs: <bean-id>' + pushes to reorg/parts-dsl-split.
+
+## Proof of Work (orchestrator-verified)
+- fileState created (root, httpFilePath + 2 file consts), ~19 file/fixture builders moved to *fileState returning p.root; file_parts_test.go NEW; baseDir stays in base (validator-shared, verified)
+- newParts wires all three domains explicitly (capture/parse/file)
+- gates re-run by orchestrator: gofmt empty, build/vet 0, lint `0 issues.`, tests both pkgs ok, 270 inventory, zero scenario diffs
+- Residual: none.

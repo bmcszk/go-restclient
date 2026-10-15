@@ -1,11 +1,11 @@
 ---
 # go-restclient-i1gt
 title: 'S4: env domain → env_parts_test.go (7 builders)'
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-10-15T11:20:03Z
-updated_at: 2026-10-15T11:20:42Z
+updated_at: 2026-10-15T12:04:51Z
 parent: go-restclient-495b
 blocked_by:
     - go-restclient-skqg
