@@ -21,55 +21,6 @@ import (
 // introduced by the batch-2b test migration. Same conventions: state lives in parts,
 // assertions come from parts.require / parts.assert, .and() stays at end of line.
 
-// aDotEnvFile writes content to <baseDir>/.env. The parser resolves .env relative to the
-// so this works for aTempDir-based .http files. No-op safety: writing empty content is allowed.
-func (p *parts) aDotEnvFile(content string) *parts {
-	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, ".env"), []byte(content), 0644))
-	return p
-}
-
-// aDotEnvFileRemoved removes <baseDir>/.env if present (os.Remove, ignore not-exists) so a
-// previous scenario's .env cannot leak into the next subtest.
-func (p *parts) aDotEnvFileRemoved() *parts {
-	_ = os.Remove(filepath.Join(p.baseDir, ".env"))
-	return p
-}
-
-// aDotEnvNamedFile writes content to <baseDir>/.env.<name> for --env-style scenarios.
-func (p *parts) aDotEnvNamedFile(name, content string) *parts {
-	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, ".env."+name), []byte(content), 0644))
-	return p
-}
-
-// aClientWithEnvName builds the client with WithEnvName (named dotenv file).
-func (p *parts) aClientWithEnvName(name string) *parts {
-	return p.aClient(rc.WithEnvName(name))
-}
-
-// anEnvJsonFile writes a committed env-json template with {{SERVER_URL}} resolved.
-func (p *parts) anEnvJsonFile(fileName, templatePath, serverURL string) *parts {
-	content, err := os.ReadFile(templatePath)
-	p.require.NoError(err)
-	resolved := strings.ReplaceAll(string(content), "{{SERVER_URL}}", serverURL)
-	path := filepath.Join(p.baseDir, fileName)
-	p.require.NoError(os.WriteFile(path, []byte(resolved), 0600))
-	return p
-}
-
-// aClientWithEnvironment builds the client with WithEnvironment unless env is empty.
-func (p *parts) aClientWithEnvironment(env string) *parts {
-	var client *rc.Client
-	var err error
-	if env != "" {
-		client, err = rc.NewClient(rc.WithEnvironment(env))
-	} else {
-		client, err = rc.NewClient()
-	}
-	p.require.NoError(err)
-	p.client = client
-	return p
-}
-
 // cannedRoute is one aCannedServer route; validJSON also requires a json.Valid body.
 type cannedRoute struct {
 	method    string
@@ -202,13 +153,6 @@ func (p *parts) withServerAddressVars() *parts {
 	}
 
 	return p.aClient(rc.WithVars(p.activeServerVars))
-}
-
-// withEnv sets an environment variable for the duration of the test.
-func (p *parts) withEnv(k, v string) *parts {
-	p.Setenv(k, v)
-
-	return p
 }
 
 // aClientWithDefaults builds a client from fixed defaults recorded in parts.clientConfig.

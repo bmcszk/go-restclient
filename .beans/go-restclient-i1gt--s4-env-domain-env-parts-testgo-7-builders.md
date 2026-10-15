@@ -1,11 +1,11 @@
 ---
 # go-restclient-i1gt
 title: 'S4: env domain → env_parts_test.go (7 builders)'
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-10-15T11:20:03Z
-updated_at: 2026-10-15T12:04:51Z
+updated_at: 2026-10-15T12:10:28Z
 parent: go-restclient-495b
 blocked_by:
     - go-restclient-skqg
@@ -27,3 +27,8 @@ gofmt empty; build/vet 0; golangci-lint '0 issues.'; go test -count=1 green; Tes
 - docs/fluent-testing-guideline.md §6-12 (in-repo)
 ## Delegation
 pi contract (pi-delegation skill): GIT JAIL + -t +codemode + scout recon; orchestrator re-gates + commits 'Refs: <bean-id>' + pushes to reorg/parts-dsl-split.
+
+## Proof of Work (orchestrator-verified)
+- envState embedded (zero new fields); 7 env builders moved to *envState returning p.root; env_parts_test.go NEW
+- gates re-run by orchestrator: gofmt empty, build/vet 0, lint `0 issues.`, tests both pkgs ok, 270 inventory, zero scenario diffs
+- Residual: none.

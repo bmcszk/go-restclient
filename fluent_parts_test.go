@@ -49,6 +49,9 @@ type parts struct {
 	// file holds the file/fixture domain state (the .http file path the file
 	// builders write and executeFile / parse read); file_parts_test.go builds on it.
 	fileState
+	// env holds the env domain state (dotenv files, environment-backed client
+	// builds); env_parts_test.go builds on it.
+	envState
 	cookieCheck  bool
 	clientConfig clientConfigSnapshot
 	// activeServerVars holds the scheme/host/port variables of the running test server.
@@ -78,6 +81,7 @@ func newParts(t *testing.T) (given, when, then *parts) {
 	p.captureState.root = p
 	p.parseState.root = p
 	p.fileState.root = p
+	p.envState.root = p
 	p.trackedValues = make(map[string][]string)
 
 	return p, p, p

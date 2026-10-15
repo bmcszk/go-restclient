@@ -1,11 +1,11 @@
 ---
 # go-restclient-1sgh
 title: 'S5: server domain + graphql fold → server_parts_test.go'
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-10-15T11:20:03Z
-updated_at: 2026-10-15T11:20:42Z
+updated_at: 2026-10-15T12:10:28Z
 parent: go-restclient-495b
 blocked_by:
     - go-restclient-i1gt
