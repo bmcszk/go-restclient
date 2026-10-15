@@ -1,0 +1,33 @@
+---
+# go-restclient-495b
+title: ""
+status: in-progress
+type: task
+priority: normal
+created_at: 2026-10-15T10:18:58Z
+updated_at: 2026-10-15T10:18:58Z
+---
+
+# TEST-CORPUS-REORG: consolidate + dedupe test files, meaningful parts DSL split
+
+## Goal
+User-directed test reorg (2026-10-15): fewer files, all < 1000 lines, no duplicate scenarios, and a meaningful parts-DSL split with a base struct + per-domain extensions (`<domain>_parts_test.go` suffix convention).
+
+## Acceptance criteria
+- [x] duplicate Test funcs removed (hash-verified verbatim twins) — 6 dropped, 276 → 270
+- [x] single-func domain files merged (inplace_vars, consistency pairs, validator options+status) — 45 → 40 files, net −147 lines
+- [x] every test file < 1000 lines (max 807)
+- [x] gates green: gofmt/vet/build/lint 0/test -count=1 — orchestrator-verified + CI 10/10
+- [ ] parts-DSL structural split: base parts struct (lifecycle + response asserts only), domain structs embedded anonymously, builders return root *parts so `.and()` chains stay byte-identical
+- [ ] parts files renamed to `<domain>_parts_test.go` suffix (core/file/env/server/parse/capture/validator/oauth2/cookies); fluent_parts_ext_test.go (751 ln) decomposed by domain
+- [ ] docs/fluent-testing-guideline.md + repo skill DSL layout table updated in the same PR as the split
+
+## Status
+- PR #83 (dedup + consolidation): CI 10/10 green, MERGEABLE, awaiting user merge — https://github.com/bmcszk/go-restclient/pull/83
+- parts-DSL structural split: NEXT (pi contract, pilot = capture domain proof-of-shape)
+
+## Proof of Work
+- dedup verified by normalized-body hash across all *_test.go: 5 groups / 6 drops (listed in PR #83 body)
+- orchestrator re-ran all gates post-pi: gofmt empty, build OK, vet OK, golangci-lint `0 issues.`, full test suite green, Test count 270, max file 807 ln
+- CI on PR #83: all 9 checks pass + Scorecard skip-as-designed; mergeable CLEAN
+- Residual: parts-DSL structural split open (criteria 5-7)
