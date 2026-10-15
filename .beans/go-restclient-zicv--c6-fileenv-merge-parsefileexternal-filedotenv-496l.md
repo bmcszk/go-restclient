@@ -1,11 +1,11 @@
 ---
 # go-restclient-zicv
 title: 'C6: file/env merge — parsefile+external_file+dotenv (496ln) + script+parser_script (124ln)'
-status: todo
+status: completed
 type: task
 priority: normal
 created_at: 2026-10-15T12:34:45Z
-updated_at: 2026-10-15T12:35:04Z
+updated_at: 2026-10-15T14:11:12Z
 parent: go-restclient-495b
 blocked_by:
     - go-restclient-1sgh
@@ -22,3 +22,8 @@ gofmt empty; build/vet 0; golangci-lint `0 issues.`; go test -count=1 both pkgs;
 ## Delegation
 pi contract per pi-delegation skill (-t +codemode + scout recon; GIT JAIL; orchestrator re-gates, commits with Refs:, pushes).
 Blocked-by: S5 (go-restclient-1sgh)
+
+## Proof of Work (orchestrator-verified)
+- external_file(240)+dotenv(90) merged into client_parsefile_test.go (485ln); parser_script(61) merged into client_script_test.go (119ln); 3 files deleted
+- gates re-run by orchestrator: gofmt empty, build/vet 0, lint `0 issues.`, tests both pkgs ok, 270 inventory
+- Residual: none.
