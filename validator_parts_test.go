@@ -6,27 +6,11 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 
 	rc "github.com/bmcszk/go-restclient"
 )
 
 // Validator DSL: builds rc.Response values directly, never executes HTTP requests.
-
-// aResponseWith appends a hand-constructed rc.Response to p.responses.
-func (p *parts) aResponseWith(statusCode int, statusText, body string, headers http.Header) *parts {
-	resp := &rc.Response{
-		StatusCode: statusCode,
-		Status:     statusText,
-		Headers:    headers,
-	}
-	if body != "" {
-		resp.BodyString = body
-		resp.Body = []byte(body)
-	}
-	p.responses = append(p.responses, resp)
-	return p
-}
 
 // aResponseWithStatus is a shorthand for aResponseWith with no body and no headers.
 func (p *parts) aResponseWithStatus(statusCode int, statusText string) *parts {
@@ -148,57 +132,5 @@ func (p *parts) validateResponsesWithIndex(index int) *parts {
 		rc.ValidateOptions{ExpectedIndex: index},
 		p.responses...,
 	)
-	return p
-}
-
-// expectedResponseFile writes the given .hresp content as the expected responses file.
-func (p *parts) expectedResponseFile(content string) *parts {
-	path := filepath.Join(p.baseDir, "expected.hresp")
-	p.require.NoError(os.WriteFile(path, []byte(content), 0644))
-	p.expectedFilePath = path
-
-	return p
-}
-
-// validationSucceeds asserts the response validation passed.
-func (p *parts) validationSucceeds() *parts {
-	p.require.NoError(p.validationErr)
-
-	return p
-}
-
-// validationFails asserts the response validation failed with count errors mentioning every text.
-func (p *parts) validationFails(count int, texts ...string) *parts {
-	p.require.Error(p.validationErr)
-
-	p.require.Equal(count, multierrorCount(p.validationErr))
-
-	for _, text := range texts {
-		p.require.Contains(p.validationErr.Error(), text)
-	}
-
-	return p
-}
-
-// responsesValidateAgainstFixture validates responses against a committed response-files fixture.
-func (p *parts) responsesValidateAgainstFixture(name string) *parts {
-	path := filepath.Join(responseFilesDir, name)
-	p.assert.NoError(p.client.ValidateResponses(path, p.responses...))
-
-	return p
-}
-
-// responsesValidateAgainst validates responses against an explicit .hresp path.
-func (p *parts) responsesValidateAgainst(expectedPath string) *parts {
-	p.require.NotNil(p.client)
-	p.assert.NoError(p.client.ValidateResponses(expectedPath, p.responses...))
-
-	return p
-}
-
-// anExpectedResponseFixture points the DSL at a committed expected-response fixture file.
-func (p *parts) anExpectedResponseFixture(name string) *parts {
-	p.expectedFilePath = filepath.Join(responseFilesDir, name)
-
 	return p
 }
