@@ -5,6 +5,9 @@ import (
 	"io"
 	"net/http"
 	"testing"
+	"time"
+
+	rc "github.com/bmcszk/go-restclient"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -433,4 +436,368 @@ func TestExecuteFile_MultipartFileUploads(t *testing.T) {
 		responseAt(1).and().
 		responseCode(http.StatusCreated).and().
 		responseContains(`"processed"`)
+}
+
+func TestExecuteFile_InvalidMethodInFile(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		aRequestFixture("invalid_method.http").and().
+		aClient()
+
+	when.
+		executeFile()
+
+	then.
+		errorContains(
+			"1 error occurred:",
+			"unsupported protocol scheme",
+			"request 1 (INVALIDMETHOD /test) processing resulted in error",
+		).and().
+		responseCount(1).and().
+		responseAt(0).and().
+		responseHasError("unsupported protocol scheme", "Invalidmethod")
+}
+
+func TestExecuteFile_IgnoreEmptyBlocks_ValidThenCommentOnly(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		aCannedServer(map[string]cannedRoute{
+			"/first": {method: http.MethodGet, code: http.StatusOK, body: "response from /first"},
+		}).and().
+		aFormattedRequestFixture("scenario_004_template.http", "{{server}}").and().
+		aClient()
+
+	when.
+		executeFile()
+
+	then.
+		responseCount(1).and().
+		noError().and().
+		responseAt(0).and().
+		responseCode(http.StatusOK).and().
+		responseBodyIs("response from /first")
+}
+
+func TestExecuteFile_IgnoreEmptyBlocks_CommentOnlyThenValid(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		aCannedServer(map[string]cannedRoute{
+			"/second": {method: http.MethodGet, code: http.StatusOK, body: "response from /second"},
+		}).and().
+		aFormattedRequestFixture("scenario_005_template.http", "{{server}}").and().
+		aClient()
+
+	when.
+		executeFile()
+
+	then.
+		responseCount(1).and().
+		noError().and().
+		responseAt(0).and().
+		responseCode(http.StatusOK).and().
+		responseBodyIs("response from /second")
+}
+
+func TestExecuteFile_IgnoreEmptyBlocks_TwoValidAcrossCommentBlock(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		aCannedServer(map[string]cannedRoute{
+			"/req1": {method: http.MethodGet, code: http.StatusAccepted, body: "response from /req1"},
+			"/req2": {method: http.MethodPost, code: http.StatusCreated, body: "response from /req2", validJSON: true},
+		}).and().
+		aFormattedRequestFixture("scenario_006_template.http", "{{server}}", "{{server}}").and().
+		aClient()
+
+	when.
+		executeFile()
+
+	then.
+		responseCount(2).and().
+		noError().and().
+		responseAt(0).and().
+		responseCode(http.StatusAccepted).and().
+		responseBodyIs("response from /req1").and().
+		responseAt(1).and().
+		responseCode(http.StatusCreated).and().
+		responseBodyIs("response from /req2")
+}
+func TestExecuteFile_IgnoreEmptyBlocks_OnlyVariables(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		aRequestFixtureAbs("test/data/execute_file_ignore_empty_blocks/only_vars.http").and().
+		aClient()
+
+	when.
+		executeFile()
+
+	then.
+		errorContains("no requests found in file").and().
+		responseCount(0)
+}
+
+// path is deliberately not merged for absolute request paths (applyBaseURLIfNeeded).
+func TestExecuteFile_WithBaseURL_AbsolutePathDropsBasePath(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aHttpFile(`### users
+GET /api/users`).and().
+		aClient(rc.WithBaseURL(given.serverURL + "/v1"))
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		capturedRequestCount(1).and().
+		tracking("segment").and().
+		capturedURLSegmentAt(0, 1).and().
+		trackedValueIs("api").and().
+		capturedURLSegmentAt(0, 2).and().
+		trackedValueIs("users")
+}
+
+// base URL including its path (applyBaseURLIfNeeded relative branch).
+func TestExecuteFile_WithBaseURL_RelativePathPrependsFullPath(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aHttpFile(`### users
+GET api/users`).and().
+		aClient(rc.WithBaseURL(given.serverURL + "/v1"))
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		capturedRequestCount(1).and().
+		tracking("segment").and().
+		capturedURLSegmentAt(0, 1).and().
+		trackedValueIs("v1").and().
+		capturedURLSegmentAt(0, 2).and().
+		trackedValueIs("api").and().
+		capturedURLSegmentAt(0, 3).and().
+		trackedValueIs("users")
+}
+
+// An absolute request URL ignores BaseURL entirely (resolveWithBaseURL IsAbs branch).
+func TestExecuteFile_WithBaseURL_AbsoluteRequestURLIgnored(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aHttpFile(fmt.Sprintf("### direct\nGET %s/absolute", given.serverURL)).and().
+		aClient(rc.WithBaseURL("https://ignored.example.com/base"))
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		capturedRequestCount(1).and().
+		tracking("segment").and().
+		capturedURLSegment(0).and().
+		trackedValueIs("absolute")
+}
+
+// Default headers set via options are sent with every request (addDefaultHeaders).
+func TestExecuteFile_WithDefaultHeader_SentWithRequest(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aHttpFile(`### h
+GET {{server}}/h`).and().
+		aClient(rc.WithDefaultHeader("X-Custom-Trace", "fluent-42"))
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		capturedRequestCount(1).and().
+		tracking("trace").and().
+		capturedHeaderField(0, "X-Custom-Trace").and().
+		trackedValueIs("fluent-42")
+}
+
+// parseAndSanitizeBaseURL rejects an unparseable BaseURL with a clear error.
+func TestExecuteFile_WithBaseURL_InvalidErrors(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		aHttpFile(`### rel
+GET /relative`).and().
+		aClient(rc.WithBaseURL("ht tp://bad url"))
+
+	when.
+		executeFile()
+
+	then.
+		errorContains("invalid BaseURL")
+}
+
+// `GET url ### NextName` splits the request and names the next one on the same line.
+func TestExecuteFile_SameLineSeparatorStartsNewNamedRequest(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aHttpFile(fmt.Sprintf(
+			"### first\nGET %s/one ### second\nGET %s/two\n",
+			given.serverURL, given.serverURL)).and().
+		aClient()
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		capturedRequestCount(2).and().
+		tracking("segment").and().
+		capturedURLSegmentAt(0, 1).and().
+		trackedValueIs("one").and().
+		capturedURLSegmentAt(1, 1).and().
+		trackedValueIs("two")
+}
+
+// Same-line separator without a name still splits requests.
+func TestExecuteFile_SameLineSeparatorWithoutNameSplits(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		anEchoServer().and().
+		aHttpFile(fmt.Sprintf(
+			"### first\nGET %s/one ###\nGET %s/two\n",
+			given.serverURL, given.serverURL)).and().
+		aClient()
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		capturedRequestCount(2).and().
+		tracking("segment").and().
+		capturedURLSegmentAt(0, 1).and().
+		trackedValueIs("one").and().
+		capturedURLSegmentAt(1, 1).and().
+		trackedValueIs("two")
+}
+
+// An HTTPS response records IsTLS, TLSVersion and cipher suite.
+func TestExecuteFile_HTTPSResponseCapturesTLSData(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		aTLSServer().and().
+		aHttpFile(`### tls
+GET {{server}}/secure`).and().
+		aTLSInsecureClient()
+
+	when.
+		executeFile()
+
+	then.
+		noError().and().
+		capturedRequestCount(1).and().
+		responseIsTLS().and().
+		responseTLSVersionMatches("TLS 1\\.3")
+}
+
+// aClientWithDefaults builds a client from fixed defaults recorded in parts.clientConfig.
+func (p *parts) aClientWithDefaults() *parts {
+	p.clientConfig = clientConfigSnapshot{
+		baseURL:     "https://api.example.com",
+		headerKey:   "X-Default",
+		headerValue: "DefaultValue",
+		httpTimeout: 15 * time.Second,
+	}
+
+	return p.aClient(
+		rc.WithHTTPClient(&http.Client{Timeout: p.clientConfig.httpTimeout}),
+		rc.WithBaseURL(p.clientConfig.baseURL),
+		rc.WithDefaultHeader(p.clientConfig.headerKey, p.clientConfig.headerValue),
+	)
+}
+
+// clientBaseURLIs asserts the client's BaseURL matches the recorded config snapshot.
+func (p *parts) clientBaseURLIs(_ string) *parts {
+	p.require.Equal(p.clientConfig.baseURL, p.client.BaseURL)
+
+	return p
+}
+
+// clientBaseURLIsEmpty asserts the client's BaseURL is empty.
+func (p *parts) clientBaseURLIsEmpty() *parts {
+	p.assert.Empty(p.client.BaseURL)
+
+	return p
+}
+
+// clientDefaultHeaderIs asserts the client's DefaultHeaders value for key equals the
+// recorded config snapshot.
+func (p *parts) clientDefaultHeaderIs(key, _ string) *parts {
+	p.require.Equal(p.clientConfig.headerValue, p.client.DefaultHeaders.Get(key))
+
+	return p
+}
+
+// clientExists asserts the client is non-nil.
+func (p *parts) clientExists() *parts {
+	p.require.NotNil(p.client)
+
+	return p
+}
+
+// clientDefaultHeadersEmpty asserts the client's DefaultHeaders map is non-nil and empty.
+func (p *parts) clientDefaultHeadersEmpty() *parts {
+	p.require.NotNil(p.client.DefaultHeaders)
+	p.assert.Empty(p.client.DefaultHeaders)
+
+	return p
+}
+
+// configurations (e.g., standard http.Client, no base URL, empty default headers).
+
+func TestNewClient(t *testing.T) {
+	given, _, then := newParts(t)
+
+	given.
+		aClient()
+
+	then.
+		clientExists().and().
+		clientBaseURLIsEmpty().and().
+		clientDefaultHeadersEmpty()
+}
+
+func TestNewClient_WithOptions(t *testing.T) {
+	given, _, then := newParts(t)
+
+	given.
+		aClientWithDefaults()
+
+	then.
+		clientExists().and().
+		clientBaseURLIs("https://api.example.com").and().
+		clientDefaultHeaderIs("X-Default", "DefaultValue")
+}
+func TestNewClient_NilHTTPClientOption(t *testing.T) {
+	given, _, then := newParts(t)
+
+	given.
+		aClient(rc.WithHTTPClient(nil))
+
+	then.
+		clientExists().and().
+		clientBaseURLIsEmpty()
 }
