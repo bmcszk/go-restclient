@@ -2,10 +2,10 @@
 # go-restclient-495b
 title: ""
 status: in-progress
-type: task
+type: epic
 priority: normal
 created_at: 2026-10-15T10:18:58Z
-updated_at: 2026-10-15T10:18:58Z
+updated_at: 2026-10-15T10:22:41Z
 ---
 
 # TEST-CORPUS-REORG: consolidate + dedupe test files, meaningful parts DSL split

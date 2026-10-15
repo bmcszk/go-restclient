@@ -1,3 +1,14 @@
+---
+# go-restclient-j61z
+title: ""
+status: ""
+type: task
+priority: normal
+created_at: 2026-10-15T10:19:26Z
+updated_at: 2026-10-15T10:22:41Z
+parent: go-restclient-495b
+---
+
 # T1: parts-DSL structural split (base struct + domain structs, <domain>_parts_test.go)
 
 Parent: go-restclient-495b (TEST-CORPUS-REORG epic). Branch: NEW off master (or off reorg/test-consolidation stacked? NO — off master after #83 merges; do NOT block on it if user merges slow: rebase).
