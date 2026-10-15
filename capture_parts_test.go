@@ -665,3 +665,34 @@ func (c *captureState) requestExecuted(i int) *parts {
 
 	return p
 }
+
+// fakerHeaderRule is one faker-header rule; containsCheck wins over pattern+fieldCount.
+type fakerHeaderRule struct {
+	key           string
+	pattern       string
+	fieldCount    int
+	containsCheck string
+}
+
+// serverReceivedFakerHeaders applies the standard set of faker-header assertions to the
+// captured request at reqIndex, for every rule in rules.
+func (p *parts) serverReceivedFakerHeaders(reqIndex int, rules []fakerHeaderRule) *parts {
+	p.require.Greater(len(p.capturedRequests), reqIndex)
+
+	for _, rule := range rules {
+		got := p.capturedRequests[reqIndex].Header.Get(rule.key)
+		if rule.containsCheck != "" {
+			p.assert.Contains(got, rule.containsCheck)
+			p.assert.NotContains(got, "{{")
+			continue
+		}
+
+		p.assert.Regexp(rule.pattern, got)
+		p.assert.NotContains(got, "{{")
+		if rule.fieldCount > 0 {
+			p.assert.Len(strings.Fields(got), rule.fieldCount)
+		}
+	}
+
+	return p
+}
