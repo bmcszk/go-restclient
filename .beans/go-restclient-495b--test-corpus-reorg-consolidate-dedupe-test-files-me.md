@@ -5,7 +5,7 @@ status: in-progress
 type: epic
 priority: normal
 created_at: 2026-10-15T10:18:58Z
-updated_at: 2026-10-15T10:22:41Z
+updated_at: 2026-10-15T14:31:29Z
 ---
 
 # TEST-CORPUS-REORG: consolidate + dedupe test files, meaningful parts DSL split
@@ -31,3 +31,10 @@ User-directed test reorg (2026-10-15): fewer files, all < 1000 lines, no duplica
 - orchestrator re-ran all gates post-pi: gofmt empty, build OK, vet OK, golangci-lint `0 issues.`, full test suite green, Test count 270, max file 807 ln
 - CI on PR #83: all 9 checks pass + Scorecard skip-as-designed; mergeable CLEAN
 - Residual: parts-DSL structural split open (criteria 5-7)
+
+
+## Proof of Work (final audit 2026-10-15, orchestrator-run)
+- 45 → 21 test files; ZERO fluent_* files; max file 839ln (< 1000); 270 Test funcs (6 documented dedup drops only)
+- 15 waves executed (S0-S8 + S6a/S6b split + C1-C7), every wave: pi contract (-t +codemode + scout + go-dev/coding-rules skills) → orchestrator re-gates (gofmt/build/vet/lint 0/test -count=1/inventory) → commit Refs: bean-id → push → CI watched terminal
+- CI final: 9 pass + Scorecard skip; MERGEABLE CLEAN on PR #84
+- DONE criteria met; epic closes on user merge of https://github.com/bmcszk/go-restclient/pull/84
