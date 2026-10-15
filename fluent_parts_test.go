@@ -49,7 +49,9 @@ type parts struct {
 	// oauth2 holds the oauth2 domain state (the OAuth2 token server address);
 	// client_oauth2_test.go builds on it.
 	oauth2State
-	cookieCheck      bool
+	// cookies holds the cookie/redirect domain state (the cookie round-trip flip
+	// flag); client_cookies_redirects_test.go builds on it.
+	cookiesState
 	clientConfig     clientConfigSnapshot
 	expectedFilePath string
 	responses        []*rc.Response
@@ -78,6 +80,7 @@ func newParts(t *testing.T) (given, when, then *parts) {
 	p.envState.root = p
 	p.serverState.root = p
 	p.oauth2State.root = p
+	p.cookiesState.root = p
 	p.trackedValues = make(map[string][]string)
 
 	return p, p, p

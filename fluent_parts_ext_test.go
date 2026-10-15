@@ -3,10 +3,7 @@ package restclient_test
 import (
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
-	"text/template"
 	"time"
 
 	rc "github.com/bmcszk/go-restclient"
@@ -71,26 +68,6 @@ func (p *parts) aClientWithDefaults() *parts {
 		rc.WithBaseURL(p.clientConfig.baseURL),
 		rc.WithDefaultHeader(p.clientConfig.headerKey, p.clientConfig.headerValue),
 	)
-}
-
-// aCookieRedirectFixture renders a committed cookie/redirect template into baseDir.
-func (p *parts) aCookieRedirectFixture(name string) *parts {
-	tmplContent, err := os.ReadFile(filepath.Join("test", "data", "cookies_redirects", name))
-	p.require.NoError(err)
-
-	tmpl, err := template.New(name).Delims("[[", "]]").Parse(string(tmplContent))
-	p.require.NoError(err)
-
-	path := filepath.Join(p.baseDir, name)
-
-	file, err := os.Create(path)
-	p.require.NoError(err)
-	p.require.NoError(tmpl.Execute(file, nil))
-	p.require.NoError(file.Close())
-
-	p.httpFilePath = path
-
-	return p
 }
 
 // clientBaseURLIs asserts the client's BaseURL matches the recorded config snapshot.
