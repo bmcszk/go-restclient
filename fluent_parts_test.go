@@ -41,13 +41,10 @@ type parts struct {
 	servers   []*httptest.Server
 	serverURL string
 	// share the name requestCount in Go.
-	requestHits      atomic.Int64
-	capturedRequests []*http.Request
-	// capturedRequestTimes records time.Now() when the test server received each request.
-	capturedRequestTimes []time.Time
-	// intercepted holds the outgoing request captured by aMockTransportClient.
-	intercepted *http.Request
-	// cookieCheck records whether the cookie test server received its cookie back.
+	requestHits atomic.Int64
+	// capture holds the capture/tracking domain state (recorded requests, bodies and
+	// consistency-tracking buckets); capture_parts_test.go builds on it.
+	captureState
 	cookieCheck  bool
 	clientConfig clientConfigSnapshot
 	// activeServerVars holds the scheme/host/port variables of the running test server.
@@ -61,13 +58,7 @@ type parts struct {
 	// parsedFile holds the result of parsingFile for parsed-file assertions.
 	parsedFile *rc.ParsedFile
 	// parseErr holds the error returned by parsingFile.
-	parseErr error
-	// handler runs, because net/http closes the original body when the handler returns.
-	capturedBodies []string
-	// trackedValues holds consistency-tracking buckets keyed by tracking name.
-	trackedValues map[string][]string
-	// activeTrack names the bucket captured* methods append into.
-	activeTrack    string
+	parseErr       error
 	tokenServerURL string
 	// baseDir is the single per-test directory every given* file-writing method uses.
 	// (testing.T.TempDir creates a fresh subdirectory on every call, so external
@@ -80,12 +71,13 @@ func newParts(t *testing.T) (given, when, then *parts) {
 	t.Helper()
 
 	p := &parts{
-		T:             t,
-		require:       require.New(t),
-		assert:        assert.New(t),
-		trackedValues: make(map[string][]string),
-		baseDir:       t.TempDir(),
+		T:       t,
+		require: require.New(t),
+		assert:  assert.New(t),
+		baseDir: t.TempDir(),
 	}
+	p.root = p
+	p.trackedValues = make(map[string][]string)
 
 	return p, p, p
 }

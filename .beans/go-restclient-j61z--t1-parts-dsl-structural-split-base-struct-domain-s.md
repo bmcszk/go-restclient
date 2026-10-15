@@ -1,11 +1,11 @@
 ---
 # go-restclient-j61z
 title: ""
-status: ""
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-10-15T10:19:26Z
-updated_at: 2026-10-15T10:22:41Z
+updated_at: 2026-10-15T10:23:02Z
 parent: go-restclient-495b
 ---
 
@@ -19,7 +19,7 @@ Parent: go-restclient-495b (TEST-CORPUS-REORG epic). Branch: NEW off master (or 
 - Suffix convention (user): `<domain>_parts_test.go` (NOT parts_<domain>_)
 
 ## Acceptance criteria (max 3)
-- [ ] capture domain as pilot: cookieCheck/captured*/tracked* fields move to an embedded domain struct, builders live on it and return *parts; all 270 tests pass byte-identical chains; file = capture_parts_test.go
+- [x] capture domain as pilot: cookieCheck/captured*/tracked* fields move to an embedded domain struct, builders live on it and return *parts; all 270 tests pass byte-identical chains; file = capture_parts_test.go
 - [ ] remaining domains same pattern: core/file/env/server/parse/validator/oauth2/cookies; fluent_parts_ext_test.go dissolved by domain; every file < 1000 lines
 - [ ] docs/fluent-testing-guideline.md DSL layout table updated in same PR
 
@@ -33,3 +33,9 @@ gofmt/vet/build/lint 0 issues/test -count=1 green; Test-inventory parity 270; ze
 
 ## Delegation
 pi contract via pi-delegation skill: GIT JAIL + gates + -t +codemode + subagent scout for pre-move symbol census; orchestrator re-gates + commits + PR.
+
+## Proof of Work (pilot)
+- pi contract /tmp/pi-parts-pilot.md (-t +codemode, go-dev skill): captureState struct (7 fields) embedded anonymously in parts; root *parts back-pointer wired in newParts; 46 builders moved to *captureState receivers returning p.root; file renamed capture_parts_test.go; orphan comment stubs carried verbatim
+- orchestrator re-gates: gofmt empty, build/vet OK, golangci-lint `0 issues.`, test -count=1 all ok, Test inventory 270 unchanged
+- zero scenario-file diffs (verified via git status)
+- Residual: remaining domains (file/env/server/parse/validator/oauth2/cookies) = T1 continuation
