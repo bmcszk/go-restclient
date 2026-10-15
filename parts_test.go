@@ -75,13 +75,13 @@ func newParts(t *testing.T) (given, when, then *parts) {
 		assert:  assert.New(t),
 		baseDir: t.TempDir(),
 	}
-	p.captureState.root = p
-	p.parseState.root = p
-	p.fileState.root = p
-	p.envState.root = p
-	p.serverState.root = p
-	p.oauth2State.root = p
-	p.cookiesState.root = p
+	p.captureState.parts = p
+	p.parseState.parts = p
+	p.fileState.parts = p
+	p.envState.parts = p
+	p.serverState.parts = p
+	p.oauth2State.parts = p
+	p.cookiesState.parts = p
 	p.trackedValues = make(map[string][]string)
 
 	return p, p, p

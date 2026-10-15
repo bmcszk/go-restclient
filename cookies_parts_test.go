@@ -15,9 +15,7 @@ import (
 // cookie round-trip flip flag set by aCookieTestServer's /check-cookie handler and
 // read by cookieWasStored / cookieWasNotStored.
 type cookiesState struct {
-	// root points back at the enclosing parts so the cookies builders can return
-	// the fluent chain; parts reads it by field promotion as p.root as well.
-	root *parts
+	*parts
 	// cookieCheck flips true when the cookie server receives its test cookie back.
 	cookieCheck bool
 }
@@ -28,7 +26,7 @@ var _ = []any{
 
 // aFreshCookieCheck resets the cookie check flag before a scenario runs.
 func (s *cookiesState) aFreshCookieCheck() *parts {
-	p := s.root
+	p := s.parts
 	p.cookieCheck = false
 
 	return p
@@ -37,7 +35,7 @@ func (s *cookiesState) aFreshCookieCheck() *parts {
 // aCookieTestServer starts the cookie test server: /set-cookie sets test-cookie=test-value,
 // /check-cookie flips cookiesState.cookieCheck when it receives the cookie back.
 func (s *cookiesState) aCookieTestServer() *parts {
-	p := s.root
+	p := s.parts
 
 	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -58,7 +56,7 @@ func (s *cookiesState) aCookieTestServer() *parts {
 // aRedirectTestServer starts the redirect test server: /redirect issues a 302 to /target,
 // /target answers 200 with body "Target page".
 func (s *cookiesState) aRedirectTestServer() *parts {
-	p := s.root
+	p := s.parts
 
 	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -75,7 +73,7 @@ func (s *cookiesState) aRedirectTestServer() *parts {
 
 // aCookieJarClient rebuilds the client with a fresh cookie jar.
 func (s *cookiesState) aCookieJarClient() *parts {
-	p := s.root
+	p := s.parts
 	jar, err := cookiejar.New(nil)
 	p.require.NoError(err)
 
@@ -84,7 +82,7 @@ func (s *cookiesState) aCookieJarClient() *parts {
 
 // aNoRedirectClient rebuilds the client with an HTTP client that refuses to follow redirects.
 func (s *cookiesState) aNoRedirectClient() *parts {
-	p := s.root
+	p := s.parts
 	noRedirectHTTPClient := &http.Client{
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			return http.ErrUseLastResponse
@@ -96,7 +94,7 @@ func (s *cookiesState) aNoRedirectClient() *parts {
 
 // cookieWasStored asserts the cookie server received its cookie back.
 func (s *cookiesState) cookieWasStored() *parts {
-	p := s.root
+	p := s.parts
 	p.assert.True(s.cookieCheck, "cookie check assertion failed")
 
 	return p
@@ -104,7 +102,7 @@ func (s *cookiesState) cookieWasStored() *parts {
 
 // cookieWasNotStored asserts the cookie server did not receive the cookie back.
 func (s *cookiesState) cookieWasNotStored() *parts {
-	p := s.root
+	p := s.parts
 	p.assert.False(s.cookieCheck, "cookie check assertion failed")
 
 	return p
@@ -113,7 +111,7 @@ func (s *cookiesState) cookieWasNotStored() *parts {
 // aJsonEchoServer accepts POST with Content-Type application/json, parses the body as JSON,
 // echoes it back wrapped in {"json": ...}, and responds 200 OK with application/json.
 func (s *cookiesState) aJsonEchoServer() *parts {
-	p := s.root
+	p := s.parts
 
 	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
 		var data map[string]any
@@ -126,7 +124,7 @@ func (s *cookiesState) aJsonEchoServer() *parts {
 
 // aRestExtensionServer serves GET with a 200 OK and a fixed JSON body.
 func (s *cookiesState) aRestExtensionServer() *parts {
-	p := s.root
+	p := s.parts
 
 	return p.aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -136,7 +134,7 @@ func (s *cookiesState) aRestExtensionServer() *parts {
 
 // aCookieRedirectFixture renders a committed cookie/redirect template into baseDir.
 func (s *cookiesState) aCookieRedirectFixture(name string) *parts {
-	p := s.root
+	p := s.parts
 	tmplContent, err := os.ReadFile(filepath.Join("test", "data", "cookies_redirects", name))
 	p.require.NoError(err)
 

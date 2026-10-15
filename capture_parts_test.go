@@ -19,9 +19,7 @@ import (
 // everything recorded by the test server, the mock transport client and the
 // consistency-tracking buckets.
 type captureState struct {
-	// root points back at the enclosing parts so the capture builders can return
-	// the fluent chain; parts reads it by field promotion as p.root as well.
-	root *parts
+	*parts
 	// capturedRequests holds every request the test server received.
 	capturedRequests []*http.Request
 	// capturedRequestTimes records time.Now() when the test server received each request.
@@ -42,7 +40,7 @@ var _ = []any{
 }
 
 func (c *captureState) requestURLContains(fragments ...string) *parts {
-	p := c.root
+	p := c.parts
 	current := p.current()
 	p.require.NotNil(current.Request)
 
@@ -54,7 +52,7 @@ func (c *captureState) requestURLContains(fragments ...string) *parts {
 }
 
 func (c *captureState) requestHeaderIs(key, value string) *parts {
-	p := c.root
+	p := c.parts
 	current := p.current()
 	p.require.NotNil(current.Request)
 	p.assert.Equal(value, current.Request.Headers.Get(key))
@@ -63,7 +61,7 @@ func (c *captureState) requestHeaderIs(key, value string) *parts {
 }
 
 func (c *captureState) requestRawBodyIs(body string) *parts {
-	p := c.root
+	p := c.parts
 	current := p.current()
 	p.require.NotNil(current.Request)
 	p.assert.Equal(body, current.Request.RawBody)
@@ -72,7 +70,7 @@ func (c *captureState) requestRawBodyIs(body string) *parts {
 }
 
 func (c *captureState) requestRawBodyContains(fragments ...string) *parts {
-	p := c.root
+	p := c.parts
 	current := p.current()
 	p.require.NotNil(current.Request)
 
@@ -84,7 +82,7 @@ func (c *captureState) requestRawBodyContains(fragments ...string) *parts {
 }
 
 func (c *captureState) requestRawBodyMatchesRegexp(pattern string) *parts {
-	p := c.root
+	p := c.parts
 	current := p.current()
 	p.require.NotNil(current.Request)
 	p.assert.Regexp(pattern, current.Request.RawBody)
@@ -94,7 +92,7 @@ func (c *captureState) requestRawBodyMatchesRegexp(pattern string) *parts {
 
 // serverReceivedBodyIs asserts the exact body captured for the server hit at index.
 func (c *captureState) serverReceivedBodyIs(index int, body string) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.capturedBodies), index)
 	p.assert.Equal(body, p.capturedBodies[index])
 
@@ -103,7 +101,7 @@ func (c *captureState) serverReceivedBodyIs(index int, body string) *parts {
 
 // serverReceivedBodyParsesAsJSON asserts the captured body at index is valid JSON.
 func (c *captureState) serverReceivedBodyParsesAsJSON(index int) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.capturedBodies), index)
 
 	var data map[string]any
@@ -115,7 +113,7 @@ func (c *captureState) serverReceivedBodyParsesAsJSON(index int) *parts {
 // serverReceivedLatin1BodyIs asserts the captured body at index equals the expected text
 // after decoding it from ISO-8859-1.
 func (c *captureState) serverReceivedLatin1BodyIs(index int, body string) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.capturedBodies), index)
 
 	decoded, _, err := transform.Bytes(charmap.ISO8859_1.NewDecoder(), []byte(p.capturedBodies[index]))
@@ -126,7 +124,7 @@ func (c *captureState) serverReceivedLatin1BodyIs(index int, body string) *parts
 }
 
 func (c *captureState) allResponseCodesAre(code int) *parts {
-	p := c.root
+	p := c.parts
 	p.require.NotEmpty(p.responses)
 
 	for i, resp := range p.responses {
@@ -139,7 +137,7 @@ func (c *captureState) allResponseCodesAre(code int) *parts {
 // tracking starts (or resumes) a named consistency-tracking bucket for the captured*
 // assertion methods that follow.
 func (c *captureState) tracking(name string) *parts {
-	p := c.root
+	p := c.parts
 	p.activeTrack = name
 
 	if _, ok := p.trackedValues[name]; !ok {
@@ -150,7 +148,7 @@ func (c *captureState) tracking(name string) *parts {
 }
 
 func (c *captureState) capturedURLSegment(index int) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.capturedRequests), index)
 
 	segments := strings.Split(p.capturedRequests[index].URL.Path, "/")
@@ -160,7 +158,7 @@ func (c *captureState) capturedURLSegment(index int) *parts {
 }
 
 func (c *captureState) capturedURLSegmentAt(reqIndex, segmentIndex int) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.capturedRequests), reqIndex)
 
 	segments := strings.Split(p.capturedRequests[reqIndex].URL.Path, "/")
@@ -171,7 +169,7 @@ func (c *captureState) capturedURLSegmentAt(reqIndex, segmentIndex int) *parts {
 }
 
 func (c *captureState) capturedHeaderField(index int, key string) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.capturedRequests), index)
 	p.track(p.capturedRequests[index].Header.Get(key))
 
@@ -179,7 +177,7 @@ func (c *captureState) capturedHeaderField(index int, key string) *parts {
 }
 
 func (c *captureState) capturedJSONField(index int, path ...string) *parts {
-	p := c.root
+	p := c.parts
 	leaf, ok := p.capturedJSONLeaf(index, path).(string)
 	p.require.True(ok, "field %v is not a string", path)
 	p.track(leaf)
@@ -188,7 +186,7 @@ func (c *captureState) capturedJSONField(index int, path ...string) *parts {
 }
 
 func (c *captureState) capturedJSONNumberField(index int, path ...string) *parts {
-	p := c.root
+	p := c.parts
 	value, ok := p.capturedJSONLeaf(index, path).(float64)
 	p.require.True(ok, "field %v is not a number", path)
 	p.track(strconv.FormatInt(int64(value), 10))
@@ -197,7 +195,7 @@ func (c *captureState) capturedJSONNumberField(index int, path ...string) *parts
 }
 
 func (c *captureState) allTrackedValuesEqual() *parts {
-	p := c.root
+	p := c.parts
 	values := p.activeBucket()
 	p.require.NotEmpty(values)
 
@@ -209,7 +207,7 @@ func (c *captureState) allTrackedValuesEqual() *parts {
 }
 
 func (c *captureState) allTrackedValuesAreValidUUIDs() *parts {
-	p := c.root
+	p := c.parts
 	for _, value := range p.activeBucket() {
 		_, err := uuid.Parse(value)
 		p.require.NoError(err, "value %q should be a valid UUID", value)
@@ -219,7 +217,7 @@ func (c *captureState) allTrackedValuesAreValidUUIDs() *parts {
 }
 
 func (c *captureState) allTrackedValuesArePositiveIntegers() *parts {
-	p := c.root
+	p := c.parts
 	for _, value := range p.activeBucket() {
 		number, err := strconv.ParseInt(value, 10, 64)
 		p.require.NoError(err, "value %q should be an integer", value)
@@ -232,7 +230,7 @@ func (c *captureState) allTrackedValuesArePositiveIntegers() *parts {
 // firstTrackedValueIsIntegerInRange asserts the first value of the active bucket parses as
 // an integer within [lowest, highest].
 func (c *captureState) firstTrackedValueIsIntegerInRange(lowest, highest int64) *parts {
-	p := c.root
+	p := c.parts
 	values := p.activeBucket()
 	p.require.NotEmpty(values)
 
@@ -246,7 +244,7 @@ func (c *captureState) firstTrackedValueIsIntegerInRange(lowest, highest int64) 
 
 // activeBucket returns the values of the currently active tracking bucket.
 func (c *captureState) activeBucket() []string {
-	p := c.root
+	p := c.parts
 	p.require.NotEmpty(p.activeTrack)
 
 	values, ok := p.trackedValues[p.activeTrack]
@@ -257,12 +255,12 @@ func (c *captureState) activeBucket() []string {
 
 // track appends a captured value to the active tracking bucket.
 func (c *captureState) track(value string) {
-	p := c.root
+	p := c.parts
 	p.trackedValues[p.activeTrack] = append(p.trackedValues[p.activeTrack], value)
 }
 
 func (c *captureState) capturedJSONLeaf(index int, path []string) any {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.capturedBodies), index)
 
 	var data map[string]any
@@ -281,7 +279,7 @@ func (c *captureState) capturedJSONLeaf(index int, path []string) any {
 }
 
 func (c *captureState) capturedRequestURLIs(index int, rawURL string) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.capturedRequests), index)
 	p.assert.Equal(rawURL, p.capturedRequests[index].URL.String())
 
@@ -289,7 +287,7 @@ func (c *captureState) capturedRequestURLIs(index int, rawURL string) *parts {
 }
 
 func (c *captureState) capturedRequestPathIs(index int, path string) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.capturedRequests), index)
 	p.assert.Equal(path, p.capturedRequests[index].URL.Path)
 
@@ -298,7 +296,7 @@ func (c *captureState) capturedRequestPathIs(index int, path string) *parts {
 
 // serverReceivedHostIs asserts p.capturedRequests[index].Host equals host.
 func (c *captureState) serverReceivedHostIs(index int, host string) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.capturedRequests), index)
 	p.assert.Equal(host, p.capturedRequests[index].Host)
 
@@ -308,7 +306,7 @@ func (c *captureState) serverReceivedHostIs(index int, host string) *parts {
 // capturedJSONStringMapIs decodes the captured body at index as a flat string
 // map and asserts each key/value equals.
 func (c *captureState) capturedJSONStringMapIs(index int, expected map[string]string) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.capturedBodies), index)
 
 	var data map[string]string
@@ -322,7 +320,7 @@ func (c *captureState) capturedJSONStringMapIs(index int, expected map[string]st
 }
 
 func (c *captureState) requestPathMatchesCapturedPath() *parts {
-	p := c.root
+	p := c.parts
 	current := p.current()
 	p.require.NotNil(current.Request)
 	p.require.Greater(len(p.capturedRequests), 0)
@@ -332,7 +330,7 @@ func (c *captureState) requestPathMatchesCapturedPath() *parts {
 }
 
 func (c *captureState) requestHeadersMatchCaptured(keys ...string) *parts {
-	p := c.root
+	p := c.parts
 	current := p.current()
 	p.require.NotNil(current.Request)
 	p.require.Greater(len(p.capturedRequests), 0)
@@ -346,7 +344,7 @@ func (c *captureState) requestHeadersMatchCaptured(keys ...string) *parts {
 
 // requestRawBodyMatchesCapturedBody asserts the request RawBody equals the first captured body.
 func (c *captureState) requestRawBodyMatchesCapturedBody() *parts {
-	p := c.root
+	p := c.parts
 	current := p.current()
 	p.require.NotNil(current.Request)
 	p.require.Greater(len(p.capturedBodies), 0)
@@ -356,7 +354,7 @@ func (c *captureState) requestRawBodyMatchesCapturedBody() *parts {
 }
 
 func (c *captureState) allTrackedValuesAreValidRFC3339Timestamps() *parts {
-	p := c.root
+	p := c.parts
 	for _, value := range p.activeBucket() {
 		_, err := time.Parse(time.RFC3339Nano, value)
 		p.require.NoError(err, "value %q should be a valid RFC3339Nano timestamp", value)
@@ -367,7 +365,7 @@ func (c *captureState) allTrackedValuesAreValidRFC3339Timestamps() *parts {
 
 // allTrackedDatetimeValuesAreWithin parses tracked values ("timestamp" = Unix seconds) and checks recency.
 func (c *captureState) allTrackedDatetimeValuesAreWithin(threshold time.Duration, layout string) *parts {
-	p := c.root
+	p := c.parts
 	now := time.Now()
 	values := p.activeBucket()
 	p.require.NotEmpty(values)
@@ -393,7 +391,7 @@ func (c *captureState) allTrackedDatetimeValuesAreWithin(threshold time.Duration
 
 // allTrackedDatetimeValuesHaveUTCZone asserts tracked RFC1123/RFC3339/Unix values resolve to UTC.
 func (c *captureState) allTrackedDatetimeValuesHaveUTCZone() *parts {
-	p := c.root
+	p := c.parts
 	values := p.activeBucket()
 	p.require.NotEmpty(values)
 
@@ -416,7 +414,7 @@ func (c *captureState) allTrackedDatetimeValuesHaveUTCZone() *parts {
 
 // allTrackedDatetimeValuesHaveLocalZone asserts tracked datetime values resolve to the local zone.
 func (c *captureState) allTrackedDatetimeValuesHaveLocalZone() *parts {
-	p := c.root
+	p := c.parts
 	values := p.activeBucket()
 	p.require.NotEmpty(values)
 	_, wantOffset := time.Now().In(time.Local).Zone()
@@ -441,7 +439,7 @@ func (c *captureState) allTrackedDatetimeValuesHaveLocalZone() *parts {
 }
 
 func (c *captureState) capturedJSONFieldIs(index int, want string, path ...string) *parts {
-	p := c.root
+	p := c.parts
 	leaf := p.capturedJSONLeaf(index, path)
 	switch v := leaf.(type) {
 	case string:
@@ -456,7 +454,7 @@ func (c *captureState) capturedJSONFieldIs(index int, want string, path ...strin
 }
 
 func (c *captureState) capturedJSONFieldContains(index int, fragment string, path ...string) *parts {
-	p := c.root
+	p := c.parts
 	leaf, ok := p.capturedJSONLeaf(index, path).(string)
 	p.require.True(ok, "field %v is not a string", path)
 	p.assert.Contains(leaf, fragment)
@@ -465,7 +463,7 @@ func (c *captureState) capturedJSONFieldContains(index int, fragment string, pat
 }
 
 func (c *captureState) capturedJSONFieldMatchesRegexp(index int, pattern string, path ...string) *parts {
-	p := c.root
+	p := c.parts
 	leaf, ok := p.capturedJSONLeaf(index, path).(string)
 	p.require.True(ok, "field %v is not a string", path)
 	p.assert.Regexp(pattern, leaf)
@@ -474,7 +472,7 @@ func (c *captureState) capturedJSONFieldMatchesRegexp(index int, pattern string,
 }
 
 func (c *captureState) capturedJSONFieldNotContains(index int, fragment string, path ...string) *parts {
-	p := c.root
+	p := c.parts
 	leaf, ok := p.capturedJSONLeaf(index, path).(string)
 	p.require.True(ok, "field %v is not a string", path)
 	p.assert.NotContains(leaf, fragment)
@@ -487,7 +485,7 @@ func (c *captureState) capturedJSONFieldNotContains(index int, fragment string, 
 // serverReceivedHeaderFieldCountIs asserts the captured header value splits into n
 
 func (c *captureState) capturedRequestPathMatchesRegexp(index int, pattern string) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.capturedRequests), index)
 	p.assert.Regexp(pattern, p.capturedRequests[index].URL.Path)
 
@@ -496,7 +494,7 @@ func (c *captureState) capturedRequestPathMatchesRegexp(index int, pattern strin
 
 // gapBetweenCapturedRequestTimesAtLeast asserts captured-request times[ j] - [i] >= minGap.
 func (c *captureState) gapBetweenCapturedRequestTimesAtLeast(i, j int, minGap time.Duration) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.capturedRequestTimes), i, "no captured-request time at index %d", i)
 	p.require.Greater(len(p.capturedRequestTimes), j, "no captured-request time at index %d", j)
 	p.assert.GreaterOrEqual(p.capturedRequestTimes[j].Sub(p.capturedRequestTimes[i]), minGap,
@@ -508,7 +506,7 @@ func (c *captureState) gapBetweenCapturedRequestTimesAtLeast(i, j int, minGap ti
 // firstTrackedValueIsFloatInRange asserts the first value of the active bucket parses as
 // a float within [lowest, highest].
 func (c *captureState) firstTrackedValueIsFloatInRange(lowest, highest float64) *parts {
-	p := c.root
+	p := c.parts
 	values := p.activeBucket()
 	p.require.NotEmpty(values)
 
@@ -521,7 +519,7 @@ func (c *captureState) firstTrackedValueIsFloatInRange(lowest, highest float64) 
 }
 
 func (c *captureState) allTrackedValuesMatchRegexp(pattern string) *parts {
-	p := c.root
+	p := c.parts
 	re := regexp.MustCompile(pattern)
 	for _, value := range p.activeBucket() {
 		p.assert.True(re.MatchString(value), "value %q should match %q", value, pattern)
@@ -531,7 +529,7 @@ func (c *captureState) allTrackedValuesMatchRegexp(pattern string) *parts {
 }
 
 func (c *captureState) capturedBodyContains(index int, fragment string) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.capturedBodies), index)
 	p.assert.Contains(p.capturedBodies[index], fragment)
 
@@ -539,7 +537,7 @@ func (c *captureState) capturedBodyContains(index int, fragment string) *parts {
 }
 
 func (c *captureState) capturedBodyMatchesRegexp(index int, pattern string) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.capturedBodies), index)
 	p.assert.Regexp(pattern, p.capturedBodies[index])
 
@@ -547,7 +545,7 @@ func (c *captureState) capturedBodyMatchesRegexp(index int, pattern string) *par
 }
 
 func (c *captureState) serverReceivedBodyLengthIs(index int, want int) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.capturedRequests), index)
 	p.require.Equal(want, len(p.capturedBodies[index]))
 
@@ -556,7 +554,7 @@ func (c *captureState) serverReceivedBodyLengthIs(index int, want int) *parts {
 
 // serverReceivedBodyMatches asserts the captured request body against a regexp.
 func (c *captureState) serverReceivedBodyMatches(index int, pattern string) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.capturedRequests), index)
 	p.assert.Regexp(pattern, p.capturedBodies[index])
 
@@ -565,7 +563,7 @@ func (c *captureState) serverReceivedBodyMatches(index int, pattern string) *par
 
 // trackedValueIs asserts the most recent tracked value equals want.
 func (c *captureState) trackedValueIs(want string) *parts {
-	p := c.root
+	p := c.parts
 	values, ok := p.trackedValues[p.activeTrack]
 	p.require.True(ok, "no tracking bucket %q active", p.activeTrack)
 	p.require.NotEmpty(values)
@@ -577,7 +575,7 @@ func (c *captureState) trackedValueIs(want string) *parts {
 // clientRequestInterceptorCaptures asserts the request captured by aMockTransportClient
 // has the given method and full URL.
 func (c *captureState) clientRequestInterceptorCaptures(method, wantURL string) *parts {
-	p := c.root
+	p := c.parts
 	p.require.NotNil(p.intercepted)
 	p.assert.Equal(method, p.intercepted.Method)
 	p.assert.Equal(wantURL, p.intercepted.URL.String())
@@ -587,7 +585,7 @@ func (c *captureState) clientRequestInterceptorCaptures(method, wantURL string) 
 
 // clientSentNoHeaders asserts the request captured by aMockTransportClient sent no headers.
 func (c *captureState) clientSentNoHeaders() *parts {
-	p := c.root
+	p := c.parts
 	p.require.NotNil(p.intercepted)
 	p.assert.Empty(p.intercepted.Header)
 
@@ -597,7 +595,7 @@ func (c *captureState) clientSentNoHeaders() *parts {
 // serverReceivedMethodAndPath asserts the request at the given server-hit index used the
 // expected HTTP method and path.
 func (c *captureState) serverReceivedMethodAndPath(index int, method, path string) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.capturedRequests), index)
 	p.assert.Equal(method, p.capturedRequests[index].Method)
 	p.assert.Equal(path, p.capturedRequests[index].URL.Path)
@@ -608,7 +606,7 @@ func (c *captureState) serverReceivedMethodAndPath(index int, method, path strin
 // serverReceivedJSONBody asserts the request body at the given server-hit index equals the
 // expected JSON regardless of key order or whitespace.
 func (c *captureState) serverReceivedJSONBody(index int, expectedJSON string) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.capturedRequests), index)
 
 	body, err := io.ReadAll(p.capturedRequests[index].Body)
@@ -620,7 +618,7 @@ func (c *captureState) serverReceivedJSONBody(index int, expectedJSON string) *p
 
 // serverReceivedHeaderValue asserts a request header value at the given server-hit index.
 func (c *captureState) serverReceivedHeaderValue(index int, key, value string) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.capturedRequests), index)
 	p.assert.Equal(value, p.capturedRequests[index].Header.Get(key))
 
@@ -629,7 +627,7 @@ func (c *captureState) serverReceivedHeaderValue(index int, key, value string) *
 
 // requestRawURLContains asserts the current request's RawURLString contains every fragment.
 func (c *captureState) requestRawURLContains(fragments ...string) *parts {
-	p := c.root
+	p := c.parts
 	current := p.current()
 	p.require.NotNil(current.Request)
 
@@ -642,7 +640,7 @@ func (c *captureState) requestRawURLContains(fragments ...string) *parts {
 
 // capturedRequestCount asserts how many requests the test server received.
 func (c *captureState) capturedRequestCount(n int) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Equal(n, len(p.capturedRequests))
 
 	return p
@@ -650,7 +648,7 @@ func (c *captureState) capturedRequestCount(n int) *parts {
 
 // requestSkipped asserts the response at index i is marked as skipped.
 func (c *captureState) requestSkipped(i int) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.responses), i)
 	p.assert.True(p.responses[i].Skipped)
 
@@ -659,7 +657,7 @@ func (c *captureState) requestSkipped(i int) *parts {
 
 // requestExecuted asserts the response at index i is not marked as skipped.
 func (c *captureState) requestExecuted(i int) *parts {
-	p := c.root
+	p := c.parts
 	p.require.Greater(len(p.responses), i)
 	p.assert.False(p.responses[i].Skipped)
 

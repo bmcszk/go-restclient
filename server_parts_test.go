@@ -20,9 +20,7 @@ import (
 // servers started by the server builders, the address of the most recent one,
 // its scheme/host/port variables and the request counter shared with the DSL.
 type serverState struct {
-	// root points back at the enclosing parts so the server builders can return
-	// the fluent chain; parts reads it by field promotion as p.root as well.
-	root *parts
+	*parts
 	// servers holds every httptest server started by the server builders.
 	servers []*httptest.Server
 	// serverURL holds the address of the most recently started test server.
@@ -39,7 +37,7 @@ var _ = []any{
 
 // aHttpServer counts requests; bodies are read eagerly because net/http closes them on return.
 func (s *serverState) aHttpServer(h http.HandlerFunc) *parts {
-	p := s.root
+	p := s.parts
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		r.Body = io.NopCloser(strings.NewReader(string(body)))
@@ -58,7 +56,7 @@ func (s *serverState) aHttpServer(h http.HandlerFunc) *parts {
 
 // aTLSServer hosts an echo handler over httptest TLS (self-signed cert).
 func (s *serverState) aTLSServer() *parts {
-	p := s.root
+	p := s.parts
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		r.Body = io.NopCloser(strings.NewReader(string(body)))
@@ -76,7 +74,7 @@ func (s *serverState) aTLSServer() *parts {
 
 // aTLSInsecureClient builds a restclient trusting the httptest self-signed cert.
 func (s *serverState) aTLSInsecureClient() *parts {
-	p := s.root
+	p := s.parts
 	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
 
 	return p.aClient(rc.WithHTTPClient(httpClient))
@@ -113,7 +111,7 @@ func serveCannedRoute(w http.ResponseWriter, r *http.Request, route cannedRoute)
 // aCannedServer serves a fixed routing table of canned responses: exact path lookup,
 // 405 on method mismatch, 404 for unknown paths. Replaces multi-path handler vars.
 func (s *serverState) aCannedServer(routes map[string]cannedRoute) *parts {
-	p := s.root
+	p := s.parts
 	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
 		route, ok := routes[r.URL.Path]
 		if !ok {
@@ -128,7 +126,7 @@ func (s *serverState) aCannedServer(routes map[string]cannedRoute) *parts {
 // anEchoServer echoes the request body back verbatim with 200 OK — for tests that only
 // need a round-tripped body (e.g. external-file encoding round trips).
 func (s *serverState) anEchoServer() *parts {
-	p := s.root
+	p := s.parts
 	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
@@ -138,7 +136,7 @@ func (s *serverState) anEchoServer() *parts {
 
 // withServerAddressVars stores scheme/host/port vars and rebuilds the client with them.
 func (s *serverState) withServerAddressVars() *parts {
-	p := s.root
+	p := s.parts
 	parsed, err := url.Parse(p.serverURL)
 	p.require.NoError(err)
 
@@ -154,7 +152,7 @@ func (s *serverState) withServerAddressVars() *parts {
 // aMockTransportClient builds the client under test with a mock round tripper that
 // records the outgoing request into parts.intercepted and answers 200 with a fixed body.
 func (s *serverState) aMockTransportClient() *parts {
-	p := s.root
+	p := s.parts
 	transport := &mockRoundTripper{
 		RoundTripFunc: func(req *http.Request) (*http.Response, error) {
 			p.intercepted = req.Clone(req.Context())
@@ -199,7 +197,7 @@ type graphqlError struct {
 
 // aGraphQLServer serves the given responses in order, one per request, as HTTP 200 JSON.
 func (s *serverState) aGraphQLServer(responses ...graphqlResponse) *parts {
-	p := s.root
+	p := s.parts
 	idx := 0
 	return p.aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
