@@ -5,7 +5,7 @@ status: in-progress
 type: epic
 priority: normal
 created_at: 2026-10-15T10:18:58Z
-updated_at: 2026-10-15T16:40:54Z
+updated_at: 2026-10-16T14:36:01Z
 ---
 
 # TEST-CORPUS-REORG: consolidate + dedupe test files, meaningful parts DSL split
@@ -60,3 +60,10 @@ User-directed test reorg (2026-10-15): fewer files, all < 1000 lines, no duplica
 - brainer v3 re-plan → 5 wave beans V3W1–V3W5, all completed with PoW
 - 10 named pairs + base; rule-3 audit clean; anonymous *parts embedding (0 root refs); ≤1000 ln; 270+2 parity
 - Final: 24 test files; epic DONE criteria met — closes on merge of PR #84
+
+
+## V5 domain-struct round PoW (2026-10-15)
+- user model adopted: captureParts/parseParts/fileParts/envParts/serverParts/oauth2Parts/cookiesParts extend *parts; newCaptureParts/newParseParts/newOauth2Parts/newCookiesParts ctors; builders return own type
+- state-cohesive layout: every struct + all methods in its one domain file (capture/parse/file/env/server/cookies/oauth2)
+- root Test-name parity vs pre-V5: EXACT (270=270); gates + CI green every push
+- waves V5W1-V5W4a4 completed with PoW; remaining: V5W4b comment sweep (bean open)

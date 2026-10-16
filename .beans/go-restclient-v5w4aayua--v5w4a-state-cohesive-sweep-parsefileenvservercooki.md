@@ -5,7 +5,7 @@ status: completed
 type: task
 priority: normal
 created_at: 2026-10-16T13:20:16Z
-updated_at: 2026-10-16T14:31:54Z
+updated_at: 2026-10-16T14:32:32Z
 parent: go-restclient-495b
 ---
 
@@ -30,3 +30,7 @@ parent: go-restclient-495b
 - gates re-run: gofmt empty, lint `0 issues.`, junit 315
 - state-cohesive layout COMPLETE: capture/parse/file/env/server/cookies/oauth2 parts files each hold struct+ctor+all methods
 - Residual: V5W4b comment sweep + final audit
+
+## Parity re-verification (orchestrator)
+- pi's '313 vs 315' = miscount (cmd/restclient main_test has its own CLI newParts; root junit 'Action:pass' includes subtests+fuzz seeds)
+- DEFINITIVE: root-package Test-name set diff vs pre-V5 commit 494ef81 → ROOT-PARITY-EXACT (270 = 270, zero names changed)
