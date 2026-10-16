@@ -1,7 +1,6 @@
 package restclient_test
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -135,41 +134,4 @@ func (s *cookiesParts) aRestExtensionServer() *cookiesParts {
 		_, _ = w.Write([]byte(`{"status": "ok from .rest"}`))
 	})
 	return s
-}
-
-// parsedRequestMethod asserts the HTTP method of the parsed request at index i.
-func (c *parseParts) parsedRequestMethod(i int, method string) *parseParts {
-	p := c.parts
-
-	p.require.Greater(len(p.parsedFile.Requests), i)
-	p.assert.Equal(method, p.parsedFile.Requests[i].Method)
-
-	return c
-}
-
-// parsedRequestRawURLIs asserts the raw (pre-substitution) URL of the parsed request
-// at index i.
-func (c *parseParts) parsedRequestRawURLIs(i int, rawURL string) *parseParts {
-	p := c.parts
-
-	p.require.Greater(len(p.parsedFile.Requests), i)
-	p.assert.Equal(rawURL, p.parsedFile.Requests[i].RawURLString)
-
-	return c
-}
-
-// executingRequestAt parses the .http file and executes only the request at the given index.
-func (c *parseParts) executingRequestAt(index int) *parseParts {
-	p := c.parts
-
-	p.require.NotNil(p.client)
-
-	parsed, err := p.client.ParseFile(p.httpFilePath)
-	p.require.NoError(err)
-
-	resp, execErr := p.client.ExecuteRequest(context.Background(), parsed, index)
-	p.responses = append(p.responses, resp)
-	p.execErr = execErr
-
-	return c
 }
