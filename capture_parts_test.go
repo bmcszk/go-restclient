@@ -3,38 +3,15 @@ package restclient_test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
+	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/transform"
 	"io"
 	"regexp"
 	"strconv"
 	"strings"
-	"testing"
 	"time"
-
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"golang.org/x/text/encoding/charmap"
-	"golang.org/x/text/transform"
 )
-
-type captureParts struct {
-	parts
-}
-
-func newCaptureParts(t *testing.T) (given, when, then *captureParts) {
-	t.Helper()
-
-	c := &captureParts{parts: parts{
-		T:             t,
-		require:       require.New(t),
-		assert:        assert.New(t),
-		baseDir:       t.TempDir(),
-		trackedValues: make(map[string][]string),
-	}}
-
-	return c, c, c
-}
 
 type fakerHeaderRule struct {
 	key           string

@@ -22,7 +22,7 @@ func urlHost(rawURL string) string {
 }
 
 func TestExecuteFile_WithCustomVariables(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aCannedServer(map[string]cannedRoute{
@@ -59,7 +59,7 @@ func TestExecuteFile_WithCustomVariables(t *testing.T) {
 
 // TestExecuteFile_VariableFunctionConsistency: Variable Function Consistency (Internal).
 func TestExecuteFile_VariableFunctionConsistency(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -102,7 +102,7 @@ func TestExecuteFile_VariableFunctionConsistency(t *testing.T) {
 
 // TestExecuteFile_WithExtendedRandomSystemVariables: System Variables {{$random.*}}.
 func TestExecuteFile_WithExtendedRandomSystemVariables(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -151,7 +151,7 @@ func TestExecuteFile_WithExtendedRandomSystemVariables(t *testing.T) {
 // TestExecuteFile_InPlace_SimpleVariableInURL: In-Place Variables - Simple Definition and URL Substitution.
 
 func TestExecuteFile_InPlace_SimpleVariableInURL(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -177,7 +177,7 @@ func TestExecuteFile_InPlace_SimpleVariableInURL(t *testing.T) {
 
 // TestExecuteFile_InPlace_VariableInHeader: In-Place Variables - Header Substitution.
 func TestExecuteFile_InPlace_VariableInHeader(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -204,7 +204,7 @@ func TestExecuteFile_InPlace_VariableInHeader(t *testing.T) {
 
 // TestExecuteFile_InPlace_VariableInBody: In-Place Variables - Body Substitution.
 func TestExecuteFile_InPlace_VariableInBody(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -230,7 +230,7 @@ func TestExecuteFile_InPlace_VariableInBody(t *testing.T) {
 
 // TestExecuteFile_InPlace_VariableDefinedByAnotherVariable: In-Place - Referencing Other In-Place.
 func TestExecuteFile_InPlace_VariableDefinedByAnotherVariable(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -257,7 +257,7 @@ func TestExecuteFile_InPlace_VariableDefinedByAnotherVariable(t *testing.T) {
 
 // TestExecuteFile_InPlace_VariablePrecedenceOverEnvironment: Variable Precedence - In-Place over Environment.
 func TestExecuteFile_InPlace_VariablePrecedenceOverEnvironment(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -280,7 +280,7 @@ func TestExecuteFile_InPlace_VariablePrecedenceOverEnvironment(t *testing.T) {
 
 // TestExecuteFile_InPlace_VariableInCustomHeader: In-Place - Custom Header Substitution.
 func TestExecuteFile_InPlace_VariableInCustomHeader(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -304,7 +304,7 @@ func TestExecuteFile_InPlace_VariableInCustomHeader(t *testing.T) {
 
 // TestExecuteFile_InPlace_VariableSubstitutionInBody: In-Place - Complex Body Substitution.
 func TestExecuteFile_InPlace_VariableSubstitutionInBody(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -329,7 +329,7 @@ func TestExecuteFile_InPlace_VariableSubstitutionInBody(t *testing.T) {
 
 // TestExecuteFile_InPlace_VariableDefinedBySystemVariable covers pathSegments[0] being a 36-char UUID plus "resource".
 func TestExecuteFile_InPlace_VariableDefinedBySystemVariable(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -355,7 +355,7 @@ func TestExecuteFile_InPlace_VariableDefinedBySystemVariable(t *testing.T) {
 
 // TestExecuteFile_InPlace_VariableDefinedByOsEnvVariable: In-Place - Referencing OS Environment.
 func TestExecuteFile_InPlace_VariableDefinedByOsEnvVariable(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		withEnv("TEST_USER_HOME_INPLACE", "/testhome/userdir").and().
@@ -382,7 +382,7 @@ func TestExecuteFile_InPlace_VariableDefinedByOsEnvVariable(t *testing.T) {
 
 // TestExecuteFile_InPlace_VariableInAuthHeader: In-Place - Authentication Header Substitution.
 func TestExecuteFile_InPlace_VariableInAuthHeader(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -405,7 +405,7 @@ func TestExecuteFile_InPlace_VariableInAuthHeader(t *testing.T) {
 
 // TestExecuteFile_InPlace_VariableInJsonRequestBody: In-Place - JSON Request Body.
 func TestExecuteFile_InPlace_VariableInJsonRequestBody(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -429,7 +429,7 @@ func TestExecuteFile_InPlace_VariableInJsonRequestBody(t *testing.T) {
 
 // TestExecuteFile_InPlace_VariableDefinedByAnotherInPlaceVariable: In-Place - Chained In-Place.
 func TestExecuteFile_InPlace_VariableDefinedByAnotherInPlaceVariable(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -453,7 +453,7 @@ func TestExecuteFile_InPlace_VariableDefinedByAnotherInPlaceVariable(t *testing.
 
 // TestExecuteFile_InPlace_VariableDefinedByDotEnvOsVariable: In-Place - {{$env.VAR}}.
 func TestExecuteFile_InPlace_VariableDefinedByDotEnvOsVariable(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		withEnv("MY_CONFIG_PATH_TEST_DOT_ENV", "/usr/local/appconfig_dotenv").and().
@@ -478,7 +478,7 @@ func TestExecuteFile_InPlace_VariableDefinedByDotEnvOsVariable(t *testing.T) {
 
 // TestExecuteFile_InPlace_Malformed_NameOnlyNoEqualsNoValue: Malformed Definition (Name Only).
 func TestExecuteFile_InPlace_Malformed_NameOnlyNoEqualsNoValue(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aRequestFixtureAbs(
@@ -498,7 +498,7 @@ func TestExecuteFile_InPlace_Malformed_NameOnlyNoEqualsNoValue(t *testing.T) {
 
 // TestExecuteFile_InPlace_Malformed_NoNameEqualsValue: Malformed Definition (No Name).
 func TestExecuteFile_InPlace_Malformed_NoNameEqualsValue(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aRequestFixtureAbs(
@@ -520,7 +520,7 @@ func TestExecuteFile_InPlace_Malformed_NoNameEqualsValue(t *testing.T) {
 //
 // The .http file references it via {{$dotenv}}. capturedRequestPathIs asserts the substitution.
 func TestExecuteFile_InPlace_VariableDefinedByDotEnvSystemVariable(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -544,7 +544,7 @@ func TestExecuteFile_InPlace_VariableDefinedByDotEnvSystemVariable(t *testing.T)
 
 // TestExecuteFile_InPlace_VariableDefinedByRandomInt: In-Place - {{$randomInt MIN MAX}}.
 func TestExecuteFile_InPlace_VariableDefinedByRandomInt(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {

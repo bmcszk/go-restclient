@@ -3,35 +3,12 @@ package restclient_test
 import (
 	"bufio"
 	"bytes"
+	rc "github.com/bmcszk/go-restclient"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
-	"testing"
-
-	rc "github.com/bmcszk/go-restclient"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
-
-type validatorParts struct {
-	parts
-}
-
-func newValidatorParts(t *testing.T) (given, when, then *validatorParts) {
-	t.Helper()
-
-	v := &validatorParts{parts: parts{
-		trackedValues: make(map[string][]string),
-		T:             t,
-		require:       require.New(t),
-		assert:        assert.New(t),
-		baseDir:       t.TempDir(),
-	}}
-
-	return v, v, v
-}
 
 func (p *parts) aResponseWithStatus(statusCode int, statusText string) *parts {
 	return p.aResponseWith(statusCode, statusText, "", nil)

@@ -8,7 +8,7 @@ import (
 )
 
 func TestExecuteFile_OAuth2ClientCredentialsSendsBearerToken(t *testing.T) {
-	given, when, then := newOauth2Parts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anOAuth2TokenServerWithStatus(http.StatusOK).and().
@@ -31,7 +31,7 @@ Authorization: oauth2 p`).and().
 }
 
 func TestExecuteFile_OAuth2ClientCredentialsCachesTokenAcrossRequests(t *testing.T) {
-	given, when, then := newOauth2Parts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anOAuth2TokenServerWithStatus(http.StatusOK).and().
@@ -59,7 +59,7 @@ Authorization: oauth2 p`).and().
 }
 
 func TestExecuteFile_OAuth2TokenEndpointNestedVarExpands(t *testing.T) {
-	given, when, then := newOauth2Parts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anOAuth2TokenServerWithStatus(http.StatusOK).and().
@@ -82,7 +82,7 @@ func TestExecuteFile_OAuth2TokenEndpointNestedVarExpands(t *testing.T) {
 }
 
 func TestExecuteFile_OAuth2ClientCredentialsDefineOverridesNestedVar(t *testing.T) {
-	given, when, then := newOauth2Parts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anOAuth2TokenServerWithStatus(http.StatusOK).and().
@@ -111,7 +111,7 @@ Authorization: oauth2 acme`).and().
 }
 
 func TestExecuteFile_OAuth2ProcessEnvPlaceholderInAtVarExpands(t *testing.T) {
-	given, when, then := newOauth2Parts(t)
+	given, when, then := newParts(t)
 
 	given.
 		withEnv("ISS45_CID", "env-client-id").and().
@@ -138,7 +138,7 @@ Authorization: oauth2 acme`).and().
 }
 
 func TestExecuteFile_OAuth2MissingClientSecretFailsNamingVar(t *testing.T) {
-	given, when, then := newOauth2Parts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anOAuth2TokenServerWithStatus(http.StatusOK).and().
@@ -156,7 +156,7 @@ Authorization: oauth2 p`).and().
 }
 
 func TestExecuteFile_OAuth2TokenEndpointErrorFailsNamingStatus(t *testing.T) {
-	given, when, then := newOauth2Parts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anOAuth2TokenServerWithStatus(http.StatusInternalServerError).and().
@@ -174,7 +174,7 @@ Authorization: oauth2 p`).and().
 }
 
 func TestExecuteFile_OAuth2PasswordGrantPostsUserCredentials(t *testing.T) {
-	given, when, then := newOauth2Parts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anOAuth2TokenServerWithStatus(http.StatusOK).and().
@@ -199,7 +199,7 @@ Authorization: oauth2 password p`).and().
 }
 
 func TestExecuteFile_OAuth2UseAuthorizationHeaderFalseSendsCredsInBody(t *testing.T) {
-	given, when, then := newOauth2Parts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anOAuth2TokenServerWithStatus(http.StatusOK).and().
@@ -225,7 +225,7 @@ Authorization: oauth2 password p`).and().
 }
 
 func TestExecuteFile_OAuth2UseAuthorizationHeaderTrueSendsBasicHeader(t *testing.T) {
-	given, when, then := newOauth2Parts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anOAuth2TokenServerWithStatus(http.StatusOK).and().
@@ -251,7 +251,7 @@ Authorization: oauth2 password p`).and().
 }
 
 func TestExecuteFile_OAuth2PasswordGrantMissingPasswordFails(t *testing.T) {
-	given, when, then := newOauth2Parts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anOAuth2TokenServerWithStatus(http.StatusOK).and().
@@ -270,7 +270,7 @@ Authorization: oauth2 password p`).and().
 }
 
 func TestExecuteFile_OAuth2UnsupportedGrantFailsWithClearError(t *testing.T) {
-	given, when, then := newOauth2Parts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anOAuth2TokenServerWithStatus(http.StatusOK).and().

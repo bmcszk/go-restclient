@@ -2,36 +2,13 @@ package restclient_test
 
 import (
 	"encoding/json"
+	rc "github.com/bmcszk/go-restclient"
 	"net/http"
 	"net/http/cookiejar"
 	"os"
 	"path/filepath"
-	"testing"
 	"text/template"
-
-	rc "github.com/bmcszk/go-restclient"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
-
-type cookiesParts struct {
-	parts
-}
-
-func newCookiesParts(t *testing.T) (given, when, then *cookiesParts) {
-	t.Helper()
-
-	c := &cookiesParts{parts: parts{
-		trackedValues: make(map[string][]string),
-		T:             t,
-		require:       require.New(t),
-		assert:        assert.New(t),
-		baseDir:       t.TempDir(),
-	}}
-
-	return c, c, c
-}
 
 func (p *parts) aFreshCookieCheck() *parts {
 	p.cookieCheck = false

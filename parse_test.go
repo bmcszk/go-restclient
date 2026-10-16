@@ -7,7 +7,7 @@ import (
 )
 
 func TestParseFile_SingleRequest(t *testing.T) {
-	given, when, then := newParseParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -27,7 +27,7 @@ func TestParseFile_SingleRequest(t *testing.T) {
 		parsedRequestRawURLIs(0, given.serverURL+"/health")
 }
 func TestParseFile_MultipleRequests(t *testing.T) {
-	given, when, then := newParseParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpFile("GET http://example.com/a\n###\n" +
@@ -44,7 +44,7 @@ func TestParseFile_MultipleRequests(t *testing.T) {
 		parsedRequestMethod(1, http.MethodPost)
 }
 func TestParseFile_NamedRequests(t *testing.T) {
-	given, when, then := newParseParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpFile("### get users\nGET http://example.com/users\n###\n" +
@@ -61,7 +61,7 @@ func TestParseFile_NamedRequests(t *testing.T) {
 		parsedRequestName(1, "create user")
 }
 func TestParseFile_NoRequests(t *testing.T) {
-	given, when, then := newParseParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpFile("# just a comment\n").and().
@@ -74,7 +74,7 @@ func TestParseFile_NoRequests(t *testing.T) {
 		parseErrorContains("no requests found")
 }
 func TestParseFile_FileNotFound(t *testing.T) {
-	given, when, then := newParseParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aMissingFile("/nonexistent/file.http").and().
@@ -87,7 +87,7 @@ func TestParseFile_FileNotFound(t *testing.T) {
 		parseErrorContains()
 }
 func TestExecuteRequest_ByIndex(t *testing.T) {
-	given, when, then := newParseParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -109,7 +109,7 @@ func TestExecuteRequest_ByIndex(t *testing.T) {
 		serverReceivedMethodAndPath(0, http.MethodGet, "/a")
 }
 func TestExecuteRequest_OutOfRange(t *testing.T) {
-	given, when, then := newParseParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpFile("GET http://example.com/a\n").and().
@@ -122,7 +122,7 @@ func TestExecuteRequest_OutOfRange(t *testing.T) {
 		errorContains("out of range")
 }
 func TestExecuteRequest_NegativeIndex(t *testing.T) {
-	given, when, then := newParseParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpFile("GET http://example.com/a\n").and().
@@ -135,7 +135,7 @@ func TestExecuteRequest_NegativeIndex(t *testing.T) {
 		errorContains("out of range")
 }
 func TestExecuteRequest_SecondOfThree(t *testing.T) {
-	given, when, then := newParseParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -160,7 +160,7 @@ func TestExecuteRequest_SecondOfThree(t *testing.T) {
 // A bare `{{ ... }}` httpyac script block between requests is skipped, not
 // swallowed as body content (#46).
 func TestParseFile_ScriptBlockBetweenRequestsIsIgnored(t *testing.T) {
-	given, when, then := newParseParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpFile(`### first

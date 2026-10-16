@@ -3,38 +3,16 @@ package restclient_test
 import (
 	"context"
 	"fmt"
+	"golang.org/x/text/transform"
 	"os"
 	"path/filepath"
 	"strings"
-	"testing"
 	"text/template"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"golang.org/x/text/transform"
 )
 
 const externalFilesFixtureDir = "test/data/external_files"
 
 const requestFilesDir = "test/data/http_request_files"
-
-type fileParts struct {
-	parts
-}
-
-func newFileParts(t *testing.T) (given, when, then *fileParts) {
-	t.Helper()
-
-	f := &fileParts{parts: parts{
-		trackedValues: make(map[string][]string),
-		T:             t,
-		require:       require.New(t),
-		assert:        assert.New(t),
-		baseDir:       t.TempDir(),
-	}}
-
-	return f, f, f
-}
 
 func (p *parts) aTemplateFixture(dir, name string, data any) *parts {
 	tmplContent, err := os.ReadFile(filepath.Join("test", "data", dir, name))

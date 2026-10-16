@@ -6,7 +6,7 @@ import (
 
 // An HTTPS response records IsTLS, TLSVersion and cipher suite.
 func TestExecuteFile_HTTPSResponseCapturesTLSData(t *testing.T) {
-	given, when, then := newServerParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aTLSServer().and().

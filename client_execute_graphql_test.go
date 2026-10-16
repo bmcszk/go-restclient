@@ -10,7 +10,7 @@ import (
 // TestExecuteFile_GraphQLBasicQuery tests basic GraphQL query execution.
 
 func TestExecuteFile_GraphQLBasicQuery(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aGraphQLServer(graphqlResponse{
@@ -43,7 +43,7 @@ func TestExecuteFile_GraphQLBasicQuery(t *testing.T) {
 
 // TestExecuteFile_GraphQLQueryWithVariables tests GraphQL queries with variables.
 func TestExecuteFile_GraphQLQueryWithVariables(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aGraphQLServer(graphqlResponse{
@@ -75,7 +75,7 @@ func TestExecuteFile_GraphQLQueryWithVariables(t *testing.T) {
 
 // TestExecuteFile_GraphQLMutation tests GraphQL mutation execution.
 func TestExecuteFile_GraphQLMutation(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aGraphQLServer(graphqlResponse{
@@ -110,7 +110,7 @@ func TestExecuteFile_GraphQLMutation(t *testing.T) {
 
 // TestExecuteFile_GraphQLFragments tests GraphQL queries with fragments.
 func TestExecuteFile_GraphQLFragments(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aGraphQLServer(graphqlResponse{
@@ -147,7 +147,7 @@ func TestExecuteFile_GraphQLFragments(t *testing.T) {
 
 // TestExecuteFile_GraphQLIntrospection tests GraphQL introspection queries.
 func TestExecuteFile_GraphQLIntrospection(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aGraphQLServer(graphqlResponse{
@@ -180,7 +180,7 @@ func TestExecuteFile_GraphQLIntrospection(t *testing.T) {
 
 // TestExecuteFile_GraphQLErrorHandling tests GraphQL error response handling.
 func TestExecuteFile_GraphQLErrorHandling(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aGraphQLServer(graphqlResponse{
@@ -212,7 +212,7 @@ func TestExecuteFile_GraphQLErrorHandling(t *testing.T) {
 
 // TestExecuteFile_GraphQLBatchQueries tests GraphQL batch query execution.
 func TestExecuteFile_GraphQLBatchQueries(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aGraphQLServer(

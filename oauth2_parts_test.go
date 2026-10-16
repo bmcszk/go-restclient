@@ -1,32 +1,9 @@
 package restclient_test
 
 import (
-	"net/http"
-	"testing"
-
 	rc "github.com/bmcszk/go-restclient"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"net/http"
 )
-
-type oauth2Parts struct {
-	parts
-}
-
-func newOauth2Parts(t *testing.T) (given, when, then *oauth2Parts) {
-	t.Helper()
-
-	o := &oauth2Parts{parts: parts{
-		trackedValues: make(map[string][]string),
-		T:             t,
-		require:       require.New(t),
-		assert:        assert.New(t),
-		baseDir:       t.TempDir(),
-	}}
-
-	return o, o, o
-}
 
 // anOAuth2TokenServerWithStatus starts a canned OAuth2 token endpoint answering with the
 // given status; 200 also returns a fixed access_token payload.

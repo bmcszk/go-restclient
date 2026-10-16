@@ -5,37 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	rc "github.com/bmcszk/go-restclient"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
-	"testing"
 	"time"
-
-	rc "github.com/bmcszk/go-restclient"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
-
-type serverParts struct {
-	parts
-}
-
-func newServerParts(t *testing.T) (given, when, then *serverParts) {
-	t.Helper()
-
-	s := &serverParts{parts: parts{
-		trackedValues: make(map[string][]string),
-		T:             t,
-		require:       require.New(t),
-		assert:        assert.New(t),
-		baseDir:       t.TempDir(),
-	}}
-
-	return s, s, s
-}
 
 // aHttpServer counts requests; bodies are read eagerly because net/http closes them on return.
 type cannedRoute struct {

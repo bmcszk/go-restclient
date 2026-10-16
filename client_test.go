@@ -7,7 +7,7 @@ import (
 )
 
 func TestNewClient(t *testing.T) {
-	given, _, then := newClientParts(t)
+	given, _, then := newParts(t)
 
 	given.
 		aClient()
@@ -18,7 +18,7 @@ func TestNewClient(t *testing.T) {
 		clientDefaultHeadersEmpty()
 }
 func TestNewClient_WithOptions(t *testing.T) {
-	given, _, then := newClientParts(t)
+	given, _, then := newParts(t)
 
 	given.
 		aClientWithDefaults()
@@ -29,7 +29,7 @@ func TestNewClient_WithOptions(t *testing.T) {
 		clientDefaultHeaderIs("X-Default", "DefaultValue")
 }
 func TestNewClient_NilHTTPClientOption(t *testing.T) {
-	given, _, then := newClientParts(t)
+	given, _, then := newParts(t)
 
 	given.
 		aClient(rc.WithHTTPClient(nil))

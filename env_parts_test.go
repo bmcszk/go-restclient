@@ -5,29 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
-
-type envParts struct {
-	parts
-}
-
-func newEnvParts(t *testing.T) (given, when, then *envParts) {
-	t.Helper()
-
-	e := &envParts{parts: parts{
-		trackedValues: make(map[string][]string),
-		T:             t,
-		require:       require.New(t),
-		assert:        assert.New(t),
-		baseDir:       t.TempDir(),
-	}}
-
-	return e, e, e
-}
 
 // aDotEnvFile writes content to <baseDir>/.env. The parser resolves .env relative to the
 // so this works for aTempDir-based .http files. No-op safety: writing empty content is allowed.

@@ -64,6 +64,20 @@ type parts struct {
 	cookieCheck    bool
 }
 
+func newParts(t *testing.T) (given, when, then *parts) {
+	t.Helper()
+
+	p := &parts{
+		T:             t,
+		require:       require.New(t),
+		assert:        assert.New(t),
+		baseDir:       t.TempDir(),
+		trackedValues: make(map[string][]string),
+	}
+
+	return p, p, p
+}
+
 type clientConfigSnapshot struct {
 	baseURL     string
 	headerKey   string

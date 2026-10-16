@@ -9,7 +9,7 @@ import (
 )
 
 func TestExecuteFile_ExternalFileWithVariables(t *testing.T) {
-	given, when, then := newFileParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aJsonEchoServer().and().
@@ -37,7 +37,7 @@ func TestExecuteFile_ExternalFileWithVariables(t *testing.T) {
 }
 
 func TestExecuteFile_ExternalFileWithoutVariables(t *testing.T) {
-	given, when, then := newFileParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aJsonEchoServer().and().
@@ -66,7 +66,7 @@ func TestExecuteFile_ExternalFileWithoutVariables(t *testing.T) {
 // aHttpFileWithExternalFileEncoding so each test stays a single fluent chain.
 
 func TestExecuteFile_ExternalFileWithEncoding_Latin1(t *testing.T) {
-	given, when, then := newFileParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -86,7 +86,7 @@ func TestExecuteFile_ExternalFileWithEncoding_Latin1(t *testing.T) {
 }
 
 func TestExecuteFile_ExternalFileWithEncoding_CP1252(t *testing.T) {
-	given, when, then := newFileParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -106,7 +106,7 @@ func TestExecuteFile_ExternalFileWithEncoding_CP1252(t *testing.T) {
 }
 
 func TestExecuteFile_ExternalFileWithEncoding_ASCII(t *testing.T) {
-	given, when, then := newFileParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -126,7 +126,7 @@ func TestExecuteFile_ExternalFileWithEncoding_ASCII(t *testing.T) {
 }
 
 func TestExecuteFile_ExternalFileWithEncoding_UTF8(t *testing.T) {
-	given, when, then := newFileParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -145,7 +145,7 @@ func TestExecuteFile_ExternalFileWithEncoding_UTF8(t *testing.T) {
 		serverReceivedBodyIs(0, "Hällo Wörld! Ñice to meet you. €😊")
 }
 func TestExecuteFile_ExternalFileWithEncoding(t *testing.T) {
-	given, when, then := newFileParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, r *http.Request) {
@@ -172,7 +172,7 @@ func TestExecuteFile_ExternalFileWithEncoding(t *testing.T) {
 }
 
 func TestExecuteFile_ExternalFileWithVariablesAndEncoding(t *testing.T) {
-	given, when, then := newFileParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -198,7 +198,7 @@ func TestExecuteFile_ExternalFileWithVariablesAndEncoding(t *testing.T) {
 }
 
 func TestExecuteFile_WithRestExtension(t *testing.T) {
-	given, when, then := newFileParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aRestExtensionServer().and().
@@ -219,7 +219,7 @@ func TestExecuteFile_WithRestExtension(t *testing.T) {
 }
 
 func TestExecuteFile_ExternalFileNotFound(t *testing.T) {
-	given, when, then := newFileParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpFile(`### External File Not Found
@@ -238,7 +238,7 @@ Content-Type: application/json
 }
 
 func TestExecuteFile_ScriptBlockBetweenRequestsIsIgnored(t *testing.T) {
-	given, when, then := newFileParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -267,7 +267,7 @@ GET {{server}}/two`).
 // TestExecuteFile_ScriptBlockInsideRequestIsIgnored verifies a script block in
 // the request section does not become body or orphaned content (#46).
 func TestExecuteFile_ScriptBlockInsideRequestIsIgnored(t *testing.T) {
-	given, when, then := newFileParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -295,7 +295,7 @@ GET {{server}}/after`).
 // A script block inside a request section does not become body and variable
 // substitution for the next request keeps working (#46).
 func TestExecuteFile_ScriptBlockInRequestKeepsVarsWorking(t *testing.T) {
-	given, when, then := newFileParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().

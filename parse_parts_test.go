@@ -2,30 +2,8 @@ package restclient_test
 
 import (
 	"context"
-	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
-
-type parseParts struct {
-	parts
-}
-
-func newParseParts(t *testing.T) (given, when, then *parseParts) {
-	t.Helper()
-
-	p := &parseParts{parts: parts{
-		trackedValues: make(map[string][]string),
-		T:             t,
-		require:       require.New(t),
-		assert:        assert.New(t),
-		baseDir:       t.TempDir(),
-	}}
-
-	return p, p, p
-}
 
 // parsingFile parses the .http file without executing any request.
 func (p *parts) parsingFile() *parts {

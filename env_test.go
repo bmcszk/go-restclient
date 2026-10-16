@@ -9,7 +9,7 @@ import (
 
 // TestExecuteFile_WithProcessEnvSystemVariable: System Variables {{$processEnv.VAR_NAME}}.
 func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
-	given, when, then := newEnvParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		withEnv("GO_RESTCLIENT_TEST_VAR", "test_env_value_123").and().
@@ -46,7 +46,7 @@ func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
 // TestExecuteFile_WithDotEnvSystemVariable_Scenario1_EnvFileExists: System Variables {{$dotenv.VAR_NAME}}.
 // .env file exists and both DOTENV_VAR1 and DOTENV_VAR2 are present.
 func TestExecuteFile_WithDotEnvSystemVariable_Scenario1_EnvFileExists(t *testing.T) {
-	given, when, then := newEnvParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aDotEnvFileRemoved().and().
@@ -78,7 +78,7 @@ func TestExecuteFile_WithDotEnvSystemVariable_Scenario1_EnvFileExists(t *testing
 // TestExecuteFile_WithDotEnvSystemVariable_Scenario2_EnvFileMissing: System Variables {{$dotenv.VAR_NAME}}.
 // No .env file: all {{$dotenv.*}} variables resolve to empty strings.
 func TestExecuteFile_WithDotEnvSystemVariable_Scenario2_EnvFileMissing(t *testing.T) {
-	given, when, then := newEnvParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aDotEnvFileRemoved().and().
@@ -106,7 +106,7 @@ func TestExecuteFile_WithDotEnvSystemVariable_Scenario2_EnvFileMissing(t *testin
 
 // TestExecuteFile_WithProgrammaticVariables: Programmatic Variable Injection.
 func TestExecuteFile_WithProgrammaticVariables(t *testing.T) {
-	given, when, then := newEnvParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		withEnv("PROG_ENV_VAR", "env_value_should_be_overridden").and().
@@ -150,7 +150,7 @@ func TestExecuteFile_WithProgrammaticVariables(t *testing.T) {
 // SCENARIO-LIB-018-004: env == "" means the http-client.env.json lookup is skipped, so
 // {{host}} in the request body is left as a literal placeholder.
 func TestExecuteFile_WithHttpClientEnvJson_NoEnvSelected(t *testing.T) {
-	given, when, then := newEnvParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -178,7 +178,7 @@ func TestExecuteFile_WithHttpClientEnvJson_NoEnvSelected(t *testing.T) {
 // SCENARIO-LIB-018-005: when both http-client.env.json and http-client.private.env.json
 // exist and an env is selected, the private file's values override the public ones.
 func TestExecuteFile_WithHttpClientEnvJson_PrivateOverridesPublic(t *testing.T) {
-	given, when, then := newEnvParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -217,7 +217,7 @@ func TestExecuteFile_WithHttpClientEnvJson_PrivateOverridesPublic(t *testing.T) 
 // TestExecuteFile_WithIndirectEnvironmentVariables: Indirect Environment Variable Lookup
 // {{$processEnv %VAR}}.
 func TestExecuteFile_WithIndirectEnvironmentVariables(t *testing.T) {
-	given, when, then := newEnvParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		withEnv("TEST_SECRET_KEY", "secret123").and().
@@ -256,7 +256,7 @@ func TestExecuteFile_WithIndirectEnvironmentVariables(t *testing.T) {
 
 // %7B%7B$dotenv VAR%7D%7D in a URL query resolves from .env (URL-safe embedding).
 func TestExecuteFile_WithDotEnvSystemVariable_URLEncodedPlaceholder(t *testing.T) {
-	given, when, then := newEnvParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -276,7 +276,7 @@ GET {{server}}/q?token=%7B%7B$dotenv SECRET_VAR%7D%7D`).and().
 
 // URL-encoded placeholder for an undefined dotenv variable resolves to empty.
 func TestExecuteFile_WithDotEnvSystemVariable_URLEncodedUndefinedIsEmpty(t *testing.T) {
-	given, when, then := newEnvParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -297,7 +297,7 @@ GET {{server}}/q?token=%7B%7B$dotenv MISSING_VAR%7D%7D`).and().
 // %7B%7B$processEnv VAR%7D%7D in a URL query resolves from the process env.
 func TestExecuteFile_WithProcessEnvSystemVariable_URLEncodedPlaceholder(t *testing.T) {
 	t.Setenv("GO_RESTCLIENT_ENCODED_VAR", "enc-val")
-	given, when, then := newEnvParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -317,7 +317,7 @@ GET {{server}}/q?v=%7B%7B$processEnv GO_RESTCLIENT_ENCODED_VAR%7D%7D`).and().
 // TestExecuteFile_DotEnvProcessEnvPlaceholderExpands: .env values support {{$processEnv}}
 // so secrets can come from the real environment (#49).
 func TestExecuteFile_DotEnvProcessEnvPlaceholderExpands(t *testing.T) {
-	given, when, then := newEnvParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		withEnv("ISS49_CID", "env-value").and().
@@ -338,7 +338,7 @@ func TestExecuteFile_DotEnvProcessEnvPlaceholderExpands(t *testing.T) {
 // TestExecuteFile_DotEnvUnresolvablePlaceholderStaysRaw: missing process env leaves the
 // {{$processEnv}} placeholder literal in the .env value (#49 pinned semantics).
 func TestExecuteFile_DotEnvUnresolvablePlaceholderStaysRaw(t *testing.T) {
-	given, when, then := newEnvParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aDotEnvFile("CID={{$processEnv ISS49_MISSING}}").and().
@@ -358,7 +358,7 @@ func TestExecuteFile_DotEnvUnresolvablePlaceholderStaysRaw(t *testing.T) {
 // TestExecuteFile_EnvFlagLoadsNamedEnvFile: --env staging loads .env first, then .env.staging
 // overrides only the keys it defines (#48).
 func TestExecuteFile_EnvFlagLoadsNamedEnvFile(t *testing.T) {
-	given, when, then := newEnvParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aDotEnvFile("A=base").and().
@@ -380,7 +380,7 @@ func TestExecuteFile_EnvFlagLoadsNamedEnvFile(t *testing.T) {
 // TestExecuteFile_NamedEnvFilePlaceholderExpands: .env.staging values support
 // {{$processEnv}} expansion like .env (#49 + #48 combined).
 func TestExecuteFile_NamedEnvFilePlaceholderExpands(t *testing.T) {
-	given, when, then := newEnvParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		withEnv("ISS49_S", "expanded-staging").and().
