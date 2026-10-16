@@ -1,80 +1,12 @@
 package restclient_test
 
 import (
-	"crypto/tls"
-	"errors"
-	"io"
 	"net/http"
-	"net/http/httptest"
 	"path/filepath"
-	"strings"
 	"time"
 
 	rc "github.com/bmcszk/go-restclient"
 )
-
-// aTLSServer hosts an echo handler over httptest TLS (self-signed cert).
-func (s *serverParts) aTLSServer() *serverParts {
-	p := s.parts
-	srv := httptest.NewTLSServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		r.Body = io.NopCloser(strings.NewReader(string(body)))
-		p.capturedRequests = append(p.capturedRequests, r)
-		p.capturedBodies = append(p.capturedBodies, string(body))
-		p.capturedRequestTimes = append(p.capturedRequestTimes, time.Now())
-		p.requestHits.Add(1)
-	}))
-	p.servers = append(p.servers, srv)
-	p.serverURL = srv.URL
-	p.Cleanup(srv.Close)
-
-	return s
-}
-
-// aTLSInsecureClient builds a restclient trusting the httptest self-signed cert.
-func (s *serverParts) aTLSInsecureClient() *serverParts {
-	p := s.parts
-	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
-
-	p.aClient(rc.WithHTTPClient(httpClient))
-
-	return s
-}
-
-// aMockTransportClient builds the client under test with a mock round tripper that
-// records the outgoing request into parts.intercepted and answers 200 with a fixed body.
-func (s *serverParts) aMockTransportClient() *serverParts {
-	p := s.parts
-	transport := &mockRoundTripper{
-		RoundTripFunc: func(req *http.Request) (*http.Response, error) {
-			p.intercepted = req.Clone(req.Context())
-
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader("mocked response")),
-				Header:     make(http.Header),
-			}, nil
-		},
-	}
-
-	p.aClient(rc.WithHTTPClient(&http.Client{Transport: transport}))
-
-	return s
-}
-
-// mockRoundTripper adapts a function into an http.RoundTripper for the DSL.
-type mockRoundTripper struct {
-	RoundTripFunc func(req *http.Request) (*http.Response, error)
-}
-
-// RoundTrip delegates to the configured function.
-func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	if m.RoundTripFunc != nil {
-		return m.RoundTripFunc(req)
-	}
-
-	return nil, errors.New("RoundTripFunc not set")
-}
 
 // responseHeaderValues asserts the Headers value for key equals values.
 func (p *parts) responseHeaderValues(key string, values ...string) *parts {

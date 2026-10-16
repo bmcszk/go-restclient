@@ -5,7 +5,7 @@ status: in-progress
 type: task
 priority: normal
 created_at: 2026-10-16T13:20:16Z
-updated_at: 2026-10-16T14:16:47Z
+updated_at: 2026-10-16T14:30:03Z
 parent: go-restclient-495b
 ---
 
@@ -18,3 +18,9 @@ parent: go-restclient-495b
 - fileParts struct + all 17 methods co-located in file_parts_test.go (NEW); drained from base + core/vars/parsefile pairs
 - gates re-run: gofmt empty, build/vet 0, lint `0 issues.`, junit 315
 - Residual: envParts, serverParts, cookies/oauth2 renames
+
+## Proof of Work (orchestrator-verified, incl. orchestrator fix-ups)
+- envParts struct + 7 methods → env_parts_test.go; serverParts struct + 8 methods + cannedRoute/serveCannedRoute/mockRoundTripper/RoundTrip/graphql types → server_parts_test.go; graphql pair file emptied+deleted
+- orchestrator correction: pi parked cookiesState→cookiesParts methods (aJsonEchoServer/aRestExtensionServer) in env_parts — moved to client_cookies_redirects_parts_test.go (cookies pair) + import fixes
+- gates re-run: gofmt empty, build/vet 0, lint `0 issues.`, junit 315
+- Residual: cookies/oauth2 pair renames to state names

@@ -2,17 +2,9 @@ package restclient_test
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
 	"net/http"
-	"net/http/httptest"
-	"os"
 	"path/filepath"
-	"strings"
-	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/stretchr/testify/assert"
@@ -254,133 +246,6 @@ func (p *parts) requestCount(n int64) *parts {
 	p.require.Equal(n, p.requestHits.Load())
 
 	return p
-}
-
-// envParts holds the env-domain state of the fluent test DSL: dotenv files,
-// named dotenv files and environment-backed client builds carry no extra
-// per-test state, so only the fluent-chain back pointer lives here.
-type envParts struct {
-	*parts
-}
-
-var _ = []any{
-	envParts{},
-}
-
-// aDotEnvFile writes content to <baseDir>/.env. The parser resolves .env relative to the
-// so this works for aTempDir-based .http files. No-op safety: writing empty content is allowed.
-func (e *envParts) aDotEnvFile(content string) *envParts {
-	p := e.parts
-	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, ".env"), []byte(content), 0644))
-	return e
-}
-
-// aDotEnvFileRemoved removes <baseDir>/.env if present (os.Remove, ignore not-exists) so a
-// previous scenario's .env cannot leak into the next subtest.
-func (e *envParts) aDotEnvFileRemoved() *envParts {
-	p := e.parts
-	_ = os.Remove(filepath.Join(p.baseDir, ".env"))
-	return e
-}
-
-// withEnv sets an environment variable for the duration of the test.
-func (e *envParts) withEnv(k, v string) *envParts {
-	p := e.parts
-	p.Setenv(k, v)
-
-	return e
-}
-
-// serverParts holds the server domain state of the fluent test DSL: the httptest
-// servers started by the server builders, the address of the most recent one,
-// its scheme/host/port variables and the request counter shared with the DSL.
-type serverParts struct {
-	*parts
-	// servers holds every httptest server started by the server builders.
-	servers []*httptest.Server
-	// serverURL holds the address of the most recently started test server.
-	serverURL string
-	// share the name requestCount in Go.
-	requestHits atomic.Int64
-	// activeServerVars holds the scheme/host/port variables of the running test server.
-	activeServerVars map[string]any
-}
-
-var _ = []any{
-	serverParts{},
-}
-
-// aHttpServer counts requests; bodies are read eagerly because net/http closes them on return.
-func (s *serverParts) aHttpServer(h http.HandlerFunc) *serverParts {
-	p := s.parts
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		r.Body = io.NopCloser(strings.NewReader(string(body)))
-		p.capturedRequests = append(p.capturedRequests, r)
-		p.capturedBodies = append(p.capturedBodies, string(body))
-		p.capturedRequestTimes = append(p.capturedRequestTimes, time.Now())
-		p.requestHits.Add(1)
-		h(w, r)
-	}))
-	p.servers = append(p.servers, srv)
-	p.serverURL = srv.URL
-	p.Cleanup(srv.Close)
-
-	return s
-}
-
-// cannedRoute is one aCannedServer route; validJSON also requires a json.Valid body.
-type cannedRoute struct {
-	method    string
-	code      int
-	body      string
-	validJSON bool
-}
-
-// serveCannedRoute writes the cannedRoute response for r: 405 on method mismatch,
-// 400 on validJSON with an unparseable body. The caller handled unknown paths.
-func serveCannedRoute(w http.ResponseWriter, r *http.Request, route cannedRoute) {
-	if r.Method != route.method {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-
-		return
-	}
-	if route.validJSON {
-		body, _ := io.ReadAll(r.Body)
-		if !json.Valid(body) {
-			w.WriteHeader(http.StatusBadRequest)
-
-			return
-		}
-	}
-	w.WriteHeader(route.code)
-	_, _ = fmt.Fprint(w, route.body)
-}
-
-// aCannedServer serves a fixed routing table of canned responses: exact path lookup,
-// 405 on method mismatch, 404 for unknown paths. Replaces multi-path handler vars.
-func (s *serverParts) aCannedServer(routes map[string]cannedRoute) *serverParts {
-	p := s.parts
-	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
-		route, ok := routes[r.URL.Path]
-		if !ok {
-			w.WriteHeader(http.StatusNotFound)
-
-			return
-		}
-		serveCannedRoute(w, r, route)
-	})
-}
-
-// anEchoServer echoes the request body back verbatim with 200 OK — for tests that only
-// need a round-tripped body (e.g. external-file encoding round trips).
-func (s *serverParts) anEchoServer() *serverParts {
-	p := s.parts
-	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(body)
-	})
 }
 
 // anExpectedResponseFixture points the DSL at a committed expected-response fixture file.

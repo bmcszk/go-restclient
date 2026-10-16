@@ -1,9 +1,9 @@
 package restclient_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/cookiejar"
-	"net/url"
 	"os"
 	"path/filepath"
 	"text/template"
@@ -98,23 +98,6 @@ func (s *cookiesParts) aNoRedirectClient() *cookiesParts {
 	return s
 }
 
-// withServerAddressVars stores scheme/host/port vars and rebuilds the client with them.
-func (s *serverParts) withServerAddressVars() *serverParts {
-	p := s.parts
-	parsed, err := url.Parse(p.serverURL)
-	p.require.NoError(err)
-
-	p.activeServerVars = map[string]any{
-		"scheme": parsed.Scheme,
-		"host":   parsed.Hostname(),
-		"port":   parsed.Port(),
-	}
-
-	p.aClient(rc.WithVars(p.activeServerVars))
-
-	return s
-}
-
 // cookieWasStored asserts the cookie server received its cookie back.
 func (s *cookiesParts) cookieWasStored() *cookiesParts {
 	p := s.parts
@@ -149,5 +132,30 @@ func (s *cookiesParts) aCookieRedirectFixture(name string) *cookiesParts {
 
 	p.httpFilePath = path
 
+	return s
+}
+
+// echoes it back wrapped in {"json": ...}, and responds 200 OK with application/json.
+func (s *cookiesParts) aJsonEchoServer() *cookiesParts {
+	p := s.parts
+
+	p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
+		var data map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&data)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{"json": data})
+	})
+	return s
+}
+
+// aRestExtensionServer serves GET with a 200 OK and a fixed JSON body.
+func (s *cookiesParts) aRestExtensionServer() *cookiesParts {
+	p := s.parts
+
+	p.aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status": "ok from .rest"}`))
+	})
 	return s
 }
