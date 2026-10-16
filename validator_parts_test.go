@@ -10,32 +10,30 @@ import (
 	"testing"
 
 	rc "github.com/bmcszk/go-restclient"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-type validatorParts struct {
-	// builtResponses collects rc.Response values the validator builders created.
-	builtResponses []*rc.Response
-}
-
-// newValidatorParts returns the given/when/then fixture for the validator DSL
-// (builds rc.Response values directly, never executes HTTP requests).
-func newValidatorParts(t *testing.T) (given, when, then *testFixture) {
+func newValidatorParts(t *testing.T) (given, when, then *parts) {
 	t.Helper()
 
-	fx := newFixture(t)
+	fx := &parts{
+		T:       t,
+		require: require.New(t),
+		assert:  assert.New(t),
+		baseDir: t.TempDir(),
+	}
 
 	return fx, fx, fx
 }
 
-// Validator DSL:
-
-// aResponseWithStatus is a shorthand for aResponseWith with no body and no headers.
-func (p *testFixture) aResponseWithStatus(statusCode int, statusText string) *testFixture {
+func (p *parts) aResponseWithStatus(statusCode int, statusText string) *parts {
 	return p.aResponseWith(statusCode, statusText, "", nil)
 }
 
 // aResponseFromRawHTTPFile parses a raw HTTP response file into a rc.Response.
-func (p *testFixture) aResponseFromRawHTTPFile(path string) *testFixture {
+func (p *parts) aResponseFromRawHTTPFile(path string) *parts {
 	content, err := os.ReadFile(path)
 	p.require.NoError(err, "read raw http file %s", path)
 
@@ -60,27 +58,21 @@ func (p *testFixture) aResponseFromRawHTTPFile(path string) *testFixture {
 	return p
 }
 
-// withStatusCode rewrites the StatusCode of the LAST response in p.responses.
-// Requires len(p.responses) > 0.
-func (p *testFixture) withStatusCode(code int) *testFixture {
+func (p *parts) withStatusCode(code int) *parts {
 	p.require.NotEmpty(p.responses)
 	p.responses[len(p.responses)-1].StatusCode = code
 
 	return p
 }
 
-// withStatusText rewrites the Status string of the LAST response in p.responses.
-// Requires len(p.responses) > 0.
-func (p *testFixture) withStatusText(s string) *testFixture {
+func (p *parts) withStatusText(s string) *parts {
 	p.require.NotEmpty(p.responses)
 	p.responses[len(p.responses)-1].Status = s
 
 	return p
 }
 
-// withHeader Sets the given key/value pair on the Headers of the LAST response
-// in p.responses. Requires len(p.responses) > 0.
-func (p *testFixture) withHeader(key, value string) *testFixture {
+func (p *parts) withHeader(key, value string) *parts {
 	p.require.NotEmpty(p.responses)
 	resp := p.responses[len(p.responses)-1]
 	if resp.Headers == nil {
@@ -91,9 +83,7 @@ func (p *testFixture) withHeader(key, value string) *testFixture {
 	return p
 }
 
-// withoutHeader removes the given header key from the LAST response in p.responses.
-// Requires len(p.responses) > 0.
-func (p *testFixture) withoutHeader(key string) *testFixture {
+func (p *parts) withoutHeader(key string) *parts {
 	p.require.NotEmpty(p.responses)
 	resp := p.responses[len(p.responses)-1]
 	if resp.Headers != nil {
@@ -103,9 +93,7 @@ func (p *testFixture) withoutHeader(key string) *testFixture {
 	return p
 }
 
-// withBody replaces the Body and BodyString of the LAST response in p.responses.
-// Requires len(p.responses) > 0.
-func (p *testFixture) withBody(body string) *testFixture {
+func (p *parts) withBody(body string) *parts {
 	p.require.NotEmpty(p.responses)
 	resp := p.responses[len(p.responses)-1]
 	resp.BodyString = body
@@ -115,21 +103,21 @@ func (p *testFixture) withBody(body string) *testFixture {
 }
 
 // noActualResponses leaves p.responses nil (a nil slice, distinct from an empty slice).
-func (p *testFixture) noActualResponses() *testFixture {
+func (p *parts) noActualResponses() *parts {
 	p.responses = nil
 
 	return p
 }
 
 // anEmptyResponseSlice sets p.responses to an empty (non-nil) slice.
-func (p *testFixture) anEmptyResponseSlice() *testFixture {
+func (p *parts) anEmptyResponseSlice() *parts {
 	p.responses = []*rc.Response{}
 
 	return p
 }
 
 // aNilResponse sets p.responses to []*rc.Response{nil}.
-func (p *testFixture) aNilResponse() *testFixture {
+func (p *parts) aNilResponse() *parts {
 	p.responses = []*rc.Response{nil}
 
 	return p
@@ -137,14 +125,14 @@ func (p *testFixture) aNilResponse() *testFixture {
 
 // anExpectedResponseFileAt sets p.expectedFilePath verbatim. Used to point at a
 // always prepends the committed-fixture directory).
-func (p *testFixture) anExpectedResponseFileAt(path string) *testFixture {
+func (p *parts) anExpectedResponseFileAt(path string) *parts {
 	p.expectedFilePath = path
 
 	return p
 }
 
 // validateResponsesWithIndex calls ValidateResponsesWithOptions with one expected index.
-func (p *testFixture) validateResponsesWithIndex(index int) *testFixture {
+func (p *parts) validateResponsesWithIndex(index int) *parts {
 	p.validationErr = p.client.ValidateResponsesWithOptions(
 		p.expectedFilePath,
 		rc.ValidateOptions{ExpectedIndex: index},
@@ -154,43 +142,39 @@ func (p *testFixture) validateResponsesWithIndex(index int) *testFixture {
 }
 
 // responsesValidateAgainst validates responses against an explicit .hresp path.
-func (p *testFixture) responsesValidateAgainst(expectedPath string) *testFixture {
+func (p *parts) responsesValidateAgainst(expectedPath string) *parts {
 	p.require.NotNil(p.client)
 	p.assert.NoError(p.client.ValidateResponses(expectedPath, p.responses...))
 
 	return p
 }
 
-// responseHeaderValues asserts the Headers value for key equals values.
-func (p *testFixture) responseHeaderValues(key string, values ...string) *testFixture {
+func (p *parts) responseHeaderValues(key string, values ...string) *parts {
 	p.require.Equal(values, p.current().Headers[key])
 
 	return p
 }
 
-// responseHeaderEmpty asserts the Headers value for key is empty.
-func (p *testFixture) responseHeaderEmpty(key string) *testFixture {
+func (p *parts) responseHeaderEmpty(key string) *parts {
 	p.require.Empty(p.current().Headers.Get(key))
 
 	return p
 }
 
-// responseIsTLS asserts the current response used TLS.
-func (p *testFixture) responseIsTLS() *testFixture {
+func (p *parts) responseIsTLS() *parts {
 	p.require.True(p.current().IsTLS, "expected TLS response, got plain")
 
 	return p
 }
 
-// responseTLSVersionMatches asserts the current response TLS version against a regexp.
-func (p *testFixture) responseTLSVersionMatches(pattern string) *testFixture {
+func (p *parts) responseTLSVersionMatches(pattern string) *parts {
 	p.assert.Regexp(pattern, p.current().TLSVersion)
 
 	return p
 }
 
 // responsesValidateAgainstFixture validates responses against a committed response-files fixture.
-func (p *testFixture) responsesValidateAgainstFixture(name string) *testFixture {
+func (p *parts) responsesValidateAgainstFixture(name string) *parts {
 	path := filepath.Join(responseFilesDir, name)
 	p.assert.NoError(p.client.ValidateResponses(path, p.responses...))
 

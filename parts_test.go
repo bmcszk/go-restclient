@@ -2,7 +2,9 @@ package restclient_test
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -33,53 +35,51 @@ type parts struct {
 	// baseDir is the single per-test directory every given* file-writing method uses.
 	// (testing.T.TempDir creates a fresh subdirectory on every call, so external
 	// files and the .http file would otherwise land in different directories.)
-	baseDir string
+	baseDir          string
+	capturedRequests []*http.Request
+	// capturedRequestTimes records time.Now() when the test server received each request.
+	capturedRequestTimes []time.Time
+	// capturedBodies holds request bodies read eagerly, because net/http closes the
+	// original body when the handler returns.
+	capturedBodies []string
+	// intercepted holds the outgoing request captured by aMockTransportClient.
+	intercepted *http.Request
+	// trackedValues holds consistency-tracking buckets keyed by tracking name.
+	trackedValues map[string][]string
+	activeTrack   string
+	servers       []*httptest.Server
+	serverURL     string
+	// share the name requestCount in Go.
+	requestHits atomic.Int64
+	// activeServerVars holds the scheme/host/port variables of the running test server.
+	activeServerVars map[string]any
+	parsedFile       *rc.ParsedFile
+	parseErr         error
+	// httpFilePath holds the path of the .http file under test that the file
+	// and fixture builders write and the executeFile / parse builders read back.
+	httpFilePath   string
+	dotenvFiles    []string
+	builtResponses []*rc.Response
+	tokenServerURL string
+	cookieCheck    bool
 }
 
-// testFixture composes the core parts with every domain state struct; all DSL
-// methods are declared on *testFixture in their domain files.
-type testFixture struct {
-	parts
-	serverParts
-	captureParts
-	parseParts
-	fileParts
-	envParts
-	validatorParts
-	oauth2Parts
-	cookiesParts
-}
-
-// newParts returns the given, when and then entry points of the DSL.
-// newFixture constructs the base parts core and returns the shared fixture.
-func newFixture(t *testing.T) *testFixture {
+func newParts(t *testing.T) (given, when, then *parts) {
 	t.Helper()
 
-	fx := &testFixture{
-		parts: parts{
-			T:       t,
-			require: require.New(t),
-			assert:  assert.New(t),
-			baseDir: t.TempDir(),
-		},
+	fx := &parts{
+		T:             t,
+		require:       require.New(t),
+		assert:        assert.New(t),
+		baseDir:       t.TempDir(),
+		trackedValues: make(map[string][]string),
 	}
-	fx.trackedValues = make(map[string][]string)
-
-	return fx
-}
-
-// newParts returns the given/when/then fixture for base-domain tests.
-func newParts(t *testing.T) (given, when, then *testFixture) {
-	t.Helper()
-
-	fx := newFixture(t)
 
 	return fx, fx, fx
 }
 
-func (p *testFixture) and() *testFixture { return p }
+func (p *parts) and() *parts { return p }
 
-// multierrorCount counts the wrapped errors inside err.
 func multierrorCount(err error) int {
 	if err == nil {
 		return 0
@@ -92,8 +92,7 @@ func multierrorCount(err error) int {
 	return 1
 }
 
-// aClient builds the restclient under test with the given options.
-func (p *testFixture) aClient(opts ...rc.ClientOption) *testFixture {
+func (p *parts) aClient(opts ...rc.ClientOption) *parts {
 	client, err := rc.NewClient(opts...)
 	p.require.NoError(err)
 	p.client = client
@@ -101,65 +100,61 @@ func (p *testFixture) aClient(opts ...rc.ClientOption) *testFixture {
 	return p
 }
 
-// validateResponses checks the actual responses against the expected file.
-func (p *testFixture) validateResponses() *testFixture {
+func (p *parts) validateResponses() *parts {
 	p.validationErr = p.client.ValidateResponses(p.expectedFilePath, p.responses...)
 
 	return p
 }
 
-func (p *testFixture) responseAt(i int) *testFixture {
+func (p *parts) responseAt(i int) *parts {
 	p.cursor = i
 
 	return p
 }
 
-// current returns the response the cursor points at.
-func (p *testFixture) current() *rc.Response {
+func (p *parts) current() *rc.Response {
 	p.require.Greater(len(p.responses), p.cursor)
 
 	return p.responses[p.cursor]
 }
 
-func (p *testFixture) responseCode(code int) *testFixture {
+func (p *parts) responseCode(code int) *parts {
 	p.require.Equal(code, p.current().StatusCode)
 
 	return p
 }
 
-func (p *testFixture) responseContains(s string) *testFixture {
+func (p *parts) responseContains(s string) *parts {
 	p.require.Contains(p.current().BodyString, s)
 
 	return p
 }
 
-func (p *testFixture) responseBodyIs(s string) *testFixture {
+func (p *parts) responseBodyIs(s string) *parts {
 	p.require.Equal(s, p.current().BodyString)
 
 	return p
 }
 
-func (p *testFixture) responseHeader(k, v string) *testFixture {
+func (p *parts) responseHeader(k, v string) *parts {
 	p.require.Equal(v, p.current().Headers.Get(k))
 
 	return p
 }
 
-func (p *testFixture) responseCount(n int) *testFixture {
+func (p *parts) responseCount(n int) *parts {
 	p.require.Len(p.responses, n)
 
 	return p
 }
 
-// responseHasNoError asserts the current response has no error.
-func (p *testFixture) responseHasNoError() *testFixture {
+func (p *parts) responseHasNoError() *parts {
 	p.require.NoError(p.current().Error)
 
 	return p
 }
 
-// responseHasError asserts the current response carries an error mentioning every text.
-func (p *testFixture) responseHasError(texts ...string) *testFixture {
+func (p *parts) responseHasError(texts ...string) *parts {
 	p.require.Error(p.current().Error)
 
 	for _, text := range texts {
@@ -169,8 +164,7 @@ func (p *testFixture) responseHasError(texts ...string) *testFixture {
 	return p
 }
 
-// noError asserts the execution succeeded and no response carries an error.
-func (p *testFixture) noError() *testFixture {
+func (p *parts) noError() *parts {
 	p.require.NoError(p.execErr)
 
 	for i, resp := range p.responses {
@@ -186,8 +180,7 @@ func (p *testFixture) noError() *testFixture {
 	return p
 }
 
-// errorContains asserts the execution failed and the error mentions every text.
-func (p *testFixture) errorContains(texts ...string) *testFixture {
+func (p *parts) errorContains(texts ...string) *parts {
 	p.require.Error(p.execErr)
 
 	for _, text := range texts {
@@ -197,15 +190,13 @@ func (p *testFixture) errorContains(texts ...string) *testFixture {
 	return p
 }
 
-// anExpectedResponseFixture points the DSL at a committed expected-response fixture file.
-func (p *testFixture) anExpectedResponseFixture(name string) *testFixture {
+func (p *parts) anExpectedResponseFixture(name string) *parts {
 	p.expectedFilePath = filepath.Join(responseFilesDir, name)
 
 	return p
 }
 
-// aResponseWith appends a hand-constructed rc.Response to p.responses.
-func (p *testFixture) aResponseWith(statusCode int, statusText, body string, headers http.Header) *testFixture {
+func (p *parts) aResponseWith(statusCode int, statusText, body string, headers http.Header) *parts {
 	resp := &rc.Response{
 		StatusCode: statusCode,
 		Status:     statusText,
@@ -219,8 +210,7 @@ func (p *testFixture) aResponseWith(statusCode int, statusText, body string, hea
 	return p
 }
 
-// validationFails asserts the response validation failed with count errors mentioning every text.
-func (p *testFixture) validationFails(count int, texts ...string) *testFixture {
+func (p *parts) validationFails(count int, texts ...string) *parts {
 	p.require.Error(p.validationErr)
 
 	p.require.Equal(count, multierrorCount(p.validationErr))
@@ -232,15 +222,13 @@ func (p *testFixture) validationFails(count int, texts ...string) *testFixture {
 	return p
 }
 
-// validationSucceeds asserts the response validation passed.
-func (p *testFixture) validationSucceeds() *testFixture {
+func (p *parts) validationSucceeds() *parts {
 	p.require.NoError(p.validationErr)
 
 	return p
 }
 
 // clientConfigSnapshot records the client options asserted by clientBaseURLIs /
-// clientDefaultHeaderIs after aClientWithDefaults runs.
 type clientConfigSnapshot struct {
 	baseURL     string
 	headerKey   string
@@ -248,8 +236,7 @@ type clientConfigSnapshot struct {
 	httpTimeout time.Duration
 }
 
-// aClientWithDefaults builds a client from fixed defaults recorded in parts.clientConfig.
-func (p *testFixture) aClientWithDefaults() *testFixture {
+func (p *parts) aClientWithDefaults() *parts {
 	p.clientConfig = clientConfigSnapshot{
 		baseURL:     "https://api.example.com",
 		headerKey:   "X-Default",
@@ -264,36 +251,32 @@ func (p *testFixture) aClientWithDefaults() *testFixture {
 	)
 }
 
-// clientBaseURLIs asserts the client's BaseURL matches the recorded config snapshot.
-func (p *testFixture) clientBaseURLIs(_ string) *testFixture {
+func (p *parts) clientBaseURLIs(_ string) *parts {
 	p.require.Equal(p.clientConfig.baseURL, p.client.BaseURL)
 
 	return p
 }
 
-// clientBaseURLIsEmpty asserts the client's BaseURL is empty.
-func (p *testFixture) clientBaseURLIsEmpty() *testFixture {
+func (p *parts) clientBaseURLIsEmpty() *parts {
 	p.assert.Empty(p.client.BaseURL)
 
 	return p
 }
 
 // clientDefaultHeaderIs after aClientWithDefaults runs.
-func (p *testFixture) clientDefaultHeaderIs(key, _ string) *testFixture {
+func (p *parts) clientDefaultHeaderIs(key, _ string) *parts {
 	p.require.Equal(p.clientConfig.headerValue, p.client.DefaultHeaders.Get(key))
 
 	return p
 }
 
-// clientExists asserts the client is non-nil.
-func (p *testFixture) clientExists() *testFixture {
+func (p *parts) clientExists() *parts {
 	p.require.NotNil(p.client)
 
 	return p
 }
 
-// clientDefaultHeadersEmpty asserts the client's DefaultHeaders map is non-nil and empty.
-func (p *testFixture) clientDefaultHeadersEmpty() *testFixture {
+func (p *parts) clientDefaultHeadersEmpty() *parts {
 	p.require.NotNil(p.client.DefaultHeaders)
 	p.assert.Empty(p.client.DefaultHeaders)
 

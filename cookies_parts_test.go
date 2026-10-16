@@ -10,34 +10,33 @@ import (
 	"text/template"
 
 	rc "github.com/bmcszk/go-restclient"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// cookiesParts holds the cookie/redirect domain state of the fluent test DSL: the
-// cookie round-trip flip flag set by aCookieTestServer's /check-cookie handler and
-// read by cookieWasStored / cookieWasNotStored.
-type cookiesParts struct {
-	// cookieCheck flips true when the cookie server receives its test cookie back.
-	cookieCheck bool
-}
-
-// newCookiesParts returns the given/when/then fixture for the cookie/redirect-domain fluent DSL.
-func newCookiesParts(t *testing.T) (given, when, then *testFixture) {
+func newCookiesParts(t *testing.T) (given, when, then *parts) {
 	t.Helper()
 
-	fx := newFixture(t)
+	fx := &parts{
+		T:       t,
+		require: require.New(t),
+		assert:  assert.New(t),
+		baseDir: t.TempDir(),
+	}
+
 	return fx, fx, fx
 }
 
-// aFreshCookieCheck resets the cookie check flag before a scenario runs.
-func (p *testFixture) aFreshCookieCheck() *testFixture {
+func (p *parts) aFreshCookieCheck() *parts {
 	p.cookieCheck = false
 
 	return p
 }
 
 // aCookieTestServer starts the cookie test server: /set-cookie sets test-cookie=test-value,
-// /check-cookie flips cookiesParts.cookieCheck when it receives the cookie back.
-func (p *testFixture) aCookieTestServer() *testFixture {
+// /check-cookie flips cookieCheck when it receives the cookie back.
+func (p *parts) aCookieTestServer() *parts {
 	p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/set-cookie":
@@ -57,7 +56,7 @@ func (p *testFixture) aCookieTestServer() *testFixture {
 
 // aRedirectTestServer starts the redirect test server: /redirect issues a 302 to /target,
 // /target answers 200 with body "Target page".
-func (p *testFixture) aRedirectTestServer() *testFixture {
+func (p *parts) aRedirectTestServer() *parts {
 	p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/redirect":
@@ -72,8 +71,7 @@ func (p *testFixture) aRedirectTestServer() *testFixture {
 	return p
 }
 
-// aCookieJarClient rebuilds the client with a fresh cookie jar.
-func (p *testFixture) aCookieJarClient() *testFixture {
+func (p *parts) aCookieJarClient() *parts {
 	jar, err := cookiejar.New(nil)
 	p.require.NoError(err)
 
@@ -82,8 +80,7 @@ func (p *testFixture) aCookieJarClient() *testFixture {
 	return p
 }
 
-// aNoRedirectClient rebuilds the client with an HTTP client that refuses to follow redirects.
-func (p *testFixture) aNoRedirectClient() *testFixture {
+func (p *parts) aNoRedirectClient() *parts {
 	noRedirectHTTPClient := &http.Client{
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			return http.ErrUseLastResponse
@@ -95,22 +92,19 @@ func (p *testFixture) aNoRedirectClient() *testFixture {
 	return p
 }
 
-// cookieWasStored asserts the cookie server received its cookie back.
-func (p *testFixture) cookieWasStored() *testFixture {
+func (p *parts) cookieWasStored() *parts {
 	p.assert.True(p.cookieCheck, "cookie check assertion failed")
 
 	return p
 }
 
-// cookieWasNotStored asserts the cookie server did not receive the cookie back.
-func (p *testFixture) cookieWasNotStored() *testFixture {
+func (p *parts) cookieWasNotStored() *parts {
 	p.assert.False(p.cookieCheck, "cookie check assertion failed")
 
 	return p
 }
 
-// aCookieRedirectFixture renders a committed cookie/redirect template into baseDir.
-func (p *testFixture) aCookieRedirectFixture(name string) *testFixture {
+func (p *parts) aCookieRedirectFixture(name string) *parts {
 	tmplContent, err := os.ReadFile(filepath.Join("test", "data", "cookies_redirects", name))
 	p.require.NoError(err)
 
@@ -130,7 +124,7 @@ func (p *testFixture) aCookieRedirectFixture(name string) *testFixture {
 }
 
 // echoes it back wrapped in {"json": ...}, and responds 200 OK with application/json.
-func (p *testFixture) aJsonEchoServer() *testFixture {
+func (p *parts) aJsonEchoServer() *parts {
 	p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
 		var data map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&data)
@@ -141,8 +135,7 @@ func (p *testFixture) aJsonEchoServer() *testFixture {
 	return p
 }
 
-// aRestExtensionServer serves GET with a 200 OK and a fixed JSON body.
-func (p *testFixture) aRestExtensionServer() *testFixture {
+func (p *parts) aRestExtensionServer() *parts {
 	p.aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status": "ok from .rest"}`))

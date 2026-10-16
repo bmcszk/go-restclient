@@ -5,42 +5,38 @@ import (
 	"testing"
 	"time"
 
-	rc "github.com/bmcszk/go-restclient"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// parseParts holds the parse-domain state of the fluent test DSL: the result of
-// parsing the .http file under test plus the parse error asserted by the
-// parsed* builders.
-type parseParts struct {
-	parsedFile *rc.ParsedFile
-	parseErr   error
-}
-
-// newParseParts returns the given/when/then fixture for the parse-domain fluent DSL.
-func newParseParts(t *testing.T) (given, when, then *testFixture) {
+func newParseParts(t *testing.T) (given, when, then *parts) {
 	t.Helper()
 
-	fx := newFixture(t)
+	fx := &parts{
+		T:       t,
+		require: require.New(t),
+		assert:  assert.New(t),
+		baseDir: t.TempDir(),
+	}
+
 	return fx, fx, fx
 }
 
 // parsingFile parses the .http file without executing any request.
-func (p *testFixture) parsingFile() *testFixture {
+func (p *parts) parsingFile() *parts {
 	p.require.NotNil(p.client)
 	p.parsedFile, p.parseErr = p.client.ParseFile(p.httpFilePath)
 
 	return p
 }
 
-func (p *testFixture) parseSucceeded() *testFixture {
+func (p *parts) parseSucceeded() *parts {
 	p.require.NoError(p.parseErr)
 
 	return p
 }
 
-// parseErrorContains asserts parsing failed and the error mentions every given text.
-// Called without texts it only asserts the error itself.
-func (p *testFixture) parseErrorContains(texts ...string) *testFixture {
+func (p *parts) parseErrorContains(texts ...string) *parts {
 	p.require.Error(p.parseErr)
 
 	for _, text := range texts {
@@ -50,91 +46,84 @@ func (p *testFixture) parseErrorContains(texts ...string) *testFixture {
 	return p
 }
 
-func (p *testFixture) parsedRequestCount(n int) *testFixture {
+func (p *parts) parsedRequestCount(n int) *parts {
 	p.require.NotNil(p.parsedFile)
 	p.require.Len(p.parsedFile.Requests, n)
 
 	return p
 }
 
-func (p *testFixture) parsedRequestBodyIs(i int, want string) *testFixture {
+func (p *parts) parsedRequestBodyIs(i int, want string) *parts {
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(want, p.parsedFile.Requests[i].RawBody)
 
 	return p
 }
 
-func (p *testFixture) parsedRequestName(i int, name string) *testFixture {
+func (p *parts) parsedRequestName(i int, name string) *parts {
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(name, p.parsedFile.Requests[i].Name)
 
 	return p
 }
 
-func (p *testFixture) parsedRequestMethod(i int, method string) *testFixture {
+func (p *parts) parsedRequestMethod(i int, method string) *parts {
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(method, p.parsedFile.Requests[i].Method)
 
 	return p
 }
 
-// parsedRequestRawURLIs asserts the raw (pre-substitution) URL of the parsed request
-// at index i.
-func (p *testFixture) parsedRequestRawURLIs(i int, rawURL string) *testFixture {
+func (p *parts) parsedRequestRawURLIs(i int, rawURL string) *parts {
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(rawURL, p.parsedFile.Requests[i].RawURLString)
 
 	return p
 }
 
-func (p *testFixture) parsedRequestDisabled(i int, want bool) *testFixture {
+func (p *parts) parsedRequestDisabled(i int, want bool) *parts {
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(want, p.parsedFile.Requests[i].Disabled)
 
 	return p
 }
 
-func (p *testFixture) parsedRequestSleep(i int, want time.Duration) *testFixture {
+func (p *parts) parsedRequestSleep(i int, want time.Duration) *parts {
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(want, p.parsedFile.Requests[i].SleepDuration)
 
 	return p
 }
 
-// parsedRequestDisabledExpr asserts the conditional @disabled expression (after `!`) at index i equals want.
-func (p *testFixture) parsedRequestDisabledExpr(i int, want string) *testFixture {
+func (p *parts) parsedRequestDisabledExpr(i int, want string) *parts {
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(want, p.parsedFile.Requests[i].DisabledExpr)
 
 	return p
 }
 
-// parsedRequestLoopCount asserts the literal `@loop for N` count on the parsed request at index i.
-func (p *testFixture) parsedRequestLoopCount(i int, want int) *testFixture {
+func (p *parts) parsedRequestLoopCount(i int, want int) *parts {
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(want, p.parsedFile.Requests[i].LoopFor)
 
 	return p
 }
 
-// parsedRequestLoopExpr asserts the raw expression on `@loop for {{expr}}` of the parsed request at index i.
-func (p *testFixture) parsedRequestLoopExpr(i int, want string) *testFixture {
+func (p *parts) parsedRequestLoopExpr(i int, want string) *parts {
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(want, p.parsedFile.Requests[i].LoopExpr)
 
 	return p
 }
 
-// parsedRequestLoopCollection asserts the collection name on `@loop for item of collection` at index i.
-func (p *testFixture) parsedRequestLoopCollection(i int, want string) *testFixture {
+func (p *parts) parsedRequestLoopCollection(i int, want string) *parts {
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(want, p.parsedFile.Requests[i].LoopCollection)
 
 	return p
 }
 
-// parsedRequestRefs asserts the parsed request at index i declares a @ref/@forceRef entry.
-func (p *testFixture) parsedRequestRefs(i int, wantName string, wantForce bool) *testFixture {
+func (p *parts) parsedRequestRefs(i int, wantName string, wantForce bool) *parts {
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	req := p.parsedFile.Requests[i]
 	p.require.NotEmpty(req.Refs, "request %d has no refs", i)
@@ -155,7 +144,7 @@ func (p *testFixture) parsedRequestRefs(i int, wantName string, wantForce bool) 
 }
 
 // executingRequestAt parses the .http file and executes only the request at the given index.
-func (p *testFixture) executingRequestAt(index int) *testFixture {
+func (p *parts) executingRequestAt(index int) *parts {
 	p.require.NotNil(p.client)
 
 	parsed, err := p.client.ParseFile(p.httpFilePath)

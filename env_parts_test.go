@@ -6,46 +6,44 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-type envParts struct {
-	// dotenvFiles lists dotenv files the env builders created (for assertions/cleanup).
-	dotenvFiles []string
-}
-
-// newEnvParts returns the given/when/then fixture for env-domain builders.
-func newEnvParts(t *testing.T) (given, when, then *testFixture) {
+func newEnvParts(t *testing.T) (given, when, then *parts) {
 	t.Helper()
 
-	fx := newFixture(t)
+	fx := &parts{
+		T:       t,
+		require: require.New(t),
+		assert:  assert.New(t),
+		baseDir: t.TempDir(),
+	}
 
 	return fx, fx, fx
 }
 
 // aDotEnvFile writes content to <baseDir>/.env. The parser resolves .env relative to the
 // so this works for aTempDir-based .http files. No-op safety: writing empty content is allowed.
-func (p *testFixture) aDotEnvFile(content string) *testFixture {
+func (p *parts) aDotEnvFile(content string) *parts {
 	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, ".env"), []byte(content), 0644))
 	p.dotenvFiles = append(p.dotenvFiles, filepath.Join(p.baseDir, ".env"))
 	return p
 }
 
-// aDotEnvFileRemoved removes <baseDir>/.env if present (os.Remove, ignore not-exists) so a
-// previous scenario's .env cannot leak into the next subtest.
-func (p *testFixture) aDotEnvFileRemoved() *testFixture {
+func (p *parts) aDotEnvFileRemoved() *parts {
 	_ = os.Remove(filepath.Join(p.baseDir, ".env"))
 	return p
 }
 
-// withEnv sets an environment variable for the duration of the test.
-func (p *testFixture) withEnv(k, v string) *testFixture {
+func (p *parts) withEnv(k, v string) *parts {
 	p.Setenv(k, v)
 
 	return p
 }
 
-// aClientWithEnvironment builds the client with WithEnvironment unless env is empty.
-func (p *testFixture) aClientWithEnvironment(env string) *testFixture {
+func (p *parts) aClientWithEnvironment(env string) *parts {
 	var client *rc.Client
 	var err error
 	if env != "" {
@@ -59,7 +57,7 @@ func (p *testFixture) aClientWithEnvironment(env string) *testFixture {
 }
 
 // anEnvJsonFile writes a committed env-json template with {{SERVER_URL}} resolved.
-func (p *testFixture) anEnvJsonFile(fileName, templatePath, serverURL string) *testFixture {
+func (p *parts) anEnvJsonFile(fileName, templatePath, serverURL string) *parts {
 	content, err := os.ReadFile(templatePath)
 	p.require.NoError(err)
 	resolved := strings.ReplaceAll(string(content), "{{SERVER_URL}}", serverURL)
@@ -68,14 +66,12 @@ func (p *testFixture) anEnvJsonFile(fileName, templatePath, serverURL string) *t
 	return p
 }
 
-// aDotEnvNamedFile writes content to <baseDir>/.env.<name> for --env-style scenarios.
-func (p *testFixture) aDotEnvNamedFile(name, content string) *testFixture {
+func (p *parts) aDotEnvNamedFile(name, content string) *parts {
 	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, ".env."+name), []byte(content), 0644))
 	return p
 }
 
-// aClientWithEnvName builds the client with WithEnvName (named dotenv file).
-func (p *testFixture) aClientWithEnvName(name string) *testFixture {
+func (p *parts) aClientWithEnvName(name string) *parts {
 	p.aClient(rc.WithEnvName(name))
 	return p
 }

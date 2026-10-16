@@ -10,37 +10,30 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	rc "github.com/bmcszk/go-restclient"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// serverParts holds the server domain state of the fluent test DSL: the httptest
-// servers started by the server builders, the address of the most recent one,
-// its scheme/host/port variables and the request counter shared with the DSL.
-type serverParts struct {
-	// servers holds every httptest server started by the server builders.
-	servers []*httptest.Server
-	// serverURL holds the address of the most recently started test server.
-	serverURL string
-	// share the name requestCount in Go.
-	requestHits atomic.Int64
-	// activeServerVars holds the scheme/host/port variables of the running test server.
-	activeServerVars map[string]any
-}
-
-// newServerParts returns the given/when/then fixture for the server-domain fluent DSL.
-func newServerParts(t *testing.T) (given, when, then *testFixture) {
+func newServerParts(t *testing.T) (given, when, then *parts) {
 	t.Helper()
 
-	fx := newFixture(t)
+	fx := &parts{
+		T:       t,
+		require: require.New(t),
+		assert:  assert.New(t),
+		baseDir: t.TempDir(),
+	}
+
 	return fx, fx, fx
 }
 
 // aHttpServer counts requests; bodies are read eagerly because net/http closes them on return.
-func (p *testFixture) aHttpServer(h http.HandlerFunc) *testFixture {
+func (p *parts) aHttpServer(h http.HandlerFunc) *parts {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		r.Body = io.NopCloser(strings.NewReader(string(body)))
@@ -87,7 +80,7 @@ func serveCannedRoute(w http.ResponseWriter, r *http.Request, route cannedRoute)
 
 // aCannedServer serves a fixed routing table of canned responses: exact path lookup,
 // 405 on method mismatch, 404 for unknown paths. Replaces multi-path handler vars.
-func (p *testFixture) aCannedServer(routes map[string]cannedRoute) *testFixture {
+func (p *parts) aCannedServer(routes map[string]cannedRoute) *parts {
 	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
 		route, ok := routes[r.URL.Path]
 		if !ok {
@@ -99,9 +92,7 @@ func (p *testFixture) aCannedServer(routes map[string]cannedRoute) *testFixture 
 	})
 }
 
-// anEchoServer echoes the request body back verbatim with 200 OK — for tests that only
-// need a round-tripped body (e.g. external-file encoding round trips).
-func (p *testFixture) anEchoServer() *testFixture {
+func (p *parts) anEchoServer() *parts {
 	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
@@ -109,8 +100,7 @@ func (p *testFixture) anEchoServer() *testFixture {
 	})
 }
 
-// withServerAddressVars stores scheme/host/port vars and rebuilds the client with them.
-func (p *testFixture) withServerAddressVars() *testFixture {
+func (p *parts) withServerAddressVars() *parts {
 	parsed, err := url.Parse(p.serverURL)
 	p.require.NoError(err)
 
@@ -125,8 +115,7 @@ func (p *testFixture) withServerAddressVars() *testFixture {
 	return p
 }
 
-// aTLSServer hosts an echo handler over httptest TLS (self-signed cert).
-func (p *testFixture) aTLSServer() *testFixture {
+func (p *parts) aTLSServer() *parts {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		r.Body = io.NopCloser(strings.NewReader(string(body)))
@@ -142,8 +131,7 @@ func (p *testFixture) aTLSServer() *testFixture {
 	return p
 }
 
-// aTLSInsecureClient builds a restclient trusting the httptest self-signed cert.
-func (p *testFixture) aTLSInsecureClient() *testFixture {
+func (p *parts) aTLSInsecureClient() *parts {
 	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
 
 	p.aClient(rc.WithHTTPClient(httpClient))
@@ -153,7 +141,7 @@ func (p *testFixture) aTLSInsecureClient() *testFixture {
 
 // aMockTransportClient builds the client under test with a mock round tripper that
 // records the outgoing request into parts.intercepted and answers 200 with a fixed body.
-func (p *testFixture) aMockTransportClient() *testFixture {
+func (p *parts) aMockTransportClient() *parts {
 	transport := &mockRoundTripper{
 		RoundTripFunc: func(req *http.Request) (*http.Response, error) {
 			p.intercepted = req.Clone(req.Context())
@@ -171,12 +159,10 @@ func (p *testFixture) aMockTransportClient() *testFixture {
 	return p
 }
 
-// mockRoundTripper adapts a function into an http.RoundTripper for the DSL.
 type mockRoundTripper struct {
 	RoundTripFunc func(req *http.Request) (*http.Response, error)
 }
 
-// RoundTrip delegates to the configured function.
 func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	if m.RoundTripFunc != nil {
 		return m.RoundTripFunc(req)
@@ -185,21 +171,18 @@ func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 	return nil, errors.New("RoundTripFunc not set")
 }
 
-// graphqlResponse is the mocked server response body for GraphQL requests.
 type graphqlResponse struct {
 	Data   any            `json:"data,omitempty"`
 	Errors []graphqlError `json:"errors,omitempty"`
 }
 
-// graphqlError mirrors the GraphQL error entry shape.
 type graphqlError struct {
 	Message   string `json:"message"`
 	Locations []any  `json:"locations,omitempty"`
 	Path      []any  `json:"path,omitempty"`
 }
 
-// aGraphQLServer serves the given responses in order, one per request, as HTTP 200 JSON.
-func (p *testFixture) aGraphQLServer(responses ...graphqlResponse) *testFixture {
+func (p *parts) aGraphQLServer(responses ...graphqlResponse) *parts {
 	idx := 0
 	return p.aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -213,7 +196,7 @@ func (p *testFixture) aGraphQLServer(responses ...graphqlResponse) *testFixture 
 	})
 }
 
-func (p *testFixture) requestCount(n int64) *testFixture {
+func (p *parts) requestCount(n int64) *parts {
 	p.require.Equal(n, p.requestHits.Load())
 
 	return p
