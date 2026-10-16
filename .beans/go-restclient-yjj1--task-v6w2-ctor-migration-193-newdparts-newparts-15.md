@@ -5,8 +5,11 @@ status: completed
 type: task
 priority: normal
 created_at: 2026-10-16T16:41:53Z
-updated_at: 2026-10-16T16:57:35Z
+updated_at: 2026-10-16T18:33:09Z
 parent: go-restclient-zvmy
 ---
 
 ## Completed inside V6W1 commit (ctor renames were required for compilability — see W1 PoW). No separate commit needed.
+
+
+Residual: none (folded into V6W1 commit)
