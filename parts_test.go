@@ -87,6 +87,42 @@ func newParts(t *testing.T) (given, when, then *parts) {
 	return p, p, p
 }
 
+func newCaptureParts(t *testing.T) (given, when, then *captureParts) {
+	t.Helper()
+
+	p, _, _ := newParts(t)
+	c := &p.captureParts
+
+	return c, c, c
+}
+
+func newParseParts(t *testing.T) (given, when, then *parseParts) {
+	t.Helper()
+
+	p, _, _ := newParts(t)
+	c := &p.parseParts
+
+	return c, c, c
+}
+
+func newOauth2Parts(t *testing.T) (given, when, then *oauth2Parts) {
+	t.Helper()
+
+	p, _, _ := newParts(t)
+	c := &p.oauth2Parts
+
+	return c, c, c
+}
+
+func newCookiesParts(t *testing.T) (given, when, then *cookiesParts) {
+	t.Helper()
+
+	p, _, _ := newParts(t)
+	c := &p.cookiesParts
+
+	return c, c, c
+}
+
 func (p *parts) and() *parts { return p }
 
 // multierrorCount counts the wrapped errors inside err.

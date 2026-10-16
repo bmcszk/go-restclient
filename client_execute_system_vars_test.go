@@ -18,7 +18,7 @@ import (
 // base64encode system variable (from system_vars_test.go)
 
 func TestSystemVar_Base64Encode(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -40,7 +40,7 @@ func TestSystemVar_Base64Encode(t *testing.T) {
 }
 
 func TestSystemVar_Base64EncodeInBody(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -65,7 +65,7 @@ func TestSystemVar_Base64EncodeInBody(t *testing.T) {
 // .hresp @name=value define extraction (from hresp_vars_test.go)
 
 func TestExtractHrespDefines_NoDefines(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aClient().and().
@@ -90,7 +90,7 @@ Content-Type: application/json
 // TestExtractHrespDefines_SimpleDefines verifies that @name=value pairs are extracted and
 // substituted into the expected body via {{name}} placeholders.
 func TestExtractHrespDefines_SimpleDefines(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aClient().and().
@@ -118,7 +118,7 @@ Content-Type: application/json
 // TestExtractHrespDefines_ExtraSpaces verifies the extractor tolerates leading/trailing
 // whitespace around both name and value.
 func TestExtractHrespDefines_ExtraSpaces(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aClient().and().
@@ -139,7 +139,7 @@ HTTP/1.1 200 OK`,
 // TestExtractHrespDefines_MixedWithComments verifies defines interleave with comments and
 // blank lines before the status line.
 func TestExtractHrespDefines_MixedWithComments(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aClient().and().
@@ -165,7 +165,7 @@ Body content here.`,
 // TestExtractHrespDefines_MalformedNoEquals verifies a malformed define (no `=` sign) is
 // silently dropped and does not affect parsing of the status line.
 func TestExtractHrespDefines_MalformedNoEquals(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aClient().and().
@@ -185,7 +185,7 @@ HTTP/1.1 200 OK`,
 // TestExtractHrespDefines_MalformedEmptyName verifies a define with an empty name (`@ = value`)
 // is silently dropped.
 func TestExtractHrespDefines_MalformedEmptyName(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aClient().and().
@@ -204,7 +204,7 @@ HTTP/1.1 200 OK`,
 
 // TestExtractHrespDefines_EmptyValue verifies a define with an empty value substitutes to "".
 func TestExtractHrespDefines_EmptyValue(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aClient().and().
@@ -224,7 +224,7 @@ HTTP/1.1 200 OK`,
 // TestExecuteFile_WithGuidSystemVariable: System Variables {{$guid}} and {{$uuid}}.
 
 func TestExecuteFile_WithGuidSystemVariable(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -254,7 +254,7 @@ func TestExecuteFile_WithGuidSystemVariable(t *testing.T) {
 
 // TestExecuteFile_WithIsoTimestampSystemVariable: System Variables {{$isoTimestamp}}.
 func TestExecuteFile_WithIsoTimestampSystemVariable(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -281,7 +281,7 @@ func TestExecuteFile_WithIsoTimestampSystemVariable(t *testing.T) {
 
 // TestExecuteFile_WithDatetimeSystemVariables: System Variables {{$datetime "format"}}.
 func TestExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -340,7 +340,7 @@ func TestExecuteFile_WithDatetimeSystemVariables(t *testing.T) {
 
 // TestExecuteFile_WithTimestampSystemVariable: System Variables {{$timestamp}}.
 func TestExecuteFile_WithTimestampSystemVariable(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -373,7 +373,7 @@ func TestExecuteFile_WithTimestampSystemVariable(t *testing.T) {
 
 // TestExecuteFile_WithRandomIntSystemVariable_ValidMinMaxArgs: System Variables {{$randomInt [MIN MAX]}}.
 func TestExecuteFile_WithRandomIntSystemVariable_ValidMinMaxArgs(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -405,7 +405,7 @@ func TestExecuteFile_WithRandomIntSystemVariable_ValidMinMaxArgs(t *testing.T) {
 
 // TestExecuteFile_WithRandomIntSystemVariable_NoArgs: System Variables {{$randomInt}} with no args.
 func TestExecuteFile_WithRandomIntSystemVariable_NoArgs(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -438,7 +438,7 @@ func TestExecuteFile_WithRandomIntSystemVariable_NoArgs(t *testing.T) {
 // TestExecuteFile_WithRandomIntSystemVariable_SwappedMinMaxArgs: System Variables {{$randomInt [MIN MAX]}}.
 // URL / header / body. Successful 200 because the runtime does not reject the syntax.
 func TestExecuteFile_WithRandomIntSystemVariable_SwappedMinMaxArgs(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -466,7 +466,7 @@ func TestExecuteFile_WithRandomIntSystemVariable_SwappedMinMaxArgs(t *testing.T)
 
 // TestExecuteFile_WithRandomIntSystemVariable_MalformedArgs: System Variables {{$randomInt [MIN MAX]}}.
 func TestExecuteFile_WithRandomIntSystemVariable_MalformedArgs(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -496,7 +496,7 @@ func TestExecuteFile_WithRandomIntSystemVariable_MalformedArgs(t *testing.T) {
 //
 // regex (NotEmpty) + NotContains "{{" + (for first/last/full) field-count.
 func TestExecuteFile_WithFakerPersonData(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -536,7 +536,7 @@ func TestExecuteFile_WithFakerPersonData(t *testing.T) {
 
 // TestExecuteFile_WithContactAndInternetFakerData: Faker Library - Contact and Internet Data.
 func TestExecuteFile_WithContactAndInternetFakerData(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -591,7 +591,7 @@ func TestExecuteFile_WithContactAndInternetFakerData(t *testing.T) {
 
 // {{$randomPassword N}} substitutes an N-char password from the default charset.
 func TestExecuteFile_WithRandomPasswordSystemVariable_ValidLength(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -612,7 +612,7 @@ POST {{server}}/pw
 
 // programmatic "password.charset" overrides the random-password charset.
 func TestExecuteFile_WithRandomPasswordSystemVariable_CharsetOverride(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -635,7 +635,7 @@ POST {{server}}/pw
 
 // A malformed random-password length leaves the placeholder unresolved.
 func TestParseFile_WithRandomPasswordSystemVariable_MalformedLength(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpFile(`### pw
@@ -654,7 +654,7 @@ POST https://example.com/pw
 
 // %7B%7B$dotenv VAR%7D%7D in a URL query resolves from .env (URL-safe embedding).
 func TestExecuteFile_WithDotEnvSystemVariable_URLEncodedPlaceholder(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -674,7 +674,7 @@ GET {{server}}/q?token=%7B%7B$dotenv SECRET_VAR%7D%7D`).and().
 
 // URL-encoded placeholder for an undefined dotenv variable resolves to empty.
 func TestExecuteFile_WithDotEnvSystemVariable_URLEncodedUndefinedIsEmpty(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -695,7 +695,7 @@ GET {{server}}/q?token=%7B%7B$dotenv MISSING_VAR%7D%7D`).and().
 // %7B%7B$processEnv VAR%7D%7D in a URL query resolves from the process env.
 func TestExecuteFile_WithProcessEnvSystemVariable_URLEncodedPlaceholder(t *testing.T) {
 	t.Setenv("GO_RESTCLIENT_ENCODED_VAR", "enc-val")
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -717,7 +717,7 @@ GET {{server}}/q?v=%7B%7B$processEnv GO_RESTCLIENT_ENCODED_VAR%7D%7D`).and().
 // Capture paths verified against test/data/system_variables/multiple_system_vars_consistency.http.
 
 func TestExecuteFile_MultipleSystemVarsConsistency(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -765,7 +765,7 @@ func TestExecuteFile_MultipleSystemVarsConsistency(t *testing.T) {
 // @scenarioId = {{$uuid}} maintains the same value throughout all uses in the file.
 
 func TestExecuteFile_UuidVariableConsistency(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, r *http.Request) {

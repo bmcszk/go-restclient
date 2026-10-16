@@ -1,11 +1,11 @@
 ---
 # go-restclient-v5w3i0lu
 title: 'V5W3: 4 new constructors (newCaptureParts/newParseParts/newOauth2Parts/newCookiesParts) + swap 174 newParts(t) call lines to domain ctors'
-status: todo
+status: completed
 type: task
 priority: normal
 created_at: 2026-10-16T12:08:57Z
-updated_at: 2026-10-16T12:09:21Z
+updated_at: 2026-10-16T12:53:36Z
 parent: go-restclient-495b
 ---
 
@@ -15,3 +15,9 @@ gofmt/build/vet/lint `0 issues.`/test ok; junit 315; grep 'newParts(t)' outside 
 ## COMMENT GATE: per-file comment diff; added comment = FAILED.
 ## Skills for coder
 ~/.agents/skills/go-dev, ~/.agents/skills/coding-rules — read §Comments/§File-structure first; binding.
+
+## Proof of Work (orchestrator-verified)
+- 4 ctors added (newCaptureParts/newParseParts/newOauth2Parts/newCookiesParts in parts_test.go); 193 construction lines swapped: capture domain 150 (control 42+core 29+sysvars 27+vars 27+refs 18+graphql 7), parsefile 27→newParseParts, oauth2 12, cookies 4; validator + validator_placeholders keep newParts (pure core)
+- test-name set unchanged (0 added/removed); only ctor lines edited per user mandate
+- gates re-run: gofmt empty, build/vet 0, lint `0 issues.`, junit parity 315
+- Residual: V5W4 comment sweep + final audit

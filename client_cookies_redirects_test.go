@@ -6,7 +6,7 @@ import (
 )
 
 func TestCookieJarHandling_DefaultBehavior(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCookiesParts(t)
 
 	given.
 		aFreshCookieCheck().and().
@@ -24,7 +24,7 @@ func TestCookieJarHandling_DefaultBehavior(t *testing.T) {
 		cookieWasStored()
 }
 func TestCookieJarHandling_NoCookieJarDirective(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCookiesParts(t)
 
 	given.
 		aFreshCookieCheck().and().
@@ -42,7 +42,7 @@ func TestCookieJarHandling_NoCookieJarDirective(t *testing.T) {
 		cookieWasNotStored()
 }
 func TestRedirectHandling_FollowsByDefault(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCookiesParts(t)
 
 	given.
 		aRedirectTestServer().and().
@@ -60,7 +60,7 @@ func TestRedirectHandling_FollowsByDefault(t *testing.T) {
 		responseBodyIs("Target page")
 }
 func TestRedirectHandling_NoRedirectDirective(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCookiesParts(t)
 
 	given.
 		aRedirectTestServer().and().

@@ -10,7 +10,7 @@ import (
 
 // `# @loop for 3` parses and stores the literal count.
 func TestParseFile_LoopForLiteralStoresCount(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpFile(`### loop
@@ -28,7 +28,7 @@ GET https://example.com/loop`).and().
 
 // `# @loop for {{n}}` parses and stores the raw expression.
 func TestParseFile_LoopForVariableStoresExpression(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpFile(`### loop
@@ -46,7 +46,7 @@ GET https://example.com/loop`).and().
 
 // `# @loop for item of items` parses and stores the collection variable name.
 func TestParseFile_LoopOfCollectionStoresCollectionRef(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpFileFromTemplate("loop_collection.http").and().
@@ -62,7 +62,7 @@ func TestParseFile_LoopOfCollectionStoresCollectionRef(t *testing.T) {
 
 // `# @loop for 3` sends the request exactly 3 times.
 func TestExecuteFile_LoopForLiteralRunsNTimes(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -81,7 +81,7 @@ GET {{server}}/loop`).and().
 
 // `# @loop for {{n}}` resolves n at runtime and runs that many times.
 func TestExecuteFile_LoopForVariableRunsNTimes(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -100,7 +100,7 @@ GET {{server}}/loop`).and().
 
 // loop counts of 0 and negative values produce zero HTTP requests, zero response entries, and no execution error.
 func TestExecuteFile_LoopZeroOrNegativeIsNoop(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -118,7 +118,7 @@ func TestExecuteFile_LoopZeroOrNegativeIsNoop(t *testing.T) {
 
 // a 2-element collection produces 2 hits with `{{item.name}}` substituted per element.
 func TestExecuteFile_LoopOfCollectionRunsPerElement(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -142,7 +142,7 @@ func TestExecuteFile_LoopOfCollectionRunsPerElement(t *testing.T) {
 
 // per-iteration `{{$index}}` is substituted as the 0-based index.
 func TestExecuteFile_LoopIndexOfCollectionAvailable(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -166,7 +166,7 @@ func TestExecuteFile_LoopIndexOfCollectionAvailable(t *testing.T) {
 
 // named looped request exposes responses as name0, name1, ... addressable via `{{nameN.response.body.X}}`.
 func TestExecuteFile_LoopNamedResponsesAddressableAsNameN(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -186,7 +186,7 @@ func TestExecuteFile_LoopNamedResponsesAddressableAsNameN(t *testing.T) {
 
 // an empty collection produces zero HTTP requests and zero response entries with no execution error.
 func TestExecuteFile_LoopEmptyCollectionIsNoop(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -204,7 +204,7 @@ func TestExecuteFile_LoopEmptyCollectionIsNoop(t *testing.T) {
 
 // a non-array collection variable yields a clear execution error naming the collection.
 func TestExecuteFile_LoopNonArrayCollectionErrors(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -220,7 +220,7 @@ func TestExecuteFile_LoopNonArrayCollectionErrors(t *testing.T) {
 
 // a collection variable that is never defined yields a runtime error naming the missing variable.
 func TestExecuteFile_LoopUnknownCollectionVarErrors(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -238,7 +238,7 @@ GET {{server}}/items`).and().
 
 // `# @loop for item of items` with a []string programmatic variable loops per element (liftStrings).
 func TestExecuteFile_LoopOfStringsCollectionRunsPerElement(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -262,7 +262,7 @@ GET {{server}}/{{item}}`).and().
 
 // A JSON-encoded string collection variable decodes into elements (decodeStringCollection).
 func TestExecuteFile_LoopOfJsonEncodedCollectionRunsPerElement(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -284,7 +284,7 @@ GET {{server}}/{{item}}`).and().
 
 // An empty JSON-encoded string collection produces zero requests.
 func TestExecuteFile_LoopOfJsonEncodedEmptyCollectionIsNoop(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -303,7 +303,7 @@ GET {{server}}/{{item}}`).and().
 
 // A non-JSON string collection errors with the collection name.
 func TestExecuteFile_LoopOfJsonEncodedMalformedCollectionErrors(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -321,7 +321,7 @@ GET {{server}}/{{item}}`).and().
 
 // A collection of JSON numbers loop-substitutes as bare JSON numbers.
 func TestExecuteFile_LoopOfNumericCollectionSubstitutesNumbers(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -345,7 +345,7 @@ GET {{server}}/id/{{item}}`).and().
 
 // A collection of objects loop-substitutes as compact JSON per element.
 func TestExecuteFile_LoopOfObjectCollectionSubstitutesJSON(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -372,7 +372,7 @@ GET {{server}}/u/{{item}}`).and().
 
 // A nil collection element substitutes as an empty string.
 func TestExecuteFile_LoopOfCollectionWithNilElementSubstitutesEmpty(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -397,7 +397,7 @@ GET {{server}}/x/{{item}}`).and().
 }
 
 func TestParseFile_DisabledDirectiveSetsFlag(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpFile(`### disabled
@@ -414,7 +414,7 @@ GET https://example.com/api`).and().
 }
 
 func TestParseFile_DisabledDirectiveSlashSlashStyle(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpFile(`### disabled
@@ -431,7 +431,7 @@ GET https://example.com/api`).and().
 }
 
 func TestExecuteFile_DisabledRequest_SkipsWithoutHTTPCall(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -449,7 +449,7 @@ GET {{server}}/skipped`).and().
 }
 
 func TestExecuteFile_DisabledAmongEnabled_KeepsStableIndexing(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -469,7 +469,7 @@ func TestExecuteFile_DisabledAmongEnabled_KeepsStableIndexing(t *testing.T) {
 }
 
 func TestExecuteFile_DisabledIsNotAnError(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpFile(`### disabled
@@ -486,7 +486,7 @@ GET https://disabled.invalid/api`).and().
 
 // parser stores the conditional expression text after `!` and does NOT set the plain Disabled flag.
 func TestParseFile_ConditionalDisabledWithBang_TogglesPlainDisabled(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpFile(`### literal-true
@@ -505,7 +505,7 @@ GET https://example.com/api`).and().
 
 // `flag=true` -> request skipped; the test server receives zero hits, response entry is marked Skipped.
 func TestExecuteFile_ConditionalDisabled_TruthyExprSkips(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -524,7 +524,7 @@ func TestExecuteFile_ConditionalDisabled_TruthyExprSkips(t *testing.T) {
 
 // `flag=false` -> request runs; the test server receives one hit, response entry is NOT marked Skipped.
 func TestExecuteFile_ConditionalDisabled_FalsyExprRuns(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -543,7 +543,7 @@ func TestExecuteFile_ConditionalDisabled_FalsyExprRuns(t *testing.T) {
 
 // numeric `flag=0` -> request runs.
 func TestExecuteFile_ConditionalDisabled_ZeroIsFalsy(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -562,7 +562,7 @@ func TestExecuteFile_ConditionalDisabled_ZeroIsFalsy(t *testing.T) {
 
 // numeric `flag=1` -> request skipped.
 func TestExecuteFile_ConditionalDisabled_NumberOneIsTruthy(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -581,7 +581,7 @@ func TestExecuteFile_ConditionalDisabled_NumberOneIsTruthy(t *testing.T) {
 
 // substituted expr is empty -> request runs.
 func TestExecuteFile_ConditionalDisabled_EmptyStringRuns(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -600,7 +600,7 @@ func TestExecuteFile_ConditionalDisabled_EmptyStringRuns(t *testing.T) {
 
 // substituted expr is any non-empty non-"true"/non-zero string -> request skipped.
 func TestExecuteFile_ConditionalDisabled_NonEmptySkips(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -619,7 +619,7 @@ func TestExecuteFile_ConditionalDisabled_NonEmptySkips(t *testing.T) {
 
 // `{{missing}}` references an undefined variable; execution must surface an error naming it, NOT skip silently.
 func TestExecuteFile_ConditionalDisabled_UnknownVariableErrors(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -635,7 +635,7 @@ func TestExecuteFile_ConditionalDisabled_UnknownVariableErrors(t *testing.T) {
 
 // `flag="TRUE"` -> request skipped (case-insensitive truthy).
 func TestExecuteFile_ConditionalDisabled_CaseInsensitiveTrue(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -654,7 +654,7 @@ func TestExecuteFile_ConditionalDisabled_CaseInsensitiveTrue(t *testing.T) {
 
 // `flag="False"` -> request runs (case-insensitive falsy).
 func TestExecuteFile_ConditionalDisabled_CaseInsensitiveFalse(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -673,7 +673,7 @@ func TestExecuteFile_ConditionalDisabled_CaseInsensitiveFalse(t *testing.T) {
 
 // `# @sleep 250` parses and stores 250ms duration.
 func TestParseFile_SleepDirectiveStoresDuration(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpFile(`### sleeping
@@ -691,7 +691,7 @@ GET https://example.com/api`).and().
 
 // `// @sleep 250` also parses (mirror of disabled).
 func TestParseFile_SleepDirectiveSlashSlashStyle(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		aHttpFile(`### sleeping
@@ -709,7 +709,7 @@ GET https://example.com/api`).and().
 
 // TestParseFile_SleepNonNumericArgErrors verifies @sleep with a non-numeric arg fails to parse and names the directive.
 func TestParseFile_SleepNonNumericArgErrors(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 	given.
 		aHttpFile(`### sleeping
 # @sleep abc
@@ -721,7 +721,7 @@ GET https://example.com/api`).and().
 
 // TestParseFile_SleepNegativeArgErrors verifies @sleep with a negative arg fails to parse and names the directive.
 func TestParseFile_SleepNegativeArgErrors(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 	given.
 		aHttpFile(`### sleeping
 # @sleep -5
@@ -733,7 +733,7 @@ GET https://example.com/api`).and().
 
 // TestParseFile_SleepMissingArgErrors verifies @sleep with no arg fails to parse and names the directive.
 func TestParseFile_SleepMissingArgErrors(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 	given.
 		aHttpFile(`### sleeping
 # @sleep
@@ -745,7 +745,7 @@ GET https://example.com/api`).and().
 
 // single request with `# @sleep 200` must take >= ~200ms before sending; measure elapsed with loose lower bound.
 func TestExecuteFile_SleepWaitsBeforeSend(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -769,7 +769,7 @@ GET {{server}}/slow`).and().
 
 // `@sleep 0` is a valid no-op — runs immediately, no error, 1 hit.
 func TestExecuteFile_SleepZeroIsNoop(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
@@ -793,7 +793,7 @@ GET {{server}}/instant`).and().
 
 // two requests, only second has `# @sleep 200`; inter-request gap between server-side timestamps >= ~200ms.
 func TestExecuteFile_SleepAppliesPerRequest(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newCaptureParts(t)
 
 	given.
 		anEchoServer().and().
