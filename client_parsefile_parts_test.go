@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	rc "github.com/bmcszk/go-restclient"
-	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/transform"
 )
 
@@ -133,53 +132,6 @@ func (s *cookiesState) aRestExtensionServer() *parts {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status": "ok from .rest"}`))
 	})
-}
-
-// anExternalFile writes the request file under test verbatim to <baseDir>/name.
-
-func (c *captureState) requestRawBodyContains(fragments ...string) *parts {
-	p := c.parts
-	current := p.current()
-	p.require.NotNil(current.Request)
-
-	for _, fragment := range fragments {
-		p.assert.Contains(current.Request.RawBody, fragment)
-	}
-
-	return p
-}
-
-func (c *captureState) requestRawBodyMatchesRegexp(pattern string) *parts {
-	p := c.parts
-	current := p.current()
-	p.require.NotNil(current.Request)
-	p.assert.Regexp(pattern, current.Request.RawBody)
-
-	return p
-}
-
-// serverReceivedBodyParsesAsJSON asserts the captured body at index is valid JSON.
-func (c *captureState) serverReceivedBodyParsesAsJSON(index int) *parts {
-	p := c.parts
-	p.require.Greater(len(p.capturedBodies), index)
-
-	var data map[string]any
-	p.require.NoError(json.Unmarshal([]byte(p.capturedBodies[index]), &data))
-
-	return p
-}
-
-// serverReceivedLatin1BodyIs asserts the captured body at index equals the expected text
-// after decoding it from ISO-8859-1.
-func (c *captureState) serverReceivedLatin1BodyIs(index int, body string) *parts {
-	p := c.parts
-	p.require.Greater(len(p.capturedBodies), index)
-
-	decoded, _, err := transform.Bytes(charmap.ISO8859_1.NewDecoder(), []byte(p.capturedBodies[index]))
-	p.require.NoError(err)
-	p.assert.Equal(body, string(decoded))
-
-	return p
 }
 
 // parsedRequestMethod asserts the HTTP method of the parsed request at index i.

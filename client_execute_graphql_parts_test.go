@@ -33,20 +33,3 @@ func (s *serverState) aGraphQLServer(responses ...graphqlResponse) *parts {
 		idx++
 	})
 }
-
-func (c *captureState) capturedBodyMatchesRegexp(index int, pattern string) *parts {
-	p := c.parts
-	p.require.Greater(len(p.capturedBodies), index)
-	p.assert.Regexp(pattern, p.capturedBodies[index])
-
-	return p
-}
-
-func (c *captureState) capturedJSONFieldContains(index int, fragment string, path ...string) *parts {
-	p := c.parts
-	leaf, ok := p.capturedJSONLeaf(index, path).(string)
-	p.require.True(ok, "field %v is not a string", path)
-	p.assert.Contains(leaf, fragment)
-
-	return p
-}

@@ -63,32 +63,3 @@ func (c *parseState) parsedRequestLoopCollection(i int, want string) *parts {
 
 	return p
 }
-
-// requestSkipped asserts the response at index i is marked as skipped.
-func (c *captureState) requestSkipped(i int) *parts {
-	p := c.parts
-	p.require.Greater(len(p.responses), i)
-	p.assert.True(p.responses[i].Skipped)
-
-	return p
-}
-
-// requestExecuted asserts the response at index i is not marked as skipped.
-func (c *captureState) requestExecuted(i int) *parts {
-	p := c.parts
-	p.require.Greater(len(p.responses), i)
-	p.assert.False(p.responses[i].Skipped)
-
-	return p
-}
-
-// gapBetweenCapturedRequestTimesAtLeast asserts captured-request times[ j] - [i] >= minGap.
-func (c *captureState) gapBetweenCapturedRequestTimesAtLeast(i, j int, minGap time.Duration) *parts {
-	p := c.parts
-	p.require.Greater(len(p.capturedRequestTimes), i, "no captured-request time at index %d", i)
-	p.require.Greater(len(p.capturedRequestTimes), j, "no captured-request time at index %d", j)
-	p.assert.GreaterOrEqual(p.capturedRequestTimes[j].Sub(p.capturedRequestTimes[i]), minGap,
-		"gap between captured-request times %d→%d was below %s", i, j, minGap)
-
-	return p
-}

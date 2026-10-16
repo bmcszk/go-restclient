@@ -22,15 +22,3 @@ func (c *parseState) parsedRequestRefs(i int, wantName string, wantForce bool) *
 
 	return p
 }
-
-func (c *captureState) requestURLContains(fragments ...string) *parts {
-	p := c.parts
-	current := p.current()
-	p.require.NotNil(current.Request)
-
-	for _, fragment := range fragments {
-		p.assert.Contains(current.Request.URL.String(), fragment)
-	}
-
-	return p
-}

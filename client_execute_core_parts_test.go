@@ -109,26 +109,6 @@ func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 	return nil, errors.New("RoundTripFunc not set")
 }
 
-// clientRequestInterceptorCaptures asserts the request captured by aMockTransportClient
-// has the given method and full URL.
-func (c *captureState) clientRequestInterceptorCaptures(method, wantURL string) *parts {
-	p := c.parts
-	p.require.NotNil(p.intercepted)
-	p.assert.Equal(method, p.intercepted.Method)
-	p.assert.Equal(wantURL, p.intercepted.URL.String())
-
-	return p
-}
-
-// clientSentNoHeaders asserts the request captured by aMockTransportClient sent no headers.
-func (c *captureState) clientSentNoHeaders() *parts {
-	p := c.parts
-	p.require.NotNil(p.intercepted)
-	p.assert.Empty(p.intercepted.Header)
-
-	return p
-}
-
 // responseHeaderValues asserts the Headers value for key equals values.
 func (p *parts) responseHeaderValues(key string, values ...string) *parts {
 	p.require.Equal(values, p.current().Headers[key])

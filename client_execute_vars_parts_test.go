@@ -1,11 +1,8 @@
 package restclient_test
 
 import (
-	"io"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 	"text/template"
 
@@ -24,95 +21,6 @@ func (f *fileState) aFixtureCopy(requestPath, destName string, replacements map[
 	path := filepath.Join(p.baseDir, destName)
 	p.require.NoError(os.WriteFile(path, []byte(result), 0644))
 	p.httpFilePath = path
-	return p
-}
-
-// firstTrackedValueIsFloatInRange asserts the first value of the active bucket parses as
-// a float within [lowest, highest].
-func (c *captureState) firstTrackedValueIsFloatInRange(lowest, highest float64) *parts {
-	p := c.parts
-	values := p.activeBucket()
-	p.require.NotEmpty(values)
-
-	number, err := strconv.ParseFloat(values[0], 64)
-	p.require.NoError(err, "value %q should be a float", values[0])
-	p.assert.GreaterOrEqual(number, lowest)
-	p.assert.LessOrEqual(number, highest)
-
-	return p
-}
-
-func (c *captureState) allTrackedValuesMatchRegexp(pattern string) *parts {
-	p := c.parts
-	re := regexp.MustCompile(pattern)
-	for _, value := range p.activeBucket() {
-		p.assert.True(re.MatchString(value), "value %q should match %q", value, pattern)
-	}
-
-	return p
-}
-
-func (c *captureState) capturedRequestPathMatchesRegexp(index int, pattern string) *parts {
-	p := c.parts
-	p.require.Greater(len(p.capturedRequests), index)
-	p.assert.Regexp(pattern, p.capturedRequests[index].URL.Path)
-
-	return p
-}
-
-// serverReceivedJSONBody asserts the request body at the given server-hit index equals the
-// expected JSON regardless of key order or whitespace.
-func (c *captureState) serverReceivedJSONBody(index int, expectedJSON string) *parts {
-	p := c.parts
-	p.require.Greater(len(p.capturedRequests), index)
-
-	body, err := io.ReadAll(p.capturedRequests[index].Body)
-	p.require.NoError(err)
-	p.assert.JSONEq(expectedJSON, string(body))
-
-	return p
-}
-
-func (c *captureState) requestHeadersMatchCaptured(keys ...string) *parts {
-	p := c.parts
-	current := p.current()
-	p.require.NotNil(current.Request)
-	p.require.Greater(len(p.capturedRequests), 0)
-
-	for _, key := range keys {
-		p.assert.Equal(p.capturedRequests[0].Header.Get(key), current.Request.Headers.Get(key), "header %q", key)
-	}
-
-	return p
-}
-
-func (c *captureState) requestPathMatchesCapturedPath() *parts {
-	p := c.parts
-	current := p.current()
-	p.require.NotNil(current.Request)
-	p.require.Greater(len(p.capturedRequests), 0)
-	p.assert.Equal(p.capturedRequests[0].URL.Path, current.Request.URL.Path)
-
-	return p
-}
-
-// requestRawBodyMatchesCapturedBody asserts the request RawBody equals the first captured body.
-func (c *captureState) requestRawBodyMatchesCapturedBody() *parts {
-	p := c.parts
-	current := p.current()
-	p.require.NotNil(current.Request)
-	p.require.Greater(len(p.capturedBodies), 0)
-	p.assert.Equal(p.capturedBodies[0], current.Request.RawBody)
-
-	return p
-}
-
-// serverReceivedHostIs asserts p.capturedRequests[index].Host equals host.
-func (c *captureState) serverReceivedHostIs(index int, host string) *parts {
-	p := c.parts
-	p.require.Greater(len(p.capturedRequests), index)
-	p.assert.Equal(host, p.capturedRequests[index].Host)
-
 	return p
 }
 
