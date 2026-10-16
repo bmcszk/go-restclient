@@ -25,19 +25,19 @@ var _ = []any{
 }
 
 // aFreshCookieCheck resets the cookie check flag before a scenario runs.
-func (s *cookiesParts) aFreshCookieCheck() *parts {
+func (s *cookiesParts) aFreshCookieCheck() *cookiesParts {
 	p := s.parts
 	p.cookieCheck = false
 
-	return p
+	return s
 }
 
 // aCookieTestServer starts the cookie test server: /set-cookie sets test-cookie=test-value,
 // /check-cookie flips cookiesParts.cookieCheck when it receives the cookie back.
-func (s *cookiesParts) aCookieTestServer() *parts {
+func (s *cookiesParts) aCookieTestServer() *cookiesParts {
 	p := s.parts
 
-	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
+	p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/set-cookie":
 			http.SetCookie(w, &http.Cookie{Name: "test-cookie", Value: "test-value"})
@@ -51,14 +51,15 @@ func (s *cookiesParts) aCookieTestServer() *parts {
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
+	return s
 }
 
 // aRedirectTestServer starts the redirect test server: /redirect issues a 302 to /target,
 // /target answers 200 with body "Target page".
-func (s *cookiesParts) aRedirectTestServer() *parts {
+func (s *cookiesParts) aRedirectTestServer() *cookiesParts {
 	p := s.parts
 
-	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
+	p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/redirect":
 			http.Redirect(w, r, "/target", http.StatusFound)
@@ -69,19 +70,22 @@ func (s *cookiesParts) aRedirectTestServer() *parts {
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
+	return s
 }
 
 // aCookieJarClient rebuilds the client with a fresh cookie jar.
-func (s *cookiesParts) aCookieJarClient() *parts {
+func (s *cookiesParts) aCookieJarClient() *cookiesParts {
 	p := s.parts
 	jar, err := cookiejar.New(nil)
 	p.require.NoError(err)
 
-	return p.aClient(rc.WithVars(p.activeServerVars), rc.WithHTTPClient(&http.Client{Jar: jar}))
+	p.aClient(rc.WithVars(p.activeServerVars), rc.WithHTTPClient(&http.Client{Jar: jar}))
+
+	return s
 }
 
 // aNoRedirectClient rebuilds the client with an HTTP client that refuses to follow redirects.
-func (s *cookiesParts) aNoRedirectClient() *parts {
+func (s *cookiesParts) aNoRedirectClient() *cookiesParts {
 	p := s.parts
 	noRedirectHTTPClient := &http.Client{
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
@@ -89,11 +93,13 @@ func (s *cookiesParts) aNoRedirectClient() *parts {
 		},
 	}
 
-	return p.aClient(rc.WithVars(p.activeServerVars), rc.WithHTTPClient(noRedirectHTTPClient))
+	p.aClient(rc.WithVars(p.activeServerVars), rc.WithHTTPClient(noRedirectHTTPClient))
+
+	return s
 }
 
 // withServerAddressVars stores scheme/host/port vars and rebuilds the client with them.
-func (s *serverParts) withServerAddressVars() *parts {
+func (s *serverParts) withServerAddressVars() *serverParts {
 	p := s.parts
 	parsed, err := url.Parse(p.serverURL)
 	p.require.NoError(err)
@@ -104,27 +110,29 @@ func (s *serverParts) withServerAddressVars() *parts {
 		"port":   parsed.Port(),
 	}
 
-	return p.aClient(rc.WithVars(p.activeServerVars))
+	p.aClient(rc.WithVars(p.activeServerVars))
+
+	return s
 }
 
 // cookieWasStored asserts the cookie server received its cookie back.
-func (s *cookiesParts) cookieWasStored() *parts {
+func (s *cookiesParts) cookieWasStored() *cookiesParts {
 	p := s.parts
 	p.assert.True(s.cookieCheck, "cookie check assertion failed")
 
-	return p
+	return s
 }
 
 // cookieWasNotStored asserts the cookie server did not receive the cookie back.
-func (s *cookiesParts) cookieWasNotStored() *parts {
+func (s *cookiesParts) cookieWasNotStored() *cookiesParts {
 	p := s.parts
 	p.assert.False(s.cookieCheck, "cookie check assertion failed")
 
-	return p
+	return s
 }
 
 // aCookieRedirectFixture renders a committed cookie/redirect template into baseDir.
-func (s *cookiesParts) aCookieRedirectFixture(name string) *parts {
+func (s *cookiesParts) aCookieRedirectFixture(name string) *cookiesParts {
 	p := s.parts
 	tmplContent, err := os.ReadFile(filepath.Join("test", "data", "cookies_redirects", name))
 	p.require.NoError(err)
@@ -141,5 +149,5 @@ func (s *cookiesParts) aCookieRedirectFixture(name string) *parts {
 
 	p.httpFilePath = path
 
-	return p
+	return s
 }

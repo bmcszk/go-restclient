@@ -10,7 +10,7 @@ import (
 )
 
 // aFixtureCopy copies a committed fixture into baseDir, applying text replacements.
-func (f *fileParts) aFixtureCopy(requestPath, destName string, replacements map[string]string) *parts {
+func (f *fileParts) aFixtureCopy(requestPath, destName string, replacements map[string]string) *fileParts {
 	p := f.parts
 	content, err := os.ReadFile(requestPath)
 	p.require.NoError(err)
@@ -21,11 +21,11 @@ func (f *fileParts) aFixtureCopy(requestPath, destName string, replacements map[
 	path := filepath.Join(p.baseDir, destName)
 	p.require.NoError(os.WriteFile(path, []byte(result), 0644))
 	p.httpFilePath = path
-	return p
+	return f
 }
 
 // aClientWithEnvironment builds the client with WithEnvironment unless env is empty.
-func (e *envParts) aClientWithEnvironment(env string) *parts {
+func (e *envParts) aClientWithEnvironment(env string) *envParts {
 	p := e.parts
 	var client *rc.Client
 	var err error
@@ -36,12 +36,12 @@ func (e *envParts) aClientWithEnvironment(env string) *parts {
 	}
 	p.require.NoError(err)
 	p.client = client
-	return p
+	return e
 }
 
 // aHttpFileFromTemplateWithData renders a committed request fixture template with the given
 // template data ([[ ]] delimiters) and stores the processed file path for execution.
-func (f *fileParts) aHttpFileFromTemplateWithData(templateName string, data any) *parts {
+func (f *fileParts) aHttpFileFromTemplateWithData(templateName string, data any) *fileParts {
 	p := f.parts
 	tmplContent, err := os.ReadFile(filepath.Join(requestFilesDir, templateName))
 	p.require.NoError(err)
@@ -58,18 +58,18 @@ func (f *fileParts) aHttpFileFromTemplateWithData(templateName string, data any)
 
 	p.httpFilePath = path
 
-	return p
+	return f
 }
 
 // anEnvJsonFile writes a committed env-json template with {{SERVER_URL}} resolved.
-func (e *envParts) anEnvJsonFile(fileName, templatePath, serverURL string) *parts {
+func (e *envParts) anEnvJsonFile(fileName, templatePath, serverURL string) *envParts {
 	p := e.parts
 	content, err := os.ReadFile(templatePath)
 	p.require.NoError(err)
 	resolved := strings.ReplaceAll(string(content), "{{SERVER_URL}}", serverURL)
 	path := filepath.Join(p.baseDir, fileName)
 	p.require.NoError(os.WriteFile(path, []byte(resolved), 0600))
-	return p
+	return e
 }
 
 // responsesValidateAgainst validates responses against an explicit .hresp path.

@@ -1,7 +1,7 @@
 package restclient_test
 
 // parsedRequestRefs asserts the parsed request at index i declares a @ref/@forceRef entry.
-func (c *parseParts) parsedRequestRefs(i int, wantName string, wantForce bool) *parts {
+func (c *parseParts) parsedRequestRefs(i int, wantName string, wantForce bool) *parseParts {
 	p := c.parts
 
 	p.require.Greater(len(p.parsedFile.Requests), i)
@@ -20,5 +20,5 @@ func (c *parseParts) parsedRequestRefs(i int, wantName string, wantForce bool) *
 	}
 	p.require.True(found, "request %d missing ref %q", i, wantName)
 
-	return p
+	return c
 }

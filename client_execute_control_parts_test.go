@@ -5,61 +5,61 @@ import (
 )
 
 // parsedRequestDisabled asserts the parsed request at index i has the disabled flag set to want.
-func (c *parseParts) parsedRequestDisabled(i int, want bool) *parts {
+func (c *parseParts) parsedRequestDisabled(i int, want bool) *parseParts {
 	p := c.parts
 
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(want, p.parsedFile.Requests[i].Disabled)
 
-	return p
+	return c
 }
 
 // parsedRequestSleep asserts the parsed request at index i has SleepDuration set to want.
-func (c *parseParts) parsedRequestSleep(i int, want time.Duration) *parts {
+func (c *parseParts) parsedRequestSleep(i int, want time.Duration) *parseParts {
 	p := c.parts
 
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(want, p.parsedFile.Requests[i].SleepDuration)
 
-	return p
+	return c
 }
 
 // parsedRequestDisabledExpr asserts the conditional @disabled expression (after `!`) at index i equals want.
-func (c *parseParts) parsedRequestDisabledExpr(i int, want string) *parts {
+func (c *parseParts) parsedRequestDisabledExpr(i int, want string) *parseParts {
 	p := c.parts
 
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(want, p.parsedFile.Requests[i].DisabledExpr)
 
-	return p
+	return c
 }
 
 // parsedRequestLoopCount asserts the literal `@loop for N` count on the parsed request at index i.
-func (c *parseParts) parsedRequestLoopCount(i int, want int) *parts {
+func (c *parseParts) parsedRequestLoopCount(i int, want int) *parseParts {
 	p := c.parts
 
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(want, p.parsedFile.Requests[i].LoopFor)
 
-	return p
+	return c
 }
 
 // parsedRequestLoopExpr asserts the raw expression on `@loop for {{expr}}` of the parsed request at index i.
-func (c *parseParts) parsedRequestLoopExpr(i int, want string) *parts {
+func (c *parseParts) parsedRequestLoopExpr(i int, want string) *parseParts {
 	p := c.parts
 
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(want, p.parsedFile.Requests[i].LoopExpr)
 
-	return p
+	return c
 }
 
 // parsedRequestLoopCollection asserts the collection name on `@loop for item of collection` at index i.
-func (c *parseParts) parsedRequestLoopCollection(i int, want string) *parts {
+func (c *parseParts) parsedRequestLoopCollection(i int, want string) *parseParts {
 	p := c.parts
 
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(want, p.parsedFile.Requests[i].LoopCollection)
 
-	return p
+	return c
 }

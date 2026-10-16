@@ -237,27 +237,27 @@ var _ = []any{
 }
 
 // parsingFile parses the .http file without executing any request.
-func (c *parseParts) parsingFile() *parts {
+func (c *parseParts) parsingFile() *parseParts {
 	p := c.parts
 
 	p.require.NotNil(p.client)
 	p.parsedFile, p.parseErr = p.client.ParseFile(p.httpFilePath)
 
-	return p
+	return c
 }
 
 // parseSucceeded asserts the file was parsed without error.
-func (c *parseParts) parseSucceeded() *parts {
+func (c *parseParts) parseSucceeded() *parseParts {
 	p := c.parts
 
 	p.require.NoError(p.parseErr)
 
-	return p
+	return c
 }
 
 // parseErrorContains asserts parsing failed and the error mentions every given text.
 // Called without texts it only asserts the error itself.
-func (c *parseParts) parseErrorContains(texts ...string) *parts {
+func (c *parseParts) parseErrorContains(texts ...string) *parseParts {
 	p := c.parts
 
 	p.require.Error(p.parseErr)
@@ -266,37 +266,37 @@ func (c *parseParts) parseErrorContains(texts ...string) *parts {
 		p.require.Contains(p.parseErr.Error(), text)
 	}
 
-	return p
+	return c
 }
 
 // parsedRequestCount asserts how many requests the parse produced.
-func (c *parseParts) parsedRequestCount(n int) *parts {
+func (c *parseParts) parsedRequestCount(n int) *parseParts {
 	p := c.parts
 
 	p.require.NotNil(p.parsedFile)
 	p.require.Len(p.parsedFile.Requests, n)
 
-	return p
+	return c
 }
 
 // parsedRequestBodyIs asserts the raw body of the parsed request at index i.
-func (c *parseParts) parsedRequestBodyIs(i int, want string) *parts {
+func (c *parseParts) parsedRequestBodyIs(i int, want string) *parseParts {
 	p := c.parts
 
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(want, p.parsedFile.Requests[i].RawBody)
 
-	return p
+	return c
 }
 
 // parsedRequestName asserts the name of the parsed request at index i.
-func (c *parseParts) parsedRequestName(i int, name string) *parts {
+func (c *parseParts) parsedRequestName(i int, name string) *parseParts {
 	p := c.parts
 
 	p.require.Greater(len(p.parsedFile.Requests), i)
 	p.assert.Equal(name, p.parsedFile.Requests[i].Name)
 
-	return p
+	return c
 }
 
 // fileParts holds the file/fixture domain state of the fluent test DSL: the path
@@ -315,7 +315,7 @@ var _ = []any{
 const requestFilesDir = "test/data/http_request_files"
 
 // aTemplateFixture renders a committed test/data/<dir> template with [[ ]] delimiters.
-func (f *fileParts) aTemplateFixture(dir, name string, data any) *parts {
+func (f *fileParts) aTemplateFixture(dir, name string, data any) *fileParts {
 	p := f.parts
 	tmplContent, err := os.ReadFile(filepath.Join("test", "data", dir, name))
 	p.require.NoError(err)
@@ -332,41 +332,41 @@ func (f *fileParts) aTemplateFixture(dir, name string, data any) *parts {
 
 	p.httpFilePath = path
 
-	return p
+	return f
 }
 
 // aRequestFixtureAbs points the DSL at a repo-root-relative request fixture path.
-func (f *fileParts) aRequestFixtureAbs(name string) *parts {
+func (f *fileParts) aRequestFixtureAbs(name string) *fileParts {
 	f.httpFilePath = name
 
-	return f.parts
+	return f
 }
 
 // aHttpFile writes the given .http content, replacing {{server}} with the test server URL.
-func (f *fileParts) aHttpFile(content string) *parts {
+func (f *fileParts) aHttpFile(content string) *fileParts {
 	p := f.parts
 	resolved := strings.ReplaceAll(content, "{{server}}", p.serverURL)
 	path := filepath.Join(p.baseDir, "requests.http")
 	p.require.NoError(os.WriteFile(path, []byte(resolved), 0644))
 	p.httpFilePath = path
 
-	return p
+	return f
 }
 
 // aHttpFileFromTemplate renders a committed request fixture template with the test server
 // URL ([[.ServerURL]] delimiters) and stores the processed file path for execution.
 // serverURL may be empty for parse-only fixtures; the template still renders (URL stays relative).
-func (f *fileParts) aHttpFileFromTemplate(templateName string) *parts {
+func (f *fileParts) aHttpFileFromTemplate(templateName string) *fileParts {
 	p := f.parts
 	return p.aHttpFileFromTemplateWithData(templateName, struct{ ServerURL string }{ServerURL: p.serverURL})
 }
 
 // aRequestFixture points the DSL at a committed request fixture file without templating.
-func (f *fileParts) aRequestFixture(name string) *parts {
+func (f *fileParts) aRequestFixture(name string) *fileParts {
 	p := f.parts
 	p.httpFilePath = filepath.Join(requestFilesDir, name)
 
-	return p
+	return f
 }
 
 // envParts holds the env-domain state of the fluent test DSL: dotenv files,
@@ -382,26 +382,26 @@ var _ = []any{
 
 // aDotEnvFile writes content to <baseDir>/.env. The parser resolves .env relative to the
 // so this works for aTempDir-based .http files. No-op safety: writing empty content is allowed.
-func (e *envParts) aDotEnvFile(content string) *parts {
+func (e *envParts) aDotEnvFile(content string) *envParts {
 	p := e.parts
 	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, ".env"), []byte(content), 0644))
-	return p
+	return e
 }
 
 // aDotEnvFileRemoved removes <baseDir>/.env if present (os.Remove, ignore not-exists) so a
 // previous scenario's .env cannot leak into the next subtest.
-func (e *envParts) aDotEnvFileRemoved() *parts {
+func (e *envParts) aDotEnvFileRemoved() *envParts {
 	p := e.parts
 	_ = os.Remove(filepath.Join(p.baseDir, ".env"))
-	return p
+	return e
 }
 
 // withEnv sets an environment variable for the duration of the test.
-func (e *envParts) withEnv(k, v string) *parts {
+func (e *envParts) withEnv(k, v string) *envParts {
 	p := e.parts
 	p.Setenv(k, v)
 
-	return p
+	return e
 }
 
 // serverParts holds the server domain state of the fluent test DSL: the httptest
@@ -424,7 +424,7 @@ var _ = []any{
 }
 
 // aHttpServer counts requests; bodies are read eagerly because net/http closes them on return.
-func (s *serverParts) aHttpServer(h http.HandlerFunc) *parts {
+func (s *serverParts) aHttpServer(h http.HandlerFunc) *serverParts {
 	p := s.parts
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -439,7 +439,7 @@ func (s *serverParts) aHttpServer(h http.HandlerFunc) *parts {
 	p.serverURL = srv.URL
 	p.Cleanup(srv.Close)
 
-	return p
+	return s
 }
 
 // cannedRoute is one aCannedServer route; validJSON also requires a json.Valid body.
@@ -472,7 +472,7 @@ func serveCannedRoute(w http.ResponseWriter, r *http.Request, route cannedRoute)
 
 // aCannedServer serves a fixed routing table of canned responses: exact path lookup,
 // 405 on method mismatch, 404 for unknown paths. Replaces multi-path handler vars.
-func (s *serverParts) aCannedServer(routes map[string]cannedRoute) *parts {
+func (s *serverParts) aCannedServer(routes map[string]cannedRoute) *serverParts {
 	p := s.parts
 	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
 		route, ok := routes[r.URL.Path]
@@ -487,7 +487,7 @@ func (s *serverParts) aCannedServer(routes map[string]cannedRoute) *parts {
 
 // anEchoServer echoes the request body back verbatim with 200 OK — for tests that only
 // need a round-tripped body (e.g. external-file encoding round trips).
-func (s *serverParts) anEchoServer() *parts {
+func (s *serverParts) anEchoServer() *serverParts {
 	p := s.parts
 	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)

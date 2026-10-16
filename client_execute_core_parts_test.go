@@ -16,7 +16,7 @@ import (
 )
 
 // aFormattedRequestFixture renders a committed %s-placeholder fixture with fmt.Sprintf.
-func (f *fileParts) aFormattedRequestFixture(name string, substitutions ...string) *parts {
+func (f *fileParts) aFormattedRequestFixture(name string, substitutions ...string) *fileParts {
 	p := f.parts
 	baseContent, err := os.ReadFile(filepath.Join(requestFilesDir, name))
 	if err != nil {
@@ -33,7 +33,7 @@ func (f *fileParts) aFormattedRequestFixture(name string, substitutions ...strin
 }
 
 // anUploadsFixtureCopy copies the multipart fixture with server URL and < paths resolved.
-func (f *fileParts) anUploadsFixtureCopy() *parts {
+func (f *fileParts) anUploadsFixtureCopy() *fileParts {
 	p := f.parts
 	p.require.NotEmpty(p.serverURL)
 
@@ -47,11 +47,11 @@ func (f *fileParts) anUploadsFixtureCopy() *parts {
 	p.require.NoError(os.WriteFile(path, []byte(resolved), 0644))
 	p.httpFilePath = path
 
-	return p
+	return f
 }
 
 // aTLSServer hosts an echo handler over httptest TLS (self-signed cert).
-func (s *serverParts) aTLSServer() *parts {
+func (s *serverParts) aTLSServer() *serverParts {
 	p := s.parts
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -65,20 +65,22 @@ func (s *serverParts) aTLSServer() *parts {
 	p.serverURL = srv.URL
 	p.Cleanup(srv.Close)
 
-	return p
+	return s
 }
 
 // aTLSInsecureClient builds a restclient trusting the httptest self-signed cert.
-func (s *serverParts) aTLSInsecureClient() *parts {
+func (s *serverParts) aTLSInsecureClient() *serverParts {
 	p := s.parts
 	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
 
-	return p.aClient(rc.WithHTTPClient(httpClient))
+	p.aClient(rc.WithHTTPClient(httpClient))
+
+	return s
 }
 
 // aMockTransportClient builds the client under test with a mock round tripper that
 // records the outgoing request into parts.intercepted and answers 200 with a fixed body.
-func (s *serverParts) aMockTransportClient() *parts {
+func (s *serverParts) aMockTransportClient() *serverParts {
 	p := s.parts
 	transport := &mockRoundTripper{
 		RoundTripFunc: func(req *http.Request) (*http.Response, error) {
@@ -92,7 +94,9 @@ func (s *serverParts) aMockTransportClient() *parts {
 		},
 	}
 
-	return p.aClient(rc.WithHTTPClient(&http.Client{Transport: transport}))
+	p.aClient(rc.WithHTTPClient(&http.Client{Transport: transport}))
+
+	return s
 }
 
 // mockRoundTripper adapts a function into an http.RoundTripper for the DSL.
