@@ -26,14 +26,14 @@ type serverParts struct {
 func newServerParts(t *testing.T) (given, when, then *serverParts) {
 	t.Helper()
 
-	fx := &serverParts{parts: parts{
+	s := &serverParts{parts: parts{
 		T:       t,
 		require: require.New(t),
 		assert:  assert.New(t),
 		baseDir: t.TempDir(),
 	}}
 
-	return fx, fx, fx
+	return s, s, s
 }
 
 // aHttpServer counts requests; bodies are read eagerly because net/http closes them on return.

@@ -25,14 +25,14 @@ type fileParts struct {
 func newFileParts(t *testing.T) (given, when, then *fileParts) {
 	t.Helper()
 
-	fx := &fileParts{parts: parts{
+	f := &fileParts{parts: parts{
 		T:       t,
 		require: require.New(t),
 		assert:  assert.New(t),
 		baseDir: t.TempDir(),
 	}}
 
-	return fx, fx, fx
+	return f, f, f
 }
 
 func (p *parts) aTemplateFixture(dir, name string, data any) *parts {

@@ -25,7 +25,7 @@ type captureParts struct {
 func newCaptureParts(t *testing.T) (given, when, then *captureParts) {
 	t.Helper()
 
-	fx := &captureParts{parts: parts{
+	c := &captureParts{parts: parts{
 		T:             t,
 		require:       require.New(t),
 		assert:        assert.New(t),
@@ -33,7 +33,7 @@ func newCaptureParts(t *testing.T) (given, when, then *captureParts) {
 		trackedValues: make(map[string][]string),
 	}}
 
-	return fx, fx, fx
+	return c, c, c
 }
 
 func (p *parts) requestURLContains(fragments ...string) *parts {

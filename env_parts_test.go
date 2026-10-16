@@ -18,14 +18,14 @@ type envParts struct {
 func newEnvParts(t *testing.T) (given, when, then *envParts) {
 	t.Helper()
 
-	fx := &envParts{parts: parts{
+	e := &envParts{parts: parts{
 		T:       t,
 		require: require.New(t),
 		assert:  assert.New(t),
 		baseDir: t.TempDir(),
 	}}
 
-	return fx, fx, fx
+	return e, e, e
 }
 
 // aDotEnvFile writes content to <baseDir>/.env. The parser resolves .env relative to the

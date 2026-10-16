@@ -22,14 +22,14 @@ type cookiesParts struct {
 func newCookiesParts(t *testing.T) (given, when, then *cookiesParts) {
 	t.Helper()
 
-	fx := &cookiesParts{parts: parts{
+	c := &cookiesParts{parts: parts{
 		T:       t,
 		require: require.New(t),
 		assert:  assert.New(t),
 		baseDir: t.TempDir(),
 	}}
 
-	return fx, fx, fx
+	return c, c, c
 }
 
 func (p *parts) aFreshCookieCheck() *parts {

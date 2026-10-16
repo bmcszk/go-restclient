@@ -16,14 +16,14 @@ type parseParts struct {
 func newParseParts(t *testing.T) (given, when, then *parseParts) {
 	t.Helper()
 
-	fx := &parseParts{parts: parts{
+	p := &parseParts{parts: parts{
 		T:       t,
 		require: require.New(t),
 		assert:  assert.New(t),
 		baseDir: t.TempDir(),
 	}}
 
-	return fx, fx, fx
+	return p, p, p
 }
 
 // parsingFile parses the .http file without executing any request.

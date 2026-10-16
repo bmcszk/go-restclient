@@ -17,14 +17,14 @@ type oauth2Parts struct {
 func newOauth2Parts(t *testing.T) (given, when, then *oauth2Parts) {
 	t.Helper()
 
-	fx := &oauth2Parts{parts: parts{
+	o := &oauth2Parts{parts: parts{
 		T:       t,
 		require: require.New(t),
 		assert:  assert.New(t),
 		baseDir: t.TempDir(),
 	}}
 
-	return fx, fx, fx
+	return o, o, o
 }
 
 // anOAuth2TokenServerWithStatus starts a canned OAuth2 token endpoint answering with the

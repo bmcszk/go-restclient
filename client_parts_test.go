@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// clientParts extends the base parts for the client-construction domain.
 type clientParts struct {
 	parts
 }
@@ -15,7 +14,7 @@ type clientParts struct {
 func newClientParts(t *testing.T) (given, when, then *clientParts) {
 	t.Helper()
 
-	fx := &clientParts{parts: parts{
+	c := &clientParts{parts: parts{
 		T:             t,
 		require:       require.New(t),
 		assert:        assert.New(t),
@@ -23,5 +22,5 @@ func newClientParts(t *testing.T) (given, when, then *clientParts) {
 		trackedValues: make(map[string][]string),
 	}}
 
-	return fx, fx, fx
+	return c, c, c
 }

@@ -22,14 +22,14 @@ type validatorParts struct {
 func newValidatorParts(t *testing.T) (given, when, then *validatorParts) {
 	t.Helper()
 
-	fx := &validatorParts{parts: parts{
+	v := &validatorParts{parts: parts{
 		T:       t,
 		require: require.New(t),
 		assert:  assert.New(t),
 		baseDir: t.TempDir(),
 	}}
 
-	return fx, fx, fx
+	return v, v, v
 }
 
 func (p *parts) aResponseWithStatus(statusCode int, statusText string) *parts {
