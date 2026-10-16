@@ -16,7 +16,7 @@ import (
 )
 
 // aFormattedRequestFixture renders a committed %s-placeholder fixture with fmt.Sprintf.
-func (f *fileState) aFormattedRequestFixture(name string, substitutions ...string) *parts {
+func (f *fileParts) aFormattedRequestFixture(name string, substitutions ...string) *parts {
 	p := f.parts
 	baseContent, err := os.ReadFile(filepath.Join(requestFilesDir, name))
 	if err != nil {
@@ -33,7 +33,7 @@ func (f *fileState) aFormattedRequestFixture(name string, substitutions ...strin
 }
 
 // anUploadsFixtureCopy copies the multipart fixture with server URL and < paths resolved.
-func (f *fileState) anUploadsFixtureCopy() *parts {
+func (f *fileParts) anUploadsFixtureCopy() *parts {
 	p := f.parts
 	p.require.NotEmpty(p.serverURL)
 
@@ -51,7 +51,7 @@ func (f *fileState) anUploadsFixtureCopy() *parts {
 }
 
 // aTLSServer hosts an echo handler over httptest TLS (self-signed cert).
-func (s *serverState) aTLSServer() *parts {
+func (s *serverParts) aTLSServer() *parts {
 	p := s.parts
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -69,7 +69,7 @@ func (s *serverState) aTLSServer() *parts {
 }
 
 // aTLSInsecureClient builds a restclient trusting the httptest self-signed cert.
-func (s *serverState) aTLSInsecureClient() *parts {
+func (s *serverParts) aTLSInsecureClient() *parts {
 	p := s.parts
 	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
 
@@ -78,7 +78,7 @@ func (s *serverState) aTLSInsecureClient() *parts {
 
 // aMockTransportClient builds the client under test with a mock round tripper that
 // records the outgoing request into parts.intercepted and answers 200 with a fixed body.
-func (s *serverState) aMockTransportClient() *parts {
+func (s *serverParts) aMockTransportClient() *parts {
 	p := s.parts
 	transport := &mockRoundTripper{
 		RoundTripFunc: func(req *http.Request) (*http.Response, error) {

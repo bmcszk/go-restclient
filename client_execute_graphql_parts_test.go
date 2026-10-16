@@ -19,7 +19,7 @@ type graphqlError struct {
 }
 
 // aGraphQLServer serves the given responses in order, one per request, as HTTP 200 JSON.
-func (s *serverState) aGraphQLServer(responses ...graphqlResponse) *parts {
+func (s *serverParts) aGraphQLServer(responses ...graphqlResponse) *parts {
 	p := s.parts
 	idx := 0
 	return p.aHttpServer(func(w http.ResponseWriter, _ *http.Request) {

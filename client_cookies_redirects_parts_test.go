@@ -11,21 +11,21 @@ import (
 	rc "github.com/bmcszk/go-restclient"
 )
 
-// cookiesState holds the cookie/redirect domain state of the fluent test DSL: the
+// cookiesParts holds the cookie/redirect domain state of the fluent test DSL: the
 // cookie round-trip flip flag set by aCookieTestServer's /check-cookie handler and
 // read by cookieWasStored / cookieWasNotStored.
-type cookiesState struct {
+type cookiesParts struct {
 	*parts
 	// cookieCheck flips true when the cookie server receives its test cookie back.
 	cookieCheck bool
 }
 
 var _ = []any{
-	cookiesState{},
+	cookiesParts{},
 }
 
 // aFreshCookieCheck resets the cookie check flag before a scenario runs.
-func (s *cookiesState) aFreshCookieCheck() *parts {
+func (s *cookiesParts) aFreshCookieCheck() *parts {
 	p := s.parts
 	p.cookieCheck = false
 
@@ -33,8 +33,8 @@ func (s *cookiesState) aFreshCookieCheck() *parts {
 }
 
 // aCookieTestServer starts the cookie test server: /set-cookie sets test-cookie=test-value,
-// /check-cookie flips cookiesState.cookieCheck when it receives the cookie back.
-func (s *cookiesState) aCookieTestServer() *parts {
+// /check-cookie flips cookiesParts.cookieCheck when it receives the cookie back.
+func (s *cookiesParts) aCookieTestServer() *parts {
 	p := s.parts
 
 	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
@@ -55,7 +55,7 @@ func (s *cookiesState) aCookieTestServer() *parts {
 
 // aRedirectTestServer starts the redirect test server: /redirect issues a 302 to /target,
 // /target answers 200 with body "Target page".
-func (s *cookiesState) aRedirectTestServer() *parts {
+func (s *cookiesParts) aRedirectTestServer() *parts {
 	p := s.parts
 
 	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +72,7 @@ func (s *cookiesState) aRedirectTestServer() *parts {
 }
 
 // aCookieJarClient rebuilds the client with a fresh cookie jar.
-func (s *cookiesState) aCookieJarClient() *parts {
+func (s *cookiesParts) aCookieJarClient() *parts {
 	p := s.parts
 	jar, err := cookiejar.New(nil)
 	p.require.NoError(err)
@@ -81,7 +81,7 @@ func (s *cookiesState) aCookieJarClient() *parts {
 }
 
 // aNoRedirectClient rebuilds the client with an HTTP client that refuses to follow redirects.
-func (s *cookiesState) aNoRedirectClient() *parts {
+func (s *cookiesParts) aNoRedirectClient() *parts {
 	p := s.parts
 	noRedirectHTTPClient := &http.Client{
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
@@ -93,7 +93,7 @@ func (s *cookiesState) aNoRedirectClient() *parts {
 }
 
 // withServerAddressVars stores scheme/host/port vars and rebuilds the client with them.
-func (s *serverState) withServerAddressVars() *parts {
+func (s *serverParts) withServerAddressVars() *parts {
 	p := s.parts
 	parsed, err := url.Parse(p.serverURL)
 	p.require.NoError(err)
@@ -108,7 +108,7 @@ func (s *serverState) withServerAddressVars() *parts {
 }
 
 // cookieWasStored asserts the cookie server received its cookie back.
-func (s *cookiesState) cookieWasStored() *parts {
+func (s *cookiesParts) cookieWasStored() *parts {
 	p := s.parts
 	p.assert.True(s.cookieCheck, "cookie check assertion failed")
 
@@ -116,7 +116,7 @@ func (s *cookiesState) cookieWasStored() *parts {
 }
 
 // cookieWasNotStored asserts the cookie server did not receive the cookie back.
-func (s *cookiesState) cookieWasNotStored() *parts {
+func (s *cookiesParts) cookieWasNotStored() *parts {
 	p := s.parts
 	p.assert.False(s.cookieCheck, "cookie check assertion failed")
 
@@ -124,7 +124,7 @@ func (s *cookiesState) cookieWasNotStored() *parts {
 }
 
 // aCookieRedirectFixture renders a committed cookie/redirect template into baseDir.
-func (s *cookiesState) aCookieRedirectFixture(name string) *parts {
+func (s *cookiesParts) aCookieRedirectFixture(name string) *parts {
 	p := s.parts
 	tmplContent, err := os.ReadFile(filepath.Join("test", "data", "cookies_redirects", name))
 	p.require.NoError(err)

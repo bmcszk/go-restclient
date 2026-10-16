@@ -10,7 +10,7 @@ import (
 )
 
 // aFixtureCopy copies a committed fixture into baseDir, applying text replacements.
-func (f *fileState) aFixtureCopy(requestPath, destName string, replacements map[string]string) *parts {
+func (f *fileParts) aFixtureCopy(requestPath, destName string, replacements map[string]string) *parts {
 	p := f.parts
 	content, err := os.ReadFile(requestPath)
 	p.require.NoError(err)
@@ -25,7 +25,7 @@ func (f *fileState) aFixtureCopy(requestPath, destName string, replacements map[
 }
 
 // aClientWithEnvironment builds the client with WithEnvironment unless env is empty.
-func (e *envState) aClientWithEnvironment(env string) *parts {
+func (e *envParts) aClientWithEnvironment(env string) *parts {
 	p := e.parts
 	var client *rc.Client
 	var err error
@@ -41,7 +41,7 @@ func (e *envState) aClientWithEnvironment(env string) *parts {
 
 // aHttpFileFromTemplateWithData renders a committed request fixture template with the given
 // template data ([[ ]] delimiters) and stores the processed file path for execution.
-func (f *fileState) aHttpFileFromTemplateWithData(templateName string, data any) *parts {
+func (f *fileParts) aHttpFileFromTemplateWithData(templateName string, data any) *parts {
 	p := f.parts
 	tmplContent, err := os.ReadFile(filepath.Join(requestFilesDir, templateName))
 	p.require.NoError(err)
@@ -62,7 +62,7 @@ func (f *fileState) aHttpFileFromTemplateWithData(templateName string, data any)
 }
 
 // anEnvJsonFile writes a committed env-json template with {{SERVER_URL}} resolved.
-func (e *envState) anEnvJsonFile(fileName, templatePath, serverURL string) *parts {
+func (e *envParts) anEnvJsonFile(fileName, templatePath, serverURL string) *parts {
 	p := e.parts
 	content, err := os.ReadFile(templatePath)
 	p.require.NoError(err)

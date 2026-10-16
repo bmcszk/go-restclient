@@ -12,7 +12,7 @@ import (
 )
 
 // anExternalFile writes the request file under test verbatim to <baseDir>/name.
-func (f *fileState) anExternalFile(name, content string) *parts {
+func (f *fileParts) anExternalFile(name, content string) *parts {
 	f.writeTempFile(name, content)
 	f.httpFilePath = filepath.Join(f.baseDir, name)
 
@@ -20,7 +20,7 @@ func (f *fileState) anExternalFile(name, content string) *parts {
 }
 
 // aMissingFile points httpFilePath at a path that does not exist, for file-not-found tests.
-func (f *fileState) aMissingFile(path string) *parts {
+func (f *fileParts) aMissingFile(path string) *parts {
 	p := f.parts
 	p.httpFilePath = path
 
@@ -28,13 +28,13 @@ func (f *fileState) aMissingFile(path string) *parts {
 }
 
 // writeTempFile writes content to a file named name inside the shared per-test base dir.
-func (f *fileState) writeTempFile(name, content string) {
+func (f *fileParts) writeTempFile(name, content string) {
 	p := f.parts
 	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, name), []byte(content), 0644))
 }
 
 // aHttpFileWithExternalFileEncoding writes the external file in the given encoding and a <@ request for it.
-func (f *fileState) aHttpFileWithExternalFileEncoding(
+func (f *fileParts) aHttpFileWithExternalFileEncoding(
 	encodingName, externalFileName string, rawUTF8Content []byte, encoder transform.Transformer,
 ) *parts {
 	p := f.parts
@@ -59,7 +59,7 @@ func (f *fileState) aHttpFileWithExternalFileEncoding(
 
 // aHttpFileWithExternalFile writes a short request body that points at the named external
 // file via <@, and stores the given JSON content in the external file.
-func (f *fileState) aHttpFileWithExternalFile(externalFileName, externalFileContent string) *parts {
+func (f *fileParts) aHttpFileWithExternalFile(externalFileName, externalFileContent string) *parts {
 	p := f.parts
 	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, externalFileName), []byte(externalFileContent), 0644))
 
@@ -68,7 +68,7 @@ func (f *fileState) aHttpFileWithExternalFile(externalFileName, externalFileCont
 
 // aHttpFileWithExternalFileStatic writes a short request body that points at the named
 // external file via < (no @: NO variable substitution).
-func (f *fileState) aHttpFileWithExternalFileStatic(externalFileName, externalFileContent string) *parts {
+func (f *fileParts) aHttpFileWithExternalFileStatic(externalFileName, externalFileContent string) *parts {
 	p := f.parts
 	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, externalFileName), []byte(externalFileContent), 0644))
 
@@ -78,7 +78,7 @@ func (f *fileState) aHttpFileWithExternalFileStatic(externalFileName, externalFi
 const externalFilesFixtureDir = "test/data/external_files"
 
 // aHttpFileWithExternalFileFixture loads the committed external-file fixture via <@.
-func (f *fileState) aHttpFileWithExternalFileFixture(externalFileName string) *parts {
+func (f *fileParts) aHttpFileWithExternalFileFixture(externalFileName string) *parts {
 	p := f.parts
 	src := filepath.Join(externalFilesFixtureDir, externalFileName)
 	content, err := os.ReadFile(src)
@@ -88,7 +88,7 @@ func (f *fileState) aHttpFileWithExternalFileFixture(externalFileName string) *p
 }
 
 // aHttpFileWithExternalFileStaticFixture is the no-substitution < counterpart.
-func (f *fileState) aHttpFileWithExternalFileStaticFixture(externalFileName string) *parts {
+func (f *fileParts) aHttpFileWithExternalFileStaticFixture(externalFileName string) *parts {
 	p := f.parts
 	src := filepath.Join(externalFilesFixtureDir, externalFileName)
 	content, err := os.ReadFile(src)
@@ -98,21 +98,21 @@ func (f *fileState) aHttpFileWithExternalFileStaticFixture(externalFileName stri
 }
 
 // aDotEnvNamedFile writes content to <baseDir>/.env.<name> for --env-style scenarios.
-func (e *envState) aDotEnvNamedFile(name, content string) *parts {
+func (e *envParts) aDotEnvNamedFile(name, content string) *parts {
 	p := e.parts
 	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, ".env."+name), []byte(content), 0644))
 	return p
 }
 
 // aClientWithEnvName builds the client with WithEnvName (named dotenv file).
-func (e *envState) aClientWithEnvName(name string) *parts {
+func (e *envParts) aClientWithEnvName(name string) *parts {
 	p := e.parts
 	return p.aClient(rc.WithEnvName(name))
 }
 
 // aJsonEchoServer accepts POST with Content-Type application/json, parses the body as JSON,
 // echoes it back wrapped in {"json": ...}, and responds 200 OK with application/json.
-func (s *cookiesState) aJsonEchoServer() *parts {
+func (s *cookiesParts) aJsonEchoServer() *parts {
 	p := s.parts
 
 	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
@@ -125,7 +125,7 @@ func (s *cookiesState) aJsonEchoServer() *parts {
 }
 
 // aRestExtensionServer serves GET with a 200 OK and a fixed JSON body.
-func (s *cookiesState) aRestExtensionServer() *parts {
+func (s *cookiesParts) aRestExtensionServer() *parts {
 	p := s.parts
 
 	return p.aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -135,7 +135,7 @@ func (s *cookiesState) aRestExtensionServer() *parts {
 }
 
 // parsedRequestMethod asserts the HTTP method of the parsed request at index i.
-func (c *parseState) parsedRequestMethod(i int, method string) *parts {
+func (c *parseParts) parsedRequestMethod(i int, method string) *parts {
 	p := c.parts
 
 	p.require.Greater(len(p.parsedFile.Requests), i)
@@ -146,7 +146,7 @@ func (c *parseState) parsedRequestMethod(i int, method string) *parts {
 
 // parsedRequestRawURLIs asserts the raw (pre-substitution) URL of the parsed request
 // at index i.
-func (c *parseState) parsedRequestRawURLIs(i int, rawURL string) *parts {
+func (c *parseParts) parsedRequestRawURLIs(i int, rawURL string) *parts {
 	p := c.parts
 
 	p.require.Greater(len(p.parsedFile.Requests), i)
@@ -156,7 +156,7 @@ func (c *parseState) parsedRequestRawURLIs(i int, rawURL string) *parts {
 }
 
 // executingRequestAt parses the .http file and executes only the request at the given index.
-func (c *parseState) executingRequestAt(index int) *parts {
+func (c *parseParts) executingRequestAt(index int) *parts {
 	p := c.parts
 
 	p.require.NotNil(p.client)
