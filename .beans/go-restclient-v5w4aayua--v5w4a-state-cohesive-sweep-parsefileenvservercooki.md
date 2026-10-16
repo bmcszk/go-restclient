@@ -1,11 +1,11 @@
 ---
 # go-restclient-v5w4aayua
 title: 'V5W4a: state-cohesive sweep — parse/file/env/server/cookies/oauth2 struct+all methods into their own parts files'
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-10-16T13:20:16Z
-updated_at: 2026-10-16T14:30:03Z
+updated_at: 2026-10-16T14:31:54Z
 parent: go-restclient-495b
 ---
 
@@ -24,3 +24,9 @@ parent: go-restclient-495b
 - orchestrator correction: pi parked cookiesState→cookiesParts methods (aJsonEchoServer/aRestExtensionServer) in env_parts — moved to client_cookies_redirects_parts_test.go (cookies pair) + import fixes
 - gates re-run: gofmt empty, build/vet 0, lint `0 issues.`, junit 315
 - Residual: cookies/oauth2 pair renames to state names
+
+## Proof of Work (orchestrator-verified)
+- R100 renames: client_cookies_redirects_parts_test.go → cookies_parts_test.go; client_oauth2_parts_test.go → oauth2_parts_test.go
+- gates re-run: gofmt empty, lint `0 issues.`, junit 315
+- state-cohesive layout COMPLETE: capture/parse/file/env/server/cookies/oauth2 parts files each hold struct+ctor+all methods
+- Residual: V5W4b comment sweep + final audit
