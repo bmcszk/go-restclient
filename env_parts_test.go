@@ -14,10 +14,6 @@ type envParts struct {
 	*parts
 }
 
-var _ = []any{
-	envParts{},
-}
-
 // aDotEnvFile writes content to <baseDir>/.env. The parser resolves .env relative to the
 // so this works for aTempDir-based .http files. No-op safety: writing empty content is allowed.
 func (e *envParts) aDotEnvFile(content string) *envParts {

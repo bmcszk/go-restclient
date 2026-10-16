@@ -14,10 +14,6 @@ type oauth2Parts struct {
 	tokenServerURL string
 }
 
-var _ = []any{
-	oauth2Parts{},
-}
-
 // anOAuth2TokenServerWithStatus starts a canned OAuth2 token endpoint answering with the
 // given status; 200 also returns a fixed access_token payload.
 func (s *oauth2Parts) anOAuth2TokenServerWithStatus(status int) *oauth2Parts {

@@ -35,10 +35,6 @@ type captureParts struct {
 	activeTrack string
 }
 
-var _ = []any{
-	captureParts{},
-}
-
 func (c *captureParts) requestURLContains(fragments ...string) *captureParts {
 	current := c.current()
 	c.require.NotNil(current.Request)

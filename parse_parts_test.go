@@ -16,10 +16,6 @@ type parseParts struct {
 	parseErr   error
 }
 
-var _ = []any{
-	parseParts{},
-}
-
 // parsingFile parses the .http file without executing any request.
 func (c *parseParts) parsingFile() *parseParts {
 	c.require.NotNil(c.client)

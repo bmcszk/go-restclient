@@ -31,10 +31,6 @@ type serverParts struct {
 	activeServerVars map[string]any
 }
 
-var _ = []any{
-	serverParts{},
-}
-
 // aHttpServer counts requests; bodies are read eagerly because net/http closes them on return.
 func (s *serverParts) aHttpServer(h http.HandlerFunc) *serverParts {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

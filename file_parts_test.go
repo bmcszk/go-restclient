@@ -23,10 +23,6 @@ type fileParts struct {
 	httpFilePath string
 }
 
-var _ = []any{
-	fileParts{},
-}
-
 // aTemplateFixture renders a committed test/data/<dir> template with [[ ]] delimiters.
 func (f *fileParts) aTemplateFixture(dir, name string, data any) *fileParts {
 	tmplContent, err := os.ReadFile(filepath.Join("test", "data", dir, name))

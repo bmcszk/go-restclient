@@ -20,10 +20,6 @@ type cookiesParts struct {
 	cookieCheck bool
 }
 
-var _ = []any{
-	cookiesParts{},
-}
-
 // aFreshCookieCheck resets the cookie check flag before a scenario runs.
 func (s *cookiesParts) aFreshCookieCheck() *cookiesParts {
 	s.cookieCheck = false
