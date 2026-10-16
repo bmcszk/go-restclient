@@ -17,10 +17,11 @@ func newParseParts(t *testing.T) (given, when, then *parseParts) {
 	t.Helper()
 
 	p := &parseParts{parts: parts{
-		T:       t,
-		require: require.New(t),
-		assert:  assert.New(t),
-		baseDir: t.TempDir(),
+		trackedValues: make(map[string][]string),
+		T:             t,
+		require:       require.New(t),
+		assert:        assert.New(t),
+		baseDir:       t.TempDir(),
 	}}
 
 	return p, p, p

@@ -23,10 +23,11 @@ func newCookiesParts(t *testing.T) (given, when, then *cookiesParts) {
 	t.Helper()
 
 	c := &cookiesParts{parts: parts{
-		T:       t,
-		require: require.New(t),
-		assert:  assert.New(t),
-		baseDir: t.TempDir(),
+		trackedValues: make(map[string][]string),
+		T:             t,
+		require:       require.New(t),
+		assert:        assert.New(t),
+		baseDir:       t.TempDir(),
 	}}
 
 	return c, c, c

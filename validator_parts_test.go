@@ -23,10 +23,11 @@ func newValidatorParts(t *testing.T) (given, when, then *validatorParts) {
 	t.Helper()
 
 	v := &validatorParts{parts: parts{
-		T:       t,
-		require: require.New(t),
-		assert:  assert.New(t),
-		baseDir: t.TempDir(),
+		trackedValues: make(map[string][]string),
+		T:             t,
+		require:       require.New(t),
+		assert:        assert.New(t),
+		baseDir:       t.TempDir(),
 	}}
 
 	return v, v, v
@@ -128,7 +129,8 @@ func (p *parts) aNilResponse() *parts {
 }
 
 // anExpectedResponseFileAt sets p.expectedFilePath verbatim. Used to point at a
-// always prepends the committed-fixture directory).
+// committed fixture (validateResponses always prepends the committed-fixture
+// directory).
 func (p *parts) anExpectedResponseFileAt(path string) *parts {
 	p.expectedFilePath = path
 

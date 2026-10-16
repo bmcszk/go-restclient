@@ -18,10 +18,11 @@ func newOauth2Parts(t *testing.T) (given, when, then *oauth2Parts) {
 	t.Helper()
 
 	o := &oauth2Parts{parts: parts{
-		T:       t,
-		require: require.New(t),
-		assert:  assert.New(t),
-		baseDir: t.TempDir(),
+		trackedValues: make(map[string][]string),
+		T:             t,
+		require:       require.New(t),
+		assert:        assert.New(t),
+		baseDir:       t.TempDir(),
 	}}
 
 	return o, o, o

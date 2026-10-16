@@ -24,4 +24,4 @@
 
 ## Fluent test DSL
 - Test DSL + guideline: docs/fluent-testing-guideline.md (binding for any test change: given/when/then, state in parts, .and() end of line, comments <= 1 line whole diff, fixtures under test/data/, no linter-appeasement var _ blocks).
-- Existing DSL surface lives in parts_test.go (base) plus one <domain>_parts_test.go per domain (capture/parse/file/env/server/validator); oauth2/cookies builders are folded into client_oauth2_test.go / client_cookies_redirects_test.go.
+- Existing DSL surface lives in parts_test.go (base) plus one <domain>_parts_test.go per domain (capture/client/cookies/env/file/oauth2/parse/server/validator), each paired with its <domain>_test.go primary; feature test files of a domain share that domain's parts file.

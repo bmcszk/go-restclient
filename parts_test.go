@@ -49,7 +49,7 @@ type parts struct {
 	activeTrack   string
 	servers       []*httptest.Server
 	serverURL     string
-	// share the name requestCount in Go.
+	// requestHits shares its JSON/URL var name with requestCount in Go.
 	requestHits atomic.Int64
 	// activeServerVars holds the scheme/host/port variables of the running test server.
 	activeServerVars map[string]any
@@ -64,18 +64,11 @@ type parts struct {
 	cookieCheck    bool
 }
 
-func newParts(t *testing.T) (given, when, then *parts) {
-	t.Helper()
-
-	fx := &parts{
-		T:             t,
-		require:       require.New(t),
-		assert:        assert.New(t),
-		baseDir:       t.TempDir(),
-		trackedValues: make(map[string][]string),
-	}
-
-	return fx, fx, fx
+type clientConfigSnapshot struct {
+	baseURL     string
+	headerKey   string
+	headerValue string
+	httpTimeout time.Duration
 }
 
 func (p *parts) and() *parts { return p }
@@ -229,12 +222,6 @@ func (p *parts) validationSucceeds() *parts {
 }
 
 // clientConfigSnapshot records the client options asserted by clientBaseURLIs /
-type clientConfigSnapshot struct {
-	baseURL     string
-	headerKey   string
-	headerValue string
-	httpTimeout time.Duration
-}
 
 func (p *parts) aClientWithDefaults() *parts {
 	p.clientConfig = clientConfigSnapshot{
@@ -263,7 +250,8 @@ func (p *parts) clientBaseURLIsEmpty() *parts {
 	return p
 }
 
-// clientDefaultHeaderIs after aClientWithDefaults runs.
+// clientDefaultHeaderIs asserts the client's DefaultHeaders value for key
+// equals the recorded config snapshot.
 func (p *parts) clientDefaultHeaderIs(key, _ string) *parts {
 	p.require.Equal(p.clientConfig.headerValue, p.client.DefaultHeaders.Get(key))
 

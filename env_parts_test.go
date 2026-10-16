@@ -19,10 +19,11 @@ func newEnvParts(t *testing.T) (given, when, then *envParts) {
 	t.Helper()
 
 	e := &envParts{parts: parts{
-		T:       t,
-		require: require.New(t),
-		assert:  assert.New(t),
-		baseDir: t.TempDir(),
+		trackedValues: make(map[string][]string),
+		T:             t,
+		require:       require.New(t),
+		assert:        assert.New(t),
+		baseDir:       t.TempDir(),
 	}}
 
 	return e, e, e

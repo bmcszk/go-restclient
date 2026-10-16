@@ -27,16 +27,39 @@ func newServerParts(t *testing.T) (given, when, then *serverParts) {
 	t.Helper()
 
 	s := &serverParts{parts: parts{
-		T:       t,
-		require: require.New(t),
-		assert:  assert.New(t),
-		baseDir: t.TempDir(),
+		trackedValues: make(map[string][]string),
+		T:             t,
+		require:       require.New(t),
+		assert:        assert.New(t),
+		baseDir:       t.TempDir(),
 	}}
 
 	return s, s, s
 }
 
 // aHttpServer counts requests; bodies are read eagerly because net/http closes them on return.
+type cannedRoute struct {
+	method    string
+	code      int
+	body      string
+	validJSON bool
+}
+
+type mockRoundTripper struct {
+	RoundTripFunc func(req *http.Request) (*http.Response, error)
+}
+
+type graphqlResponse struct {
+	Data   any            `json:"data,omitempty"`
+	Errors []graphqlError `json:"errors,omitempty"`
+}
+
+type graphqlError struct {
+	Message   string `json:"message"`
+	Locations []any  `json:"locations,omitempty"`
+	Path      []any  `json:"path,omitempty"`
+}
+
 func (p *parts) aHttpServer(h http.HandlerFunc) *parts {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -55,12 +78,6 @@ func (p *parts) aHttpServer(h http.HandlerFunc) *parts {
 }
 
 // cannedRoute is one aCannedServer route; validJSON also requires a json.Valid body.
-type cannedRoute struct {
-	method    string
-	code      int
-	body      string
-	validJSON bool
-}
 
 // serveCannedRoute writes the cannedRoute response for r: 405 on method mismatch,
 // 400 on validJSON with an unparseable body. The caller handled unknown paths.
@@ -83,7 +100,7 @@ func serveCannedRoute(w http.ResponseWriter, r *http.Request, route cannedRoute)
 }
 
 // aCannedServer serves a fixed routing table of canned responses: exact path lookup,
-// 405 on method mismatch, 404 for unknown paths. Replaces multi-path handler vars.
+// 405 on method mismatch, 404 for unknown paths.
 func (p *parts) aCannedServer(routes map[string]cannedRoute) *parts {
 	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
 		route, ok := routes[r.URL.Path]
@@ -163,27 +180,12 @@ func (p *parts) aMockTransportClient() *parts {
 	return p
 }
 
-type mockRoundTripper struct {
-	RoundTripFunc func(req *http.Request) (*http.Response, error)
-}
-
 func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	if m.RoundTripFunc != nil {
 		return m.RoundTripFunc(req)
 	}
 
 	return nil, errors.New("RoundTripFunc not set")
-}
-
-type graphqlResponse struct {
-	Data   any            `json:"data,omitempty"`
-	Errors []graphqlError `json:"errors,omitempty"`
-}
-
-type graphqlError struct {
-	Message   string `json:"message"`
-	Locations []any  `json:"locations,omitempty"`
-	Path      []any  `json:"path,omitempty"`
 }
 
 func (p *parts) aGraphQLServer(responses ...graphqlResponse) *parts {

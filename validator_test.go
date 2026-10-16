@@ -10,7 +10,7 @@ const validatorSamplePath = "test/data/http_response_files/sample1.http"
 // TestValidateResponses_WithSampleFile_PerfectMatch verifies the validator passes against
 
 func TestValidateResponses_WithSampleFile_PerfectMatch(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -27,7 +27,7 @@ func TestValidateResponses_WithSampleFile_PerfectMatch(t *testing.T) {
 // TestValidateResponses_WithSampleFile_StatusCodeMismatch verifies a "status code mismatch"
 // error is reported when the actual status code differs from the .hresp expected.
 func TestValidateResponses_WithSampleFile_StatusCodeMismatch(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -45,7 +45,7 @@ func TestValidateResponses_WithSampleFile_StatusCodeMismatch(t *testing.T) {
 // TestValidateResponses_WithSampleFile_StatusStringMismatch verifies a "status string
 // mismatch" error is reported when the actual reason phrase differs from the .hresp expected.
 func TestValidateResponses_WithSampleFile_StatusStringMismatch(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -63,7 +63,7 @@ func TestValidateResponses_WithSampleFile_StatusStringMismatch(t *testing.T) {
 // TestValidateResponses_WithSampleFile_HeaderValueMismatch verifies the validator reports
 // a header-value mismatch for the Content-Type header.
 func TestValidateResponses_WithSampleFile_HeaderValueMismatch(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -82,7 +82,7 @@ func TestValidateResponses_WithSampleFile_HeaderValueMismatch(t *testing.T) {
 // TestValidateResponses_WithSampleFile_MissingExpectedHeaderDate verifies the validator
 // reports a missing-expected-header error for the Date header.
 func TestValidateResponses_WithSampleFile_MissingExpectedHeaderDate(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -98,7 +98,7 @@ func TestValidateResponses_WithSampleFile_MissingExpectedHeaderDate(t *testing.T
 }
 
 func TestValidateResponses_WithSampleFile_BodyMismatch(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -117,7 +117,7 @@ func TestValidateResponses_WithSampleFile_BodyMismatch(t *testing.T) {
 // reports a JSON content mismatch when BodyContains cannot rescue an exact-body mismatch
 // from the file format.
 func TestValidateResponses_WithSampleFile_BodyContainsExactMismatch(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -135,7 +135,7 @@ func TestValidateResponses_WithSampleFile_BodyContainsExactMismatch(t *testing.T
 // reports a JSON content mismatch when BodyNotContains cannot rescue an exact-body
 // mismatch from the file format.
 func TestValidateResponses_WithSampleFile_BodyNotContainsExactMismatch(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -153,7 +153,7 @@ func TestValidateResponses_WithSampleFile_BodyNotContainsExactMismatch(t *testin
 // TestValidateResponses_PartialExpected_StatusCodeOnly_Match verifies the validator passes
 // when the .hresp defines only the status code (no body, no extra headers) and the actual
 func TestValidateResponses_PartialExpected_StatusCodeOnly_Match(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -171,7 +171,7 @@ func TestValidateResponses_PartialExpected_StatusCodeOnly_Match(t *testing.T) {
 // TestValidateResponses_PartialExpected_StatusCodeEmptyBody_Match verifies validation
 // succeeds when the .hresp defines status code + empty body and the actual matches.
 func TestValidateResponses_PartialExpected_StatusCodeEmptyBody_Match(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -188,7 +188,7 @@ func TestValidateResponses_PartialExpected_StatusCodeEmptyBody_Match(t *testing.
 // TestValidateResponses_PartialExpected_StatusCodeEmptyBody_Mismatch verifies a body
 // mismatch is reported when the .hresp expects an empty body but the actual has content.
 func TestValidateResponses_PartialExpected_StatusCodeEmptyBody_Mismatch(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -206,7 +206,7 @@ func TestValidateResponses_PartialExpected_StatusCodeEmptyBody_Mismatch(t *testi
 // and string mismatches are reported when the status code differs and the .hresp expects
 // only the code.
 func TestValidateResponses_PartialExpected_StatusCodeOnly_StatusMismatch(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -226,7 +226,7 @@ func TestValidateResponses_PartialExpected_StatusCodeOnly_StatusMismatch(t *test
 // TestValidateResponses_PartialExpected_HeadersOnly_Match verifies validation passes when
 // the .hresp defines only specific headers and the actual matches.
 func TestValidateResponses_PartialExpected_HeadersOnly_Match(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -244,7 +244,7 @@ func TestValidateResponses_PartialExpected_HeadersOnly_Match(t *testing.T) {
 // TestValidateResponses_PartialExpected_HeadersOnly_ValueMismatch verifies a header-value
 // mismatch is reported when an expected header value differs.
 func TestValidateResponses_PartialExpected_HeadersOnly_ValueMismatch(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -260,7 +260,7 @@ func TestValidateResponses_PartialExpected_HeadersOnly_ValueMismatch(t *testing.
 }
 
 func TestValidateResponses_PartialExpected_HeadersOnly_HeaderMissing(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -276,7 +276,7 @@ func TestValidateResponses_PartialExpected_HeadersOnly_HeaderMissing(t *testing.
 }
 
 func TestValidateResponses_NilAndEmptyActuals_NilSlice(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -291,7 +291,7 @@ func TestValidateResponses_NilAndEmptyActuals_NilSlice(t *testing.T) {
 }
 
 func TestValidateResponses_NilAndEmptyActuals_EmptySlice(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -306,7 +306,7 @@ func TestValidateResponses_NilAndEmptyActuals_EmptySlice(t *testing.T) {
 }
 
 func TestValidateResponses_NilAndEmptyActuals_SliceWithNil(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -323,7 +323,7 @@ func TestValidateResponses_NilAndEmptyActuals_SliceWithNil(t *testing.T) {
 // TestValidateResponses_FileErrors_MissingFile verifies the validator reports a "failed to
 // read expected response file" error when the .hresp path does not exist.
 func TestValidateResponses_FileErrors_MissingFile(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -340,7 +340,7 @@ func TestValidateResponses_FileErrors_MissingFile(t *testing.T) {
 // TestValidateResponses_FileErrors_EmptyFile verifies a "mismatch in number of responses"
 // error when the .hresp file is empty (parses to zero responses).
 func TestValidateResponses_FileErrors_EmptyFile(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -357,7 +357,7 @@ func TestValidateResponses_FileErrors_EmptyFile(t *testing.T) {
 // TestValidateResponses_FileErrors_MalformedStatus verifies the validator reports both a
 // parse error (invalid status code) and a count mismatch when the .hresp is malformed.
 func TestValidateResponses_FileErrors_MalformedStatus(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -377,7 +377,7 @@ func TestValidateResponses_FileErrors_MalformedStatus(t *testing.T) {
 // TestValidateResponses_StatusString_Mismatching verifies the validator reports a
 // "status string mismatch" when the reason phrase differs from the .hresp expected.
 func TestValidateResponses_StatusString_Mismatching(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -394,7 +394,7 @@ func TestValidateResponses_StatusString_Mismatching(t *testing.T) {
 // TestValidateResponses_StatusString_ActualCorrectFileOnlyCode verifies a status string
 // mismatch when the actual status string is "200 OK" but the .hresp expects only "200".
 func TestValidateResponses_StatusString_ActualCorrectFileOnlyCode(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -411,7 +411,7 @@ func TestValidateResponses_StatusString_ActualCorrectFileOnlyCode(t *testing.T) 
 // TestValidateResponses_StatusString_MismatchingBoth verifies both status code and status
 // string mismatches are reported when both fields differ.
 func TestValidateResponses_StatusString_MismatchingBoth(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -430,7 +430,7 @@ func TestValidateResponses_StatusString_MismatchingBoth(t *testing.T) {
 // TestValidateResponses_StatusCode_Matching verifies the numeric status code alone is
 // sufficient for validation when both actual and expected carry only the code.
 func TestValidateResponses_StatusCode_Matching(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -447,7 +447,7 @@ func TestValidateResponses_StatusCode_Matching(t *testing.T) {
 // TestValidateResponses_StatusCode_Mismatching verifies the validator reports two errors
 // (code + string) when the numeric status code does not match.
 func TestValidateResponses_StatusCode_Mismatching(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -465,7 +465,7 @@ func TestValidateResponses_StatusCode_Mismatching(t *testing.T) {
 // mismatches when the actual status code is 0 (the "nil" case, which should not happen with
 // a real http.Response).
 func TestValidateResponses_StatusCode_NilActual(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -484,7 +484,7 @@ func TestValidateResponses_StatusCode_NilActual(t *testing.T) {
 // TestValidateResponses_StatusCode_NilExpected verifies a parse failure plus count mismatch
 // when the .hresp expected file has no status line.
 func TestValidateResponses_StatusCode_NilExpected(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -503,7 +503,7 @@ func TestValidateResponses_StatusCode_NilExpected(t *testing.T) {
 // TestValidateResponses_StatusCode_BothCodeOnly verifies validation succeeds when both
 // sides carry only the numeric status code and no reason phrase.
 func TestValidateResponses_StatusCode_BothCodeOnly(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -521,7 +521,7 @@ func TestValidateResponses_StatusCode_BothCodeOnly(t *testing.T) {
 // that the legacy validator tests never exercised.
 
 func TestValidateResponsesWithOptions_OutOfRangeIndex(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -539,7 +539,7 @@ func TestValidateResponsesWithOptions_OutOfRangeIndex(t *testing.T) {
 // the expected body comes from a .hresp fixture and matches the actual response.
 
 func TestValidateResponses_Body_ExactMatch_Matching(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -556,7 +556,7 @@ func TestValidateResponses_Body_ExactMatch_Matching(t *testing.T) {
 // TestValidateResponses_Body_ExactMatch_Mismatching verifies the validator reports a
 // "body mismatch" error when the actual body differs from the .hresp expected body.
 func TestValidateResponses_Body_ExactMatch_Mismatching(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -573,7 +573,7 @@ func TestValidateResponses_Body_ExactMatch_Mismatching(t *testing.T) {
 // TestValidateResponses_Body_ExactMatch_EmptyFileActualContent verifies a body mismatch
 // when the .hresp expects an empty body but the actual has content.
 func TestValidateResponses_Body_ExactMatch_EmptyFileActualContent(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -590,7 +590,7 @@ func TestValidateResponses_Body_ExactMatch_EmptyFileActualContent(t *testing.T) 
 // TestValidateResponses_Body_ExactMatch_EmptyFileActualEmpty verifies validation succeeds
 // when both expected and actual bodies are empty.
 func TestValidateResponses_Body_ExactMatch_EmptyFileActualEmpty(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -608,7 +608,7 @@ func TestValidateResponses_Body_ExactMatch_EmptyFileActualEmpty(t *testing.T) {
 // is benign when the expected response comes from a file (the file format cannot
 // express BodyContains).
 func TestValidateResponses_BodyContains_NotTriggeredByFile(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -625,7 +625,7 @@ func TestValidateResponses_BodyContains_NotTriggeredByFile(t *testing.T) {
 // TestValidateResponses_BodyContains_ExactMismatchHandled verifies that when BodyContains
 // is not triggered by the file, body mismatch is still handled by the exact-match check.
 func TestValidateResponses_BodyContains_ExactMismatchHandled(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -642,7 +642,7 @@ func TestValidateResponses_BodyContains_ExactMismatchHandled(t *testing.T) {
 // TestValidateResponses_BodyNotContains_NotTriggeredByFile verifies the BodyNotContains path
 // is benign when the expected response comes from a file.
 func TestValidateResponses_BodyNotContains_NotTriggeredByFile(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -660,7 +660,7 @@ func TestValidateResponses_BodyNotContains_NotTriggeredByFile(t *testing.T) {
 // expected body (file) does not match the actual body, validation reports a body mismatch
 // regardless of BodyNotContains not being expressible in the file format.
 func TestValidateResponses_BodyNotContains_ActualContainsUnwanted(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -678,7 +678,7 @@ func TestValidateResponses_BodyNotContains_ActualContainsUnwanted(t *testing.T) 
 // treats JSON with different whitespace / indentation / key ordering as equal.
 
 func TestValidateResponses_JSON_WhitespaceComparison(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -697,7 +697,7 @@ func TestValidateResponses_JSON_WhitespaceComparison(t *testing.T) {
 // placeholders in the expected body (e.g. {{$anyGuid}}) still validates
 // against an actual JSON body that satisfies the placeholder.
 func TestValidateResponses_JSON_WithPlaceholders(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -717,7 +717,7 @@ func TestValidateResponses_JSON_WithPlaceholders(t *testing.T) {
 // placeholders inside expected bodies (e.g. timestamp placeholders) validates
 // against an actual JSON body whose values match the placeholder shape.
 func TestValidateResponses_JSON_WithPlaceholdersInBody(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().

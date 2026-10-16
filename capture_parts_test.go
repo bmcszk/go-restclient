@@ -36,6 +36,13 @@ func newCaptureParts(t *testing.T) (given, when, then *captureParts) {
 	return c, c, c
 }
 
+type fakerHeaderRule struct {
+	key           string
+	pattern       string
+	fieldCount    int
+	containsCheck string
+}
+
 func (p *parts) requestURLContains(fragments ...string) *parts {
 	current := p.current()
 	p.require.NotNil(current.Request)
@@ -569,12 +576,6 @@ func (p *parts) requestExecuted(i int) *parts {
 }
 
 // fakerHeaderRule is one faker-header rule; containsCheck wins over pattern+fieldCount.
-type fakerHeaderRule struct {
-	key           string
-	pattern       string
-	fieldCount    int
-	containsCheck string
-}
 
 // serverReceivedFakerHeaders applies the standard set of faker-header assertions to the
 // captured request at reqIndex, for every rule in rules.

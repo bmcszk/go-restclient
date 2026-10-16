@@ -26,10 +26,11 @@ func newFileParts(t *testing.T) (given, when, then *fileParts) {
 	t.Helper()
 
 	f := &fileParts{parts: parts{
-		T:       t,
-		require: require.New(t),
-		assert:  assert.New(t),
-		baseDir: t.TempDir(),
+		trackedValues: make(map[string][]string),
+		T:             t,
+		require:       require.New(t),
+		assert:        assert.New(t),
+		baseDir:       t.TempDir(),
 	}}
 
 	return f, f, f
