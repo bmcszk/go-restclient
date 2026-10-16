@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/stretchr/testify/assert"
@@ -224,6 +225,67 @@ func (p *testFixture) validationFails(count int, texts ...string) *testFixture {
 // validationSucceeds asserts the response validation passed.
 func (p *testFixture) validationSucceeds() *testFixture {
 	p.require.NoError(p.validationErr)
+
+	return p
+}
+
+// clientConfigSnapshot records the client options asserted by clientBaseURLIs /
+// clientDefaultHeaderIs after aClientWithDefaults runs.
+type clientConfigSnapshot struct {
+	baseURL     string
+	headerKey   string
+	headerValue string
+	httpTimeout time.Duration
+}
+
+// aClientWithDefaults builds a client from fixed defaults recorded in parts.clientConfig.
+func (p *testFixture) aClientWithDefaults() *testFixture {
+	p.clientConfig = clientConfigSnapshot{
+		baseURL:     "https://api.example.com",
+		headerKey:   "X-Default",
+		headerValue: "DefaultValue",
+		httpTimeout: 15 * time.Second,
+	}
+
+	return p.aClient(
+		rc.WithHTTPClient(&http.Client{Timeout: p.clientConfig.httpTimeout}),
+		rc.WithBaseURL(p.clientConfig.baseURL),
+		rc.WithDefaultHeader(p.clientConfig.headerKey, p.clientConfig.headerValue),
+	)
+}
+
+// clientBaseURLIs asserts the client's BaseURL matches the recorded config snapshot.
+func (p *testFixture) clientBaseURLIs(_ string) *testFixture {
+	p.require.Equal(p.clientConfig.baseURL, p.client.BaseURL)
+
+	return p
+}
+
+// clientBaseURLIsEmpty asserts the client's BaseURL is empty.
+func (p *testFixture) clientBaseURLIsEmpty() *testFixture {
+	p.assert.Empty(p.client.BaseURL)
+
+	return p
+}
+
+// clientDefaultHeaderIs after aClientWithDefaults runs.
+func (p *testFixture) clientDefaultHeaderIs(key, _ string) *testFixture {
+	p.require.Equal(p.clientConfig.headerValue, p.client.DefaultHeaders.Get(key))
+
+	return p
+}
+
+// clientExists asserts the client is non-nil.
+func (p *testFixture) clientExists() *testFixture {
+	p.require.NotNil(p.client)
+
+	return p
+}
+
+// clientDefaultHeadersEmpty asserts the client's DefaultHeaders map is non-nil and empty.
+func (p *testFixture) clientDefaultHeadersEmpty() *testFixture {
+	p.require.NotNil(p.client.DefaultHeaders)
+	p.assert.Empty(p.client.DefaultHeaders)
 
 	return p
 }

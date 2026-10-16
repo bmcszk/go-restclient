@@ -6,6 +6,7 @@ import (
 	"net/http/cookiejar"
 	"os"
 	"path/filepath"
+	"testing"
 	"text/template"
 
 	rc "github.com/bmcszk/go-restclient"
@@ -17,6 +18,13 @@ import (
 type cookiesParts struct {
 	// cookieCheck flips true when the cookie server receives its test cookie back.
 	cookieCheck bool
+}
+
+// newCookiesParts returns the given/when/then fixture for the cookie/redirect-domain fluent DSL.
+func newCookiesParts(t *testing.T) (given, when, then *testFixture) {
+	t.Helper()
+
+	return newParts(t)
 }
 
 // aFreshCookieCheck resets the cookie check flag before a scenario runs.

@@ -2,6 +2,7 @@ package restclient_test
 
 import (
 	"net/http"
+	"testing"
 
 	rc "github.com/bmcszk/go-restclient"
 )
@@ -11,6 +12,13 @@ import (
 type oauth2Parts struct {
 	// tokenServerURL holds the address of the OAuth2 token server under test.
 	tokenServerURL string
+}
+
+// newOauth2Parts returns the given/when/then fixture for the oauth2-domain fluent DSL.
+func newOauth2Parts(t *testing.T) (given, when, then *testFixture) {
+	t.Helper()
+
+	return newParts(t)
 }
 
 // anOAuth2TokenServerWithStatus starts a canned OAuth2 token endpoint answering with the

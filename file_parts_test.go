@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"testing"
 	"text/template"
 
 	"golang.org/x/text/transform"
@@ -21,6 +22,13 @@ const requestFilesDir = "test/data/http_request_files"
 type fileParts struct {
 	// httpFilePath holds the path of the .http file under test.
 	httpFilePath string
+}
+
+// newFileParts returns the given/when/then fixture for the file/fixture-domain fluent DSL.
+func newFileParts(t *testing.T) (given, when, then *testFixture) {
+	t.Helper()
+
+	return newParts(t)
 }
 
 // aTemplateFixture renders a committed test/data/<dir> template with [[ ]] delimiters.

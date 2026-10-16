@@ -1,177 +1,15 @@
 package restclient_test
 
 import (
-	"fmt"
+	rc "github.com/bmcszk/go-restclient"
+	"golang.org/x/text/encoding/charmap"
 	"io"
 	"net/http"
 	"testing"
-
-	"golang.org/x/text/encoding/charmap"
-
-	rc "github.com/bmcszk/go-restclient"
 )
 
-func TestParseFile_SingleRequest(t *testing.T) {
-	given, when, then := newParts(t)
-
-	given.
-		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			_, _ = fmt.Fprint(w, "ok")
-		}).and().
-		aHttpFile(fmt.Sprintf("GET %s/health\n", given.serverURL)).and().
-		aClient()
-
-	when.
-		parsingFile()
-
-	then.
-		parseSucceeded().and().
-		parsedRequestCount(1).and().
-		parsedRequestMethod(0, http.MethodGet).and().
-		parsedRequestRawURLIs(0, given.serverURL+"/health")
-}
-
-func TestParseFile_MultipleRequests(t *testing.T) {
-	given, when, then := newParts(t)
-
-	given.
-		aHttpFile("GET http://example.com/a\n###\n" +
-			"POST http://example.com/b\nContent-Type: application/json\n\n{\"x\":1}\n").and().
-		aClient()
-
-	when.
-		parsingFile()
-
-	then.
-		parseSucceeded().and().
-		parsedRequestCount(2).and().
-		parsedRequestMethod(0, http.MethodGet).and().
-		parsedRequestMethod(1, http.MethodPost)
-}
-
-func TestParseFile_NamedRequests(t *testing.T) {
-	given, when, then := newParts(t)
-
-	given.
-		aHttpFile("### get users\nGET http://example.com/users\n###\n" +
-			"### create user\nPOST http://example.com/users\n").and().
-		aClient()
-
-	when.
-		parsingFile()
-
-	then.
-		parseSucceeded().and().
-		parsedRequestCount(2).and().
-		parsedRequestName(0, "get users").and().
-		parsedRequestName(1, "create user")
-}
-
-func TestParseFile_NoRequests(t *testing.T) {
-	given, when, then := newParts(t)
-
-	given.
-		aHttpFile("# just a comment\n").and().
-		aClient()
-
-	when.
-		parsingFile()
-
-	then.
-		parseErrorContains("no requests found")
-}
-
-func TestParseFile_FileNotFound(t *testing.T) {
-	given, when, then := newParts(t)
-
-	given.
-		aMissingFile("/nonexistent/file.http").and().
-		aClient()
-
-	when.
-		parsingFile()
-
-	then.
-		parseErrorContains()
-}
-
-func TestExecuteRequest_ByIndex(t *testing.T) {
-	given, when, then := newParts(t)
-
-	given.
-		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusOK)
-			_, _ = fmt.Fprint(w, "response1")
-		}).and().
-		aHttpFile(fmt.Sprintf("GET %s/a\n###\nGET %s/b\n", given.serverURL, given.serverURL)).and().
-		aClient()
-
-	when.
-		executingRequestAt(0)
-
-	then.
-		noError().and().
-		responseCount(1).and().
-		responseAt(0).and().
-		responseHasNoError().and().
-		responseBodyIs("response1").and().
-		serverReceivedMethodAndPath(0, http.MethodGet, "/a")
-}
-
-func TestExecuteRequest_OutOfRange(t *testing.T) {
-	given, when, then := newParts(t)
-
-	given.
-		aHttpFile("GET http://example.com/a\n").and().
-		aClient()
-
-	when.
-		executingRequestAt(5)
-
-	then.
-		errorContains("out of range")
-}
-
-func TestExecuteRequest_NegativeIndex(t *testing.T) {
-	given, when, then := newParts(t)
-
-	given.
-		aHttpFile("GET http://example.com/a\n").and().
-		aClient()
-
-	when.
-		executingRequestAt(-1)
-
-	then.
-		errorContains("out of range")
-}
-
-func TestExecuteRequest_SecondOfThree(t *testing.T) {
-	given, when, then := newParts(t)
-
-	given.
-		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusOK)
-		}).and().
-		aHttpFile(fmt.Sprintf("GET %s/1\n###\nGET %s/2\n###\nGET %s/3\n",
-			given.serverURL, given.serverURL, given.serverURL)).and().
-		aClient()
-
-	when.
-		executingRequestAt(1)
-
-	then.
-		noError().and().
-		responseCount(1).and().
-		responseAt(0).and().
-		responseHasNoError().and().
-		capturedRequestCount(1).and().
-		serverReceivedMethodAndPath(0, http.MethodGet, "/2")
-}
-
 func TestExecuteFile_ExternalFileWithVariables(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newFileParts(t)
 
 	given.
 		aJsonEchoServer().and().
@@ -199,7 +37,7 @@ func TestExecuteFile_ExternalFileWithVariables(t *testing.T) {
 }
 
 func TestExecuteFile_ExternalFileWithoutVariables(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newFileParts(t)
 
 	given.
 		aJsonEchoServer().and().
@@ -228,7 +66,7 @@ func TestExecuteFile_ExternalFileWithoutVariables(t *testing.T) {
 // aHttpFileWithExternalFileEncoding so each test stays a single fluent chain.
 
 func TestExecuteFile_ExternalFileWithEncoding_Latin1(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newFileParts(t)
 
 	given.
 		anEchoServer().and().
@@ -248,7 +86,7 @@ func TestExecuteFile_ExternalFileWithEncoding_Latin1(t *testing.T) {
 }
 
 func TestExecuteFile_ExternalFileWithEncoding_CP1252(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newFileParts(t)
 
 	given.
 		anEchoServer().and().
@@ -268,7 +106,7 @@ func TestExecuteFile_ExternalFileWithEncoding_CP1252(t *testing.T) {
 }
 
 func TestExecuteFile_ExternalFileWithEncoding_ASCII(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newFileParts(t)
 
 	given.
 		anEchoServer().and().
@@ -288,7 +126,7 @@ func TestExecuteFile_ExternalFileWithEncoding_ASCII(t *testing.T) {
 }
 
 func TestExecuteFile_ExternalFileWithEncoding_UTF8(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newFileParts(t)
 
 	given.
 		anEchoServer().and().
@@ -307,7 +145,7 @@ func TestExecuteFile_ExternalFileWithEncoding_UTF8(t *testing.T) {
 		serverReceivedBodyIs(0, "Hällo Wörld! Ñice to meet you. €😊")
 }
 func TestExecuteFile_ExternalFileWithEncoding(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newFileParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, r *http.Request) {
@@ -334,7 +172,7 @@ func TestExecuteFile_ExternalFileWithEncoding(t *testing.T) {
 }
 
 func TestExecuteFile_ExternalFileWithVariablesAndEncoding(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newFileParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -360,7 +198,7 @@ func TestExecuteFile_ExternalFileWithVariablesAndEncoding(t *testing.T) {
 }
 
 func TestExecuteFile_WithRestExtension(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newFileParts(t)
 
 	given.
 		aRestExtensionServer().and().
@@ -381,7 +219,7 @@ func TestExecuteFile_WithRestExtension(t *testing.T) {
 }
 
 func TestExecuteFile_ExternalFileNotFound(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newFileParts(t)
 
 	given.
 		aHttpFile(`### External File Not Found
@@ -399,92 +237,8 @@ Content-Type: application/json
 		responseCount(0)
 }
 
-// TestExecuteFile_DotEnvProcessEnvPlaceholderExpands: .env values support {{$processEnv}}
-// so secrets can come from the real environment (#49).
-func TestExecuteFile_DotEnvProcessEnvPlaceholderExpands(t *testing.T) {
-	given, when, then := newEnvParts(t)
-
-	given.
-		withEnv("ISS49_CID", "env-value").and().
-		aDotEnvFile("CID={{$processEnv ISS49_CID}}").and().
-		anEchoServer().and().
-		aHttpFile("@client = {{CID}}\n\nPOST {{server}}/echo\nX-Client: {{client}}\n\nok").and().
-		aClient()
-
-	when.
-		executeFile()
-
-	then.
-		responseCount(1).and().
-		noError().and().
-		serverReceivedHeaderValue(0, "X-Client", "env-value")
-}
-
-// TestExecuteFile_DotEnvUnresolvablePlaceholderStaysRaw: missing process env leaves the
-// {{$processEnv}} placeholder literal in the .env value (#49 pinned semantics).
-func TestExecuteFile_DotEnvUnresolvablePlaceholderStaysRaw(t *testing.T) {
-	given, when, then := newEnvParts(t)
-
-	given.
-		aDotEnvFile("CID={{$processEnv ISS49_MISSING}}").and().
-		anEchoServer().and().
-		aHttpFile("@client = {{CID}}\n\nPOST {{server}}/echo\nX-Client: {{client}}\n\nok").and().
-		aClient()
-
-	when.
-		executeFile()
-
-	then.
-		responseCount(1).and().
-		noError().and().
-		serverReceivedHeaderValue(0, "X-Client", "{{$processEnv ISS49_MISSING}}")
-}
-
-// TestExecuteFile_EnvFlagLoadsNamedEnvFile: --env staging loads .env first, then .env.staging
-// overrides only the keys it defines (#48).
-func TestExecuteFile_EnvFlagLoadsNamedEnvFile(t *testing.T) {
-	given, when, then := newEnvParts(t)
-
-	given.
-		aDotEnvFile("A=base").and().
-		aDotEnvNamedFile("staging", "A=staging\nB=two").and().
-		anEchoServer().and().
-		aHttpFile("@client = {{A}}\n\nPOST {{server}}/echo\nX-A: {{A}}\nX-B: {{B}}\n\nok").and().
-		aClientWithEnvName("staging")
-
-	when.
-		executeFile()
-
-	then.
-		responseCount(1).and().
-		noError().and().
-		serverReceivedHeaderValue(0, "X-A", "staging").and().
-		serverReceivedHeaderValue(0, "X-B", "two")
-}
-
-// TestExecuteFile_NamedEnvFilePlaceholderExpands: .env.staging values support
-// {{$processEnv}} expansion like .env (#49 + #48 combined).
-func TestExecuteFile_NamedEnvFilePlaceholderExpands(t *testing.T) {
-	given, when, then := newEnvParts(t)
-
-	given.
-		withEnv("ISS49_S", "expanded-staging").and().
-		aDotEnvFileRemoved().and().
-		aDotEnvNamedFile("staging", "CID={{$processEnv ISS49_S}}").and().
-		anEchoServer().and().
-		aHttpFile("@client = {{CID}}\n\nPOST {{server}}/echo\nX-Client: {{client}}\n\nok").and().
-		aClientWithEnvName("staging")
-
-	when.
-		executeFile()
-
-	then.
-		responseCount(1).and().
-		noError().and().
-		serverReceivedHeaderValue(0, "X-Client", "expanded-staging")
-}
 func TestExecuteFile_ScriptBlockBetweenRequestsIsIgnored(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newFileParts(t)
 
 	given.
 		anEchoServer().and().
@@ -513,7 +267,7 @@ GET {{server}}/two`).
 // TestExecuteFile_ScriptBlockInsideRequestIsIgnored verifies a script block in
 // the request section does not become body or orphaned content (#46).
 func TestExecuteFile_ScriptBlockInsideRequestIsIgnored(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newFileParts(t)
 
 	given.
 		anEchoServer().and().
@@ -538,37 +292,10 @@ GET {{server}}/after`).
 		serverReceivedMethodAndPath(1, http.MethodGet, "/after")
 }
 
-// A bare `{{ ... }}` httpyac script block between requests is skipped, not
-// swallowed as body content (#46).
-func TestParseFile_ScriptBlockBetweenRequestsIsIgnored(t *testing.T) {
-	given, when, then := newParts(t)
-
-	given.
-		aHttpFile(`### first
-GET {{server}}/one
-
-{{
-  const { randomUUID } = require('crypto');
-  exports.id = randomUUID();
-}}
-
-### second
-GET {{server}}/two`).and().
-		aClient()
-
-	when.
-		parsingFile()
-
-	then.
-		parseSucceeded().and().
-		parsedRequestCount(2).and().
-		parsedRequestBodyIs(0, "")
-}
-
 // A script block inside a request section does not become body and variable
 // substitution for the next request keeps working (#46).
 func TestExecuteFile_ScriptBlockInRequestKeepsVarsWorking(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newFileParts(t)
 
 	given.
 		anEchoServer().and().

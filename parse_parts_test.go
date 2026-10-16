@@ -2,6 +2,7 @@ package restclient_test
 
 import (
 	"context"
+	"testing"
 	"time"
 
 	rc "github.com/bmcszk/go-restclient"
@@ -13,6 +14,13 @@ import (
 type parseParts struct {
 	parsedFile *rc.ParsedFile
 	parseErr   error
+}
+
+// newParseParts returns the given/when/then fixture for the parse-domain fluent DSL.
+func newParseParts(t *testing.T) (given, when, then *testFixture) {
+	t.Helper()
+
+	return newParts(t)
 }
 
 // parsingFile parses the .http file without executing any request.

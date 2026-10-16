@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"sync/atomic"
+	"testing"
 	"time"
 
 	rc "github.com/bmcszk/go-restclient"
@@ -28,6 +29,13 @@ type serverParts struct {
 	requestHits atomic.Int64
 	// activeServerVars holds the scheme/host/port variables of the running test server.
 	activeServerVars map[string]any
+}
+
+// newServerParts returns the given/when/then fixture for the server-domain fluent DSL.
+func newServerParts(t *testing.T) (given, when, then *testFixture) {
+	t.Helper()
+
+	return newParts(t)
 }
 
 // aHttpServer counts requests; bodies are read eagerly because net/http closes them on return.

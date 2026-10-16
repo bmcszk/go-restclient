@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"testing"
 
 	rc "github.com/bmcszk/go-restclient"
@@ -153,6 +154,42 @@ func (p *testFixture) validateResponsesWithIndex(index int) *testFixture {
 func (p *testFixture) responsesValidateAgainst(expectedPath string) *testFixture {
 	p.require.NotNil(p.client)
 	p.assert.NoError(p.client.ValidateResponses(expectedPath, p.responses...))
+
+	return p
+}
+
+// responseHeaderValues asserts the Headers value for key equals values.
+func (p *testFixture) responseHeaderValues(key string, values ...string) *testFixture {
+	p.require.Equal(values, p.current().Headers[key])
+
+	return p
+}
+
+// responseHeaderEmpty asserts the Headers value for key is empty.
+func (p *testFixture) responseHeaderEmpty(key string) *testFixture {
+	p.require.Empty(p.current().Headers.Get(key))
+
+	return p
+}
+
+// responseIsTLS asserts the current response used TLS.
+func (p *testFixture) responseIsTLS() *testFixture {
+	p.require.True(p.current().IsTLS, "expected TLS response, got plain")
+
+	return p
+}
+
+// responseTLSVersionMatches asserts the current response TLS version against a regexp.
+func (p *testFixture) responseTLSVersionMatches(pattern string) *testFixture {
+	p.assert.Regexp(pattern, p.current().TLSVersion)
+
+	return p
+}
+
+// responsesValidateAgainstFixture validates responses against a committed response-files fixture.
+func (p *testFixture) responsesValidateAgainstFixture(name string) *testFixture {
+	path := filepath.Join(responseFilesDir, name)
+	p.assert.NoError(p.client.ValidateResponses(path, p.responses...))
 
 	return p
 }

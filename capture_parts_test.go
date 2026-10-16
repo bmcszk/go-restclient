@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,6 +33,13 @@ type captureParts struct {
 	trackedValues map[string][]string
 	// activeTrack names the bucket captured* methods append into.
 	activeTrack string
+}
+
+// newCaptureParts returns the given/when/then fixture for the capture-domain fluent DSL.
+func newCaptureParts(t *testing.T) (given, when, then *testFixture) {
+	t.Helper()
+
+	return newParts(t)
 }
 
 func (p *testFixture) requestURLContains(fragments ...string) *testFixture {
