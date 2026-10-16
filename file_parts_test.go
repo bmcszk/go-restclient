@@ -1,6 +1,7 @@
 package restclient_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,68 +19,67 @@ const requestFilesDir = "test/data/http_request_files"
 // of the .http file under test that the file and fixture builders write and the
 // executeFile / parse builders read back.
 type fileParts struct {
-	*parts
 	// httpFilePath holds the path of the .http file under test.
 	httpFilePath string
 }
 
 // aTemplateFixture renders a committed test/data/<dir> template with [[ ]] delimiters.
-func (f *fileParts) aTemplateFixture(dir, name string, data any) *fileParts {
+func (p *testFixture) aTemplateFixture(dir, name string, data any) *testFixture {
 	tmplContent, err := os.ReadFile(filepath.Join("test", "data", dir, name))
-	f.require.NoError(err)
+	p.require.NoError(err)
 
 	tmpl, err := template.New(name).Delims("[[", "]]").Parse(string(tmplContent))
-	f.require.NoError(err)
+	p.require.NoError(err)
 
-	path := filepath.Join(f.baseDir, name)
+	path := filepath.Join(p.baseDir, name)
 
 	file, err := os.Create(path)
-	f.require.NoError(err)
-	f.require.NoError(tmpl.Execute(file, data))
-	f.require.NoError(file.Close())
+	p.require.NoError(err)
+	p.require.NoError(tmpl.Execute(file, data))
+	p.require.NoError(file.Close())
 
-	f.httpFilePath = path
+	p.httpFilePath = path
 
-	return f
+	return p
 }
 
 // aRequestFixtureAbs points the DSL at a repo-root-relative request fixture path.
-func (f *fileParts) aRequestFixtureAbs(name string) *fileParts {
-	f.httpFilePath = name
+func (p *testFixture) aRequestFixtureAbs(name string) *testFixture {
+	p.httpFilePath = name
 
-	return f
+	return p
 }
 
 // aHttpFile writes the given .http content, replacing {{server}} with the test server URL.
-func (f *fileParts) aHttpFile(content string) *fileParts {
-	resolved := strings.ReplaceAll(content, "{{server}}", f.serverURL)
-	path := filepath.Join(f.baseDir, "requests.http")
-	f.require.NoError(os.WriteFile(path, []byte(resolved), 0644))
-	f.httpFilePath = path
+func (p *testFixture) aHttpFile(content string) *testFixture {
+	resolved := strings.ReplaceAll(content, "{{server}}", p.serverURL)
+	path := filepath.Join(p.baseDir, "requests.http")
+	p.require.NoError(os.WriteFile(path, []byte(resolved), 0644))
+	p.httpFilePath = path
 
-	return f
+	return p
 }
 
 // aHttpFileFromTemplate renders a committed request fixture template with the test server
 // URL ([[.ServerURL]] delimiters) and stores the processed file path for execution.
 // serverURL may be empty for parse-only fixtures; the template still renders (URL stays relative).
-func (f *fileParts) aHttpFileFromTemplate(templateName string) *fileParts {
-	return f.aHttpFileFromTemplateWithData(templateName, struct{ ServerURL string }{ServerURL: f.serverURL})
+func (p *testFixture) aHttpFileFromTemplate(templateName string) *testFixture {
+	return p.aHttpFileFromTemplateWithData(templateName, struct{ ServerURL string }{ServerURL: p.serverURL})
 }
 
 // aRequestFixture points the DSL at a committed request fixture file without templating.
-func (f *fileParts) aRequestFixture(name string) *fileParts {
-	f.httpFilePath = filepath.Join(requestFilesDir, name)
+func (p *testFixture) aRequestFixture(name string) *testFixture {
+	p.httpFilePath = filepath.Join(requestFilesDir, name)
 
-	return f
+	return p
 }
 
 // aFormattedRequestFixture renders a committed %s-placeholder fixture with fmt.Sprintf.
-func (f *fileParts) aFormattedRequestFixture(name string, substitutions ...string) *fileParts {
+func (p *testFixture) aFormattedRequestFixture(name string, substitutions ...string) *testFixture {
 	baseContent, err := os.ReadFile(filepath.Join(requestFilesDir, name))
 	if err != nil {
 		baseContent, err = os.ReadFile(filepath.Join("test", "data", "execute_file_ignore_empty_blocks", name))
-		f.require.NoError(err)
+		p.require.NoError(err)
 	}
 
 	args := make([]any, len(substitutions))
@@ -87,134 +87,142 @@ func (f *fileParts) aFormattedRequestFixture(name string, substitutions ...strin
 		args[i] = s
 	}
 
-	return f.aHttpFile(fmt.Sprintf(string(baseContent), args...))
+	return p.aHttpFile(fmt.Sprintf(string(baseContent), args...))
 }
 
 // anUploadsFixtureCopy copies the multipart fixture with server URL and < paths resolved.
-func (f *fileParts) anUploadsFixtureCopy() *fileParts {
-	f.require.NotEmpty(f.serverURL)
+func (p *testFixture) anUploadsFixtureCopy() *testFixture {
+	p.require.NotEmpty(p.serverURL)
 
 	content, err := os.ReadFile(filepath.Join("test", "data", "http_request_files", "multipart_file_uploads.http"))
-	f.require.NoError(err)
+	p.require.NoError(err)
 
 	resolved := strings.ReplaceAll(string(content), "< ./test/data/request_body/", "< test/data/request_body/")
-	resolved = strings.ReplaceAll(resolved, "[[.ServerURL]]", f.serverURL)
-	path := filepath.Join(f.baseDir, "multipart_file_uploads.http")
+	resolved = strings.ReplaceAll(resolved, "[[.ServerURL]]", p.serverURL)
+	path := filepath.Join(p.baseDir, "multipart_file_uploads.http")
 
-	f.require.NoError(os.WriteFile(path, []byte(resolved), 0644))
-	f.httpFilePath = path
+	p.require.NoError(os.WriteFile(path, []byte(resolved), 0644))
+	p.httpFilePath = path
 
-	return f
+	return p
 }
 
 // aFixtureCopy copies a committed fixture into baseDir, applying text replacements.
-func (f *fileParts) aFixtureCopy(requestPath, destName string, replacements map[string]string) *fileParts {
+func (p *testFixture) aFixtureCopy(requestPath, destName string, replacements map[string]string) *testFixture {
 	content, err := os.ReadFile(requestPath)
-	f.require.NoError(err)
+	p.require.NoError(err)
 	result := string(content)
 	for old, newVal := range replacements {
 		result = strings.ReplaceAll(result, old, newVal)
 	}
-	path := filepath.Join(f.baseDir, destName)
-	f.require.NoError(os.WriteFile(path, []byte(result), 0644))
-	f.httpFilePath = path
-	return f
+	path := filepath.Join(p.baseDir, destName)
+	p.require.NoError(os.WriteFile(path, []byte(result), 0644))
+	p.httpFilePath = path
+	return p
 }
 
 // aHttpFileFromTemplateWithData renders a committed request fixture template with the given
 // template data ([[ ]] delimiters) and stores the processed file path for execution.
-func (f *fileParts) aHttpFileFromTemplateWithData(templateName string, data any) *fileParts {
+func (p *testFixture) aHttpFileFromTemplateWithData(templateName string, data any) *testFixture {
 	tmplContent, err := os.ReadFile(filepath.Join(requestFilesDir, templateName))
-	f.require.NoError(err)
+	p.require.NoError(err)
 
 	tmpl, err := template.New(templateName).Delims("[[", "]]").Parse(string(tmplContent))
-	f.require.NoError(err)
+	p.require.NoError(err)
 
-	path := filepath.Join(f.baseDir, templateName)
+	path := filepath.Join(p.baseDir, templateName)
 
 	file, err := os.Create(path)
-	f.require.NoError(err)
-	f.require.NoError(tmpl.Execute(file, data))
-	f.require.NoError(file.Close())
+	p.require.NoError(err)
+	p.require.NoError(tmpl.Execute(file, data))
+	p.require.NoError(file.Close())
 
-	f.httpFilePath = path
+	p.httpFilePath = path
 
-	return f
+	return p
 }
 
 // anExternalFile writes the request file under test verbatim to <baseDir>/name.
-func (f *fileParts) anExternalFile(name, content string) *fileParts {
-	f.writeTempFile(name, content)
-	f.httpFilePath = filepath.Join(f.baseDir, name)
+func (p *testFixture) anExternalFile(name, content string) *testFixture {
+	p.writeTempFile(name, content)
+	p.httpFilePath = filepath.Join(p.baseDir, name)
 
-	return f
+	return p
 }
 
 // aMissingFile points httpFilePath at a path that does not exist, for file-not-found tests.
-func (f *fileParts) aMissingFile(path string) *fileParts {
-	f.httpFilePath = path
+func (p *testFixture) aMissingFile(path string) *testFixture {
+	p.httpFilePath = path
 
-	return f
+	return p
 }
 
 // writeTempFile writes content to a file named name inside the shared per-test base dir.
-func (f *fileParts) writeTempFile(name, content string) {
-	f.require.NoError(os.WriteFile(filepath.Join(f.baseDir, name), []byte(content), 0644))
+func (p *testFixture) writeTempFile(name, content string) {
+	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, name), []byte(content), 0644))
 }
 
 // aHttpFileWithExternalFileEncoding writes the external file in the given encoding and a <@ request for it.
-func (f *fileParts) aHttpFileWithExternalFileEncoding(
+func (p *testFixture) aHttpFileWithExternalFileEncoding(
 	encodingName, externalFileName string, rawUTF8Content []byte, encoder transform.Transformer,
-) *fileParts {
+) *testFixture {
 	var encoded []byte
 	if encoder != nil {
 		var err error
 		encoded, _, err = transform.Bytes(encoder, rawUTF8Content)
-		f.require.NoError(err)
+		p.require.NoError(err)
 	} else {
 		encoded = rawUTF8Content
 	}
 
-	f.require.NoError(os.WriteFile(filepath.Join(f.baseDir, externalFileName), encoded, 0644))
+	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, externalFileName), encoded, 0644))
 
-	return f.aHttpFileFromTemplateWithData("external_file_encoding.http",
+	return p.aHttpFileFromTemplateWithData("external_file_encoding.http",
 		struct {
 			ServerURL    string
 			EncodingName string
 			ExternalName string
-		}{f.serverURL, encodingName, externalFileName})
+		}{p.serverURL, encodingName, externalFileName})
 }
 
 // aHttpFileWithExternalFile writes a short request body that points at the named external
 // file via <@, and stores the given JSON content in the external file.
-func (f *fileParts) aHttpFileWithExternalFile(externalFileName, externalFileContent string) *fileParts {
-	f.require.NoError(os.WriteFile(filepath.Join(f.baseDir, externalFileName), []byte(externalFileContent), 0644))
+func (p *testFixture) aHttpFileWithExternalFile(externalFileName, externalFileContent string) *testFixture {
+	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, externalFileName), []byte(externalFileContent), 0644))
 
-	return f.aHttpFileFromTemplate("external_file_with_vars.http")
+	return p.aHttpFileFromTemplate("external_file_with_vars.http")
 }
 
 // aHttpFileWithExternalFileStatic writes a short request body that points at the named
 // external file via < (no @: NO variable substitution).
-func (f *fileParts) aHttpFileWithExternalFileStatic(externalFileName, externalFileContent string) *fileParts {
-	f.require.NoError(os.WriteFile(filepath.Join(f.baseDir, externalFileName), []byte(externalFileContent), 0644))
+func (p *testFixture) aHttpFileWithExternalFileStatic(externalFileName, externalFileContent string) *testFixture {
+	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, externalFileName), []byte(externalFileContent), 0644))
 
-	return f.aHttpFileFromTemplate("external_file_static.http")
+	return p.aHttpFileFromTemplate("external_file_static.http")
 }
 
 // aHttpFileWithExternalFileFixture loads the committed external-file fixture via <@.
-func (f *fileParts) aHttpFileWithExternalFileFixture(externalFileName string) *fileParts {
+func (p *testFixture) aHttpFileWithExternalFileFixture(externalFileName string) *testFixture {
 	src := filepath.Join(externalFilesFixtureDir, externalFileName)
 	content, err := os.ReadFile(src)
-	f.require.NoError(err)
+	p.require.NoError(err)
 
-	return f.aHttpFileWithExternalFile(externalFileName, string(content))
+	return p.aHttpFileWithExternalFile(externalFileName, string(content))
 }
 
 // aHttpFileWithExternalFileStaticFixture is the no-substitution < counterpart.
-func (f *fileParts) aHttpFileWithExternalFileStaticFixture(externalFileName string) *fileParts {
+func (p *testFixture) aHttpFileWithExternalFileStaticFixture(externalFileName string) *testFixture {
 	src := filepath.Join(externalFilesFixtureDir, externalFileName)
 	content, err := os.ReadFile(src)
-	f.require.NoError(err)
+	p.require.NoError(err)
 
-	return f.aHttpFileWithExternalFileStatic(externalFileName, string(content))
+	return p.aHttpFileWithExternalFileStatic(externalFileName, string(content))
+}
+
+// executeFile runs every request in the .http file.
+func (p *testFixture) executeFile() *testFixture {
+	p.require.NotNil(p.client)
+	p.responses, p.execErr = p.client.ExecuteFile(context.Background(), p.httpFilePath)
+
+	return p
 }

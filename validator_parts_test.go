@@ -13,12 +13,12 @@ import (
 // Validator DSL: builds rc.Response values directly, never executes HTTP requests.
 
 // aResponseWithStatus is a shorthand for aResponseWith with no body and no headers.
-func (p *parts) aResponseWithStatus(statusCode int, statusText string) *parts {
+func (p *testFixture) aResponseWithStatus(statusCode int, statusText string) *testFixture {
 	return p.aResponseWith(statusCode, statusText, "", nil)
 }
 
 // aResponseFromRawHTTPFile parses a raw HTTP response file into a rc.Response.
-func (p *parts) aResponseFromRawHTTPFile(path string) *parts {
+func (p *testFixture) aResponseFromRawHTTPFile(path string) *testFixture {
 	content, err := os.ReadFile(path)
 	p.require.NoError(err, "read raw http file %s", path)
 
@@ -44,7 +44,7 @@ func (p *parts) aResponseFromRawHTTPFile(path string) *parts {
 
 // withStatusCode rewrites the StatusCode of the LAST response in p.responses.
 // Requires len(p.responses) > 0.
-func (p *parts) withStatusCode(code int) *parts {
+func (p *testFixture) withStatusCode(code int) *testFixture {
 	p.require.NotEmpty(p.responses)
 	p.responses[len(p.responses)-1].StatusCode = code
 
@@ -53,7 +53,7 @@ func (p *parts) withStatusCode(code int) *parts {
 
 // withStatusText rewrites the Status string of the LAST response in p.responses.
 // Requires len(p.responses) > 0.
-func (p *parts) withStatusText(s string) *parts {
+func (p *testFixture) withStatusText(s string) *testFixture {
 	p.require.NotEmpty(p.responses)
 	p.responses[len(p.responses)-1].Status = s
 
@@ -62,7 +62,7 @@ func (p *parts) withStatusText(s string) *parts {
 
 // withHeader Sets the given key/value pair on the Headers of the LAST response
 // in p.responses. Requires len(p.responses) > 0.
-func (p *parts) withHeader(key, value string) *parts {
+func (p *testFixture) withHeader(key, value string) *testFixture {
 	p.require.NotEmpty(p.responses)
 	resp := p.responses[len(p.responses)-1]
 	if resp.Headers == nil {
@@ -75,7 +75,7 @@ func (p *parts) withHeader(key, value string) *parts {
 
 // withoutHeader removes the given header key from the LAST response in p.responses.
 // Requires len(p.responses) > 0.
-func (p *parts) withoutHeader(key string) *parts {
+func (p *testFixture) withoutHeader(key string) *testFixture {
 	p.require.NotEmpty(p.responses)
 	resp := p.responses[len(p.responses)-1]
 	if resp.Headers != nil {
@@ -87,7 +87,7 @@ func (p *parts) withoutHeader(key string) *parts {
 
 // withBody replaces the Body and BodyString of the LAST response in p.responses.
 // Requires len(p.responses) > 0.
-func (p *parts) withBody(body string) *parts {
+func (p *testFixture) withBody(body string) *testFixture {
 	p.require.NotEmpty(p.responses)
 	resp := p.responses[len(p.responses)-1]
 	resp.BodyString = body
@@ -97,21 +97,21 @@ func (p *parts) withBody(body string) *parts {
 }
 
 // noActualResponses leaves p.responses nil (a nil slice, distinct from an empty slice).
-func (p *parts) noActualResponses() *parts {
+func (p *testFixture) noActualResponses() *testFixture {
 	p.responses = nil
 
 	return p
 }
 
 // anEmptyResponseSlice sets p.responses to an empty (non-nil) slice.
-func (p *parts) anEmptyResponseSlice() *parts {
+func (p *testFixture) anEmptyResponseSlice() *testFixture {
 	p.responses = []*rc.Response{}
 
 	return p
 }
 
 // aNilResponse sets p.responses to []*rc.Response{nil}.
-func (p *parts) aNilResponse() *parts {
+func (p *testFixture) aNilResponse() *testFixture {
 	p.responses = []*rc.Response{nil}
 
 	return p
@@ -119,14 +119,14 @@ func (p *parts) aNilResponse() *parts {
 
 // anExpectedResponseFileAt sets p.expectedFilePath verbatim. Used to point at a
 // always prepends the committed-fixture directory).
-func (p *parts) anExpectedResponseFileAt(path string) *parts {
+func (p *testFixture) anExpectedResponseFileAt(path string) *testFixture {
 	p.expectedFilePath = path
 
 	return p
 }
 
 // validateResponsesWithIndex calls ValidateResponsesWithOptions with one expected index.
-func (p *parts) validateResponsesWithIndex(index int) *parts {
+func (p *testFixture) validateResponsesWithIndex(index int) *testFixture {
 	p.validationErr = p.client.ValidateResponsesWithOptions(
 		p.expectedFilePath,
 		rc.ValidateOptions{ExpectedIndex: index},

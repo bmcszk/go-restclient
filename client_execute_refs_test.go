@@ -7,7 +7,7 @@ import (
 )
 
 func TestExecuteFile_RequestRefs_ParserRecordsRefAndForceRef(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aTemplateFixture("http_request_files", "refs_parse.http",
@@ -26,7 +26,7 @@ func TestExecuteFile_RequestRefs_ParserRecordsRefAndForceRef(t *testing.T) {
 }
 
 func TestExecuteFile_RequestRefs_RefRunsReferencedBeforeReferencing(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -45,7 +45,7 @@ func TestExecuteFile_RequestRefs_RefRunsReferencedBeforeReferencing(t *testing.T
 }
 
 func TestExecuteFile_RequestRefs_RefCachedWithinRun(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -63,7 +63,7 @@ func TestExecuteFile_RequestRefs_RefCachedWithinRun(t *testing.T) {
 }
 
 func TestExecuteFile_RequestRefs_ForceRefReruns(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -81,7 +81,7 @@ func TestExecuteFile_RequestRefs_ForceRefReruns(t *testing.T) {
 }
 
 func TestExecuteFile_RequestRefs_CycleFails(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -97,7 +97,7 @@ func TestExecuteFile_RequestRefs_CycleFails(t *testing.T) {
 }
 
 func TestExecuteFile_RequestRefs_UnknownRefFails(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -113,7 +113,7 @@ func TestExecuteFile_RequestRefs_UnknownRefFails(t *testing.T) {
 }
 
 func TestExecuteFile_RequestRefs_TransitiveChain(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -134,7 +134,7 @@ func TestExecuteFile_RequestRefs_TransitiveChain(t *testing.T) {
 
 // referencing request comes first in the fixture — resolution is name-based, not file-order
 func TestExecuteFile_RequestRefs_RefResponseUsableInReferencingRequest(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -156,7 +156,7 @@ func TestExecuteFile_RequestRefs_RefResponseUsableInReferencingRequest(t *testin
 }
 
 func TestExecuteFile_RequestImports_CrossFileRefAndVars(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -178,7 +178,7 @@ func TestExecuteFile_RequestImports_CrossFileRefAndVars(t *testing.T) {
 }
 
 func TestExecuteFile_RequestImports_MissingFileFails(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -194,7 +194,7 @@ func TestExecuteFile_RequestImports_MissingFileFails(t *testing.T) {
 }
 
 func TestExecuteFile_RequestImports_ImportedRequestRefCached(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -216,7 +216,7 @@ func TestExecuteFile_RequestImports_ImportedRequestRefCached(t *testing.T) {
 }
 
 func TestResponseRef_StatusCode(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -245,7 +245,7 @@ func TestResponseRef_StatusCode(t *testing.T) {
 }
 
 func TestResponseRef_BodyField(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, r *http.Request) {
@@ -284,7 +284,7 @@ func TestResponseRef_BodyField(t *testing.T) {
 }
 
 func TestResponseRef_HeaderValue(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -312,7 +312,7 @@ func TestResponseRef_HeaderValue(t *testing.T) {
 }
 
 func TestResponseRef_NestedBodyField(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -338,7 +338,7 @@ func TestResponseRef_NestedBodyField(t *testing.T) {
 }
 
 func TestResponseRef_ArrayIndex(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -364,7 +364,7 @@ func TestResponseRef_ArrayIndex(t *testing.T) {
 }
 
 func TestResponseRef_MissingName(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -389,7 +389,7 @@ func TestResponseRef_MissingName(t *testing.T) {
 }
 
 func TestResponseRef_BodyWhole(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {

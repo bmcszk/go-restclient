@@ -20,7 +20,6 @@ import (
 // servers started by the server builders, the address of the most recent one,
 // its scheme/host/port variables and the request counter shared with the DSL.
 type serverParts struct {
-	*parts
 	// servers holds every httptest server started by the server builders.
 	servers []*httptest.Server
 	// serverURL holds the address of the most recently started test server.
@@ -32,21 +31,21 @@ type serverParts struct {
 }
 
 // aHttpServer counts requests; bodies are read eagerly because net/http closes them on return.
-func (s *serverParts) aHttpServer(h http.HandlerFunc) *serverParts {
+func (p *testFixture) aHttpServer(h http.HandlerFunc) *testFixture {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		r.Body = io.NopCloser(strings.NewReader(string(body)))
-		s.capturedRequests = append(s.capturedRequests, r)
-		s.capturedBodies = append(s.capturedBodies, string(body))
-		s.capturedRequestTimes = append(s.capturedRequestTimes, time.Now())
-		s.requestHits.Add(1)
+		p.capturedRequests = append(p.capturedRequests, r)
+		p.capturedBodies = append(p.capturedBodies, string(body))
+		p.capturedRequestTimes = append(p.capturedRequestTimes, time.Now())
+		p.requestHits.Add(1)
 		h(w, r)
 	}))
-	s.servers = append(s.servers, srv)
-	s.serverURL = srv.URL
-	s.Cleanup(srv.Close)
+	p.servers = append(p.servers, srv)
+	p.serverURL = srv.URL
+	p.Cleanup(srv.Close)
 
-	return s
+	return p
 }
 
 // cannedRoute is one aCannedServer route; validJSON also requires a json.Valid body.
@@ -79,8 +78,8 @@ func serveCannedRoute(w http.ResponseWriter, r *http.Request, route cannedRoute)
 
 // aCannedServer serves a fixed routing table of canned responses: exact path lookup,
 // 405 on method mismatch, 404 for unknown paths. Replaces multi-path handler vars.
-func (s *serverParts) aCannedServer(routes map[string]cannedRoute) *serverParts {
-	return s.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
+func (p *testFixture) aCannedServer(routes map[string]cannedRoute) *testFixture {
+	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
 		route, ok := routes[r.URL.Path]
 		if !ok {
 			w.WriteHeader(http.StatusNotFound)
@@ -93,8 +92,8 @@ func (s *serverParts) aCannedServer(routes map[string]cannedRoute) *serverParts 
 
 // anEchoServer echoes the request body back verbatim with 200 OK — for tests that only
 // need a round-tripped body (e.g. external-file encoding round trips).
-func (s *serverParts) anEchoServer() *serverParts {
-	return s.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
+func (p *testFixture) anEchoServer() *testFixture {
+	return p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(body)
@@ -102,53 +101,53 @@ func (s *serverParts) anEchoServer() *serverParts {
 }
 
 // withServerAddressVars stores scheme/host/port vars and rebuilds the client with them.
-func (s *serverParts) withServerAddressVars() *serverParts {
-	parsed, err := url.Parse(s.serverURL)
-	s.require.NoError(err)
+func (p *testFixture) withServerAddressVars() *testFixture {
+	parsed, err := url.Parse(p.serverURL)
+	p.require.NoError(err)
 
-	s.activeServerVars = map[string]any{
+	p.activeServerVars = map[string]any{
 		"scheme": parsed.Scheme,
 		"host":   parsed.Hostname(),
 		"port":   parsed.Port(),
 	}
 
-	s.aClient(rc.WithVars(s.activeServerVars))
+	p.aClient(rc.WithVars(p.activeServerVars))
 
-	return s
+	return p
 }
 
 // aTLSServer hosts an echo handler over httptest TLS (self-signed cert).
-func (s *serverParts) aTLSServer() *serverParts {
+func (p *testFixture) aTLSServer() *testFixture {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		r.Body = io.NopCloser(strings.NewReader(string(body)))
-		s.capturedRequests = append(s.capturedRequests, r)
-		s.capturedBodies = append(s.capturedBodies, string(body))
-		s.capturedRequestTimes = append(s.capturedRequestTimes, time.Now())
-		s.requestHits.Add(1)
+		p.capturedRequests = append(p.capturedRequests, r)
+		p.capturedBodies = append(p.capturedBodies, string(body))
+		p.capturedRequestTimes = append(p.capturedRequestTimes, time.Now())
+		p.requestHits.Add(1)
 	}))
-	s.servers = append(s.servers, srv)
-	s.serverURL = srv.URL
-	s.Cleanup(srv.Close)
+	p.servers = append(p.servers, srv)
+	p.serverURL = srv.URL
+	p.Cleanup(srv.Close)
 
-	return s
+	return p
 }
 
 // aTLSInsecureClient builds a restclient trusting the httptest self-signed cert.
-func (s *serverParts) aTLSInsecureClient() *serverParts {
+func (p *testFixture) aTLSInsecureClient() *testFixture {
 	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
 
-	s.aClient(rc.WithHTTPClient(httpClient))
+	p.aClient(rc.WithHTTPClient(httpClient))
 
-	return s
+	return p
 }
 
 // aMockTransportClient builds the client under test with a mock round tripper that
 // records the outgoing request into parts.intercepted and answers 200 with a fixed body.
-func (s *serverParts) aMockTransportClient() *serverParts {
+func (p *testFixture) aMockTransportClient() *testFixture {
 	transport := &mockRoundTripper{
 		RoundTripFunc: func(req *http.Request) (*http.Response, error) {
-			s.intercepted = req.Clone(req.Context())
+			p.intercepted = req.Clone(req.Context())
 
 			return &http.Response{
 				StatusCode: http.StatusOK,
@@ -158,9 +157,9 @@ func (s *serverParts) aMockTransportClient() *serverParts {
 		},
 	}
 
-	s.aClient(rc.WithHTTPClient(&http.Client{Transport: transport}))
+	p.aClient(rc.WithHTTPClient(&http.Client{Transport: transport}))
 
-	return s
+	return p
 }
 
 // mockRoundTripper adapts a function into an http.RoundTripper for the DSL.
@@ -191,9 +190,9 @@ type graphqlError struct {
 }
 
 // aGraphQLServer serves the given responses in order, one per request, as HTTP 200 JSON.
-func (s *serverParts) aGraphQLServer(responses ...graphqlResponse) *serverParts {
+func (p *testFixture) aGraphQLServer(responses ...graphqlResponse) *testFixture {
 	idx := 0
-	return s.aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
+	return p.aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		i := idx
@@ -203,4 +202,10 @@ func (s *serverParts) aGraphQLServer(responses ...graphqlResponse) *serverParts 
 		_ = json.NewEncoder(w).Encode(responses[i])
 		idx++
 	})
+}
+
+func (p *testFixture) requestCount(n int64) *testFixture {
+	p.require.Equal(n, p.requestHits.Load())
+
+	return p
 }

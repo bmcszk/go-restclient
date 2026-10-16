@@ -7,36 +7,29 @@ import (
 	"strings"
 )
 
-// envParts holds the env-domain state of the fluent test DSL: dotenv files,
-// named dotenv files and environment-backed client builds carry no extra
-// per-test state, so only the fluent-chain back pointer lives here.
-type envParts struct {
-	*parts
-}
-
 // aDotEnvFile writes content to <baseDir>/.env. The parser resolves .env relative to the
 // so this works for aTempDir-based .http files. No-op safety: writing empty content is allowed.
-func (e *envParts) aDotEnvFile(content string) *envParts {
-	e.require.NoError(os.WriteFile(filepath.Join(e.baseDir, ".env"), []byte(content), 0644))
-	return e
+func (p *testFixture) aDotEnvFile(content string) *testFixture {
+	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, ".env"), []byte(content), 0644))
+	return p
 }
 
 // aDotEnvFileRemoved removes <baseDir>/.env if present (os.Remove, ignore not-exists) so a
 // previous scenario's .env cannot leak into the next subtest.
-func (e *envParts) aDotEnvFileRemoved() *envParts {
-	_ = os.Remove(filepath.Join(e.baseDir, ".env"))
-	return e
+func (p *testFixture) aDotEnvFileRemoved() *testFixture {
+	_ = os.Remove(filepath.Join(p.baseDir, ".env"))
+	return p
 }
 
 // withEnv sets an environment variable for the duration of the test.
-func (e *envParts) withEnv(k, v string) *envParts {
-	e.Setenv(k, v)
+func (p *testFixture) withEnv(k, v string) *testFixture {
+	p.Setenv(k, v)
 
-	return e
+	return p
 }
 
 // aClientWithEnvironment builds the client with WithEnvironment unless env is empty.
-func (e *envParts) aClientWithEnvironment(env string) *envParts {
+func (p *testFixture) aClientWithEnvironment(env string) *testFixture {
 	var client *rc.Client
 	var err error
 	if env != "" {
@@ -44,31 +37,31 @@ func (e *envParts) aClientWithEnvironment(env string) *envParts {
 	} else {
 		client, err = rc.NewClient()
 	}
-	e.require.NoError(err)
-	e.client = client
-	return e
+	p.require.NoError(err)
+	p.client = client
+	return p
 }
 
 // anEnvJsonFile writes a committed env-json template with {{SERVER_URL}} resolved.
-func (e *envParts) anEnvJsonFile(fileName, templatePath, serverURL string) *envParts {
+func (p *testFixture) anEnvJsonFile(fileName, templatePath, serverURL string) *testFixture {
 	content, err := os.ReadFile(templatePath)
-	e.require.NoError(err)
+	p.require.NoError(err)
 	resolved := strings.ReplaceAll(string(content), "{{SERVER_URL}}", serverURL)
-	path := filepath.Join(e.baseDir, fileName)
-	e.require.NoError(os.WriteFile(path, []byte(resolved), 0600))
-	return e
+	path := filepath.Join(p.baseDir, fileName)
+	p.require.NoError(os.WriteFile(path, []byte(resolved), 0600))
+	return p
 }
 
 // aDotEnvNamedFile writes content to <baseDir>/.env.<name> for --env-style scenarios.
-func (e *envParts) aDotEnvNamedFile(name, content string) *envParts {
-	e.require.NoError(os.WriteFile(filepath.Join(e.baseDir, ".env."+name), []byte(content), 0644))
-	return e
+func (p *testFixture) aDotEnvNamedFile(name, content string) *testFixture {
+	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, ".env."+name), []byte(content), 0644))
+	return p
 }
 
 // aClientWithEnvName builds the client with WithEnvName (named dotenv file).
-func (e *envParts) aClientWithEnvName(name string) *envParts {
-	e.aClient(rc.WithEnvName(name))
-	return e
+func (p *testFixture) aClientWithEnvName(name string) *testFixture {
+	p.aClient(rc.WithEnvName(name))
+	return p
 }
 
 // aJsonEchoServer accepts POST with Content-Type application/json, parses the body as JSON,

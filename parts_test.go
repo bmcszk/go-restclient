@@ -1,7 +1,6 @@
 package restclient_test
 
 import (
-	"context"
 	"net/http"
 	"path/filepath"
 	"testing"
@@ -17,33 +16,13 @@ const (
 	responseFilesDir = "test/data/http_response_files"
 )
 
-// parts is the shared state for the fluent Given/When/Then test DSL.
+// parts is the core state of the fluent Given/When/Then test DSL: the test
+// handle, the assertion clients, the client under test and the response ledger.
 type parts struct {
 	*testing.T
-	require *require.Assertions
-	assert  *assert.Assertions
-	client  *rc.Client
-	// server holds the server domain state (the httptest servers and their
-	// address variables); parts_test.go builds on it.
-	serverParts
-	// capture holds the capture/tracking domain state (recorded requests, bodies and
-	// consistency-tracking buckets); parts_test.go builds on it.
-	captureParts
-	// parse holds the parse-domain state (the parsed .http file and its error);
-	// parts_test.go builds on it.
-	parseParts
-	// file holds the file/fixture domain state (the .http file path the file
-	// builders write and executeFile / parse read); parts_test.go builds on it.
-	fileParts
-	// env holds the env domain state (dotenv files, environment-backed client
-	// builds); parts_test.go builds on it.
-	envParts
-	// oauth2 holds the oauth2 domain state (the OAuth2 token server address);
-	// client_oauth2_test.go builds on it.
-	oauth2Parts
-	// cookies holds the cookie/redirect domain state (the cookie round-trip flip
-	// flag); client_cookies_redirects_test.go builds on it.
-	cookiesParts
+	require          *require.Assertions
+	assert           *assert.Assertions
+	client           *rc.Client
 	clientConfig     clientConfigSnapshot
 	expectedFilePath string
 	responses        []*rc.Response
@@ -56,65 +35,36 @@ type parts struct {
 	baseDir string
 }
 
+// testFixture composes the core parts with every domain state struct; all DSL
+// methods are declared on *testFixture in their domain files.
+type testFixture struct {
+	parts
+	serverParts
+	captureParts
+	parseParts
+	fileParts
+	oauth2Parts
+	cookiesParts
+}
+
 // newParts returns the given, when and then entry points of the DSL.
-func newParts(t *testing.T) (given, when, then *parts) {
+func newParts(t *testing.T) (given, when, then *testFixture) {
 	t.Helper()
 
-	p := &parts{
-		T:       t,
-		require: require.New(t),
-		assert:  assert.New(t),
-		baseDir: t.TempDir(),
+	fx := &testFixture{
+		parts: parts{
+			T:       t,
+			require: require.New(t),
+			assert:  assert.New(t),
+			baseDir: t.TempDir(),
+		},
 	}
-	p.serverParts.parts = p
-	p.captureParts.parts = p
-	p.parseParts.parts = p
-	p.fileParts.parts = p
-	p.envParts.parts = p
-	p.oauth2Parts.parts = p
-	p.cookiesParts.parts = p
-	p.trackedValues = make(map[string][]string)
+	fx.trackedValues = make(map[string][]string)
 
-	return p, p, p
+	return fx, fx, fx
 }
 
-func newCaptureParts(t *testing.T) (given, when, then *captureParts) {
-	t.Helper()
-
-	p, _, _ := newParts(t)
-	c := &p.captureParts
-
-	return c, c, c
-}
-
-func newParseParts(t *testing.T) (given, when, then *parseParts) {
-	t.Helper()
-
-	p, _, _ := newParts(t)
-	c := &p.parseParts
-
-	return c, c, c
-}
-
-func newOauth2Parts(t *testing.T) (given, when, then *oauth2Parts) {
-	t.Helper()
-
-	p, _, _ := newParts(t)
-	c := &p.oauth2Parts
-
-	return c, c, c
-}
-
-func newCookiesParts(t *testing.T) (given, when, then *cookiesParts) {
-	t.Helper()
-
-	p, _, _ := newParts(t)
-	c := &p.cookiesParts
-
-	return c, c, c
-}
-
-func (p *parts) and() *parts { return p }
+func (p *testFixture) and() *testFixture { return p }
 
 // multierrorCount counts the wrapped errors inside err.
 func multierrorCount(err error) int {
@@ -130,7 +80,7 @@ func multierrorCount(err error) int {
 }
 
 // aClient builds the restclient under test with the given options.
-func (p *parts) aClient(opts ...rc.ClientOption) *parts {
+func (p *testFixture) aClient(opts ...rc.ClientOption) *testFixture {
 	client, err := rc.NewClient(opts...)
 	p.require.NoError(err)
 	p.client = client
@@ -138,73 +88,65 @@ func (p *parts) aClient(opts ...rc.ClientOption) *parts {
 	return p
 }
 
-// executeFile runs every request in the .http file.
-func (p *parts) executeFile() *parts {
-	p.require.NotNil(p.client)
-	p.responses, p.execErr = p.client.ExecuteFile(context.Background(), p.httpFilePath)
-
-	return p
-}
-
 // validateResponses checks the actual responses against the expected file.
-func (p *parts) validateResponses() *parts {
+func (p *testFixture) validateResponses() *testFixture {
 	p.validationErr = p.client.ValidateResponses(p.expectedFilePath, p.responses...)
 
 	return p
 }
 
-func (p *parts) responseAt(i int) *parts {
+func (p *testFixture) responseAt(i int) *testFixture {
 	p.cursor = i
 
 	return p
 }
 
 // current returns the response the cursor points at.
-func (p *parts) current() *rc.Response {
+func (p *testFixture) current() *rc.Response {
 	p.require.Greater(len(p.responses), p.cursor)
 
 	return p.responses[p.cursor]
 }
 
-func (p *parts) responseCode(code int) *parts {
+func (p *testFixture) responseCode(code int) *testFixture {
 	p.require.Equal(code, p.current().StatusCode)
 
 	return p
 }
 
-func (p *parts) responseContains(s string) *parts {
+func (p *testFixture) responseContains(s string) *testFixture {
 	p.require.Contains(p.current().BodyString, s)
 
 	return p
 }
 
-func (p *parts) responseBodyIs(s string) *parts {
+func (p *testFixture) responseBodyIs(s string) *testFixture {
 	p.require.Equal(s, p.current().BodyString)
 
 	return p
 }
 
-func (p *parts) responseHeader(k, v string) *parts {
+func (p *testFixture) responseHeader(k, v string) *testFixture {
 	p.require.Equal(v, p.current().Headers.Get(k))
 
 	return p
 }
 
-func (p *parts) responseCount(n int) *parts {
+func (p *testFixture) responseCount(n int) *testFixture {
 	p.require.Len(p.responses, n)
 
 	return p
 }
 
 // responseHasNoError asserts the current response has no error.
-func (p *parts) responseHasNoError() *parts {
+func (p *testFixture) responseHasNoError() *testFixture {
 	p.require.NoError(p.current().Error)
 
 	return p
 }
 
 // responseHasError asserts the current response carries an error mentioning every text.
-func (p *parts) responseHasError(texts ...string) *parts {
+func (p *testFixture) responseHasError(texts ...string) *testFixture {
 	p.require.Error(p.current().Error)
 
 	for _, text := range texts {
@@ -215,7 +157,7 @@ func (p *parts) responseHasError(texts ...string) *parts {
 }
 
 // noError asserts the execution succeeded and no response carries an error.
-func (p *parts) noError() *parts {
+func (p *testFixture) noError() *testFixture {
 	p.require.NoError(p.execErr)
 
 	for i, resp := range p.responses {
@@ -232,7 +174,7 @@ func (p *parts) noError() *parts {
 }
 
 // errorContains asserts the execution failed and the error mentions every text.
-func (p *parts) errorContains(texts ...string) *parts {
+func (p *testFixture) errorContains(texts ...string) *testFixture {
 	p.require.Error(p.execErr)
 
 	for _, text := range texts {
@@ -242,21 +184,15 @@ func (p *parts) errorContains(texts ...string) *parts {
 	return p
 }
 
-func (p *parts) requestCount(n int64) *parts {
-	p.require.Equal(n, p.requestHits.Load())
-
-	return p
-}
-
 // anExpectedResponseFixture points the DSL at a committed expected-response fixture file.
-func (p *parts) anExpectedResponseFixture(name string) *parts {
+func (p *testFixture) anExpectedResponseFixture(name string) *testFixture {
 	p.expectedFilePath = filepath.Join(responseFilesDir, name)
 
 	return p
 }
 
 // aResponseWith appends a hand-constructed rc.Response to p.responses.
-func (p *parts) aResponseWith(statusCode int, statusText, body string, headers http.Header) *parts {
+func (p *testFixture) aResponseWith(statusCode int, statusText, body string, headers http.Header) *testFixture {
 	resp := &rc.Response{
 		StatusCode: statusCode,
 		Status:     statusText,
@@ -271,7 +207,7 @@ func (p *parts) aResponseWith(statusCode int, statusText, body string, headers h
 }
 
 // validationFails asserts the response validation failed with count errors mentioning every text.
-func (p *parts) validationFails(count int, texts ...string) *parts {
+func (p *testFixture) validationFails(count int, texts ...string) *testFixture {
 	p.require.Error(p.validationErr)
 
 	p.require.Equal(count, multierrorCount(p.validationErr))
@@ -284,7 +220,7 @@ func (p *parts) validationFails(count int, texts ...string) *parts {
 }
 
 // validationSucceeds asserts the response validation passed.
-func (p *parts) validationSucceeds() *parts {
+func (p *testFixture) validationSucceeds() *testFixture {
 	p.require.NoError(p.validationErr)
 
 	return p

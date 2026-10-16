@@ -6,7 +6,7 @@ import (
 )
 
 // expectedResponseFile writes the given .hresp content as the expected responses file.
-func (p *parts) expectedResponseFile(content string) *parts {
+func (p *testFixture) expectedResponseFile(content string) *testFixture {
 	path := filepath.Join(p.baseDir, "expected.hresp")
 	p.require.NoError(os.WriteFile(path, []byte(content), 0644))
 	p.expectedFilePath = path

@@ -11,151 +11,150 @@ import (
 // parsing the .http file under test plus the parse error asserted by the
 // parsed* builders.
 type parseParts struct {
-	*parts
 	parsedFile *rc.ParsedFile
 	parseErr   error
 }
 
 // parsingFile parses the .http file without executing any request.
-func (c *parseParts) parsingFile() *parseParts {
-	c.require.NotNil(c.client)
-	c.parsedFile, c.parseErr = c.client.ParseFile(c.httpFilePath)
+func (p *testFixture) parsingFile() *testFixture {
+	p.require.NotNil(p.client)
+	p.parsedFile, p.parseErr = p.client.ParseFile(p.httpFilePath)
 
-	return c
+	return p
 }
 
-func (c *parseParts) parseSucceeded() *parseParts {
-	c.require.NoError(c.parseErr)
+func (p *testFixture) parseSucceeded() *testFixture {
+	p.require.NoError(p.parseErr)
 
-	return c
+	return p
 }
 
 // parseErrorContains asserts parsing failed and the error mentions every given text.
 // Called without texts it only asserts the error itself.
-func (c *parseParts) parseErrorContains(texts ...string) *parseParts {
-	c.require.Error(c.parseErr)
+func (p *testFixture) parseErrorContains(texts ...string) *testFixture {
+	p.require.Error(p.parseErr)
 
 	for _, text := range texts {
-		c.require.Contains(c.parseErr.Error(), text)
+		p.require.Contains(p.parseErr.Error(), text)
 	}
 
-	return c
+	return p
 }
 
-func (c *parseParts) parsedRequestCount(n int) *parseParts {
-	c.require.NotNil(c.parsedFile)
-	c.require.Len(c.parsedFile.Requests, n)
+func (p *testFixture) parsedRequestCount(n int) *testFixture {
+	p.require.NotNil(p.parsedFile)
+	p.require.Len(p.parsedFile.Requests, n)
 
-	return c
+	return p
 }
 
-func (c *parseParts) parsedRequestBodyIs(i int, want string) *parseParts {
-	c.require.Greater(len(c.parsedFile.Requests), i)
-	c.assert.Equal(want, c.parsedFile.Requests[i].RawBody)
+func (p *testFixture) parsedRequestBodyIs(i int, want string) *testFixture {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(want, p.parsedFile.Requests[i].RawBody)
 
-	return c
+	return p
 }
 
-func (c *parseParts) parsedRequestName(i int, name string) *parseParts {
-	c.require.Greater(len(c.parsedFile.Requests), i)
-	c.assert.Equal(name, c.parsedFile.Requests[i].Name)
+func (p *testFixture) parsedRequestName(i int, name string) *testFixture {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(name, p.parsedFile.Requests[i].Name)
 
-	return c
+	return p
 }
 
-func (c *parseParts) parsedRequestMethod(i int, method string) *parseParts {
-	c.require.Greater(len(c.parsedFile.Requests), i)
-	c.assert.Equal(method, c.parsedFile.Requests[i].Method)
+func (p *testFixture) parsedRequestMethod(i int, method string) *testFixture {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(method, p.parsedFile.Requests[i].Method)
 
-	return c
+	return p
 }
 
 // parsedRequestRawURLIs asserts the raw (pre-substitution) URL of the parsed request
 // at index i.
-func (c *parseParts) parsedRequestRawURLIs(i int, rawURL string) *parseParts {
-	c.require.Greater(len(c.parsedFile.Requests), i)
-	c.assert.Equal(rawURL, c.parsedFile.Requests[i].RawURLString)
+func (p *testFixture) parsedRequestRawURLIs(i int, rawURL string) *testFixture {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(rawURL, p.parsedFile.Requests[i].RawURLString)
 
-	return c
+	return p
 }
 
-func (c *parseParts) parsedRequestDisabled(i int, want bool) *parseParts {
-	c.require.Greater(len(c.parsedFile.Requests), i)
-	c.assert.Equal(want, c.parsedFile.Requests[i].Disabled)
+func (p *testFixture) parsedRequestDisabled(i int, want bool) *testFixture {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(want, p.parsedFile.Requests[i].Disabled)
 
-	return c
+	return p
 }
 
-func (c *parseParts) parsedRequestSleep(i int, want time.Duration) *parseParts {
-	c.require.Greater(len(c.parsedFile.Requests), i)
-	c.assert.Equal(want, c.parsedFile.Requests[i].SleepDuration)
+func (p *testFixture) parsedRequestSleep(i int, want time.Duration) *testFixture {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(want, p.parsedFile.Requests[i].SleepDuration)
 
-	return c
+	return p
 }
 
 // parsedRequestDisabledExpr asserts the conditional @disabled expression (after `!`) at index i equals want.
-func (c *parseParts) parsedRequestDisabledExpr(i int, want string) *parseParts {
-	c.require.Greater(len(c.parsedFile.Requests), i)
-	c.assert.Equal(want, c.parsedFile.Requests[i].DisabledExpr)
+func (p *testFixture) parsedRequestDisabledExpr(i int, want string) *testFixture {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(want, p.parsedFile.Requests[i].DisabledExpr)
 
-	return c
+	return p
 }
 
 // parsedRequestLoopCount asserts the literal `@loop for N` count on the parsed request at index i.
-func (c *parseParts) parsedRequestLoopCount(i int, want int) *parseParts {
-	c.require.Greater(len(c.parsedFile.Requests), i)
-	c.assert.Equal(want, c.parsedFile.Requests[i].LoopFor)
+func (p *testFixture) parsedRequestLoopCount(i int, want int) *testFixture {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(want, p.parsedFile.Requests[i].LoopFor)
 
-	return c
+	return p
 }
 
 // parsedRequestLoopExpr asserts the raw expression on `@loop for {{expr}}` of the parsed request at index i.
-func (c *parseParts) parsedRequestLoopExpr(i int, want string) *parseParts {
-	c.require.Greater(len(c.parsedFile.Requests), i)
-	c.assert.Equal(want, c.parsedFile.Requests[i].LoopExpr)
+func (p *testFixture) parsedRequestLoopExpr(i int, want string) *testFixture {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(want, p.parsedFile.Requests[i].LoopExpr)
 
-	return c
+	return p
 }
 
 // parsedRequestLoopCollection asserts the collection name on `@loop for item of collection` at index i.
-func (c *parseParts) parsedRequestLoopCollection(i int, want string) *parseParts {
-	c.require.Greater(len(c.parsedFile.Requests), i)
-	c.assert.Equal(want, c.parsedFile.Requests[i].LoopCollection)
+func (p *testFixture) parsedRequestLoopCollection(i int, want string) *testFixture {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	p.assert.Equal(want, p.parsedFile.Requests[i].LoopCollection)
 
-	return c
+	return p
 }
 
 // parsedRequestRefs asserts the parsed request at index i declares a @ref/@forceRef entry.
-func (c *parseParts) parsedRequestRefs(i int, wantName string, wantForce bool) *parseParts {
-	c.require.Greater(len(c.parsedFile.Requests), i)
-	req := c.parsedFile.Requests[i]
-	c.require.NotEmpty(req.Refs, "request %d has no refs", i)
+func (p *testFixture) parsedRequestRefs(i int, wantName string, wantForce bool) *testFixture {
+	p.require.Greater(len(p.parsedFile.Requests), i)
+	req := p.parsedFile.Requests[i]
+	p.require.NotEmpty(req.Refs, "request %d has no refs", i)
 
 	found := false
 	for _, ref := range req.Refs {
 		if ref.Name == wantName {
-			c.assert.Equal(wantForce, ref.Force,
+			p.assert.Equal(wantForce, ref.Force,
 				"ref %q force flag (expected %v)", wantName, wantForce)
 			found = true
 
 			break
 		}
 	}
-	c.require.True(found, "request %d missing ref %q", i, wantName)
+	p.require.True(found, "request %d missing ref %q", i, wantName)
 
-	return c
+	return p
 }
 
 // executingRequestAt parses the .http file and executes only the request at the given index.
-func (c *parseParts) executingRequestAt(index int) *parseParts {
-	c.require.NotNil(c.client)
+func (p *testFixture) executingRequestAt(index int) *testFixture {
+	p.require.NotNil(p.client)
 
-	parsed, err := c.client.ParseFile(c.httpFilePath)
-	c.require.NoError(err)
+	parsed, err := p.client.ParseFile(p.httpFilePath)
+	p.require.NoError(err)
 
-	resp, execErr := c.client.ExecuteRequest(context.Background(), parsed, index)
-	c.responses = append(c.responses, resp)
-	c.execErr = execErr
+	resp, execErr := p.client.ExecuteRequest(context.Background(), parsed, index)
+	p.responses = append(p.responses, resp)
+	p.execErr = execErr
 
-	return c
+	return p
 }

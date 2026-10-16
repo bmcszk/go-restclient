@@ -16,7 +16,7 @@ import (
 // 'test/data/http_request_files/single_request.http' and retrieve the response.
 
 func TestExecuteFile_SingleRequest(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, r *http.Request) {
@@ -40,7 +40,7 @@ func TestExecuteFile_SingleRequest(t *testing.T) {
 }
 
 func TestExecuteFile_MultipleRequests(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, r *http.Request) {
@@ -81,7 +81,7 @@ func TestExecuteFile_MultipleRequests(t *testing.T) {
 }
 
 func TestExecuteFile_RequestWithError(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -109,7 +109,7 @@ func TestExecuteFile_RequestWithError(t *testing.T) {
 }
 
 func TestExecuteFile_ParseError(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aRequestFixture("parse_error.http").and().
@@ -122,7 +122,7 @@ func TestExecuteFile_ParseError(t *testing.T) {
 		errorContains("no requests found in file test/data/http_request_files/parse_error.http")
 }
 func TestExecuteFile_NoRequestsInFile(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aRequestFixture("comment_only_file.http").and().
@@ -139,7 +139,7 @@ func TestExecuteFile_NoRequestsInFile(t *testing.T) {
 // the client executes valid requests up to the point of the parse error and then reports
 // the parsing error, potentially halting further execution from that file.
 func TestExecuteFile_ValidThenInvalidSyntax(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, r *http.Request) {
@@ -176,7 +176,7 @@ func TestExecuteFile_ValidThenInvalidSyntax(t *testing.T) {
 // designed to fail) to verify that each failing request's error is captured in its
 // respective response object and that an aggregated error is returned by ExecuteFile.
 func TestExecuteFile_MultipleErrors(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aRequestFixture("multiple_errors.http").and().
@@ -203,7 +203,7 @@ func TestExecuteFile_MultipleErrors(t *testing.T) {
 // the client correctly stores received headers, including multi-value headers, in the Response
 // object.
 func TestExecuteFile_CapturesResponseHeaders(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -233,7 +233,7 @@ func TestExecuteFile_CapturesResponseHeaders(t *testing.T) {
 // verify the fundamental request execution flow, ensuring the correct method, URL, and headers
 // are prepared and sent.
 func TestExecuteFile_SimpleGetHTTP(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aRequestFixture("simple_get.http").and().
@@ -254,7 +254,7 @@ func TestExecuteFile_SimpleGetHTTP(t *testing.T) {
 // ensuring all are processed sequentially (http_syntax.md "Request Separation").
 // ensure the client can handle a larger number of requests in a file.
 func TestExecuteFile_MultipleRequests_GreaterThanTwo(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, r *http.Request) {
@@ -287,7 +287,7 @@ func TestExecuteFile_MultipleRequests_GreaterThanTwo(t *testing.T) {
 // ? and & line continuations (http_syntax.md "Query Parameters on Multiple Lines").
 // spread across multiple lines using the VS Code REST Client syntax.
 func TestExecuteFile_MultilineQueryParameters(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, r *http.Request) {
@@ -328,7 +328,7 @@ func TestExecuteFile_MultilineQueryParameters(t *testing.T) {
 // & line continuations (http_syntax.md "Form Data on Multiple Lines").
 // spread across multiple lines using the VS Code REST Client syntax.
 func TestExecuteFile_MultilineFormData(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, r *http.Request) {
@@ -376,7 +376,7 @@ func TestExecuteFile_MultilineFormData(t *testing.T) {
 // < file references (http_syntax.md "File Upload").
 // that include file uploads using the < file reference syntax.
 func TestExecuteFile_MultipartFileUploads(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, r *http.Request) {
@@ -438,7 +438,7 @@ func TestExecuteFile_MultipartFileUploads(t *testing.T) {
 }
 
 func TestExecuteFile_InvalidMethodInFile(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aRequestFixture("invalid_method.http").and().
@@ -459,7 +459,7 @@ func TestExecuteFile_InvalidMethodInFile(t *testing.T) {
 }
 
 func TestExecuteFile_IgnoreEmptyBlocks_ValidThenCommentOnly(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aCannedServer(map[string]cannedRoute{
@@ -480,7 +480,7 @@ func TestExecuteFile_IgnoreEmptyBlocks_ValidThenCommentOnly(t *testing.T) {
 }
 
 func TestExecuteFile_IgnoreEmptyBlocks_CommentOnlyThenValid(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aCannedServer(map[string]cannedRoute{
@@ -501,7 +501,7 @@ func TestExecuteFile_IgnoreEmptyBlocks_CommentOnlyThenValid(t *testing.T) {
 }
 
 func TestExecuteFile_IgnoreEmptyBlocks_TwoValidAcrossCommentBlock(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aCannedServer(map[string]cannedRoute{
@@ -525,7 +525,7 @@ func TestExecuteFile_IgnoreEmptyBlocks_TwoValidAcrossCommentBlock(t *testing.T) 
 		responseBodyIs("response from /req2")
 }
 func TestExecuteFile_IgnoreEmptyBlocks_OnlyVariables(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aRequestFixtureAbs("test/data/execute_file_ignore_empty_blocks/only_vars.http").and().
@@ -541,7 +541,7 @@ func TestExecuteFile_IgnoreEmptyBlocks_OnlyVariables(t *testing.T) {
 
 // path is deliberately not merged for absolute request paths (applyBaseURLIfNeeded).
 func TestExecuteFile_WithBaseURL_AbsolutePathDropsBasePath(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -564,7 +564,7 @@ GET /api/users`).and().
 
 // base URL including its path (applyBaseURLIfNeeded relative branch).
 func TestExecuteFile_WithBaseURL_RelativePathPrependsFullPath(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -589,7 +589,7 @@ GET api/users`).and().
 
 // An absolute request URL ignores BaseURL entirely (resolveWithBaseURL IsAbs branch).
 func TestExecuteFile_WithBaseURL_AbsoluteRequestURLIgnored(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -609,7 +609,7 @@ func TestExecuteFile_WithBaseURL_AbsoluteRequestURLIgnored(t *testing.T) {
 
 // Default headers set via options are sent with every request (addDefaultHeaders).
 func TestExecuteFile_WithDefaultHeader_SentWithRequest(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -630,7 +630,7 @@ GET {{server}}/h`).and().
 
 // parseAndSanitizeBaseURL rejects an unparseable BaseURL with a clear error.
 func TestExecuteFile_WithBaseURL_InvalidErrors(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aHttpFile(`### rel
@@ -646,7 +646,7 @@ GET /relative`).and().
 
 // `GET url ### NextName` splits the request and names the next one on the same line.
 func TestExecuteFile_SameLineSeparatorStartsNewNamedRequest(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -670,7 +670,7 @@ func TestExecuteFile_SameLineSeparatorStartsNewNamedRequest(t *testing.T) {
 
 // Same-line separator without a name still splits requests.
 func TestExecuteFile_SameLineSeparatorWithoutNameSplits(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		anEchoServer().and().
@@ -694,7 +694,7 @@ func TestExecuteFile_SameLineSeparatorWithoutNameSplits(t *testing.T) {
 
 // An HTTPS response records IsTLS, TLSVersion and cipher suite.
 func TestExecuteFile_HTTPSResponseCapturesTLSData(t *testing.T) {
-	given, when, then := newCaptureParts(t)
+	given, when, then := newParts(t)
 
 	given.
 		aTLSServer().and().
@@ -715,7 +715,7 @@ GET {{server}}/secure`).and().
 // configurations (e.g., standard http.Client, no base URL, empty default headers).
 
 func TestNewClient(t *testing.T) {
-	given, _, then := newCaptureParts(t)
+	given, _, then := newParts(t)
 
 	given.
 		aClient()
@@ -727,7 +727,7 @@ func TestNewClient(t *testing.T) {
 }
 
 func TestNewClient_WithOptions(t *testing.T) {
-	given, _, then := newCaptureParts(t)
+	given, _, then := newParts(t)
 
 	given.
 		aClientWithDefaults()
@@ -738,7 +738,7 @@ func TestNewClient_WithOptions(t *testing.T) {
 		clientDefaultHeaderIs("X-Default", "DefaultValue")
 }
 func TestNewClient_NilHTTPClientOption(t *testing.T) {
-	given, _, then := newCaptureParts(t)
+	given, _, then := newParts(t)
 
 	given.
 		aClient(rc.WithHTTPClient(nil))

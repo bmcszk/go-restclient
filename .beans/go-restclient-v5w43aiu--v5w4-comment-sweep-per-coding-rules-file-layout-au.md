@@ -5,7 +5,7 @@ status: todo
 type: task
 priority: normal
 created_at: 2026-10-16T12:08:57Z
-updated_at: 2026-10-16T14:41:39Z
+updated_at: 2026-10-16T14:46:40Z
 parent: go-restclient-495b
 ---
 
@@ -19,3 +19,7 @@ gofmt/build/vet/lint 0 issues./test ok; junit 315; comment count NET DECREASE; n
 - zero value-usages of p (verified before rewrite) → pure promoted-member access, compiles
 - gates: gofmt empty, build/vet 0, lint `0 issues.`, junit 315, Test-name parity vs pre-V5 EXACT
 - LESSON STORED: Go embedding = promoted members; never re-bind host
+
+## Orchestrator fix-up (user review round 2)
+- all 7 `var _ = []any{ DParts{} }` compile-assert blocks removed (28 lines)
+- gates: gofmt empty, lint `0 issues.`, junit 315, Test-name parity exact; CI 9 pass + Scorecard skip
