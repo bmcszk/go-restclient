@@ -39,7 +39,9 @@ type captureParts struct {
 func newCaptureParts(t *testing.T) (given, when, then *testFixture) {
 	t.Helper()
 
-	return newParts(t)
+	fx := newFixture(t)
+	fx.trackedValues = make(map[string][]string)
+	return fx, fx, fx
 }
 
 func (p *testFixture) requestURLContains(fragments ...string) *testFixture {

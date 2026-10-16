@@ -51,7 +51,8 @@ type testFixture struct {
 }
 
 // newParts returns the given, when and then entry points of the DSL.
-func newParts(t *testing.T) (given, when, then *testFixture) {
+// newFixture constructs the base parts core and returns the shared fixture.
+func newFixture(t *testing.T) *testFixture {
 	t.Helper()
 
 	fx := &testFixture{
@@ -63,6 +64,15 @@ func newParts(t *testing.T) (given, when, then *testFixture) {
 		},
 	}
 	fx.trackedValues = make(map[string][]string)
+
+	return fx
+}
+
+// newParts returns the given/when/then fixture for base-domain tests.
+func newParts(t *testing.T) (given, when, then *testFixture) {
+	t.Helper()
+
+	fx := newFixture(t)
 
 	return fx, fx, fx
 }

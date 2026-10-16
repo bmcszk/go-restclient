@@ -28,7 +28,8 @@ type fileParts struct {
 func newFileParts(t *testing.T) (given, when, then *testFixture) {
 	t.Helper()
 
-	return newParts(t)
+	fx := newFixture(t)
+	return fx, fx, fx
 }
 
 // aTemplateFixture renders a committed test/data/<dir> template with [[ ]] delimiters.

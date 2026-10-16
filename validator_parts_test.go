@@ -21,7 +21,10 @@ type validatorParts struct {
 // (builds rc.Response values directly, never executes HTTP requests).
 func newValidatorParts(t *testing.T) (given, when, then *testFixture) {
 	t.Helper()
-	return newParts(t)
+
+	fx := newFixture(t)
+
+	return fx, fx, fx
 }
 
 // Validator DSL:

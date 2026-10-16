@@ -20,7 +20,8 @@ type parseParts struct {
 func newParseParts(t *testing.T) (given, when, then *testFixture) {
 	t.Helper()
 
-	return newParts(t)
+	fx := newFixture(t)
+	return fx, fx, fx
 }
 
 // parsingFile parses the .http file without executing any request.

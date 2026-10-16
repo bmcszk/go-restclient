@@ -35,7 +35,8 @@ type serverParts struct {
 func newServerParts(t *testing.T) (given, when, then *testFixture) {
 	t.Helper()
 
-	return newParts(t)
+	fx := newFixture(t)
+	return fx, fx, fx
 }
 
 // aHttpServer counts requests; bodies are read eagerly because net/http closes them on return.

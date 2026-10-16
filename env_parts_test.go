@@ -16,7 +16,10 @@ type envParts struct {
 // newEnvParts returns the given/when/then fixture for env-domain builders.
 func newEnvParts(t *testing.T) (given, when, then *testFixture) {
 	t.Helper()
-	return newParts(t)
+
+	fx := newFixture(t)
+
+	return fx, fx, fx
 }
 
 // aDotEnvFile writes content to <baseDir>/.env. The parser resolves .env relative to the

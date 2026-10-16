@@ -18,7 +18,8 @@ type oauth2Parts struct {
 func newOauth2Parts(t *testing.T) (given, when, then *testFixture) {
 	t.Helper()
 
-	return newParts(t)
+	fx := newFixture(t)
+	return fx, fx, fx
 }
 
 // anOAuth2TokenServerWithStatus starts a canned OAuth2 token endpoint answering with the

@@ -24,7 +24,8 @@ type cookiesParts struct {
 func newCookiesParts(t *testing.T) (given, when, then *testFixture) {
 	t.Helper()
 
-	return newParts(t)
+	fx := newFixture(t)
+	return fx, fx, fx
 }
 
 // aFreshCookieCheck resets the cookie check flag before a scenario runs.
