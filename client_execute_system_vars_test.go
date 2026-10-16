@@ -118,7 +118,7 @@ Content-Type: application/json
 // TestExtractHrespDefines_ExtraSpaces verifies the extractor tolerates leading/trailing
 // whitespace around both name and value.
 func TestExtractHrespDefines_ExtraSpaces(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -139,7 +139,7 @@ HTTP/1.1 200 OK`,
 // TestExtractHrespDefines_MixedWithComments verifies defines interleave with comments and
 // blank lines before the status line.
 func TestExtractHrespDefines_MixedWithComments(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -165,7 +165,7 @@ Body content here.`,
 // TestExtractHrespDefines_MalformedNoEquals verifies a malformed define (no `=` sign) is
 // silently dropped and does not affect parsing of the status line.
 func TestExtractHrespDefines_MalformedNoEquals(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -185,7 +185,7 @@ HTTP/1.1 200 OK`,
 // TestExtractHrespDefines_MalformedEmptyName verifies a define with an empty name (`@ = value`)
 // is silently dropped.
 func TestExtractHrespDefines_MalformedEmptyName(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -204,7 +204,7 @@ HTTP/1.1 200 OK`,
 
 // TestExtractHrespDefines_EmptyValue verifies a define with an empty value substitutes to "".
 func TestExtractHrespDefines_EmptyValue(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aClient().and().
@@ -654,7 +654,7 @@ POST https://example.com/pw
 
 // %7B%7B$dotenv VAR%7D%7D in a URL query resolves from .env (URL-safe embedding).
 func TestExecuteFile_WithDotEnvSystemVariable_URLEncodedPlaceholder(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newEnvParts(t)
 
 	given.
 		anEchoServer().and().
@@ -674,7 +674,7 @@ GET {{server}}/q?token=%7B%7B$dotenv SECRET_VAR%7D%7D`).and().
 
 // URL-encoded placeholder for an undefined dotenv variable resolves to empty.
 func TestExecuteFile_WithDotEnvSystemVariable_URLEncodedUndefinedIsEmpty(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newEnvParts(t)
 
 	given.
 		anEchoServer().and().

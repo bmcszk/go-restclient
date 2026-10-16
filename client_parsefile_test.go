@@ -402,7 +402,7 @@ Content-Type: application/json
 // TestExecuteFile_DotEnvProcessEnvPlaceholderExpands: .env values support {{$processEnv}}
 // so secrets can come from the real environment (#49).
 func TestExecuteFile_DotEnvProcessEnvPlaceholderExpands(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newEnvParts(t)
 
 	given.
 		withEnv("ISS49_CID", "env-value").and().
@@ -423,7 +423,7 @@ func TestExecuteFile_DotEnvProcessEnvPlaceholderExpands(t *testing.T) {
 // TestExecuteFile_DotEnvUnresolvablePlaceholderStaysRaw: missing process env leaves the
 // {{$processEnv}} placeholder literal in the .env value (#49 pinned semantics).
 func TestExecuteFile_DotEnvUnresolvablePlaceholderStaysRaw(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newEnvParts(t)
 
 	given.
 		aDotEnvFile("CID={{$processEnv ISS49_MISSING}}").and().
@@ -443,7 +443,7 @@ func TestExecuteFile_DotEnvUnresolvablePlaceholderStaysRaw(t *testing.T) {
 // TestExecuteFile_EnvFlagLoadsNamedEnvFile: --env staging loads .env first, then .env.staging
 // overrides only the keys it defines (#48).
 func TestExecuteFile_EnvFlagLoadsNamedEnvFile(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newEnvParts(t)
 
 	given.
 		aDotEnvFile("A=base").and().
@@ -465,7 +465,7 @@ func TestExecuteFile_EnvFlagLoadsNamedEnvFile(t *testing.T) {
 // TestExecuteFile_NamedEnvFilePlaceholderExpands: .env.staging values support
 // {{$processEnv}} expansion like .env (#49 + #48 combined).
 func TestExecuteFile_NamedEnvFilePlaceholderExpands(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newEnvParts(t)
 
 	given.
 		withEnv("ISS49_S", "expanded-staging").and().

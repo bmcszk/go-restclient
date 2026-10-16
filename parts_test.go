@@ -43,6 +43,8 @@ type testFixture struct {
 	captureParts
 	parseParts
 	fileParts
+	envParts
+	validatorParts
 	oauth2Parts
 	cookiesParts
 }

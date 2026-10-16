@@ -6,11 +6,24 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"testing"
 
 	rc "github.com/bmcszk/go-restclient"
 )
 
-// Validator DSL: builds rc.Response values directly, never executes HTTP requests.
+type validatorParts struct {
+	// builtResponses collects rc.Response values the validator builders created.
+	builtResponses []*rc.Response
+}
+
+// newValidatorParts returns the given/when/then fixture for the validator DSL
+// (builds rc.Response values directly, never executes HTTP requests).
+func newValidatorParts(t *testing.T) (given, when, then *testFixture) {
+	t.Helper()
+	return newParts(t)
+}
+
+// Validator DSL:
 
 // aResponseWithStatus is a shorthand for aResponseWith with no body and no headers.
 func (p *testFixture) aResponseWithStatus(statusCode int, statusText string) *testFixture {
@@ -38,6 +51,7 @@ func (p *testFixture) aResponseFromRawHTTPFile(path string) *testFixture {
 		Body:       bodyBytes,
 		BodyString: string(bodyBytes),
 	})
+	p.builtResponses = append(p.builtResponses, p.responses[len(p.responses)-1])
 
 	return p
 }
@@ -132,5 +146,13 @@ func (p *testFixture) validateResponsesWithIndex(index int) *testFixture {
 		rc.ValidateOptions{ExpectedIndex: index},
 		p.responses...,
 	)
+	return p
+}
+
+// responsesValidateAgainst validates responses against an explicit .hresp path.
+func (p *testFixture) responsesValidateAgainst(expectedPath string) *testFixture {
+	p.require.NotNil(p.client)
+	p.assert.NoError(p.client.ValidateResponses(expectedPath, p.responses...))
+
 	return p
 }

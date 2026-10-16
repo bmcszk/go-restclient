@@ -97,7 +97,7 @@ func TestExecuteFile_WithProcessEnvSystemVariable(t *testing.T) {
 // TestExecuteFile_WithDotEnvSystemVariable_Scenario1_EnvFileExists: System Variables {{$dotenv.VAR_NAME}}.
 // .env file exists and both DOTENV_VAR1 and DOTENV_VAR2 are present.
 func TestExecuteFile_WithDotEnvSystemVariable_Scenario1_EnvFileExists(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newEnvParts(t)
 
 	given.
 		aDotEnvFileRemoved().and().
@@ -129,7 +129,7 @@ func TestExecuteFile_WithDotEnvSystemVariable_Scenario1_EnvFileExists(t *testing
 // TestExecuteFile_WithDotEnvSystemVariable_Scenario2_EnvFileMissing: System Variables {{$dotenv.VAR_NAME}}.
 // No .env file: all {{$dotenv.*}} variables resolve to empty strings.
 func TestExecuteFile_WithDotEnvSystemVariable_Scenario2_EnvFileMissing(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newEnvParts(t)
 
 	given.
 		aDotEnvFileRemoved().and().
@@ -244,7 +244,7 @@ func TestExecuteFile_VariableFunctionConsistency(t *testing.T) {
 // SCENARIO-LIB-018-004: env == "" means the http-client.env.json lookup is skipped, so
 // {{host}} in the request body is left as a literal placeholder.
 func TestExecuteFile_WithHttpClientEnvJson_NoEnvSelected(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newEnvParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -272,7 +272,7 @@ func TestExecuteFile_WithHttpClientEnvJson_NoEnvSelected(t *testing.T) {
 // SCENARIO-LIB-018-005: when both http-client.env.json and http-client.private.env.json
 // exist and an env is selected, the private file's values override the public ones.
 func TestExecuteFile_WithHttpClientEnvJson_PrivateOverridesPublic(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newEnvParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -399,7 +399,7 @@ func TestExecuteFile_WithExtendedRandomSystemVariables(t *testing.T) {
 // TestExecuteFile_InPlace_SimpleVariableInURL: In-Place Variables - Simple Definition and URL Substitution.
 
 func TestExecuteFile_InPlace_SimpleVariableInURL(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -425,7 +425,7 @@ func TestExecuteFile_InPlace_SimpleVariableInURL(t *testing.T) {
 
 // TestExecuteFile_InPlace_VariableInHeader: In-Place Variables - Header Substitution.
 func TestExecuteFile_InPlace_VariableInHeader(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -452,7 +452,7 @@ func TestExecuteFile_InPlace_VariableInHeader(t *testing.T) {
 
 // TestExecuteFile_InPlace_VariableInBody: In-Place Variables - Body Substitution.
 func TestExecuteFile_InPlace_VariableInBody(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -478,7 +478,7 @@ func TestExecuteFile_InPlace_VariableInBody(t *testing.T) {
 
 // TestExecuteFile_InPlace_VariableDefinedByAnotherVariable: In-Place - Referencing Other In-Place.
 func TestExecuteFile_InPlace_VariableDefinedByAnotherVariable(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -528,7 +528,7 @@ func TestExecuteFile_InPlace_VariablePrecedenceOverEnvironment(t *testing.T) {
 
 // TestExecuteFile_InPlace_VariableInCustomHeader: In-Place - Custom Header Substitution.
 func TestExecuteFile_InPlace_VariableInCustomHeader(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -552,7 +552,7 @@ func TestExecuteFile_InPlace_VariableInCustomHeader(t *testing.T) {
 
 // TestExecuteFile_InPlace_VariableSubstitutionInBody: In-Place - Complex Body Substitution.
 func TestExecuteFile_InPlace_VariableSubstitutionInBody(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -577,7 +577,7 @@ func TestExecuteFile_InPlace_VariableSubstitutionInBody(t *testing.T) {
 
 // TestExecuteFile_InPlace_VariableDefinedBySystemVariable covers pathSegments[0] being a 36-char UUID plus "resource".
 func TestExecuteFile_InPlace_VariableDefinedBySystemVariable(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
@@ -603,7 +603,7 @@ func TestExecuteFile_InPlace_VariableDefinedBySystemVariable(t *testing.T) {
 
 // TestExecuteFile_InPlace_VariableDefinedByOsEnvVariable: In-Place - Referencing OS Environment.
 func TestExecuteFile_InPlace_VariableDefinedByOsEnvVariable(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		withEnv("TEST_USER_HOME_INPLACE", "/testhome/userdir").and().

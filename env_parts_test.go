@@ -5,12 +5,25 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"testing"
 )
+
+type envParts struct {
+	// dotenvFiles lists dotenv files the env builders created (for assertions/cleanup).
+	dotenvFiles []string
+}
+
+// newEnvParts returns the given/when/then fixture for env-domain builders.
+func newEnvParts(t *testing.T) (given, when, then *testFixture) {
+	t.Helper()
+	return newParts(t)
+}
 
 // aDotEnvFile writes content to <baseDir>/.env. The parser resolves .env relative to the
 // so this works for aTempDir-based .http files. No-op safety: writing empty content is allowed.
 func (p *testFixture) aDotEnvFile(content string) *testFixture {
 	p.require.NoError(os.WriteFile(filepath.Join(p.baseDir, ".env"), []byte(content), 0644))
+	p.dotenvFiles = append(p.dotenvFiles, filepath.Join(p.baseDir, ".env"))
 	return p
 }
 

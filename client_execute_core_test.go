@@ -40,7 +40,7 @@ func TestExecuteFile_SingleRequest(t *testing.T) {
 }
 
 func TestExecuteFile_MultipleRequests(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, r *http.Request) {
@@ -254,7 +254,7 @@ func TestExecuteFile_SimpleGetHTTP(t *testing.T) {
 // ensuring all are processed sequentially (http_syntax.md "Request Separation").
 // ensure the client can handle a larger number of requests in a file.
 func TestExecuteFile_MultipleRequests_GreaterThanTwo(t *testing.T) {
-	given, when, then := newParts(t)
+	given, when, then := newValidatorParts(t)
 
 	given.
 		aHttpServer(func(w http.ResponseWriter, r *http.Request) {
