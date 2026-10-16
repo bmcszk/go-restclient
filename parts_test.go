@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"text/template"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
@@ -255,76 +254,6 @@ func (p *parts) requestCount(n int64) *parts {
 	p.require.Equal(n, p.requestHits.Load())
 
 	return p
-}
-
-// fileParts holds the file/fixture domain state of the fluent test DSL: the path
-// of the .http file under test that the file and fixture builders write and the
-// executeFile / parse builders read back.
-type fileParts struct {
-	*parts
-	// httpFilePath holds the path of the .http file under test.
-	httpFilePath string
-}
-
-var _ = []any{
-	fileParts{},
-}
-
-const requestFilesDir = "test/data/http_request_files"
-
-// aTemplateFixture renders a committed test/data/<dir> template with [[ ]] delimiters.
-func (f *fileParts) aTemplateFixture(dir, name string, data any) *fileParts {
-	p := f.parts
-	tmplContent, err := os.ReadFile(filepath.Join("test", "data", dir, name))
-	p.require.NoError(err)
-
-	tmpl, err := template.New(name).Delims("[[", "]]").Parse(string(tmplContent))
-	p.require.NoError(err)
-
-	path := filepath.Join(p.baseDir, name)
-
-	file, err := os.Create(path)
-	p.require.NoError(err)
-	p.require.NoError(tmpl.Execute(file, data))
-	p.require.NoError(file.Close())
-
-	p.httpFilePath = path
-
-	return f
-}
-
-// aRequestFixtureAbs points the DSL at a repo-root-relative request fixture path.
-func (f *fileParts) aRequestFixtureAbs(name string) *fileParts {
-	f.httpFilePath = name
-
-	return f
-}
-
-// aHttpFile writes the given .http content, replacing {{server}} with the test server URL.
-func (f *fileParts) aHttpFile(content string) *fileParts {
-	p := f.parts
-	resolved := strings.ReplaceAll(content, "{{server}}", p.serverURL)
-	path := filepath.Join(p.baseDir, "requests.http")
-	p.require.NoError(os.WriteFile(path, []byte(resolved), 0644))
-	p.httpFilePath = path
-
-	return f
-}
-
-// aHttpFileFromTemplate renders a committed request fixture template with the test server
-// URL ([[.ServerURL]] delimiters) and stores the processed file path for execution.
-// serverURL may be empty for parse-only fixtures; the template still renders (URL stays relative).
-func (f *fileParts) aHttpFileFromTemplate(templateName string) *fileParts {
-	p := f.parts
-	return p.aHttpFileFromTemplateWithData(templateName, struct{ ServerURL string }{ServerURL: p.serverURL})
-}
-
-// aRequestFixture points the DSL at a committed request fixture file without templating.
-func (f *fileParts) aRequestFixture(name string) *fileParts {
-	p := f.parts
-	p.httpFilePath = filepath.Join(requestFilesDir, name)
-
-	return f
 }
 
 // envParts holds the env-domain state of the fluent test DSL: dotenv files,

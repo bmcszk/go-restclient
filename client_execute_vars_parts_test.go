@@ -4,25 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"text/template"
 
 	rc "github.com/bmcszk/go-restclient"
 )
-
-// aFixtureCopy copies a committed fixture into baseDir, applying text replacements.
-func (f *fileParts) aFixtureCopy(requestPath, destName string, replacements map[string]string) *fileParts {
-	p := f.parts
-	content, err := os.ReadFile(requestPath)
-	p.require.NoError(err)
-	result := string(content)
-	for old, newVal := range replacements {
-		result = strings.ReplaceAll(result, old, newVal)
-	}
-	path := filepath.Join(p.baseDir, destName)
-	p.require.NoError(os.WriteFile(path, []byte(result), 0644))
-	p.httpFilePath = path
-	return f
-}
 
 // aClientWithEnvironment builds the client with WithEnvironment unless env is empty.
 func (e *envParts) aClientWithEnvironment(env string) *envParts {
@@ -37,28 +21,6 @@ func (e *envParts) aClientWithEnvironment(env string) *envParts {
 	p.require.NoError(err)
 	p.client = client
 	return e
-}
-
-// aHttpFileFromTemplateWithData renders a committed request fixture template with the given
-// template data ([[ ]] delimiters) and stores the processed file path for execution.
-func (f *fileParts) aHttpFileFromTemplateWithData(templateName string, data any) *fileParts {
-	p := f.parts
-	tmplContent, err := os.ReadFile(filepath.Join(requestFilesDir, templateName))
-	p.require.NoError(err)
-
-	tmpl, err := template.New(templateName).Delims("[[", "]]").Parse(string(tmplContent))
-	p.require.NoError(err)
-
-	path := filepath.Join(p.baseDir, templateName)
-
-	file, err := os.Create(path)
-	p.require.NoError(err)
-	p.require.NoError(tmpl.Execute(file, data))
-	p.require.NoError(file.Close())
-
-	p.httpFilePath = path
-
-	return f
 }
 
 // anEnvJsonFile writes a committed env-json template with {{SERVER_URL}} resolved.

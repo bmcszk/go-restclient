@@ -3,52 +3,15 @@ package restclient_test
 import (
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	rc "github.com/bmcszk/go-restclient"
 )
-
-// aFormattedRequestFixture renders a committed %s-placeholder fixture with fmt.Sprintf.
-func (f *fileParts) aFormattedRequestFixture(name string, substitutions ...string) *fileParts {
-	p := f.parts
-	baseContent, err := os.ReadFile(filepath.Join(requestFilesDir, name))
-	if err != nil {
-		baseContent, err = os.ReadFile(filepath.Join("test", "data", "execute_file_ignore_empty_blocks", name))
-		p.require.NoError(err)
-	}
-
-	args := make([]any, len(substitutions))
-	for i, s := range substitutions {
-		args[i] = s
-	}
-
-	return p.aHttpFile(fmt.Sprintf(string(baseContent), args...))
-}
-
-// anUploadsFixtureCopy copies the multipart fixture with server URL and < paths resolved.
-func (f *fileParts) anUploadsFixtureCopy() *fileParts {
-	p := f.parts
-	p.require.NotEmpty(p.serverURL)
-
-	content, err := os.ReadFile(filepath.Join("test", "data", "http_request_files", "multipart_file_uploads.http"))
-	p.require.NoError(err)
-
-	resolved := strings.ReplaceAll(string(content), "< ./test/data/request_body/", "< test/data/request_body/")
-	resolved = strings.ReplaceAll(resolved, "[[.ServerURL]]", p.serverURL)
-	path := filepath.Join(p.baseDir, "multipart_file_uploads.http")
-
-	p.require.NoError(os.WriteFile(path, []byte(resolved), 0644))
-	p.httpFilePath = path
-
-	return f
-}
 
 // aTLSServer hosts an echo handler over httptest TLS (self-signed cert).
 func (s *serverParts) aTLSServer() *serverParts {
