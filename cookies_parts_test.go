@@ -26,8 +26,7 @@ var _ = []any{
 
 // aFreshCookieCheck resets the cookie check flag before a scenario runs.
 func (s *cookiesParts) aFreshCookieCheck() *cookiesParts {
-	p := s.parts
-	p.cookieCheck = false
+	s.cookieCheck = false
 
 	return s
 }
@@ -35,9 +34,7 @@ func (s *cookiesParts) aFreshCookieCheck() *cookiesParts {
 // aCookieTestServer starts the cookie test server: /set-cookie sets test-cookie=test-value,
 // /check-cookie flips cookiesParts.cookieCheck when it receives the cookie back.
 func (s *cookiesParts) aCookieTestServer() *cookiesParts {
-	p := s.parts
-
-	p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
+	s.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/set-cookie":
 			http.SetCookie(w, &http.Cookie{Name: "test-cookie", Value: "test-value"})
@@ -57,9 +54,7 @@ func (s *cookiesParts) aCookieTestServer() *cookiesParts {
 // aRedirectTestServer starts the redirect test server: /redirect issues a 302 to /target,
 // /target answers 200 with body "Target page".
 func (s *cookiesParts) aRedirectTestServer() *cookiesParts {
-	p := s.parts
-
-	p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
+	s.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/redirect":
 			http.Redirect(w, r, "/target", http.StatusFound)
@@ -75,71 +70,64 @@ func (s *cookiesParts) aRedirectTestServer() *cookiesParts {
 
 // aCookieJarClient rebuilds the client with a fresh cookie jar.
 func (s *cookiesParts) aCookieJarClient() *cookiesParts {
-	p := s.parts
 	jar, err := cookiejar.New(nil)
-	p.require.NoError(err)
+	s.require.NoError(err)
 
-	p.aClient(rc.WithVars(p.activeServerVars), rc.WithHTTPClient(&http.Client{Jar: jar}))
+	s.aClient(rc.WithVars(s.activeServerVars), rc.WithHTTPClient(&http.Client{Jar: jar}))
 
 	return s
 }
 
 // aNoRedirectClient rebuilds the client with an HTTP client that refuses to follow redirects.
 func (s *cookiesParts) aNoRedirectClient() *cookiesParts {
-	p := s.parts
 	noRedirectHTTPClient := &http.Client{
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 	}
 
-	p.aClient(rc.WithVars(p.activeServerVars), rc.WithHTTPClient(noRedirectHTTPClient))
+	s.aClient(rc.WithVars(s.activeServerVars), rc.WithHTTPClient(noRedirectHTTPClient))
 
 	return s
 }
 
 // cookieWasStored asserts the cookie server received its cookie back.
 func (s *cookiesParts) cookieWasStored() *cookiesParts {
-	p := s.parts
-	p.assert.True(s.cookieCheck, "cookie check assertion failed")
+	s.assert.True(s.cookieCheck, "cookie check assertion failed")
 
 	return s
 }
 
 // cookieWasNotStored asserts the cookie server did not receive the cookie back.
 func (s *cookiesParts) cookieWasNotStored() *cookiesParts {
-	p := s.parts
-	p.assert.False(s.cookieCheck, "cookie check assertion failed")
+	s.assert.False(s.cookieCheck, "cookie check assertion failed")
 
 	return s
 }
 
 // aCookieRedirectFixture renders a committed cookie/redirect template into baseDir.
 func (s *cookiesParts) aCookieRedirectFixture(name string) *cookiesParts {
-	p := s.parts
 	tmplContent, err := os.ReadFile(filepath.Join("test", "data", "cookies_redirects", name))
-	p.require.NoError(err)
+	s.require.NoError(err)
 
 	tmpl, err := template.New(name).Delims("[[", "]]").Parse(string(tmplContent))
-	p.require.NoError(err)
+	s.require.NoError(err)
 
-	path := filepath.Join(p.baseDir, name)
+	path := filepath.Join(s.baseDir, name)
 
 	file, err := os.Create(path)
-	p.require.NoError(err)
-	p.require.NoError(tmpl.Execute(file, nil))
-	p.require.NoError(file.Close())
+	s.require.NoError(err)
+	s.require.NoError(tmpl.Execute(file, nil))
+	s.require.NoError(file.Close())
 
-	p.httpFilePath = path
+	s.httpFilePath = path
 
 	return s
 }
 
 // echoes it back wrapped in {"json": ...}, and responds 200 OK with application/json.
 func (s *cookiesParts) aJsonEchoServer() *cookiesParts {
-	p := s.parts
-
-	p.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
+	s.aHttpServer(func(w http.ResponseWriter, r *http.Request) {
 		var data map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&data)
 		w.Header().Set("Content-Type", "application/json")
@@ -151,9 +139,7 @@ func (s *cookiesParts) aJsonEchoServer() *cookiesParts {
 
 // aRestExtensionServer serves GET with a 200 OK and a fixed JSON body.
 func (s *cookiesParts) aRestExtensionServer() *cookiesParts {
-	p := s.parts
-
-	p.aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
+	s.aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status": "ok from .rest"}`))
 	})

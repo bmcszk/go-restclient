@@ -21,24 +21,22 @@ var _ = []any{
 // anOAuth2TokenServerWithStatus starts a canned OAuth2 token endpoint answering with the
 // given status; 200 also returns a fixed access_token payload.
 func (s *oauth2Parts) anOAuth2TokenServerWithStatus(status int) *oauth2Parts {
-	p := s.parts
-	p.aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
+	s.aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
 		if status == http.StatusOK {
 			_, _ = w.Write([]byte(`{"access_token":"test-access-token","token_type":"Bearer"}`))
 		}
 	})
-	p.tokenServerURL = p.serverURL
+	s.tokenServerURL = s.serverURL
 
 	return s
 }
 
 // aClientWithOAuth2Vars builds a client whose `p`-prefixed OAuth2 variables point at the token server.
 func (s *oauth2Parts) aClientWithOAuth2Vars() *oauth2Parts {
-	p := s.parts
-	p.aClient(rc.WithVars(map[string]any{
-		"p_tokenEndpoint": p.tokenServerURL + "/token",
+	s.aClient(rc.WithVars(map[string]any{
+		"p_tokenEndpoint": s.tokenServerURL + "/token",
 		"p_clientId":      "test-client",
 		"p_clientSecret":  "test-secret",
 	}))
@@ -48,16 +46,14 @@ func (s *oauth2Parts) aClientWithOAuth2Vars() *oauth2Parts {
 // aClientWithOAuth2ProgrammaticVars builds a client with the given programmatic vars —
 // for scenarios whose @-vars resolve through the normal lookup chain.
 func (s *oauth2Parts) aClientWithOAuth2ProgrammaticVars(vars map[string]any) *oauth2Parts {
-	p := s.parts
-	p.aClient(rc.WithVars(vars))
+	s.aClient(rc.WithVars(vars))
 	return s
 }
 
 // clientWithProgrammaticVars adds programmatic vars to the existing client (SetProgrammaticVars),
 // mirroring the -D/--define CLI path.
 func (s *oauth2Parts) clientWithProgrammaticVars(vars map[string]any) *oauth2Parts {
-	p := s.parts
-	p.client.SetProgrammaticVars(vars)
+	s.client.SetProgrammaticVars(vars)
 
 	return s
 }
@@ -65,9 +61,8 @@ func (s *oauth2Parts) clientWithProgrammaticVars(vars map[string]any) *oauth2Par
 // aClientWithOAuth2PasswordVars builds a client whose `p`-prefixed OAuth2 password-grant
 // variables point at the token server; useAuthorizationHeader=false keeps client creds in the body.
 func (s *oauth2Parts) aClientWithOAuth2PasswordVars() *oauth2Parts {
-	p := s.parts
-	p.aClient(rc.WithVars(map[string]any{
-		"p_tokenEndpoint":          p.tokenServerURL + "/token",
+	s.aClient(rc.WithVars(map[string]any{
+		"p_tokenEndpoint":          s.tokenServerURL + "/token",
 		"p_clientId":               "test-client",
 		"p_clientSecret":           "test-secret",
 		"p_username":               "test-user",
@@ -80,9 +75,8 @@ func (s *oauth2Parts) aClientWithOAuth2PasswordVars() *oauth2Parts {
 // aClientWithOAuth2PasswordVarsAuthHeaderUnset omits useAuthorizationHeader so the
 // file's @-var (or the true default) decides the Basic-header behavior.
 func (s *oauth2Parts) aClientWithOAuth2PasswordVarsAuthHeaderUnset() *oauth2Parts {
-	p := s.parts
-	p.aClient(rc.WithVars(map[string]any{
-		"p_tokenEndpoint": p.tokenServerURL + "/token",
+	s.aClient(rc.WithVars(map[string]any{
+		"p_tokenEndpoint": s.tokenServerURL + "/token",
 		"p_clientId":      "test-client",
 		"p_clientSecret":  "test-secret",
 		"p_username":      "test-user",
@@ -93,9 +87,8 @@ func (s *oauth2Parts) aClientWithOAuth2PasswordVarsAuthHeaderUnset() *oauth2Part
 
 // aClientWithOAuth2PasswordVarsMissingPassword omits the password to exercise the missing-variable error.
 func (s *oauth2Parts) aClientWithOAuth2PasswordVarsMissingPassword() *oauth2Parts {
-	p := s.parts
-	p.aClient(rc.WithVars(map[string]any{
-		"p_tokenEndpoint": p.tokenServerURL + "/token",
+	s.aClient(rc.WithVars(map[string]any{
+		"p_tokenEndpoint": s.tokenServerURL + "/token",
 		"p_clientId":      "test-client",
 		"p_clientSecret":  "test-secret",
 		"p_username":      "test-user",
@@ -105,9 +98,8 @@ func (s *oauth2Parts) aClientWithOAuth2PasswordVarsMissingPassword() *oauth2Part
 
 // aClientWithOAuth2VarsMissingSecret omits the client secret to exercise the missing-variable error.
 func (s *oauth2Parts) aClientWithOAuth2VarsMissingSecret() *oauth2Parts {
-	p := s.parts
-	p.aClient(rc.WithVars(map[string]any{
-		"p_tokenEndpoint": p.tokenServerURL + "/token",
+	s.aClient(rc.WithVars(map[string]any{
+		"p_tokenEndpoint": s.tokenServerURL + "/token",
 		"p_clientId":      "test-client",
 	}))
 	return s
