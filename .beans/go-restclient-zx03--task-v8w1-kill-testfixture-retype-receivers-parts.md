@@ -5,7 +5,7 @@ status: completed
 type: task
 priority: normal
 created_at: 2026-10-16T18:57:10Z
-updated_at: 2026-10-16T19:11:47Z
+updated_at: 2026-10-16T19:13:36Z
 parent: go-restclient-pxon
 ---
 
@@ -18,3 +18,11 @@ parent: go-restclient-pxon
 - Imports fixed per file after field folds (httptest/atomic moved to parts_test.go; testify added where ctors now assert).
 
 Gates: gofmt EMPTY, go build 0, go vet 0, golangci-lint 0 issues., 315 test passes, Test-func diff vs 494ef81 EMPTY, grep testFixture EMPTY, grep 'return newParts(t)' in *_parts_test.go EMPTY.
+
+## Proof of Work V8W1 (pi-executed, orchestrator-gated)
+- testFixture + newFixture + 8 state structs DELETED; parts = single struct (all state flattened)
+- all builders on *parts returning *parts — 1253 .and() chains unchanged; domain ctors construct parts inline (no delegation)
+- pi contract: skills verbatim (coding-rules/ponytail/go-dev), GIT JAIL held, report plain-text
+- orchestrator delta: 10 narration field comments deleted (coding-rules)
+- gates: gofmt EMPTY, build/vet 0, lint `0 issues.`, junit 315, Test parity vs 494ef81 EXACT, grep testFixture = EMPTY
+Residual: docs/ mention check skipped (out of scope, no docs reference DSL internals).

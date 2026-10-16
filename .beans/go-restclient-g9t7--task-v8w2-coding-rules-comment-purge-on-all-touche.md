@@ -1,11 +1,11 @@
 ---
 # go-restclient-g9t7
 title: task V8W2 coding-rules comment purge on all touched files
-status: completed
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-10-16T18:57:10Z
-updated_at: 2026-10-16T19:11:47Z
+updated_at: 2026-10-16T19:13:36Z
 parent: go-restclient-pxon
 ---
 
