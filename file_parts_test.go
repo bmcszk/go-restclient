@@ -18,15 +18,19 @@ const externalFilesFixtureDir = "test/data/external_files"
 
 const requestFilesDir = "test/data/http_request_files"
 
-func newFileParts(t *testing.T) (given, when, then *parts) {
+type fileParts struct {
+	parts
+}
+
+func newFileParts(t *testing.T) (given, when, then *fileParts) {
 	t.Helper()
 
-	fx := &parts{
+	fx := &fileParts{parts: parts{
 		T:       t,
 		require: require.New(t),
 		assert:  assert.New(t),
 		baseDir: t.TempDir(),
-	}
+	}}
 
 	return fx, fx, fx
 }

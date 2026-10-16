@@ -10,15 +10,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newOauth2Parts(t *testing.T) (given, when, then *parts) {
+type oauth2Parts struct {
+	parts
+}
+
+func newOauth2Parts(t *testing.T) (given, when, then *oauth2Parts) {
 	t.Helper()
 
-	fx := &parts{
+	fx := &oauth2Parts{parts: parts{
 		T:       t,
 		require: require.New(t),
 		assert:  assert.New(t),
 		baseDir: t.TempDir(),
-	}
+	}}
 
 	return fx, fx, fx
 }

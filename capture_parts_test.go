@@ -18,16 +18,20 @@ import (
 	"golang.org/x/text/transform"
 )
 
-func newCaptureParts(t *testing.T) (given, when, then *parts) {
+type captureParts struct {
+	parts
+}
+
+func newCaptureParts(t *testing.T) (given, when, then *captureParts) {
 	t.Helper()
 
-	fx := &parts{
+	fx := &captureParts{parts: parts{
 		T:             t,
 		require:       require.New(t),
 		assert:        assert.New(t),
 		baseDir:       t.TempDir(),
 		trackedValues: make(map[string][]string),
-	}
+	}}
 
 	return fx, fx, fx
 }

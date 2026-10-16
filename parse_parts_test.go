@@ -9,15 +9,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newParseParts(t *testing.T) (given, when, then *parts) {
+type parseParts struct {
+	parts
+}
+
+func newParseParts(t *testing.T) (given, when, then *parseParts) {
 	t.Helper()
 
-	fx := &parts{
+	fx := &parseParts{parts: parts{
 		T:       t,
 		require: require.New(t),
 		assert:  assert.New(t),
 		baseDir: t.TempDir(),
-	}
+	}}
 
 	return fx, fx, fx
 }

@@ -15,15 +15,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newCookiesParts(t *testing.T) (given, when, then *parts) {
+type cookiesParts struct {
+	parts
+}
+
+func newCookiesParts(t *testing.T) (given, when, then *cookiesParts) {
 	t.Helper()
 
-	fx := &parts{
+	fx := &cookiesParts{parts: parts{
 		T:       t,
 		require: require.New(t),
 		assert:  assert.New(t),
 		baseDir: t.TempDir(),
-	}
+	}}
 
 	return fx, fx, fx
 }

@@ -15,15 +15,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newValidatorParts(t *testing.T) (given, when, then *parts) {
+type validatorParts struct {
+	parts
+}
+
+func newValidatorParts(t *testing.T) (given, when, then *validatorParts) {
 	t.Helper()
 
-	fx := &parts{
+	fx := &validatorParts{parts: parts{
 		T:       t,
 		require: require.New(t),
 		assert:  assert.New(t),
 		baseDir: t.TempDir(),
-	}
+	}}
 
 	return fx, fx, fx
 }

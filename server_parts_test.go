@@ -19,15 +19,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newServerParts(t *testing.T) (given, when, then *parts) {
+type serverParts struct {
+	parts
+}
+
+func newServerParts(t *testing.T) (given, when, then *serverParts) {
 	t.Helper()
 
-	fx := &parts{
+	fx := &serverParts{parts: parts{
 		T:       t,
 		require: require.New(t),
 		assert:  assert.New(t),
 		baseDir: t.TempDir(),
-	}
+	}}
 
 	return fx, fx, fx
 }
