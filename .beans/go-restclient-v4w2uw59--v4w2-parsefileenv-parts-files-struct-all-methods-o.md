@@ -1,11 +1,11 @@
 ---
 # go-restclient-v4w2uw59
 title: 'V4W2: parse/file/env parts files — struct + all methods of each state, one file per state'
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-10-16T11:22:08Z
-updated_at: 2026-10-16T11:40:38Z
+updated_at: 2026-10-17T19:28:49Z
 parent: go-restclient-495b
 ---
 

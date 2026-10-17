@@ -1,11 +1,11 @@
 ---
 # go-restclient-495b
-title: ""
+title: 'TEST-CORPUS-REORG: fluent test DSL reorg epic'
 status: in-progress
 type: epic
 priority: normal
 created_at: 2026-10-15T10:18:58Z
-updated_at: 2026-10-16T14:36:01Z
+updated_at: 2026-10-17T19:28:49Z
 ---
 
 # TEST-CORPUS-REORG: consolidate + dedupe test files, meaningful parts DSL split

@@ -1,11 +1,11 @@
 ---
 # go-restclient-v5w43aiu
 title: 'V5W4: comment sweep per coding-rules + file layout audit (state-cohesive files) + PR #84 body'
-status: todo
+status: completed
 type: task
 priority: normal
 created_at: 2026-10-16T12:08:57Z
-updated_at: 2026-10-16T14:46:40Z
+updated_at: 2026-10-17T19:28:49Z
 parent: go-restclient-495b
 ---
 
