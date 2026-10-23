@@ -25,3 +25,12 @@
 ## Fluent test DSL
 - Test DSL + guideline: docs/fluent-testing-guideline.md (binding for any test change: given/when/then, state in parts, .and() end of line, comments <= 1 line whole diff, fixtures under test/data/, no linter-appeasement var _ blocks).
 - Existing DSL surface lives in parts_test.go (base) plus one <domain>_parts_test.go per domain (capture/client/cookies/env/file/oauth2/parse/server/validator), each paired with its <domain>_test.go primary; feature test files of a domain share that domain's parts file.
+
+## Docs map
+
+- `docs/fluent-testing-guideline.md` — binding fluent-DSL guideline.
+- `docs/recipes/pr-workflow.md` — PR workflow, review rounds, DoD, close-out.
+- `docs/recipes/github-mechanics.md` — gh CLI mechanics and pitfalls.
+- `docs/recipes/dsl-discipline.md` — standing DSL rules, TDD discipline, file layout.
+- `docs/recipes/cli-and-releases.md` — CLI tests, versioning, releases.
+- `docs/recipes/pitfalls.md` — known pitfalls.
