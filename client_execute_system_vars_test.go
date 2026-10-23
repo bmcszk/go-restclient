@@ -5,12 +5,114 @@ package restclient_test
 
 import (
 	"fmt"
+	rc "github.com/bmcszk/go-restclient"
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
-
-	rc "github.com/bmcszk/go-restclient"
 )
+
+// ---------------------------------------------------------------------------
+// base64encode system variable (from system_vars_test.go)
+
+func TestSystemVar_Base64Encode(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "ok")
+		}).and().
+		aHttpFile("### auth\n" +
+			"GET {{server}}/api\n" +
+			"Authorization: Basic {{$base64encode user:pass}}\n").and().
+		aClient()
+
+	when.
+		executeFile()
+
+	then.
+		responseCount(1).and().
+		noError().and().
+		serverReceivedHeaderValue(0, "Authorization", "Basic dXNlcjpwYXNz")
+}
+
+func TestSystemVar_Base64EncodeInBody(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}).and().
+		aHttpFile("### send\n" +
+			"POST {{server}}/data\n" +
+			"Content-Type: text/plain\n\n" +
+			"{{$base64encode hello world}}\n").and().
+		aClient()
+
+	when.
+		executeFile()
+
+	then.
+		responseCount(1).and().
+		noError().and().
+		serverReceivedBodyIs(0, "aGVsbG8gd29ybGQ=")
+}
+
+// ---------------------------------------------------------------------------
+// .hresp @name=value define extraction (from hresp_vars_test.go)
+
+func TestExtractHrespDefines_NoDefines(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		aClient().and().
+		expectedResponseFile(
+			`HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "message": "hello"
+}`,
+		).and().
+		aResponseWith(200, "200 OK", "{\n  \"message\": \"hello\"\n}",
+			http.Header{"Content-Type": {"application/json"}})
+
+	when.
+		validateResponses()
+
+	then.
+		validationSucceeds()
+}
+
+// TestExtractHrespDefines_SimpleDefines verifies that @name=value pairs are extracted and
+// substituted into the expected body via {{name}} placeholders.
+func TestExtractHrespDefines_SimpleDefines(t *testing.T) {
+	given, when, then := newParts(t)
+
+	given.
+		aClient().and().
+		expectedResponseFile(
+			`@name = John Doe
+@age = 30
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "user": "{{name}}",
+  "age": {{age}}
+}`,
+		).and().
+		aResponseWith(200, "200 OK", "{\n  \"user\": \"John Doe\",\n  \"age\": 30\n}",
+			http.Header{"Content-Type": {"application/json"}})
+
+	when.
+		validateResponses()
+
+	then.
+		validationSucceeds()
+}
 
 // TestExecuteFile_WithGuidSystemVariable: System Variables {{$guid}} and {{$uuid}}.
 
@@ -443,62 +545,96 @@ POST https://example.com/pw
 		parsedRequestBodyIs(0, "{{$randomPassword -3}}")
 }
 
-// %7B%7B$dotenv VAR%7D%7D in a URL query resolves from .env (URL-safe embedding).
-func TestExecuteFile_WithDotEnvSystemVariable_URLEncodedPlaceholder(t *testing.T) {
+// TestExecuteFile_MultipleSystemVarsConsistency tests that multiple system variables
+// defined in file-scoped variables maintain consistency across all requests in the file.
+// Capture paths verified against test/data/system_variables/multiple_system_vars_consistency.http.
+
+func TestExecuteFile_MultipleSystemVarsConsistency(t *testing.T) {
 	given, when, then := newParts(t)
 
 	given.
-		anEchoServer().and().
-		aDotEnvFile("SECRET_VAR=s3cr3t-value").and().
-		aHttpFile(`### enc
-GET {{server}}/q?token=%7B%7B$dotenv SECRET_VAR%7D%7D`).and().
+		aHttpServer(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status": "ok"}`))
+		}).and().
+		aTemplateFixture("system_variables", "multiple_system_vars_consistency.http",
+			struct{ ServerURL string }{ServerURL: given.serverURL}).and().
 		aClient()
 
 	when.
 		executeFile()
 
 	then.
+		responseCount(3).and().
 		noError().and().
-		capturedRequestCount(1).and().
-		capturedRequestURLIs(0, "/q?token=s3cr3t-value")
+		allResponseCodesAre(http.StatusOK).and().
+		capturedRequestCount(3).and().
+		tracking("uuid").and().
+		capturedURLSegment(0).and().
+		capturedJSONField(1, "transaction_id").and().
+		capturedJSONField(1, "session", "id").and().
+		capturedHeaderField(2, "X-Transaction-ID").and().
+		capturedJSONField(2, "transaction_ref").and().
+		allTrackedValuesAreValidUUIDs().and().
+		allTrackedValuesEqual().and().
+		tracking("timestamp").and().
+		capturedHeaderField(0, "X-Request-Time").and().
+		capturedJSONNumberField(1, "timestamp").and().
+		capturedHeaderField(1, "X-Request-Time").and().
+		capturedJSONNumberField(2, "last_activity").and().
+		allTrackedValuesArePositiveIntegers().and().
+		allTrackedValuesEqual().and().
+		tracking("session token").and().
+		capturedHeaderField(0, "X-Session-Token").and().
+		firstTrackedValueIsIntegerInRange(1000000, 9999999).and().
+		capturedJSONField(1, "session", "token").and().
+		capturedURLSegment(2).and().
+		capturedJSONField(2, "session_token").and().
+		allTrackedValuesEqual()
 }
 
-// URL-encoded placeholder for an undefined dotenv variable resolves to empty.
-func TestExecuteFile_WithDotEnvSystemVariable_URLEncodedUndefinedIsEmpty(t *testing.T) {
+// TestExecuteFile_UuidVariableConsistency tests that a variable defined as
+// @scenarioId = {{$uuid}} maintains the same value throughout all uses in the file.
+
+func TestExecuteFile_UuidVariableConsistency(t *testing.T) {
 	given, when, then := newParts(t)
 
 	given.
-		anEchoServer().and().
-		aDotEnvFile("OTHER_VAR=x").and().
-		aHttpFile(`### enc
-GET {{server}}/q?token=%7B%7B$dotenv MISSING_VAR%7D%7D`).and().
+		aHttpServer(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+
+			switch r.Method {
+			case http.MethodGet:
+				fmt.Fprintf(w, `{"uuid": "%s"}`, strings.TrimPrefix(r.URL.Path, "/uuid/"))
+			case http.MethodPost, http.MethodPut:
+				fmt.Fprintf(w, `{"json": %s, "headers": {"X-Scenario-Id": "%s"}}`,
+					string(body), r.Header.Get("X-Scenario-ID"))
+			default:
+				w.WriteHeader(http.StatusNotImplemented)
+			}
+		}).and().
+		aTemplateFixture("system_variables", "uuid_consistency.http",
+			struct{ ServerURL string }{ServerURL: given.serverURL}).and().
 		aClient()
 
 	when.
 		executeFile()
 
 	then.
+		responseCount(3).and().
 		noError().and().
-		capturedRequestCount(1).and().
-		capturedRequestURLIs(0, "/q?token=")
-}
-
-// %7B%7B$processEnv VAR%7D%7D in a URL query resolves from the process env.
-func TestExecuteFile_WithProcessEnvSystemVariable_URLEncodedPlaceholder(t *testing.T) {
-	t.Setenv("GO_RESTCLIENT_ENCODED_VAR", "enc-val")
-	given, when, then := newParts(t)
-
-	given.
-		anEchoServer().and().
-		aHttpFile(`### enc
-GET {{server}}/q?v=%7B%7B$processEnv GO_RESTCLIENT_ENCODED_VAR%7D%7D`).and().
-		aClient()
-
-	when.
-		executeFile()
-
-	then.
-		noError().and().
-		capturedRequestCount(1).and().
-		capturedRequestURLIs(0, "/q?v=enc-val")
+		allResponseCodesAre(http.StatusOK).and().
+		capturedRequestCount(3).and().
+		tracking("uuid").and().
+		capturedURLSegment(0).and().
+		capturedJSONField(1, "scenario_id").and().
+		capturedJSONField(1, "test_data", "uuid").and().
+		capturedJSONField(1, "test_data", "metadata", "scenario").and().
+		capturedHeaderField(2, "X-Scenario-ID").and().
+		capturedJSONField(2, "update_scenario").and().
+		allTrackedValuesAreValidUUIDs().and().
+		allTrackedValuesEqual()
 }
